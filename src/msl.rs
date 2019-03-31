@@ -2,13 +2,11 @@ use std::fmt::{Error as FmtError, Write};
 
 use Module;
 
-
-pub struct Options {
-}
+pub struct Options {}
 
 #[derive(Debug)]
 pub enum Error {
-    Format(FmtError)
+    Format(FmtError),
 }
 
 impl From<FmtError> for Error {

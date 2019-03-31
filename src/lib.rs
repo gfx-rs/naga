@@ -5,9 +5,7 @@ pub mod msl;
 
 use std::collections::HashMap;
 
-
-pub struct Transpiler {
-}
+pub struct Transpiler {}
 
 pub struct Module {
     raw: rspirv::mr::Module,
@@ -26,8 +24,7 @@ pub enum LoadError {
 
 impl Transpiler {
     pub fn new() -> Self {
-        Transpiler {
-        }
+        Transpiler {}
     }
 
     pub fn load(&mut self, spv: &[u8]) -> Result<Module, LoadError> {
@@ -37,7 +34,8 @@ impl Transpiler {
             .map_err(|_| LoadError::Parsing)?;
         let raw = loader.module();
 
-        let entry_points = raw.entry_points
+        let entry_points = raw
+            .entry_points
             .iter()
             .map(|ep| {
                 let name = match ep.operands[2] {
@@ -55,10 +53,7 @@ impl Transpiler {
             })
             .collect();
 
-        Ok(Module {
-            raw,
-            entry_points,
-        })
+        Ok(Module { raw, entry_points })
     }
 }
 

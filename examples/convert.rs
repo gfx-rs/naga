@@ -16,4 +16,3 @@ fn main() {
     let msl = module.to_msl(&options).unwrap();
     println!("{}", msl);
 }
-
