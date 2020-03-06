@@ -72,6 +72,30 @@ fn main() {
         };
         let msl = msl::write_string(&module, options).unwrap();
         fs::write(&args[2], msl).unwrap();
+    } else if args[2].ends_with(".spv") {
+        use naga::back::spirv;
+
+        let debug_enabled;
+
+        if args.len() == 4 {
+            debug_enabled = args[3].parse().unwrap();
+        } else {
+            debug_enabled = true;
+        }
+
+        let mut parser = spirv::Parser::new(&module, debug_enabled);
+        let spirv = parser.parse(&module);
+
+        let mut bytes: Vec<u8> = vec![];
+        for byte in spirv.iter() {
+            let bits = byte.to_le_bytes();
+            bytes.push(bits[0]);
+            bytes.push(bits[1]);
+            bytes.push(bits[2]);
+            bytes.push(bits[3]);
+        }
+
+        fs::write(&args[2], bytes.as_slice()).unwrap();
     } else {
         panic!("Unknown output: {:?}", args[2]);
     }
