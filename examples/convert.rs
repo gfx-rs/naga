@@ -7,7 +7,7 @@ fn main() {
 
     let module = if args.len() <= 1 {
         println!("Call with <input> <output>");
-        return
+        return;
     } else if args[1].ends_with(".spv") {
         let input = fs::read(&args[1]).unwrap();
         naga::front::spirv::parse_u8_slice(&input).unwrap()
@@ -20,17 +20,25 @@ fn main() {
 
     if args.len() <= 2 {
         println!("{:#?}", module);
-        return
+        return;
     } else if args[2].ends_with(".metal") {
         use naga::back::msl;
         let mut binding_map = msl::BindingMap::default();
         binding_map.insert(
             msl::BindSource { set: 0, binding: 0 },
-            msl::BindTarget { buffer: None, texture: Some(1), sampler: None },
+            msl::BindTarget {
+                buffer: None,
+                texture: Some(1),
+                sampler: None,
+            },
         );
         binding_map.insert(
             msl::BindSource { set: 0, binding: 1 },
-            msl::BindTarget { buffer: None, texture: None, sampler: Some(1) },
+            msl::BindTarget {
+                buffer: None,
+                texture: None,
+                sampler: Some(1),
+            },
         );
         let options = msl::Options {
             binding_map: &binding_map,

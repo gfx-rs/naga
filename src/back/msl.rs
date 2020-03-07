@@ -14,16 +14,9 @@ the output struct. If there is a structure in the outputs, and it contains any b
 we move them up to the root output structure that we define ourselves.
 !*/
 
-use std::{
-    fmt::{
-        Display, Error as FmtError, Formatter, Write,
-    },
-};
+use std::fmt::{Display, Error as FmtError, Formatter, Write};
 
-use crate::{
-    storage::Token,
-    FastHashMap, FastHashSet
-};
+use crate::{storage::Token, FastHashMap, FastHashSet};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct BindTarget {
@@ -44,7 +37,10 @@ enum ResolvedBinding {
     BuiltIn(spirv::BuiltIn),
     Attribute(spirv::Word),
     Color(spirv::Word),
-    User { prefix: &'static str, index: spirv::Word },
+    User {
+        prefix: &'static str,
+        index: spirv::Word,
+    },
     Resource(BindTarget),
 }
 
@@ -79,7 +75,11 @@ pub struct Options<'a> {
 }
 
 impl Options<'_> {
-    fn resolve_binding(&self, binding: &crate::Binding, mode: LocationMode) -> Result<ResolvedBinding, Error> {
+    fn resolve_binding(
+        &self,
+        binding: &crate::Binding,
+        mode: LocationMode,
+    ) -> Result<ResolvedBinding, Error> {
         match *binding {
             crate::Binding::BuiltIn(built_in) => Ok(ResolvedBinding::BuiltIn(built_in)),
             crate::Binding::Location(index) => match mode {
@@ -98,12 +98,10 @@ impl Options<'_> {
                     .cloned()
                     .map(ResolvedBinding::Resource)
                     .ok_or(Error::MissingBindTarget(source))
-
             }
         }
     }
 }
-
 
 trait Indexed {
     const CLASS: &'static str;
@@ -113,38 +111,52 @@ trait Indexed {
 
 impl Indexed for crate::Token<crate::Type> {
     const CLASS: &'static str = "Type";
-    fn id(&self) -> usize { self.index() }
+    fn id(&self) -> usize {
+        self.index()
+    }
 }
 impl Indexed for crate::Token<crate::GlobalVariable> {
     const CLASS: &'static str = "global";
-    fn id(&self) -> usize { self.index() }
+    fn id(&self) -> usize {
+        self.index()
+    }
 }
 impl Indexed for crate::Token<crate::Function> {
     const CLASS: &'static str = "function";
-    fn id(&self) -> usize { self.index() }
+    fn id(&self) -> usize {
+        self.index()
+    }
 }
 
 struct MemberIndex(usize);
 impl Indexed for MemberIndex {
     const CLASS: &'static str = "field";
-    fn id(&self) -> usize { self.0 }
+    fn id(&self) -> usize {
+        self.0
+    }
 }
 struct ParameterIndex(usize);
 impl Indexed for ParameterIndex {
     const CLASS: &'static str = "param";
-    fn id(&self) -> usize { self.0 }
+    fn id(&self) -> usize {
+        self.0
+    }
 }
 struct InputStructIndex(crate::Token<crate::Function>);
 impl Indexed for InputStructIndex {
     const CLASS: &'static str = "Input";
     const PREFIX: bool = true;
-    fn id(&self) -> usize { self.0.index() }
+    fn id(&self) -> usize {
+        self.0.index()
+    }
 }
 struct OutputStructIndex(crate::Token<crate::Function>);
 impl Indexed for OutputStructIndex {
     const CLASS: &'static str = "Output";
     const PREFIX: bool = true;
-    fn id(&self) -> usize { self.0.index() }
+    fn id(&self) -> usize {
+        self.0.index()
+    }
 }
 
 enum NameSource<'a> {
@@ -152,9 +164,7 @@ enum NameSource<'a> {
     Index(usize),
 }
 
-const RESERVED_NAMES: &[&str] = &[
-    "main",
-];
+const RESERVED_NAMES: &[&str] = &["main"];
 
 struct Name<'a> {
     class: &'static str,
@@ -163,10 +173,14 @@ struct Name<'a> {
 impl Display for Name<'_> {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> Result<(), FmtError> {
         match self.source {
-            NameSource::Custom { name, prefix: false } if RESERVED_NAMES.contains(&name) => {
-                write!(formatter, "{}_", name)
-            }
-            NameSource::Custom { name, prefix: false } => formatter.write_str(name),
+            NameSource::Custom {
+                name,
+                prefix: false,
+            } if RESERVED_NAMES.contains(&name) => write!(formatter, "{}_", name),
+            NameSource::Custom {
+                name,
+                prefix: false,
+            } => formatter.write_str(name),
             NameSource::Custom { name, prefix: true } => {
                 let (head, tail) = name.split_at(1);
                 write!(formatter, "{}{}{}", self.class, head.to_uppercase(), tail)
@@ -192,7 +206,10 @@ impl AsName for Option<String> {
         Name {
             class: I::CLASS,
             source: match *self {
-                Some(ref name) if !name.is_empty() => NameSource::Custom { name, prefix: I::PREFIX },
+                Some(ref name) if !name.is_empty() => NameSource::Custom {
+                    name,
+                    prefix: I::PREFIX,
+                },
                 _ => NameSource::Index(index.id()),
             },
         }
@@ -216,12 +233,12 @@ impl Display for TypedGlobalVariable<'_> {
         let name = var.name.or_index(self.token);
         let ty = &self.module.types[var.ty];
         match ty.inner {
-            crate::TypeInner::Pointer { base, class }  => {
+            crate::TypeInner::Pointer { base, class } => {
                 let ty_token = match class {
-                    spirv::StorageClass::Input |
-                    spirv::StorageClass::Output |
-                    spirv::StorageClass::UniformConstant => base,
-                    _ => var.ty
+                    spirv::StorageClass::Input
+                    | spirv::StorageClass::Output
+                    | spirv::StorageClass::UniformConstant => base,
+                    _ => var.ty,
                 };
                 let ty_name = self.module.types[ty_token].name.or_index(ty_token);
                 write!(formatter, "{} {}", ty_name, name)
@@ -243,12 +260,8 @@ impl Display for ResolvedBinding {
                 };
                 formatter.write_str(name)
             }
-            ResolvedBinding::Attribute(index) => {
-                write!(formatter, "attribute({})", index)
-            }
-            ResolvedBinding::Color(index) => {
-                write!(formatter, "color({})", index)
-            }
+            ResolvedBinding::Attribute(index) => write!(formatter, "attribute({})", index),
+            ResolvedBinding::Color(index) => write!(formatter, "color({})", index),
             ResolvedBinding::User { prefix, index } => {
                 write!(formatter, "user({}{})", prefix, index)
             }
@@ -331,9 +344,15 @@ impl<W: Write> Writer<W> {
                         write!(self.out, ".{}", name)?;
                         Ok(module.borrow_type(member.ty))
                     }
-                    crate::TypeInner::Matrix { rows, kind, width, .. } => {
+                    crate::TypeInner::Matrix {
+                        rows, kind, width, ..
+                    } => {
                         write!(self.out, ".{}", COMPONENTS[index as usize])?;
-                        Ok(MaybeOwned::Owned(crate::TypeInner::Vector { size: rows, kind, width }))
+                        Ok(MaybeOwned::Owned(crate::TypeInner::Vector {
+                            size: rows,
+                            kind,
+                            width,
+                        }))
                     }
                     crate::TypeInner::Vector { kind, width, .. } => {
                         write!(self.out, ".{}", COMPONENTS[index as usize])?;
@@ -375,7 +394,12 @@ impl<W: Write> Writer<W> {
                 let inner = &module.types[ty].inner;
                 match *inner {
                     crate::TypeInner::Vector { size, kind, .. } => {
-                        write!(self.out, "{}{}(", scalar_kind_string(kind), vector_size_string(size))?;
+                        write!(
+                            self.out,
+                            "{}{}(",
+                            scalar_kind_string(kind),
+                            vector_size_string(size)
+                        )?;
                         for (i, &token) in components.iter().enumerate() {
                             if i != 0 {
                                 write!(self.out, ",")?;
@@ -405,7 +429,7 @@ impl<W: Write> Writer<W> {
                     spirv::StorageClass::Input => {
                         write!(self.out, "{}.", NAME_INPUT)?;
                     }
-                    _ => ()
+                    _ => (),
                 }
                 let name = var.name.or_index(token);
                 write!(self.out, "{}", name)?;
@@ -414,9 +438,7 @@ impl<W: Write> Writer<W> {
             crate::Expression::Load { pointer } => {
                 //write!(self.out, "*")?;
                 match *self.put_expression(pointer, expressions, module)?.borrow() {
-                    crate::TypeInner::Pointer { base, .. } => {
-                        Ok(module.borrow_type(base))
-                    }
+                    crate::TypeInner::Pointer { base, .. } => Ok(module.borrow_type(base)),
                     ref other => panic!("Unexpected load pointer {:?}", other),
                 }
             }
@@ -427,12 +449,18 @@ impl<W: Write> Writer<W> {
                 let ty_right = self.put_expression(right, expressions, module)?;
                 write!(self.out, ")")?;
                 Ok(match (ty_left.borrow(), ty_right.borrow()) {
-                    (&crate::TypeInner::Vector { size, kind, width }, &crate::TypeInner::Scalar { .. }) =>
-                        MaybeOwned::Owned(crate::TypeInner::Vector { size, kind, width }),
+                    (
+                        &crate::TypeInner::Vector { size, kind, width },
+                        &crate::TypeInner::Scalar { .. },
+                    ) => MaybeOwned::Owned(crate::TypeInner::Vector { size, kind, width }),
                     other => panic!("Unable to infer Mul for {:?}", other),
                 })
             }
-            crate::Expression::ImageSample { image, sampler, coordinate } => {
+            crate::Expression::ImageSample {
+                image,
+                sampler,
+                coordinate,
+            } => {
                 let ty_image = self.put_expression(image, expressions, module)?;
                 write!(self.out, ".sample(")?;
                 self.put_expression(sampler, expressions, module)?;
@@ -460,18 +488,35 @@ impl<W: Write> Writer<W> {
             match ty.inner {
                 crate::TypeInner::Scalar { kind, .. } => {
                     write!(self.out, "typedef {} {}", scalar_kind_string(kind), name)?;
-                },
+                }
                 crate::TypeInner::Vector { size, kind, .. } => {
-                    write!(self.out, "typedef {}{} {}", scalar_kind_string(kind), vector_size_string(size), name)?;
-                },
-                crate::TypeInner::Matrix { columns, rows, kind, .. } => {
-                    write!(self.out, "typedef {}{}x{} {}", scalar_kind_string(kind), vector_size_string(columns), vector_size_string(rows), name)?;
+                    write!(
+                        self.out,
+                        "typedef {}{} {}",
+                        scalar_kind_string(kind),
+                        vector_size_string(size),
+                        name
+                    )?;
+                }
+                crate::TypeInner::Matrix {
+                    columns,
+                    rows,
+                    kind,
+                    ..
+                } => {
+                    write!(
+                        self.out,
+                        "typedef {}{}x{} {}",
+                        scalar_kind_string(kind),
+                        vector_size_string(columns),
+                        vector_size_string(rows),
+                        name
+                    )?;
                 }
                 crate::TypeInner::Pointer { base, class } => {
                     let base_name = module.types[base].name.or_index(base);
                     let class_name = match class {
-                        spirv::StorageClass::Input |
-                        spirv::StorageClass::Output => continue,
+                        spirv::StorageClass::Input | spirv::StorageClass::Output => continue,
                         spirv::StorageClass::UniformConstant => "constant",
                         other => {
                             log::warn!("Unexpected pointer class {:?}", other);
@@ -486,7 +531,11 @@ impl<W: Write> Writer<W> {
                         crate::ArraySize::Static(length) => length,
                         crate::ArraySize::Dynamic => 1,
                     };
-                    write!(self.out, "typedef {} {}[{}]", base_name, name, resolved_size)?;
+                    write!(
+                        self.out,
+                        "typedef {} {}[{}]",
+                        base_name, name, resolved_size
+                    )?;
                 }
                 crate::TypeInner::Struct { ref members } => {
                     writeln!(self.out, "struct {} {{", name)?;
@@ -495,7 +544,8 @@ impl<W: Write> Writer<W> {
                         let base_name = module.types[member.ty].name.or_index(member.ty);
                         write!(self.out, "\t{} {}", base_name, name)?;
                         if let Some(ref binding) = member.binding {
-                            let resolved = options.resolve_binding(binding, LocationMode::Intermediate)?;
+                            let resolved =
+                                options.resolve_binding(binding, LocationMode::Intermediate)?;
                             write!(self.out, " [[{}]]", resolved)?;
                         }
                         writeln!(self.out, ";")?;
@@ -516,7 +566,9 @@ impl<W: Write> Writer<W> {
                             return Err(Error::InvalidImageFlags(flags));
                         }
                         "sample"
-                    } else if flags.contains(crate::ImageFlags::CAN_LOAD | crate::ImageFlags::CAN_STORE) {
+                    } else if flags
+                        .contains(crate::ImageFlags::CAN_LOAD | crate::ImageFlags::CAN_STORE)
+                    {
                         "read_write"
                     } else if flags.contains(crate::ImageFlags::CAN_STORE) {
                         "write"
@@ -525,7 +577,11 @@ impl<W: Write> Writer<W> {
                     } else {
                         return Err(Error::InvalidImageFlags(flags));
                     };
-                    write!(self.out, "typedef texture{}<{}, access::{}> {}", dim, base_name, access, name)?;
+                    write!(
+                        self.out,
+                        "typedef texture{}<{}, access::{}> {}",
+                        dim, base_name, access, name
+                    )?;
                 }
                 crate::TypeInner::Sampler => {
                     write!(self.out, "typedef sampler {}", name)?;
@@ -562,9 +618,19 @@ impl<W: Write> Writer<W> {
             if let Some(em) = exec_model {
                 writeln!(self.out, "struct {} {{", input_name)?;
                 let (em_str, in_mode, out_mode) = match em {
-                    spirv::ExecutionModel::Vertex => ("vertex", LocationMode::VertexInput, LocationMode::Intermediate),
-                    spirv::ExecutionModel::Fragment => ("fragment", LocationMode::Intermediate, LocationMode::FragmentOutput),
-                    spirv::ExecutionModel::GLCompute => ("compute", LocationMode::Uniform, LocationMode::Uniform),
+                    spirv::ExecutionModel::Vertex => (
+                        "vertex",
+                        LocationMode::VertexInput,
+                        LocationMode::Intermediate,
+                    ),
+                    spirv::ExecutionModel::Fragment => (
+                        "fragment",
+                        LocationMode::Intermediate,
+                        LocationMode::FragmentOutput,
+                    ),
+                    spirv::ExecutionModel::GLCompute => {
+                        ("compute", LocationMode::Uniform, LocationMode::Uniform)
+                    }
                     _ => return Err(Error::UnsupportedExecutionModel(em)),
                 };
                 for &token in var_inputs.iter() {
@@ -587,13 +653,14 @@ impl<W: Write> Writer<W> {
                             for (index, member) in members.iter().enumerate() {
                                 let name = member.name.or_index(MemberIndex(index));
                                 let ty_name = module.types[member.ty].name.or_index(member.ty);
-                                let binding = member.binding
+                                let binding = member
+                                    .binding
                                     .as_ref()
                                     .ok_or(Error::MissingBinding(token))?;
                                 let resolved = options.resolve_binding(binding, out_mode)?;
                                 writeln!(self.out, "\t{} {} [[{}]];", ty_name, name, resolved)?;
                             }
-                            continue
+                            continue;
                         }
                     }
                     let tyvar = TypedGlobalVariable { module, token };
@@ -612,7 +679,10 @@ impl<W: Write> Writer<W> {
                     Some(type_id) => module.types[type_id].name.or_index(type_id),
                     None => Name {
                         class: "",
-                        source: NameSource::Custom { name: "void", prefix: false },
+                        source: NameSource::Custom {
+                            name: "void",
+                            prefix: false,
+                        },
                     },
                 };
                 writeln!(self.out, "{} {}(", result_type_name, fun_name)?;
@@ -625,11 +695,11 @@ impl<W: Write> Writer<W> {
             for (_, expr) in fun.expressions.iter() {
                 if let crate::Expression::GlobalVariable(token) = *expr {
                     let var = &module.global_variables[token];
-                    if var.class == spirv::StorageClass::UniformConstant && !uniforms_used.contains(&token) {
+                    if var.class == spirv::StorageClass::UniformConstant
+                        && !uniforms_used.contains(&token)
+                    {
                         uniforms_used.insert(token);
-                        let binding = var.binding
-                            .as_ref()
-                            .ok_or(Error::MissingBinding(token))?;
+                        let binding = var.binding.as_ref().ok_or(Error::MissingBinding(token))?;
                         let resolved = options.resolve_binding(binding, LocationMode::Uniform)?;
                         let var = TypedGlobalVariable { module, token };
                         writeln!(self.out, "\t{} [[{}]],", var, resolved)?;
@@ -675,9 +745,10 @@ impl<W: Write> Writer<W> {
                             (Some(expr_token), None) => {
                                 self.put_expression(expr_token, &fun.expressions, module)?;
                             }
-                            (Some(expr_token), Some(_)) => {
-                                panic!("Unable to return value {:?} from an entry point!", expr_token)
-                            }
+                            (Some(expr_token), Some(_)) => panic!(
+                                "Unable to return value {:?} from an entry point!",
+                                expr_token
+                            ),
                         }
                         writeln!(self.out, ";")?;
                     }

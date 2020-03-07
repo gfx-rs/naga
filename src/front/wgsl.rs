@@ -3,7 +3,6 @@ use crate::{
     FastHashMap,
 };
 
-
 #[derive(Parser)]
 #[grammar = "../grammars/wgsl.pest"]
 struct Tokenizer;
@@ -115,8 +114,13 @@ impl Parser {
         Ok(pair.as_str().parse()?)
     }
 
-    fn parse_decoration_list(variable_decoration_list: pest::iterators::Pair<Rule>) -> Result<Option<crate::Binding>, Error> {
-        assert_eq!(variable_decoration_list.as_rule(), Rule::variable_decoration_list);
+    fn parse_decoration_list(
+        variable_decoration_list: pest::iterators::Pair<Rule>,
+    ) -> Result<Option<crate::Binding>, Error> {
+        assert_eq!(
+            variable_decoration_list.as_rule(),
+            Rule::variable_decoration_list
+        );
         for variable_decoration in variable_decoration_list.into_inner() {
             match variable_decoration.as_rule() {
                 Rule::location_decoration => {
@@ -138,7 +142,9 @@ impl Parser {
         unimplemented!()
     }
 
-    fn parse_storage_class(storage_class: pest::iterators::Pair<Rule>) -> Result<spirv::StorageClass, Error> {
+    fn parse_storage_class(
+        storage_class: pest::iterators::Pair<Rule>,
+    ) -> Result<spirv::StorageClass, Error> {
         match storage_class.as_str() {
             "in" => Ok(spirv::StorageClass::Input),
             "out" => Ok(spirv::StorageClass::Output),
@@ -179,26 +185,25 @@ impl Parser {
                     "vec4" => crate::VectorSize::Quad,
                     other => panic!("Unexpected vec kind {:?}", other),
                 };
-                crate::TypeInner::Vector { size, kind: crate::ScalarKind::Float, width: 32 }
+                crate::TypeInner::Vector {
+                    size,
+                    kind: crate::ScalarKind::Float,
+                    width: 32,
+                }
             }
             Rule::ident => {
-                return self.lookup_type
+                return self
+                    .lookup_type
                     .get(type_kind.as_str())
                     .cloned()
                     .ok_or(Error::UnknownType(type_kind.as_str().to_owned()));
             }
             other => panic!("Unexpected type {:?}", other),
         };
-        if let Some((token, _)) = type_store
-            .iter()
-            .find(|(_, ty)| ty.inner == inner)
-        {
+        if let Some((token, _)) = type_store.iter().find(|(_, ty)| ty.inner == inner) {
             return Ok(token);
         }
-        Ok(type_store.append(crate::Type {
-            name: None,
-            inner,
-        }))
+        Ok(type_store.append(crate::Type { name: None, inner }))
     }
 
     fn parse_variable_ident_decl(
@@ -314,7 +319,8 @@ impl Parser {
                 let ty = self.parse_type_decl(expr_pairs.next().unwrap(), ctx.types)?;
                 let mut components = Vec::new();
                 for argument_pair in expr_pairs {
-                    let expr_token = self.parse_primary_expression(argument_pair, ctx.reborrow())?;
+                    let expr_token =
+                        self.parse_primary_expression(argument_pair, ctx.reborrow())?;
                     components.push(expr_token);
                 }
                 let expression = crate::Expression::Compose { ty, components };
@@ -333,9 +339,7 @@ impl Parser {
             Rule::logical_or_expression => {
                 self.parse_logical_or_expression(primary_expression, ctx)
             }
-            Rule::ident => {
-                ctx.lookup_ident.lookup(primary_expression.as_str())
-            }
+            Rule::ident => ctx.lookup_ident.lookup(primary_expression.as_str()),
             _ => panic!("Unknown expression {:?}", primary_expression),
         }
     }
@@ -349,12 +353,14 @@ impl Parser {
             pair,
             Rule::additive_expression,
             crate::BinaryOperator::Add,
-            |pair, mut context| context.parse_binary(
-                pair,
-                Rule::multiplicative_expression,
-                crate::BinaryOperator::Multiply,
-                |pair, context| self.parse_primary_expression(pair, context),
-            ),
+            |pair, mut context| {
+                context.parse_binary(
+                    pair,
+                    Rule::multiplicative_expression,
+                    crate::BinaryOperator::Multiply,
+                    |pair, context| self.parse_primary_expression(pair, context),
+                )
+            },
         )
     }
 
@@ -367,32 +373,46 @@ impl Parser {
             pair,
             Rule::logical_or_expression,
             crate::BinaryOperator::LogicalOr,
-            |pair, mut context| context.parse_binary(
-                pair,
-                Rule::logical_and_expression,
-                crate::BinaryOperator::LogicalAnd,
-                |pair, mut context| context.parse_binary(
+            |pair, mut context| {
+                context.parse_binary(
                     pair,
-                    Rule::inclusive_or_expression,
-                    crate::BinaryOperator::InclusiveOr,
-                    |pair, mut context| context.parse_binary(
-                        pair,
-                        Rule::exclusive_or_expression,
-                        crate::BinaryOperator::ExclusiveOr,
-                        |pair, mut context| context.parse_binary(
+                    Rule::logical_and_expression,
+                    crate::BinaryOperator::LogicalAnd,
+                    |pair, mut context| {
+                        context.parse_binary(
                             pair,
-                            Rule::and_expression,
-                            crate::BinaryOperator::And,
-                            |pair, mut context| context.parse_binary(
-                                pair,
-                                Rule::equality_expression,
-                                crate::BinaryOperator::Equals,
-                                |pair, context| self.parse_relational_expression(pair, context),
-                            ),
-                        ),
-                    ),
-                ),
-            ),
+                            Rule::inclusive_or_expression,
+                            crate::BinaryOperator::InclusiveOr,
+                            |pair, mut context| {
+                                context.parse_binary(
+                                    pair,
+                                    Rule::exclusive_or_expression,
+                                    crate::BinaryOperator::ExclusiveOr,
+                                    |pair, mut context| {
+                                        context.parse_binary(
+                                            pair,
+                                            Rule::and_expression,
+                                            crate::BinaryOperator::And,
+                                            |pair, mut context| {
+                                                context.parse_binary(
+                                                    pair,
+                                                    Rule::equality_expression,
+                                                    crate::BinaryOperator::Equals,
+                                                    |pair, context| {
+                                                        self.parse_relational_expression(
+                                                            pair, context,
+                                                        )
+                                                    },
+                                                )
+                                            },
+                                        )
+                                    },
+                                )
+                            },
+                        )
+                    },
+                )
+            },
         )
     }
 
@@ -419,13 +439,17 @@ impl Parser {
         };
         for (const_token, constant) in module.constants.iter() {
             if let Some(ref name) = constant.name {
-                let expr_token = fun.expressions.append(crate::Expression::Constant(const_token));
+                let expr_token = fun
+                    .expressions
+                    .append(crate::Expression::Constant(const_token));
                 lookup_ident.insert(name.clone(), expr_token);
             }
         }
         for (var_token, variable) in module.global_variables.iter() {
             if let Some(ref name) = variable.name {
-                let expr_token = fun.expressions.append(crate::Expression::GlobalVariable(var_token));
+                let expr_token = fun
+                    .expressions
+                    .append(crate::Expression::GlobalVariable(var_token));
                 lookup_ident.insert(name.clone(), expr_token);
             }
         }
@@ -435,8 +459,14 @@ impl Parser {
         for (i, variable_ident_decl) in param_list.into_inner().enumerate() {
             assert_eq!(variable_ident_decl.as_rule(), Rule::variable_ident_decl);
             let mut variable_ident_decl_pairs = variable_ident_decl.into_inner();
-            let param_name = variable_ident_decl_pairs.next().unwrap().as_str().to_owned();
-            let expression_token = fun.expressions.append(crate::Expression::FunctionParameter(i as u32));
+            let param_name = variable_ident_decl_pairs
+                .next()
+                .unwrap()
+                .as_str()
+                .to_owned();
+            let expression_token = fun
+                .expressions
+                .append(crate::Expression::FunctionParameter(i as u32));
             lookup_ident.insert(param_name, expression_token);
             let param_type_decl = variable_ident_decl_pairs.next().unwrap();
             let ty = self.parse_type_decl(param_type_decl, &mut module.types)?;
@@ -476,25 +506,24 @@ impl Parser {
                     let variable_decl = variable_pairs.next().unwrap();
                     match variable_decl.as_rule() {
                         Rule::variable_decl => {
-                            let (name, class, ty) = self.parse_variable_decl(variable_decl, context.types)?;
+                            let (name, class, ty) =
+                                self.parse_variable_decl(variable_decl, context.types)?;
                             if let Some(class) = class {
                                 return Err(Error::InvalidVariableClass(class));
                             }
                             let value = if let Some(value_pair) = variable_pairs.next() {
-                                let value_token = self.parse_primary_expression(value_pair, context)?;
+                                let value_token =
+                                    self.parse_primary_expression(value_pair, context)?;
                                 lookup_ident.insert(name.clone(), value_token);
                                 Some(value_token)
                             } else {
                                 None
                             };
-                            crate::Statement::VariableDeclaration {
-                                name,
-                                ty,
-                                value,
-                            }
+                            crate::Statement::VariableDeclaration { name, ty, value }
                         }
                         Rule::variable_ident_decl => {
-                            let (name, ty) = self.parse_variable_ident_decl(variable_decl, context.types)?;
+                            let (name, ty) =
+                                self.parse_variable_ident_decl(variable_decl, context.types)?;
                             let value_pair = variable_pairs.next().unwrap();
                             let value_token = self.parse_primary_expression(value_pair, context)?;
                             lookup_ident.insert(name.clone(), value_token);
@@ -504,12 +533,13 @@ impl Parser {
                                 value: Some(value_token),
                             }
                         }
-                        _ => panic!("Unexpected variable decl {:?}", variable_decl)
+                        _ => panic!("Unexpected variable decl {:?}", variable_decl),
                     }
                 }
                 Rule::assignment_statement => {
                     let mut assignment_pairs = first_statement.into_inner();
-                    let left_token = lookup_ident.lookup(assignment_pairs.next().unwrap().as_str())?;
+                    let left_token =
+                        lookup_ident.lookup(assignment_pairs.next().unwrap().as_str())?;
                     let right_pair = assignment_pairs.next().unwrap();
                     let right_token = self.parse_primary_expression(right_pair, context)?;
                     crate::Statement::Store {
@@ -540,9 +570,11 @@ impl Parser {
                         }
                         Rule::global_variable_decl => {
                             let mut global_decl_pairs = global_decl.into_inner();
-                            let binding = Self::parse_decoration_list(global_decl_pairs.next().unwrap())?;
+                            let binding =
+                                Self::parse_decoration_list(global_decl_pairs.next().unwrap())?;
                             let var_decl = global_decl_pairs.next().unwrap();
-                            let (name, class, ty) = self.parse_variable_decl(var_decl, &mut module.types)?;
+                            let (name, class, ty) =
+                                self.parse_variable_decl(var_decl, &mut module.types)?;
                             module.global_variables.append(crate::GlobalVariable {
                                 name: Some(name),
                                 class: class.unwrap_or(spirv::StorageClass::Private),
@@ -553,9 +585,15 @@ impl Parser {
                         Rule::global_constant_decl => {
                             let mut global_constant_pairs = global_decl.into_inner();
                             let variable_ident_decl = global_constant_pairs.next().unwrap();
-                            let (name, _ty) = self.parse_variable_ident_decl(variable_ident_decl, &mut module.types)?;
+                            let (name, _ty) = self.parse_variable_ident_decl(
+                                variable_ident_decl,
+                                &mut module.types,
+                            )?;
                             let const_expr_decl = global_constant_pairs.next().unwrap();
-                            let inner = Self::parse_const_expression(const_expr_decl, &mut module.constants)?;
+                            let inner = Self::parse_const_expression(
+                                const_expr_decl,
+                                &mut module.constants,
+                            )?;
                             module.constants.append(crate::Constant {
                                 name: Some(name),
                                 specialization: None,
@@ -568,14 +606,16 @@ impl Parser {
                             let something_decl = type_alias_pairs.next().unwrap();
                             match something_decl.as_rule() {
                                 Rule::type_decl => {
-                                    let token = self.parse_type_decl(something_decl, &mut module.types)?;
+                                    let token =
+                                        self.parse_type_decl(something_decl, &mut module.types)?;
                                     self.lookup_type.insert(name, token);
                                 }
                                 Rule::struct_decl => {
                                     let mut struct_decl_pairs = something_decl.into_inner();
                                     let mut body = struct_decl_pairs.next().unwrap();
                                     while body.as_rule() == Rule::struct_decoration_decl {
-                                        body = struct_decl_pairs.next().unwrap(); //skip
+                                        body = struct_decl_pairs.next().unwrap();
+                                        //skip
                                     }
                                     let inner = self.parse_struct_decl(body, &mut module.types)?;
                                     module.types.append(crate::Type {
@@ -599,20 +639,23 @@ impl Parser {
                                 fun_name_pair = ep_decl_pairs.next().unwrap();
                             }
                             let fun_ident = fun_name_pair.as_str();
-                            let function = module.functions
+                            let function = module
+                                .functions
                                 .iter()
-                                .find(|(_, fun)| fun.name.as_ref().map(|s| s.as_str()) == Some(fun_ident))
+                                .find(|(_, fun)| {
+                                    fun.name.as_ref().map(|s| s.as_str()) == Some(fun_ident)
+                                })
                                 .map(|(token, _)| token)
                                 .ok_or(Error::UnknownFunction(fun_ident.to_owned()))?;
                             module.entry_points.push(crate::EntryPoint {
                                 exec_model: match pipeline_stage_pair.as_str() {
                                     "vertex" => spirv::ExecutionModel::Vertex,
                                     "fragment" => spirv::ExecutionModel::Fragment,
-                                    "compute" =>  spirv::ExecutionModel::GLCompute,
+                                    "compute" => spirv::ExecutionModel::GLCompute,
                                     other => panic!("Unknown execution model {:?}", other),
                                 },
                                 name,
-                                inputs: Vec::new(), //TODO
+                                inputs: Vec::new(),  //TODO
                                 outputs: Vec::new(), //TODO
                                 function,
                             });

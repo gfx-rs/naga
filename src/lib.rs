@@ -13,7 +13,6 @@ use std::{
     hash::BuildHasherDefault,
 };
 
-
 type FastHashMap<K, T> = HashMap<K, T, BuildHasherDefault<fxhash::FxHasher>>;
 type FastHashSet<K> = HashSet<K, BuildHasherDefault<fxhash::FxHasher>>;
 
@@ -74,13 +73,37 @@ pub struct Type {
 
 #[derive(Debug, PartialEq)]
 pub enum TypeInner {
-    Scalar { kind: ScalarKind, width: Bytes },
-    Vector { size: VectorSize, kind: ScalarKind, width: Bytes },
-    Matrix { columns: VectorSize, rows: VectorSize, kind: ScalarKind, width: Bytes },
-    Pointer { base: Token<Type>, class: spirv::StorageClass },
-    Array { base: Token<Type>, size: ArraySize },
-    Struct { members: Vec<StructMember> },
-    Image { base: Token<Type>, dim: spirv::Dim, flags: ImageFlags },
+    Scalar {
+        kind: ScalarKind,
+        width: Bytes,
+    },
+    Vector {
+        size: VectorSize,
+        kind: ScalarKind,
+        width: Bytes,
+    },
+    Matrix {
+        columns: VectorSize,
+        rows: VectorSize,
+        kind: ScalarKind,
+        width: Bytes,
+    },
+    Pointer {
+        base: Token<Type>,
+        class: spirv::StorageClass,
+    },
+    Array {
+        base: Token<Type>,
+        size: ArraySize,
+    },
+    Struct {
+        members: Vec<StructMember>,
+    },
+    Image {
+        base: Token<Type>,
+        dim: spirv::Dim,
+        flags: ImageFlags,
+    },
     Sampler,
 }
 
@@ -103,7 +126,10 @@ pub enum ConstantInner {
 pub enum Binding {
     BuiltIn(spirv::BuiltIn),
     Location(spirv::Word),
-    Descriptor { set: spirv::Word, binding: spirv::Word },
+    Descriptor {
+        set: spirv::Word,
+        binding: spirv::Word,
+    },
 }
 
 #[derive(Clone, Debug)]
