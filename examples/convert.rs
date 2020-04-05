@@ -83,7 +83,7 @@ fn main() {
             debug_enabled = true;
         }
 
-        let mut parser = spirv::Parser::new(&module, debug_enabled);
+        let mut parser = spirv::parser::Parser::new(&module, debug_enabled);
         let spirv = parser.parse(&module);
 
         let mut bytes: Vec<u8> = vec![];

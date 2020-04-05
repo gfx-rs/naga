@@ -1,232 +1,47 @@
 /*! Standard Portable Intermediate Representation (SPIR-V) backend !*/
 use spirv::*;
-use crate::{FastHashMap, BinaryOperator};
+use crate::{FastHashMap};
+use super::layout::{
+    Module,
+    Instruction,
+};
 
-struct PhysicalLayout {
-    magic_number: Word,
-    version: Word,
-    generator: Word,
-    bound: Word,
-    instruction_schema: Word,
+trait LookupHelper<T> {
+    type Target;
+    fn lookup_id(&self, handle: &crate::Handle<T>) -> Option<Word>;
+    fn lookup_handle(&self, word: &Word) -> Option<crate::Handle<T>>;
 }
 
-impl PhysicalLayout {
-    fn new(
-        version: Word,
-        generator: Word,
-        instruction_schema: Word
-    ) -> Self {
-        PhysicalLayout {
-            magic_number: MAGIC_NUMBER,
-            version,
-            generator,
-            bound: 0,
-            instruction_schema
+impl<T> LookupHelper<T> for FastHashMap<Word, crate::Handle<T>> {
+    type Target = T;
+
+    fn lookup_id(&self, handle: &crate::Handle<T>) -> Option<Word> {
+        let mut word = None;
+        for (k, v) in self.iter() {
+            if v.eq(handle) {
+                word = Some(*k);
+                break;
+            }
         }
+        word
     }
 
-    fn in_words(&self) -> Vec<Word> {
-        let mut words: Vec<Word> = vec![];
-
-        words.push(self.magic_number);
-        words.push(self.version);
-        words.push(self.generator);
-
-        match self.bound {
-            0 => panic!("Bound cannot be 0"),
-            _ => words.push(self.bound),
+    fn lookup_handle(&self, word: &u32) -> Option<crate::Handle<T>> {
+        let mut handle = None;
+        for (k, v) in self.iter() {
+            if k.eq(word) {
+                handle = Some(*v);
+                break;
+            }
         }
-
-        words.push(self.instruction_schema);
-        words
+        handle
     }
 }
 
-struct LogicalLayout {
-    capabilities: Vec<Word>,
-    extensions: Vec<Word>,
-    ext_inst_imports: Vec<Word>,
-    memory_model: Vec<Word>,
-    entry_points: Vec<Word>,
-    execution_modes: Vec<Word>,
-    debugs: Vec<Word>,
-    annotations: Vec<Word>,
-    type_declarations: Vec<Word>,
-    constants: Vec<Word>,
-    global_variables: Vec<Word>,
-    function_declarations: Vec<Word>,
-    function_definitions: Vec<Word>,
-}
-
-impl LogicalLayout {
-    fn new() -> Self {
-        LogicalLayout {
-            capabilities: vec![],
-            extensions: vec![],
-            ext_inst_imports: vec![],
-            memory_model: vec![],
-            entry_points: vec![],
-            execution_modes: vec![],
-            debugs: vec![],
-            annotations: vec![],
-            type_declarations: vec![],
-            constants: vec![],
-            global_variables: vec![],
-            function_declarations: vec![],
-            function_definitions: vec![],
-        }
-    }
-
-    fn in_words(
-        &self,
-    ) -> Vec<u32> {
-        let mut words: Vec<Word> = vec![];
-
-        for capability in self.capabilities.iter() {
-            words.push(*capability);
-        }
-
-        for extension in self.extensions.iter() {
-            words.push(*extension);
-        }
-
-        for ext_inst_import in self.ext_inst_imports.iter() {
-            words.push(*ext_inst_import);
-        }
-
-        for memory_model in self.memory_model.iter() {
-            words.push(*memory_model);
-        }
-
-        for entry_point in self.entry_points.iter() {
-            words.push(*entry_point);
-        }
-
-        for execution_mode in self.execution_modes.iter() {
-            words.push(*execution_mode);
-        }
-
-        for debug in self.debugs.iter() {
-            words.push(*debug);
-        }
-
-        for annotation in self.annotations.iter() {
-            words.push(*annotation);
-        }
-
-        for type_declaration in self.type_declarations.iter() {
-            words.push(*type_declaration);
-        }
-
-        for constants in self.constants.iter() {
-            words.push(*constants);
-        }
-
-        for global_variables in self.global_variables.iter() {
-            words.push(*global_variables);
-        }
-
-        for function_declaration in self.function_declarations.iter() {
-            words.push(*function_declaration);
-        }
-
-        for function_definition in self.function_definitions.iter() {
-            words.push(*function_definition);
-        }
-
-        words
-    }
-}
-
-struct Module {
-    physical_layout: PhysicalLayout,
-    logical_layout: LogicalLayout
-}
-
-impl Module {
-    fn new(module: &crate::Module) -> Self {
-        let version: Word = (0x0u32 << 24) |
-            ((module.header.version.0 as u32) << 16) |
-            ((module.header.version.1 as u32) << 8) |
-            module.header.version.2 as u32;
-
-        Module {
-            physical_layout: PhysicalLayout::new(
-                version,
-                module.header.generator,
-                0x0u32
-            ),
-            logical_layout: LogicalLayout::new(),
-        }
-    }
-}
-
-pub struct Instruction {
-    op: u32,
-    wc: u32,
-    type_id: Option<Word>,
-    result_id: Option<Word>,
-    operands: Vec<Word>,
-}
-
-impl Instruction {
-    fn new(
-        op: Op,
-    ) -> Self {
-        Instruction {
-            op: op as u32,
-            wc: 1, // Always start at 1 for the first word (OP + WC),
-            type_id: None,
-            result_id: None,
-            operands: vec![],
-        }
-    }
-
-    fn set_type(&mut self, id: Word) {
-        if self.type_id.is_none() {
-            self.wc += 1;
-        }
-        self.type_id = Some(id);
-    }
-
-    fn set_result(&mut self, id: Word) {
-        if self.result_id.is_none() {
-            self.wc += 1;
-        }
-        self.result_id = Some(id);
-    }
-
-    fn add_operand(&mut self, operand: Word) {
-        self.operands.push(operand);
-        self.wc += 1;
-    }
-
-    fn add_operands(&mut self, operands: Vec<Word>) {
-        for operand in operands {
-            self.add_operand(operand);
-        }
-    }
-
-    fn to_words(&self) -> Vec<Word> {
-        let mut words = Vec::with_capacity(self.wc as usize);
-        let wc_op = (self.wc << 16 | self.op ) as u32;
-
-        words.push(wc_op);
-
-        if self.type_id.is_some() {
-            words.push(self.type_id.unwrap());
-        }
-
-        if self.result_id.is_some() {
-            words.push(self.result_id.unwrap());
-        }
-
-        for operand in self.operands.iter() {
-            words.push(*operand);
-        }
-
-        words
-    }
+#[derive(Debug, PartialEq)]
+struct LookupFunctionType {
+    parameter_type_ids: Vec<Word>,
+    return_type_id: Word,
 }
 
 pub struct Parser {
@@ -235,15 +50,13 @@ pub struct Parser {
     capabilities: Vec<Capability>,
     debugs: Vec<Instruction>,
     annotations: Vec<Instruction>,
-
-    scalar_types_lookup: FastHashMap<u8, u32>,
-    void_type: Option<u32>,
     debug_enabled: bool,
+    void_type: Option<u32>,
     lookup_type: FastHashMap<Word, crate::Handle<crate::Type>>,
     lookup_function: FastHashMap<Word, crate::Handle<crate::Function>>,
+    lookup_function_type: FastHashMap<Word, LookupFunctionType>,
     lookup_constant: FastHashMap<Word, crate::Handle<crate::Constant>>,
     lookup_global_variable: FastHashMap<Word, crate::Handle<crate::GlobalVariable>>,
-    lookup_pointer: FastHashMap<Word, Word>,
 }
 
 impl Parser {
@@ -257,23 +70,20 @@ impl Parser {
             capabilities: vec![],
             debugs: vec![],
             annotations: vec![],
-
-            scalar_types_lookup: FastHashMap::default(),
-            void_type: None,
             debug_enabled,
-
+            void_type: None,
             lookup_type: FastHashMap::default(),
             lookup_function: FastHashMap::default(),
+            lookup_function_type: FastHashMap::default(),
             lookup_constant: FastHashMap::default(),
             lookup_global_variable: FastHashMap::default(),
-            lookup_pointer: FastHashMap::default(),
         }
     }
 
     fn generate_id(
         &mut self,
-    ) -> u32 {
-         self.id_count += 1;
+    ) -> Word {
+        self.id_count += 1;
         self.id_count
     }
 
@@ -337,6 +147,18 @@ impl Parser {
         instruction
     }
 
+    fn try_add_capabilities(
+        &mut self,
+        capabilities: &[Capability],
+    ) {
+        for capability in capabilities.iter() {
+            if !self.capabilities.contains(capability) {
+                self.instruction_capability(capability);
+                self.capabilities.push(*capability);
+            }
+        }
+    }
+
     fn instruction_ext_inst_import(&mut self) -> Instruction {
         let mut instruction= Instruction::new(Op::ExtInstImport);
         let id = self.generate_id();
@@ -345,10 +167,15 @@ impl Parser {
         instruction
     }
 
-    fn instruction_memory_model(&self) -> Instruction {
+    fn instruction_memory_model(&mut self) -> Instruction {
         let mut instruction= Instruction::new(Op::MemoryModel);
-        instruction.add_operand(AddressingModel::Logical as u32);
-        instruction.add_operand(MemoryModel::GLSL450 as u32);
+        let addressing_model = AddressingModel::Logical;
+        let memory_model = MemoryModel::GLSL450;
+        self.try_add_capabilities(addressing_model.required_capabilities());
+        self.try_add_capabilities(memory_model.required_capabilities());
+
+        instruction.add_operand(addressing_model as u32);
+        instruction.add_operand(memory_model as u32);
         instruction
     }
 
@@ -358,7 +185,7 @@ impl Parser {
         ir_module: &crate::Module,
     ) -> Instruction {
         let mut instruction = Instruction::new(Op::EntryPoint);
-        let function_id = self.lookup_function(entry_point.function);
+        let function_id = self.lookup_function.lookup_id(&entry_point.function).unwrap();
 
         instruction.add_operand(entry_point.exec_model as u32);
         instruction.add_operand(function_id);
@@ -386,139 +213,27 @@ impl Parser {
             }
         }
 
+        self.try_add_capabilities(entry_point.exec_model.required_capabilities());
+        match entry_point.exec_model {
+            ExecutionModel::Vertex => {
 
-        // TODO Always adding the same ExecutionMode, need to be researched how this works
-        let mut execution_mode_instruction
-            = Instruction::new(Op::ExecutionMode);
-        execution_mode_instruction.add_operand(function_id);
-        execution_mode_instruction.add_operand(ExecutionMode::OriginUpperLeft as u32);
-        for word in execution_mode_instruction.to_words() {
-            self.module.logical_layout.execution_modes.push(word)
+            }
+            ExecutionModel::Fragment => {
+                let execution_mode = ExecutionMode::OriginUpperLeft;
+                self.try_add_capabilities(execution_mode.required_capabilities());
+
+                let mut execution_mode_instruction
+                    = Instruction::new(Op::ExecutionMode);
+                execution_mode_instruction.add_operand(function_id);
+                execution_mode_instruction.add_operand(execution_mode as u32);
+                for word in execution_mode_instruction.to_words() {
+                    self.module.logical_layout.execution_modes.push(word)
+                }
+            }
+            _ => unimplemented!()
         }
 
         instruction
-    }
-
-    fn lookup_function(
-        &mut self,
-        handle: crate::Handle<crate::Function>,
-    ) -> Word {
-        let mut word = 0;
-        for (k, v) in self.lookup_function.iter() {
-            if v.eq(&handle) {
-                word = *k;
-                break;
-            }
-        }
-
-        // TODO error handling
-        word
-    }
-
-    fn lookup_pointer(
-        &mut self,
-        type_id: Word,
-    ) -> Option<Word> {
-        let mut word = None;
-        for (k, v) in self.lookup_pointer.iter() {
-            if k.eq(&type_id) {
-                word = Some(*v);
-                break;
-            }
-        }
-        word
-    }
-
-    fn get_pointer(
-        &mut self,
-        type_id: Word,
-        class: u32,
-    ) -> Word {
-        match self.lookup_pointer(type_id) {
-            Some(word) => word,
-            None => {
-                let mut instruction
-                    = Instruction::new(Op::TypePointer);
-                let id = self.generate_id();
-                instruction.set_result(id);
-                instruction.add_operand(class);
-                instruction.add_operand(type_id);
-
-                for words in instruction.to_words() {
-                    self.module.logical_layout.type_declarations.push(words);
-                }
-
-                id
-            }
-        }
-    }
-
-    fn lookup_scalar_type(
-        &mut self,
-        kind: u8,
-    ) -> Option<Word> {
-        let mut word = None;
-
-        for (k, v) in self.scalar_types_lookup.iter() {
-            if k.eq(&kind) {
-                word = Some(*v);
-                break;
-            }
-        }
-
-        word
-    }
-
-    fn get_scalar_type(
-        &mut self,
-        kind: &crate::ScalarKind,
-        width: u8,
-    ) -> Word {
-        let kind_u8: u8 = unsafe {
-            std::mem::transmute(*kind)
-        };
-
-        match self.lookup_scalar_type(kind_u8) {
-            Some(word) => word,
-            None => {
-                let (instruction, id) = self.instruction_scalar_type_declaration(kind, width);
-
-                for words in instruction.to_words() {
-                    self.module.logical_layout.type_declarations.push(words);
-                }
-
-                self.scalar_types_lookup.insert(kind_u8, id);
-
-                id
-            }
-        }
-    }
-
-    fn lookup_type(
-        &mut self,
-        handle: &crate::Handle<crate::Type>,
-        ty: &crate::Type,
-    ) -> Option<Word> {
-        match ty.inner {
-            crate::TypeInner::Scalar { kind, .. } => {
-                let kind_u8: u8 = unsafe {
-                    std::mem::transmute(kind)
-                };
-
-                self.lookup_scalar_type(kind_u8)
-            }
-            _ => {
-                let mut word = None;
-                for (k, v) in self.lookup_type.iter() {
-                    if v.eq(&handle) {
-                        word = Some(*k);
-                        break;
-                    }
-                }
-
-                word
-            }
-        }
     }
 
     fn get_type_id(
@@ -526,31 +241,18 @@ impl Parser {
         arena: &crate::Arena<crate::Type>,
         handle: &crate::Handle<crate::Type>,
     ) -> Word {
-        let ty = &arena[*handle];
-
-        match self.lookup_type(handle, ty) {
+        match self.lookup_type.lookup_id(&handle)
+        {
             Some(word) => word,
             None => {
-                let id = self.instruction_type_declaration(arena, *handle);
+                let (instruction, id) = self.instruction_type_declaration(arena, *handle);
+
+                for words in instruction.to_words() {
+                    self.module.logical_layout.type_declarations.push(words);
+                }
                 id
             }
         }
-    }
-
-    fn lookup_constant(
-        &mut self,
-        handle: &crate::Handle<crate::Constant>,
-    ) -> Option<Word> {
-        let mut word = None;
-
-        for (k, v) in self.lookup_constant.iter() {
-            if v.eq(&handle) {
-                word = Some(*k);
-                break;
-            }
-        };
-
-        word
     }
 
     fn get_constant_id(
@@ -558,7 +260,7 @@ impl Parser {
         handle: &crate::Handle<crate::Constant>,
         ir_module: &crate::Module,
     ) -> Word {
-        match self.lookup_constant(handle) {
+        match self.lookup_constant.lookup_id(&handle) {
             Some(word) => word,
             None => {
                 let (instruction, id) = self.instruction_constant_type(*handle, ir_module);
@@ -566,25 +268,9 @@ impl Parser {
                 for words in instruction.to_words() {
                     self.module.logical_layout.constants.push(words);
                 }
-
                 id
             }
         }
-    }
-
-    fn lookup_global_variable(
-        &mut self,
-        handle: &crate::Handle<crate::GlobalVariable>,
-    ) -> Option<Word> {
-        let mut word = None;
-        for (k, v) in self.lookup_global_variable.iter() {
-            if v.eq(&handle) {
-                word = Some(*k);
-                break;
-            }
-        };
-
-        word
     }
 
     fn get_global_variable_id(
@@ -593,7 +279,7 @@ impl Parser {
         global_arena: &crate::Arena<crate::GlobalVariable>,
         handle: &crate::Handle<crate::GlobalVariable>,
     ) -> Word {
-        match self.lookup_global_variable(handle) {
+        match self.lookup_global_variable.lookup_id(&handle) {
             Some(word) => word,
             None => {
                 let global_variable = &global_arena[*handle];
@@ -602,111 +288,131 @@ impl Parser {
                 for words in instruction.to_words() {
                     self.module.logical_layout.global_variables.push(words);
                 }
-
                 id
             }
         }
     }
 
-    fn instruction_scalar_type_declaration(
+    fn get_function_type(
         &mut self,
-        kind: &crate::ScalarKind,
-        width: u8,
-    ) -> (Instruction, Word) {
-        let id = self.generate_id();
-        match kind {
-            crate::ScalarKind::Sint => {
-                let mut instruction
-                    = Instruction::new(Op::TypeInt);
-                instruction.set_result(id);
-                instruction.add_operand(width as u32);
-                instruction.add_operand(0x1u32);
-                (instruction, id)
+        ty: Option<crate::Handle<crate::Type>>,
+        arena: &crate::Arena<crate::Type>,
+    ) -> Word {
+        match ty {
+            Some(handle) => {
+                self.get_type_id(arena, &handle)
             }
-            crate::ScalarKind::Uint => {
-                let mut instruction
-                    = Instruction::new(Op::TypeInt);
-                instruction.set_result(id);
-                instruction.add_operand(width as u32);
-                instruction.add_operand(0x0u32);
-                (instruction, id)
-            }
-            crate::ScalarKind::Float => {
-                let mut instruction
-                    = Instruction::new(Op::TypeFloat);
-                instruction.set_result(id);
-                instruction.add_operand(width as u32);
-                (instruction, id)
-            }
-            crate::ScalarKind::Bool => {
-                let mut instruction
-                    = Instruction::new(Op::TypeBool);
-                instruction.set_result(id);
-                (instruction, id)
+            None => {
+                match self.void_type {
+                    Some(id) => id,
+                    None => {
+                        let id = self.generate_id();
+
+                        let mut instruction
+                            = Instruction::new(Op::TypeVoid);
+                        instruction.set_result(id);
+
+                        self.void_type = Some(id);
+                        for word in instruction.to_words().iter() {
+                            self.module.logical_layout.type_declarations.push(*word);
+                        }
+                        id
+                    }
+                }
             }
         }
+    }
+
+    fn find_scalar_handle(
+        &self,
+        arena: &crate::Arena<crate::Type>,
+        kind: &crate::ScalarKind,
+        width: &u8,
+    ) -> crate::Handle<crate::Type> {
+        let mut scalar_handle = None;
+        for (handle, ty) in arena.iter() {
+            match ty.inner {
+                crate::TypeInner::Scalar { kind: _kind, width: _width } => {
+                    if kind == &_kind && width == &_width {
+                        scalar_handle = Some(handle);
+                        break
+                    }
+                }
+                _ => continue
+            }
+        }
+        scalar_handle.unwrap()
     }
 
     fn instruction_type_declaration(
         &mut self,
         arena: &crate::Arena<crate::Type>,
         handle: crate::Handle<crate::Type>,
-    ) -> Word {
+    ) -> (Instruction, Word) {
         let ty = &arena[handle];
-
+        let id = self.generate_id();
+        let mut instruction;
 
         match ty.inner {
             crate::TypeInner::Scalar { kind, width } => {
-                let (instruction, id) = self.instruction_scalar_type_declaration(&kind, width);
-                for words in instruction.to_words() {
-                    self.module.logical_layout.type_declarations.push(words);
+                match kind {
+                    crate::ScalarKind::Sint => {
+                        instruction = Instruction::new(Op::TypeInt);
+                        instruction.set_result(id);
+                        instruction.add_operand(width as u32);
+                        instruction.add_operand(0x1u32);
+                    }
+                    crate::ScalarKind::Uint => {
+                        instruction = Instruction::new(Op::TypeInt);
+                        instruction.set_result(id);
+                        instruction.add_operand(width as u32);
+                        instruction.add_operand(0x0u32);
+                    }
+                    crate::ScalarKind::Float => {
+                        instruction = Instruction::new(Op::TypeFloat);
+                        instruction.set_result(id);
+                        instruction.add_operand(width as u32);
+                    }
+                    crate::ScalarKind::Bool => {
+                        instruction = Instruction::new(Op::TypeBool);
+                        instruction.set_result(id);
+                    }
                 }
-
-                id
+                self.lookup_type.insert(id, handle);
             }
             crate::TypeInner::Vector { size, kind, width } => {
-                let id = self.generate_id();
-                let kind_id = self.get_scalar_type(&kind, width);
+                let scalar_handle = self.find_scalar_handle(arena, &kind, &width);
+                let scalar_id = self.get_type_id(arena, &scalar_handle);
 
-                let mut instruction
-                    = Instruction::new(Op::TypeVector);
+                instruction = Instruction::new(Op::TypeVector);
                 instruction.set_result(id);
-                instruction.add_operand(kind_id);
+                instruction.add_operand(scalar_id);
                 instruction.add_operand(size as u32);
 
                 self.lookup_type.insert(id, handle);
-                for words in instruction.to_words() {
-                    self.module.logical_layout.type_declarations.push(words);
-                }
-                id
             }
             crate::TypeInner::Matrix { columns, rows: _, kind, width } => {
-                let id = self.generate_id();
-                let kind_id = self.get_scalar_type(&kind, width);
+                let scalar_handle = self.find_scalar_handle(arena, &kind, &width);
+                let scalar_id = self.get_type_id(arena, &scalar_handle);
 
-                let mut instruction
-                    = Instruction::new(Op::TypeMatrix);
+                instruction = Instruction::new(Op::TypeMatrix);
                 instruction.set_result(id);
-                instruction.add_operand(kind_id);
+                instruction.add_operand(scalar_id);
                 instruction.add_operand(columns as u32);
-
-                self.lookup_type.insert(id, handle);
-                for words in instruction.to_words() {
-                    self.module.logical_layout.type_declarations.push(words);
-                }
-                id
             }
             crate::TypeInner::Pointer { base, class } => {
                 let type_id = self.get_type_id(arena, &base);
-                let id = self.get_pointer(type_id, class as u32);
-                id
+                instruction = Instruction::new(Op::TypePointer);
+                instruction.set_result(id);
+                instruction.add_operand(class as u32);
+                instruction.add_operand(type_id);
+
+                self.lookup_type.insert(id, handle);
             }
             crate::TypeInner::Array { base, size } => {
-                let id = self.generate_id();
                 let type_id = self.get_type_id(arena, &handle);
 
-                let mut instruction
-                    = Instruction::new(Op::TypeArray);
+                instruction = Instruction::new(Op::TypeArray);
                 instruction.set_result(id);
                 instruction.add_operand(type_id);
 
@@ -718,15 +424,9 @@ impl Parser {
                 }
 
                 self.lookup_type.insert(id, base);
-                for words in instruction.to_words() {
-                    self.module.logical_layout.type_declarations.push(words);
-                }
-                id
             }
             crate::TypeInner::Struct { ref members } => {
-                let id = self.generate_id();
-                let mut instruction
-                    = Instruction::new(Op::TypeStruct);
+                instruction = Instruction::new(Op::TypeStruct);
                 instruction.set_result(id);
 
                 for member in members {
@@ -736,17 +436,12 @@ impl Parser {
                 }
 
                 self.lookup_type.insert(id, handle);
-                for words in instruction.to_words() {
-                    self.module.logical_layout.type_declarations.push(words);
-                }
-                id
             }
             crate::TypeInner::Image { base, dim, flags } => {
-                let id = self.generate_id();
                 let type_id = self.get_type_id(arena, &base);
+                self.try_add_capabilities(dim.required_capabilities());
 
-                let mut instruction
-                    = Instruction::new(Op::TypeImage);
+                instruction = Instruction::new(Op::TypeImage);
                 instruction.set_result(id);
                 instruction.add_operand(type_id);
                 instruction.add_operand(dim as u32);
@@ -797,24 +492,15 @@ impl Parser {
                 }
 
                 self.lookup_type.insert(id, base);
-                for words in instruction.to_words() {
-                    self.module.logical_layout.type_declarations.push(words);
-                }
-                id
             }
             crate::TypeInner::Sampler => {
-                let id = self.generate_id();
-                let mut instruction
-                    = Instruction::new(Op::TypeSampler);
+                instruction = Instruction::new(Op::TypeSampler);
                 instruction.set_result(id);
-
                 self.lookup_type.insert(id, handle);
-                for words in instruction.to_words() {
-                    self.module.logical_layout.type_declarations.push(words);
-                }
-                id
             }
         }
+
+        (instruction, id)
     }
 
     fn instruction_constant_type(
@@ -946,6 +632,39 @@ impl Parser {
         }
     }
 
+    fn get_pointer_id(
+        &mut self,
+        arena: &crate::Arena<crate::Type>,
+        handle: &crate::Handle<crate::Type>,
+        class: &StorageClass,
+    ) -> Word {
+        let ty = &arena[*handle];
+        let type_id = self.get_type_id(arena, handle);
+        match ty.inner {
+            crate::TypeInner::Pointer { .. } => {
+                type_id
+            }
+            _ => {
+                let pointer_id = self.generate_id();
+                let mut instruction = Instruction::new(Op::TypePointer);
+                instruction.set_result(pointer_id);
+                instruction.add_operand((*class) as u32);
+                instruction.add_operand(type_id);
+                for words in instruction.to_words() {
+                    self.module.logical_layout.type_declarations.push(words);
+                }
+
+                /* TODO
+                    Not able to lookup Pointer, because there is no Handle in the IR for it.
+                    Idea would be to not have any handles at all in the lookups, so we aren't bound
+                    to the IR. We can then insert, like here runtime values to the lookups
+                */
+                // self.lookup_type.insert(pointer_id, global_variable.ty);
+                pointer_id
+            }
+        }
+    }
+
     fn instruction_global_variable(
         &mut self,
         arena: &crate::Arena<crate::Type>,
@@ -955,8 +674,10 @@ impl Parser {
         let mut instruction
             = Instruction::new(Op::Variable);
         let id = self.generate_id();
-        let type_id = self.get_type_id(arena, &global_variable.ty);
-        let pointer_id = self.get_pointer(type_id, global_variable.class as u32);
+
+        self.try_add_capabilities(global_variable.class.required_capabilities());
+
+        let pointer_id = self.get_pointer_id(arena, &global_variable.ty, &global_variable.class);
 
         instruction.set_type(pointer_id);
         instruction.set_result(id);
@@ -996,9 +717,17 @@ impl Parser {
                 binding_instruction.add_operand(*binding);
                 self.annotations.push(binding_instruction);
             }
-            crate::Binding::BuiltIn(_) => {
-                // TODO
-                panic!("unsupported")
+            crate::Binding::BuiltIn(built_in) => {
+                let built_in_u32 : u32 = unsafe {
+                    std::mem::transmute(*built_in)
+                };
+
+                let mut instruction
+                    = Instruction::new(Op::Decorate);
+                instruction.add_operand(id);
+                instruction.add_operand(Decoration::BuiltIn as u32);
+                instruction.add_operand(built_in_u32);
+                self.annotations.push(instruction);
             }
         }
 
@@ -1025,50 +754,39 @@ impl Parser {
         instruction
     }
 
-    fn get_or_insert_function_type_id(
+    fn instruction_function_type(
         &mut self,
-        ty: Option<crate::Handle<crate::Type>>,
-        arena: &crate::Arena<crate::Type>,
+        lookup_function_type: LookupFunctionType,
     ) -> Word {
-        match ty {
-            Some(handle) => {
-                self.get_type_id(arena, &handle)
-            }
-            None => {
-                match self.void_type {
-                    Some(id) => id,
-                    None => {
-                        let id = self.generate_id();
+        let mut id = None;
 
-                        let mut instruction
-                            = Instruction::new(Op::TypeVoid);
-                        instruction.set_result(id);
-
-                        self.void_type = Some(id);
-                        for word in instruction.to_words().iter() {
-                            self.module.logical_layout.type_declarations.push(*word);
-                        }
-                        id
-                    }
-                }
+        for (k, v) in self.lookup_function_type.iter() {
+            if v.eq(&lookup_function_type) {
+                id = Some(*k);
+                break;
             }
         }
-    }
 
-    fn instruction_type_function(
-        &mut self,
-        return_type_id: Word,
-    ) -> (Instruction, Word) {
-        let id = self.generate_id();
+        if id.is_none() {
+            let _id = self.generate_id();
+            id = Some(_id);
 
-        let mut instruction
-            = Instruction::new(Op::TypeFunction);
-        instruction.set_result(id);
-        instruction.add_operand(return_type_id);
+            let mut instruction
+                = Instruction::new(Op::TypeFunction);
+            instruction.set_result(_id);
+            instruction.add_operand(lookup_function_type.return_type_id);
 
-        // TODO Add support for parameters
+            for parameter_type_id in lookup_function_type.parameter_type_ids.iter() {
+                instruction.add_operand(*parameter_type_id);
+            }
 
-        (instruction, id)
+            self.lookup_function_type.insert(_id, lookup_function_type);
+            for word in instruction.to_words() {
+                self.module.logical_layout.type_declarations.push(word);
+            }
+        }
+
+        id.unwrap()
     }
 
     fn instruction_function(
@@ -1078,8 +796,9 @@ impl Parser {
         arena: &crate::Arena<crate::Type>,
     ) -> Instruction {
         let id = self.generate_id();
+
         let return_type_id
-            = self.get_or_insert_function_type_id(function.return_type, arena);
+            = self.get_function_type(function.return_type, arena);
 
         let mut instruction
             = Instruction::new(Op::Function);
@@ -1092,34 +811,46 @@ impl Parser {
 
         instruction.add_operand(control_u32);
 
-        let (type_function_instruction, type_function_id)
-            = self.instruction_type_function(return_type_id);
+        let mut parameter_type_ids = Vec::with_capacity(function.parameter_types.len());
+        for parameter_type in function.parameter_types.iter() {
+            parameter_type_ids.push(self.get_type_id(arena, &parameter_type))
+        }
+
+        let lookup_function_type = LookupFunctionType {return_type_id, parameter_type_ids};
+
+        let type_function_id
+            = self.instruction_function_type(lookup_function_type);
 
         instruction.add_operand(type_function_id);
 
         self.lookup_function.insert(id, handle);
-        for word in type_function_instruction.to_words() {
-            self.module.logical_layout.type_declarations.push(word);
-        }
 
         instruction
     }
 
-    fn parse_expression(
+    fn parse_expression<'a>(
         &mut self,
-        ir_module: &crate::Module,
+        ir_module: &'a crate::Module,
         function: &crate::Function,
         expression: &crate::Expression,
         output: &mut Vec<Instruction>,
-    ) -> Word {
+    ) -> (Word, &'a crate::TypeInner) {
         match expression {
             crate::Expression::GlobalVariable(handle) => {
-                self.get_global_variable_id(&ir_module.types, &ir_module.global_variables, handle)
+                let var = &ir_module.global_variables[*handle];
+                let inner = &ir_module.types[var.ty].inner;
+                let id = self.get_global_variable_id(&ir_module.types, &ir_module.global_variables, handle);
+                (id, inner)
             }
             crate::Expression::Constant(handle) => {
-                self.get_constant_id(handle, ir_module)
+                let var = &ir_module.constants[*handle];
+                let inner = &ir_module.types[var.ty].inner;
+                let id = self.get_constant_id(handle, ir_module);
+                (id, inner)
             }
             crate::Expression::Compose { ty, components } => {
+                let var = &ir_module.types[*ty];
+                let inner = &var.inner;
                 let id = self.generate_id();
                 let type_id = self.get_type_id( &ir_module.types, &ty);
 
@@ -1130,32 +861,113 @@ impl Parser {
 
                 for component in components {
                     let expression = &function.expressions[*component];
-                    let component_id = self.parse_expression(ir_module,&function, expression, output);
+                    let (component_id, _) = self.parse_expression(ir_module,&function, expression, output);
                     instruction.add_operand(component_id);
                 }
 
                 output.push(instruction);
 
-                id
+                (id, inner)
             }
             crate::Expression::Binary {op, left, right} => {
-                let expression_left = &function.expressions[*left];
-                let expression_right = &function.expressions[*right];
-
                 match op {
                     crate::BinaryOperator::Multiply => {
-                        // retrieve type handles
-                        // check what one is the composite
-                        // match composite, only support vector now
-                        // match other expression, only support scalar types for now
-                        // create instruction
-                        // return id
-                    },
-                    _ => panic!("Unsupported binary op {:?}", op),
+                        // TODO OpVectorTimesScalar is only supported
+                        let id = self.generate_id();
+                        let left_expression = &function.expressions[*left];
+                        let right_expression = &function.expressions[*right];
+                        let (left_id, left_inner) = self.parse_expression(ir_module, function, left_expression, output);
+                        let (right_id, right_inner) = self.parse_expression(ir_module, function, right_expression, output);
+
+                        let mut result_type_id = None;
+                        let mut vector_id = None;
+                        let mut scalar_id = None;
+
+                        match left_inner {
+                            crate::TypeInner::Vector { size, kind, width } => {
+                                vector_id = Some(left_id);
+                                for (k, v) in self.lookup_type.iter() {
+                                    let ty = &ir_module.types[*v];
+                                    match ty.inner {
+                                        crate::TypeInner::Vector { size: _size, kind: _kind, width: _width } => {
+                                            if  size == &_size &&
+                                                kind == &_kind &&
+                                                width == &_width {
+                                                result_type_id = Some(*k);
+                                                break
+                                            }
+                                        }
+                                        _ => continue
+                                    }
+                                }
+                            }
+                            _ => scalar_id = Some(left_id)
+                        }
+
+                        match right_inner {
+                            crate::TypeInner::Vector { size, kind, width } => {
+                                vector_id = Some(right_id);
+                                for (k, v) in self.lookup_type.iter() {
+                                    let ty = &ir_module.types[*v];
+                                    match ty.inner {
+                                        crate::TypeInner::Vector { size: _size, kind: _kind, width: _width } => {
+                                            if  size == &_size &&
+                                                kind == &_kind &&
+                                                width == &_width {
+                                                result_type_id = Some(*k);
+                                                break
+                                            }
+                                        }
+                                        _ => continue
+                                    }
+                                }
+                            }
+                            _ => scalar_id = Some(right_id)
+                        }
+
+                        // TODO Quick fix
+                        let load_id = self.generate_id();
+                        let mut instruction
+                            = Instruction::new(Op::Load);
+                        instruction.set_type(result_type_id.unwrap());
+                        instruction.set_result(load_id);
+                        instruction.add_operand(vector_id.unwrap());
+
+                        output.push(instruction);
+
+                        let mut instruction
+                            = Instruction::new(Op::VectorTimesScalar);
+                        instruction.set_type(result_type_id.unwrap());
+                        instruction.set_result(id);
+                        instruction.add_operand(load_id);
+                        instruction.add_operand(scalar_id.unwrap());
+                        output.push(instruction);
+
+                        // TODO Not sure how or what to return
+                        (id, &crate::TypeInner::Scalar { kind: crate::ScalarKind::Float, width: 10 })
+                    }
+                    _ => unimplemented!("{:?}", op)
                 }
-                1
             }
-            _ => unimplemented!()
+            crate::Expression::LocalVariable(variable) => {
+                let id = self.generate_id();
+                let var = &function.local_variables[*variable];
+
+                let ty = &ir_module.types[var.ty];
+
+                let pointer_id = self.get_pointer_id(
+                    &ir_module.types,
+                    &var.ty,
+                    &StorageClass::Function);
+
+                let mut instruction
+                    = Instruction::new(Op::Variable);
+                instruction.set_type(pointer_id);
+                instruction.set_result(id);
+                instruction.add_operand(StorageClass::Function as u32);
+                (id, &ty.inner)
+            }
+            _ => unimplemented!("{:?}", expression)
         }
     }
 
@@ -1179,8 +991,8 @@ impl Parser {
 
                 let pointer_expression = &function.expressions[*pointer];
                 let value_expression = &function.expressions[*value];
-                let pointer_id = self.parse_expression(ir_module, function, pointer_expression, output);
-                let value_id = self.parse_expression(ir_module, function, value_expression, output);
+                let (pointer_id, _) = self.parse_expression(ir_module, function, pointer_expression, output);
+                let (value_id, _) = self.parse_expression(ir_module, function, value_expression, output);
 
                 instruction.add_operand(pointer_id);
                 instruction.add_operand(value_id);
@@ -1209,8 +1021,6 @@ impl Parser {
         &mut self,
         ir_module: &crate::Module,
     ) {
-        println!("{:#?}", ir_module);
-
         for word in &self.instruction_ext_inst_import().to_words() {
             self.module.logical_layout.ext_inst_imports.push(*word);
         }
@@ -1280,13 +1090,11 @@ impl Parser {
             }
         }
 
-        // TODO Add support for other capabilities
-        let mut capability_instruction
-            = Instruction::new(Op::Capability);
-        capability_instruction.add_operand(Capability::Shader as u32);
-
-        for words in capability_instruction.to_words() {
-            self.module.logical_layout.capabilities.push(words);
+        for capability in self.capabilities.iter() {
+            let instruction = self.instruction_capability(capability);
+            for words in instruction.to_words() {
+                self.module.logical_layout.capabilities.push(words);
+            }
         }
 
         for word in &self.instruction_memory_model().to_words() {
