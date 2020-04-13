@@ -114,7 +114,7 @@ bitflags::bitflags! {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub struct GlobalVariable {
     pub name: Option<String>,
     pub class: spirv::StorageClass,

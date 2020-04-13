@@ -2,22 +2,18 @@ use spirv::*;
 
 pub(crate) struct Module {
     pub(crate) physical_layout: PhysicalLayout,
-    pub(crate) logical_layout: LogicalLayout
+    pub(crate) logical_layout: LogicalLayout,
 }
 
 impl Module {
     pub(crate) fn new(module: &crate::Module) -> Self {
-        let version: Word = (0x0u32 << 24) |
-            ((module.header.version.0 as u32) << 16) |
-            ((module.header.version.1 as u32) << 8) |
-            module.header.version.2 as u32;
+        let version: Word = (0x0u32 << 24)
+            | ((module.header.version.0 as u32) << 16)
+            | ((module.header.version.1 as u32) << 8)
+            | module.header.version.2 as u32;
 
         Module {
-            physical_layout: PhysicalLayout::new(
-                version,
-                module.header.generator,
-                0x0u32
-            ),
+            physical_layout: PhysicalLayout::new(version, module.header.generator, 0x0u32),
             logical_layout: LogicalLayout::new(),
         }
     }
@@ -32,17 +28,13 @@ pub(crate) struct PhysicalLayout {
 }
 
 impl PhysicalLayout {
-    pub(crate) fn new(
-        version: Word,
-        generator: Word,
-        instruction_schema: Word
-    ) -> Self {
+    pub(crate) fn new(version: Word, generator: Word, instruction_schema: Word) -> Self {
         PhysicalLayout {
             magic_number: MAGIC_NUMBER,
             version,
             generator,
             bound: 0,
-            instruction_schema
+            instruction_schema,
         }
     }
 
@@ -98,9 +90,7 @@ impl LogicalLayout {
         }
     }
 
-    pub(crate) fn in_words(
-        &self,
-    ) -> Vec<u32> {
+    pub(crate) fn in_words(&self) -> Vec<u32> {
         let mut words: Vec<Word> = vec![];
 
         for capability in self.capabilities.iter() {
@@ -168,9 +158,7 @@ pub(crate) struct Instruction {
 }
 
 impl Instruction {
-    pub(crate) fn new(
-        op: Op,
-    ) -> Self {
+    pub(crate) fn new(op: Op) -> Self {
         Instruction {
             op: op as u32,
             wc: 1, // Always start at 1 for the first word (OP + WC),
@@ -207,7 +195,7 @@ impl Instruction {
 
     pub(crate) fn to_words(&self) -> Vec<Word> {
         let mut words = Vec::with_capacity(self.wc as usize);
-        let wc_op = (self.wc << 16 | self.op ) as u32;
+        let wc_op = (self.wc << 16 | self.op) as u32;
 
         words.push(wc_op);
 
