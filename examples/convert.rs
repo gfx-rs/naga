@@ -75,7 +75,7 @@ fn main() {
     } else if args[2].ends_with(".spv") {
         use naga::back::spv;
 
-        let debug_enabled = args.get(3).map_or(true, |arg|arg.parse().unwrap());
+        let debug_enabled = args.get(3).map_or(true, |arg| arg.parse().unwrap());
 
         let mut parser = spv::parser::Parser::new(&module, debug_enabled);
         let spirv = parser.parse(&module);
