@@ -1,4 +1,3 @@
-mod layout;
 pub mod parser;
 
 use spirv::*;
