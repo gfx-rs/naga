@@ -1,6 +1,6 @@
 /*! Standard Portable Intermediate Representation (SPIR-V) backend !*/
-use super::layout::{Instruction, Module};
-use crate::FastHashMap;
+use super::{Instruction, Module};
+use crate::{FastHashMap, FastHashSet};
 use spirv::*;
 
 trait LookupHelper<T> {
@@ -44,11 +44,11 @@ struct LookupFunctionType {
 pub struct Parser {
     module: Module,
     id_count: u32,
-    capabilities: Vec<Capability>,
+    capabilities: FastHashSet<Capability>,
     debugs: Vec<Instruction>,
     annotations: Vec<Instruction>,
     debug_enabled: bool,
-    void_type: Option<u32>,
+    void_type: Option<Word>,
     lookup_type: FastHashMap<Word, crate::Handle<crate::Type>>,
     lookup_function: FastHashMap<Word, crate::Handle<crate::Function>>,
     lookup_function_type: FastHashMap<Word, LookupFunctionType>,
@@ -62,9 +62,9 @@ pub struct Parser {
 impl Parser {
     pub fn new(module: &crate::Module, debug_enabled: bool) -> Self {
         Parser {
-            module: Module::new(module),
+            module: Module::new(&module.header),
             id_count: 0,
-            capabilities: vec![],
+            capabilities: FastHashSet::default(),
             debugs: vec![],
             annotations: vec![],
             debug_enabled,
@@ -88,23 +88,7 @@ impl Parser {
     fn bytes_to_words(&self, bytes: &[u8]) -> Vec<Word> {
         let words: Vec<Word> = bytes
             .chunks(4)
-            .map(|chars| match chars.len() {
-                4 => {
-                    (chars[3] as u32) << 24
-                        | (chars[2] as u32) << 16
-                        | (chars[1] as u32) << 8
-                        | chars[0] as u32
-                }
-                3 => {
-                    0x0u32 << 24
-                        | (chars[2] as u32) << 16
-                        | (chars[1] as u32) << 8
-                        | (chars[0] as u32) as u32
-                }
-                2 => 0x0u32 << 24 | 0x0u32 << 16 | (chars[1] as u32) << 8 | chars[0] as u32,
-                1 => 0x0u32 << 24 | 0x0u32 << 16 | 0x0u32 << 8 | chars[0] as u32,
-                _ => 0x0u32,
-            })
+            .map(|chars| chars.iter().rev().fold(0u32, |u, c| (u << 8) | *c as u32))
             .collect();
 
         words
@@ -133,10 +117,7 @@ impl Parser {
 
     fn try_add_capabilities(&mut self, capabilities: &[Capability]) {
         for capability in capabilities.iter() {
-            if !self.capabilities.contains(capability) {
-                self.instruction_capability(capability);
-                self.capabilities.push(*capability);
-            }
+            self.capabilities.insert(*capability);
         }
     }
 
@@ -438,48 +419,43 @@ impl Parser {
                 // TODO Add Depth, but how to determine? Not yet in the WGSL spec
                 instruction.add_operand(1);
 
-                if flags.contains(crate::ImageFlags::ARRAYED) {
-                    instruction.add_operand(1);
+                instruction.add_operand(if flags.contains(crate::ImageFlags::ARRAYED) {
+                    1
                 } else {
-                    instruction.add_operand(0);
-                }
+                    0
+                });
 
-                if flags.contains(crate::ImageFlags::MULTISAMPLED) {
-                    instruction.add_operand(1);
+                instruction.add_operand(if flags.contains(crate::ImageFlags::MULTISAMPLED) {
+                    1
                 } else {
-                    instruction.add_operand(0);
-                }
+                    0
+                });
 
-                let is_subpass_data = match dim {
-                    Dim::DimSubpassData => true,
-                    _ => false,
-                };
-
-                if is_subpass_data {
+                if let Dim::DimSubpassData = dim {
                     instruction.add_operand(2);
                     instruction.add_operand(ImageFormat::Unknown as u32);
                 } else {
-                    if flags.contains(crate::ImageFlags::SAMPLED) {
-                        instruction.add_operand(1);
+                    instruction.add_operand(if flags.contains(crate::ImageFlags::SAMPLED) {
+                        1
                     } else {
-                        instruction.add_operand(0);
-                    }
+                        0
+                    });
 
                     // TODO Add Image Format, but how to determine? Not yet in the WGSL spec
                     instruction.add_operand(ImageFormat::Unknown as u32);
-                }
+                };
 
-                if flags.contains(crate::ImageFlags::CAN_STORE)
-                    && flags.contains(crate::ImageFlags::CAN_LOAD)
-                {
-                    instruction.add_operand(2);
-                } else {
-                    if flags.contains(crate::ImageFlags::CAN_STORE) {
-                        instruction.add_operand(1);
-                    } else if flags.contains(crate::ImageFlags::CAN_LOAD) {
-                        instruction.add_operand(0);
-                    }
-                }
+                instruction.add_operand(
+                    if flags.contains(crate::ImageFlags::CAN_STORE)
+                        && flags.contains(crate::ImageFlags::CAN_LOAD)
+                    {
+                        2
+                    } else if flags.contains(crate::ImageFlags::CAN_STORE) {
+                        1
+                    } else {
+                        0
+                    },
+                );
 
                 self.lookup_type.insert(id, base);
             }

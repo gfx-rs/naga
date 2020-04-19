@@ -1,44 +1,47 @@
+mod layout;
+pub mod parser;
+
 use spirv::*;
 
-pub(crate) struct Module {
-    pub(crate) physical_layout: PhysicalLayout,
-    pub(crate) logical_layout: LogicalLayout,
+struct Module {
+    physical_layout: PhysicalLayout,
+    logical_layout: LogicalLayout,
 }
 
 impl Module {
-    pub(crate) fn new(module: &crate::Module) -> Self {
-        let version: Word = (0x0u32 << 24)
-            | ((module.header.version.0 as u32) << 16)
-            | ((module.header.version.1 as u32) << 8)
-            | module.header.version.2 as u32;
-
+    fn new(header: &crate::Header) -> Self {
         Module {
-            physical_layout: PhysicalLayout::new(version, module.header.generator, 0x0u32),
+            physical_layout: PhysicalLayout::new(header, 0x0u32),
             logical_layout: LogicalLayout::new(),
         }
     }
 }
 
-pub(crate) struct PhysicalLayout {
+struct PhysicalLayout {
     magic_number: Word,
     version: Word,
     generator: Word,
-    pub(crate) bound: Word,
+    bound: Word,
     instruction_schema: Word,
 }
 
 impl PhysicalLayout {
-    pub(crate) fn new(version: Word, generator: Word, instruction_schema: Word) -> Self {
+    fn new(header: &crate::Header, instruction_schema: Word) -> Self {
+        let version: Word = (0x0u32 << 24)
+            | ((header.version.0 as u32) << 16)
+            | ((header.version.1 as u32) << 8)
+            | header.version.2 as u32;
+
         PhysicalLayout {
             magic_number: MAGIC_NUMBER,
             version,
-            generator,
+            generator: header.generator,
             bound: 0,
             instruction_schema,
         }
     }
 
-    pub(crate) fn in_words(&self) -> Vec<Word> {
+    fn in_words(&self) -> Vec<Word> {
         let mut words: Vec<Word> = vec![];
 
         words.push(self.magic_number);
@@ -56,23 +59,23 @@ impl PhysicalLayout {
 }
 
 pub(crate) struct LogicalLayout {
-    pub(crate) capabilities: Vec<Word>,
+    capabilities: Vec<Word>,
     extensions: Vec<Word>,
-    pub(crate) ext_inst_imports: Vec<Word>,
-    pub(crate) memory_model: Vec<Word>,
-    pub(crate) entry_points: Vec<Word>,
-    pub(crate) execution_modes: Vec<Word>,
-    pub(crate) debugs: Vec<Word>,
-    pub(crate) annotations: Vec<Word>,
-    pub(crate) type_declarations: Vec<Word>,
-    pub(crate) constants: Vec<Word>,
-    pub(crate) global_variables: Vec<Word>,
+    ext_inst_imports: Vec<Word>,
+    memory_model: Vec<Word>,
+    entry_points: Vec<Word>,
+    execution_modes: Vec<Word>,
+    debugs: Vec<Word>,
+    annotations: Vec<Word>,
+    type_declarations: Vec<Word>,
+    constants: Vec<Word>,
+    global_variables: Vec<Word>,
     function_declarations: Vec<Word>,
-    pub(crate) function_definitions: Vec<Word>,
+    function_definitions: Vec<Word>,
 }
 
 impl LogicalLayout {
-    pub(crate) fn new() -> Self {
+    fn new() -> Self {
         LogicalLayout {
             capabilities: vec![],
             extensions: vec![],
@@ -90,7 +93,7 @@ impl LogicalLayout {
         }
     }
 
-    pub(crate) fn in_words(&self) -> Vec<u32> {
+    fn in_words(&self) -> Vec<u32> {
         let mut words: Vec<Word> = vec![];
 
         for capability in self.capabilities.iter() {
@@ -149,8 +152,8 @@ impl LogicalLayout {
     }
 }
 
-pub(crate) struct Instruction {
-    op: u32,
+struct Instruction {
+    op: Op,
     wc: u32,
     type_id: Option<Word>,
     result_id: Option<Word>,
@@ -158,9 +161,9 @@ pub(crate) struct Instruction {
 }
 
 impl Instruction {
-    pub(crate) fn new(op: Op) -> Self {
+    fn new(op: Op) -> Self {
         Instruction {
-            op: op as u32,
+            op,
             wc: 1, // Always start at 1 for the first word (OP + WC),
             type_id: None,
             result_id: None,
@@ -168,34 +171,33 @@ impl Instruction {
         }
     }
 
-    pub(crate) fn set_type(&mut self, id: Word) {
-        if self.type_id.is_none() {
-            self.wc += 1;
-        }
+    fn set_type(&mut self, id: Word) {
+        assert!(self.type_id.is_none(), "Type can only be set once");
         self.type_id = Some(id);
+        self.wc += 1;
     }
 
-    pub(crate) fn set_result(&mut self, id: Word) {
-        if self.result_id.is_none() {
-            self.wc += 1;
-        }
+    fn set_result(&mut self, id: Word) {
+        assert!(self.result_id.is_none(), "Result can only be set once");
         self.result_id = Some(id);
+        self.wc += 1;
     }
 
-    pub(crate) fn add_operand(&mut self, operand: Word) {
+    fn add_operand(&mut self, operand: Word) {
         self.operands.push(operand);
         self.wc += 1;
     }
 
-    pub(crate) fn add_operands(&mut self, operands: Vec<Word>) {
+    fn add_operands(&mut self, operands: Vec<Word>) {
         for operand in operands {
             self.add_operand(operand);
         }
     }
 
-    pub(crate) fn to_words(&self) -> Vec<Word> {
+    fn to_words(&self) -> Vec<Word> {
         let mut words = Vec::with_capacity(self.wc as usize);
-        let wc_op = (self.wc << 16 | self.op) as u32;
+
+        let wc_op = (self.wc << 16 | self.op as u32) as u32;
 
         words.push(wc_op);
 

@@ -1,4 +1,4 @@
-pub mod spirv;
+pub mod spv;
 pub mod wgsl;
 
 use crate::arena::Arena;

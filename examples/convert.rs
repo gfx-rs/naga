@@ -30,7 +30,7 @@ fn main() {
         return
     } else if args[1].ends_with(".spv") {
         let input = fs::read(&args[1]).unwrap();
-        naga::front::spirv::parse_u8_slice(&input).unwrap()
+        naga::front::spv::parse_u8_slice(&input).unwrap()
     } else if args[1].ends_with(".wgsl") {
         let input = fs::read_to_string(&args[1]).unwrap();
         naga::front::wgsl::parse_str(&input).unwrap()
@@ -73,17 +73,11 @@ fn main() {
         let msl = msl::write_string(&module, options).unwrap();
         fs::write(&args[2], msl).unwrap();
     } else if args[2].ends_with(".spv") {
-        use naga::back::spirv;
+        use naga::back::spv;
 
-        let debug_enabled;
+        let debug_enabled = args.get(3).map_or(true, |arg|arg.parse().unwrap());
 
-        if args.len() == 4 {
-            debug_enabled = args[3].parse().unwrap();
-        } else {
-            debug_enabled = true;
-        }
-
-        let mut parser = spirv::parser::Parser::new(&module, debug_enabled);
+        let mut parser = spv::parser::Parser::new(&module, debug_enabled);
         let spirv = parser.parse(&module);
 
         let mut bytes: Vec<u8> = vec![];

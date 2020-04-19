@@ -1,2 +1,2 @@
 pub mod msl;
-pub mod spirv;
+pub mod spv;
