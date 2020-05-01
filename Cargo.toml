@@ -9,11 +9,16 @@ repository = "https://github.com/gfx-rs/naga"
 keywords = ["shader", "SPIR-V"]
 license = "MPL-2.0"
 
+[features]
+serialize = ["serde", "spirv/serialize"]
+deserialize = ["serde", "spirv/deserialize"]
+
 [dependencies]
 bitflags = "1"
 fxhash = "0.2"
 log = "0.4"
 num-traits = "0.2"
+serde = { version = "1", optional = true, features = ["serde_derive"] }
 spirv = { package = "spirv_headers", version = "1" }
 
 [dev-dependencies]

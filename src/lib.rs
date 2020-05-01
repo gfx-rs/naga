@@ -17,6 +17,8 @@ pub type FastHashMap<K, T> = HashMap<K, T, BuildHasherDefault<fxhash::FxHasher>>
 pub type FastHashSet<K> = HashSet<K, BuildHasherDefault<fxhash::FxHasher>>;
 
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub struct Header {
     pub version: (u8, u8, u8),
     pub generator: u32,
@@ -26,6 +28,8 @@ pub type Bytes = u8;
 
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub enum VectorSize {
     Bi = 2,
     Tri = 3,
@@ -34,6 +38,8 @@ pub enum VectorSize {
 
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub enum ScalarKind {
     Sint,
     Uint,
@@ -43,12 +49,16 @@ pub enum ScalarKind {
 
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub enum ArraySize {
     Static(spirv::Word),
     Dynamic,
 }
 
 #[derive(Debug, PartialEq)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub struct StructMember {
     pub name: Option<String>,
     pub binding: Option<Binding>,
@@ -56,6 +66,8 @@ pub struct StructMember {
 }
 
 bitflags::bitflags! {
+    #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+    #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
     pub struct ImageFlags: u32 {
         const ARRAYED = 0x1;
         const MULTISAMPLED = 0x2;
@@ -66,12 +78,16 @@ bitflags::bitflags! {
 }
 
 #[derive(Debug)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub struct Type {
     pub name: Option<String>,
     pub inner: TypeInner,
 }
 
 #[derive(Debug, PartialEq)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub enum TypeInner {
     Scalar { kind: ScalarKind, width: Bytes },
     Vector { size: VectorSize, kind: ScalarKind, width: Bytes },
@@ -84,6 +100,8 @@ pub enum TypeInner {
 }
 
 #[derive(Debug, PartialEq)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub struct Constant {
     pub name: Option<String>,
     pub specialization: Option<spirv::Word>,
@@ -92,6 +110,8 @@ pub struct Constant {
 }
 
 #[derive(Debug, PartialEq)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub enum ConstantInner {
     Sint(i64),
     Uint(u64),
@@ -101,6 +121,8 @@ pub enum ConstantInner {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub enum Binding {
     BuiltIn(spirv::BuiltIn),
     Location(spirv::Word),
@@ -108,6 +130,8 @@ pub enum Binding {
 }
 
 bitflags::bitflags! {
+    #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+    #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
     pub struct GlobalUse: u8 {
         const LOAD = 0x1;
         const STORE = 0x2;
@@ -115,6 +139,8 @@ bitflags::bitflags! {
 }
 
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub struct GlobalVariable {
     pub name: Option<String>,
     pub class: spirv::StorageClass,
@@ -123,6 +149,8 @@ pub struct GlobalVariable {
 }
 
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub struct LocalVariable {
     pub name: Option<String>,
     pub ty: Handle<Type>,
@@ -130,12 +158,16 @@ pub struct LocalVariable {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub enum UnaryOperator {
     Negate,
     Not,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub enum BinaryOperator {
     Add,
     Subtract,
@@ -159,6 +191,8 @@ pub enum BinaryOperator {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub enum IntrinsicFunction {
     Any,
     All,
@@ -169,6 +203,8 @@ pub enum IntrinsicFunction {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub enum DerivativeAxis {
     X,
     Y,
@@ -176,6 +212,8 @@ pub enum DerivativeAxis {
 }
 
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub enum Expression {
     Access {
         base: Handle<Expression>,
@@ -229,9 +267,13 @@ pub enum Expression {
 
 pub type Block = Vec<Statement>;
 #[derive(Debug)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub struct FallThrough;
 
 #[derive(Debug)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub enum Statement {
     Empty,
     Block(Block),
@@ -263,6 +305,8 @@ pub enum Statement {
 }
 
 #[derive(Debug)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub struct Function {
     pub name: Option<String>,
     pub control: spirv::FunctionControl,
@@ -275,6 +319,8 @@ pub struct Function {
 }
 
 #[derive(Debug)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub struct EntryPoint {
     pub exec_model: spirv::ExecutionModel,
     pub name: String,
@@ -282,6 +328,8 @@ pub struct EntryPoint {
 }
 
 #[derive(Debug)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub struct Module {
     pub header: Header,
     pub types: Arena<Type>,

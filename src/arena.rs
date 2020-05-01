@@ -9,6 +9,8 @@ use std::{fmt, hash, marker::PhantomData, num::NonZeroU32};
 type Index = NonZeroU32;
 
 /// A strongly typed reference to a SPIR-V element.
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub struct Handle<T> {
     index: Index,
     marker: PhantomData<T>,
@@ -64,6 +66,8 @@ impl<T> Handle<T> {
 /// An arena holding some kind of component (e.g., type, constant,
 /// instruction, etc.) that can be referenced.
 #[derive(Debug)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub struct Arena<T> {
     /// Values of this arena.
     data: Vec<T>,
@@ -164,5 +168,14 @@ mod tests {
         let t2 = arena.fetch_or_append(1);
         assert!(t1 != t2);
         assert!(arena[t1] != arena[t2]);
+    }
+
+    #[test]
+    #[cfg(all(feature = "serialize", feature = "deserialize"))]
+    fn test_serde_handle() {
+        type TestHandle = Handle::<()>;
+        let handle_ser = ron::ser::to_string(&TestHandle::DUMMY).unwrap();
+        let handle_de: TestHandle = ron::de::from_str(&handle_ser).unwrap();
+        assert_eq!(handle_de, TestHandle::DUMMY)
     }
 }

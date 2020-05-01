@@ -49,3 +49,13 @@ fn convert_boids() {
         msl::write_string(&module, options).unwrap();
     }
 }
+
+#[test]
+#[cfg(all(feature = "serialize", feature = "deserialize"))]
+fn boids_serde_round_trip() {
+    let module = load_wgsl("boids");
+    let module_ser = ron::ser::to_string(&module).unwrap();
+    let module_de = ron::de::from_str::<naga::Module>(&module_ser).unwrap();
+    let module_ser_ser = ron::ser::to_string(&module_de).unwrap();
+    assert_eq!(module_ser, module_ser_ser);
+}
