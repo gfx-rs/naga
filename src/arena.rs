@@ -9,11 +9,38 @@ use std::{fmt, hash, marker::PhantomData, num::NonZeroU32};
 type Index = NonZeroU32;
 
 /// A strongly typed reference to a SPIR-V element.
-#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
-#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[repr(transparent)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize), serde(into = "SerHandle"))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize), serde(from = "SerHandle"))]
 pub struct Handle<T> {
     index: Index,
     marker: PhantomData<T>,
+}
+
+/// This type allows us to make the serialized representation of a Handle more concise
+#[allow(dead_code)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+enum SerHandle {
+    // The single-variant enum makes the serialized RON representation look like `Handle(42)`.
+    // Otherwise it would just look like `42`.
+    Handle(Index)
+}
+
+#[cfg(feature = "serialize")]
+impl<T> From<Handle<T>> for SerHandle {
+    fn from(handle: Handle<T>) -> Self {
+        SerHandle::Handle(handle.index)
+    }
+}
+
+#[cfg(feature = "deserialize")]
+impl<T> From<SerHandle> for Handle<T> {
+    fn from(handle: SerHandle) -> Self {
+        match handle {
+            SerHandle::Handle(index) => Handle { index, marker: PhantomData },
+        }
+    }
 }
 
 impl<T> Clone for Handle<T> {
@@ -171,11 +198,26 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "serialize")]
+    fn handle_ser() {
+        let handle_ser = ron::ser::to_string(&Handle::<()>::DUMMY).unwrap();
+        assert_eq!(handle_ser, "Handle(4294967295)");
+    }
+
+    #[test]
+    #[cfg(feature = "deserialize")]
+    fn handle_de() {
+        type TestHandle = Handle<()>;
+        let handle_de: TestHandle = ron::de::from_str("Handle(4294967295)").unwrap();
+        assert_eq!(handle_de.index, TestHandle::DUMMY.index);
+    }
+
+    #[test]
     #[cfg(all(feature = "serialize", feature = "deserialize"))]
-    fn test_serde_handle() {
-        type TestHandle = Handle::<()>;
+    fn handle_ser_de() {
+        type TestHandle = Handle<()>;
         let handle_ser = ron::ser::to_string(&TestHandle::DUMMY).unwrap();
-        let handle_de: TestHandle = ron::de::from_str(&handle_ser).unwrap();
-        assert_eq!(handle_de, TestHandle::DUMMY)
+        let handle_ser_de: TestHandle = ron::de::from_str(&handle_ser).unwrap();
+        assert_eq!(handle_ser_de.index, TestHandle::DUMMY.index);
     }
 }
