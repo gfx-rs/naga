@@ -12,7 +12,6 @@ use std::{
     hash::BuildHasherDefault,
 };
 
-
 pub type FastHashMap<K, T> = HashMap<K, T, BuildHasherDefault<fxhash::FxHasher>>;
 pub type FastHashSet<K> = HashSet<K, BuildHasherDefault<fxhash::FxHasher>>;
 
@@ -66,7 +65,7 @@ bitflags::bitflags! {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct Type {
     pub name: Option<String>,
     pub inner: TypeInner,
@@ -75,13 +74,37 @@ pub struct Type {
 // Clone is used only for error reporting and is not intended for end users
 #[derive(Clone, Debug, PartialEq)]
 pub enum TypeInner {
-    Scalar { kind: ScalarKind, width: Bytes },
-    Vector { size: VectorSize, kind: ScalarKind, width: Bytes },
-    Matrix { columns: VectorSize, rows: VectorSize, kind: ScalarKind, width: Bytes },
-    Pointer { base: Handle<Type>, class: spirv::StorageClass },
-    Array { base: Handle<Type>, size: ArraySize },
-    Struct { members: Vec<StructMember> },
-    Image { base: Handle<Type>, dim: spirv::Dim, flags: ImageFlags },
+    Scalar {
+        kind: ScalarKind,
+        width: Bytes,
+    },
+    Vector {
+        size: VectorSize,
+        kind: ScalarKind,
+        width: Bytes,
+    },
+    Matrix {
+        columns: VectorSize,
+        rows: VectorSize,
+        kind: ScalarKind,
+        width: Bytes,
+    },
+    Pointer {
+        base: Handle<Type>,
+        class: spirv::StorageClass,
+    },
+    Array {
+        base: Handle<Type>,
+        size: ArraySize,
+    },
+    Struct {
+        members: Vec<StructMember>,
+    },
+    Image {
+        base: Handle<Type>,
+        dim: spirv::Dim,
+        flags: ImageFlags,
+    },
     Sampler,
 }
 
@@ -107,7 +130,10 @@ pub enum ConstantInner {
 pub enum Binding {
     BuiltIn(spirv::BuiltIn),
     Location(spirv::Word),
-    Descriptor { set: spirv::Word, binding: spirv::Word },
+    Descriptor {
+        set: spirv::Word,
+        binding: spirv::Word,
+    },
 }
 
 bitflags::bitflags! {
@@ -117,7 +143,7 @@ bitflags::bitflags! {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct GlobalVariable {
     pub name: Option<String>,
     pub class: spirv::StorageClass,
