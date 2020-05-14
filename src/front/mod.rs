@@ -1,3 +1,4 @@
+#[cfg(feature = "glsl")]
 pub mod glsl;
 pub mod spirv;
 pub mod wgsl;

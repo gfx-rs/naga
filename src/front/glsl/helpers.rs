@@ -28,213 +28,213 @@ pub fn glsl_to_spirv_binary_op(op: BinaryOp) -> crate::BinaryOperator {
 pub fn glsl_to_spirv_type(ty: TypeSpecifierNonArray) -> Option<TypeInner> {
     use TypeSpecifierNonArray::*;
 
-    match ty {
-        Void => None,
-        Bool => Some(TypeInner::Scalar {
+    Some(match ty {
+        Void => return None,
+        Bool => TypeInner::Scalar {
             kind: ScalarKind::Bool,
             width: 1,
-        }),
-        Int => Some(TypeInner::Scalar {
+        },
+        Int => TypeInner::Scalar {
             kind: ScalarKind::Sint,
             width: 32,
-        }),
-        UInt => Some(TypeInner::Scalar {
+        },
+        UInt => TypeInner::Scalar {
             kind: ScalarKind::Uint,
             width: 32,
-        }),
-        Float => Some(TypeInner::Scalar {
+        },
+        Float => TypeInner::Scalar {
             kind: ScalarKind::Float,
             width: 32,
-        }),
-        Double => Some(TypeInner::Scalar {
+        },
+        Double => TypeInner::Scalar {
             kind: ScalarKind::Float,
             width: 64,
-        }),
-        Vec2 => Some(TypeInner::Vector {
+        },
+        Vec2 => TypeInner::Vector {
             size: VectorSize::Bi,
             kind: ScalarKind::Float,
             width: 32,
-        }),
-        Vec3 => Some(TypeInner::Vector {
+        },
+        Vec3 => TypeInner::Vector {
             size: VectorSize::Tri,
             kind: ScalarKind::Float,
             width: 32,
-        }),
-        Vec4 => Some(TypeInner::Vector {
+        },
+        Vec4 => TypeInner::Vector {
             size: VectorSize::Quad,
             kind: ScalarKind::Float,
             width: 32,
-        }),
-        DVec2 => Some(TypeInner::Vector {
+        },
+        DVec2 => TypeInner::Vector {
             size: VectorSize::Bi,
             kind: ScalarKind::Float,
             width: 64,
-        }),
-        DVec3 => Some(TypeInner::Vector {
+        },
+        DVec3 => TypeInner::Vector {
             size: VectorSize::Tri,
             kind: ScalarKind::Float,
             width: 64,
-        }),
-        DVec4 => Some(TypeInner::Vector {
+        },
+        DVec4 => TypeInner::Vector {
             size: VectorSize::Quad,
             kind: ScalarKind::Float,
             width: 64,
-        }),
-        BVec2 => Some(TypeInner::Vector {
+        },
+        BVec2 => TypeInner::Vector {
             size: VectorSize::Bi,
             kind: ScalarKind::Bool,
             width: 1,
-        }),
-        BVec3 => Some(TypeInner::Vector {
+        },
+        BVec3 => TypeInner::Vector {
             size: VectorSize::Tri,
             kind: ScalarKind::Bool,
             width: 1,
-        }),
-        BVec4 => Some(TypeInner::Vector {
+        },
+        BVec4 => TypeInner::Vector {
             size: VectorSize::Quad,
             kind: ScalarKind::Bool,
             width: 1,
-        }),
-        IVec2 => Some(TypeInner::Vector {
+        },
+        IVec2 => TypeInner::Vector {
             size: VectorSize::Bi,
             kind: ScalarKind::Sint,
             width: 32,
-        }),
-        IVec3 => Some(TypeInner::Vector {
+        },
+        IVec3 => TypeInner::Vector {
             size: VectorSize::Tri,
             kind: ScalarKind::Sint,
             width: 32,
-        }),
-        IVec4 => Some(TypeInner::Vector {
+        },
+        IVec4 => TypeInner::Vector {
             size: VectorSize::Quad,
             kind: ScalarKind::Sint,
             width: 32,
-        }),
-        UVec2 => Some(TypeInner::Vector {
+        },
+        UVec2 => TypeInner::Vector {
             size: VectorSize::Bi,
             kind: ScalarKind::Uint,
             width: 32,
-        }),
-        UVec3 => Some(TypeInner::Vector {
+        },
+        UVec3 => TypeInner::Vector {
             size: VectorSize::Tri,
             kind: ScalarKind::Uint,
             width: 32,
-        }),
-        UVec4 => Some(TypeInner::Vector {
+        },
+        UVec4 => TypeInner::Vector {
             size: VectorSize::Quad,
             kind: ScalarKind::Uint,
             width: 32,
-        }),
+        },
         // Float Matrices
-        Mat2 => Some(TypeInner::Matrix {
+        Mat2 => TypeInner::Matrix {
             columns: VectorSize::Bi,
             rows: VectorSize::Bi,
             kind: ScalarKind::Float,
             width: 32,
-        }),
-        Mat3 => Some(TypeInner::Matrix {
+        },
+        Mat3 => TypeInner::Matrix {
             columns: VectorSize::Tri,
             rows: VectorSize::Tri,
             kind: ScalarKind::Float,
             width: 32,
-        }),
-        Mat4 => Some(TypeInner::Matrix {
+        },
+        Mat4 => TypeInner::Matrix {
             columns: VectorSize::Quad,
             rows: VectorSize::Quad,
             kind: ScalarKind::Float,
             width: 32,
-        }),
-        Mat23 => Some(TypeInner::Matrix {
+        },
+        Mat23 => TypeInner::Matrix {
             columns: VectorSize::Bi,
             rows: VectorSize::Tri,
             kind: ScalarKind::Float,
             width: 32,
-        }),
-        Mat24 => Some(TypeInner::Matrix {
+        },
+        Mat24 => TypeInner::Matrix {
             columns: VectorSize::Bi,
             rows: VectorSize::Quad,
             kind: ScalarKind::Float,
             width: 32,
-        }),
-        Mat32 => Some(TypeInner::Matrix {
+        },
+        Mat32 => TypeInner::Matrix {
             columns: VectorSize::Tri,
             rows: VectorSize::Bi,
             kind: ScalarKind::Float,
             width: 32,
-        }),
-        Mat34 => Some(TypeInner::Matrix {
+        },
+        Mat34 => TypeInner::Matrix {
             columns: VectorSize::Tri,
             rows: VectorSize::Quad,
             kind: ScalarKind::Float,
             width: 32,
-        }),
-        Mat42 => Some(TypeInner::Matrix {
+        },
+        Mat42 => TypeInner::Matrix {
             columns: VectorSize::Quad,
             rows: VectorSize::Bi,
             kind: ScalarKind::Float,
             width: 32,
-        }),
-        Mat43 => Some(TypeInner::Matrix {
+        },
+        Mat43 => TypeInner::Matrix {
             columns: VectorSize::Quad,
             rows: VectorSize::Tri,
             kind: ScalarKind::Float,
             width: 32,
-        }),
+        },
         // Double Matrices
-        DMat2 => Some(TypeInner::Matrix {
+        DMat2 => TypeInner::Matrix {
             columns: VectorSize::Bi,
             rows: VectorSize::Bi,
             kind: ScalarKind::Float,
             width: 64,
-        }),
-        DMat3 => Some(TypeInner::Matrix {
+        },
+        DMat3 => TypeInner::Matrix {
             columns: VectorSize::Tri,
             rows: VectorSize::Tri,
             kind: ScalarKind::Float,
             width: 64,
-        }),
-        DMat4 => Some(TypeInner::Matrix {
+        },
+        DMat4 => TypeInner::Matrix {
             columns: VectorSize::Quad,
             rows: VectorSize::Quad,
             kind: ScalarKind::Float,
             width: 64,
-        }),
-        DMat23 => Some(TypeInner::Matrix {
+        },
+        DMat23 => TypeInner::Matrix {
             columns: VectorSize::Bi,
             rows: VectorSize::Tri,
             kind: ScalarKind::Float,
             width: 64,
-        }),
-        DMat24 => Some(TypeInner::Matrix {
+        },
+        DMat24 => TypeInner::Matrix {
             columns: VectorSize::Bi,
             rows: VectorSize::Quad,
             kind: ScalarKind::Float,
             width: 64,
-        }),
-        DMat32 => Some(TypeInner::Matrix {
+        },
+        DMat32 => TypeInner::Matrix {
             columns: VectorSize::Tri,
             rows: VectorSize::Bi,
             kind: ScalarKind::Float,
             width: 64,
-        }),
-        DMat34 => Some(TypeInner::Matrix {
+        },
+        DMat34 => TypeInner::Matrix {
             columns: VectorSize::Tri,
             rows: VectorSize::Quad,
             kind: ScalarKind::Float,
             width: 64,
-        }),
-        DMat42 => Some(TypeInner::Matrix {
+        },
+        DMat42 => TypeInner::Matrix {
             columns: VectorSize::Quad,
             rows: VectorSize::Bi,
             kind: ScalarKind::Float,
             width: 64,
-        }),
-        DMat43 => Some(TypeInner::Matrix {
+        },
+        DMat43 => TypeInner::Matrix {
             columns: VectorSize::Quad,
             rows: VectorSize::Tri,
             kind: ScalarKind::Float,
             width: 64,
-        }),
+        },
         _ => unimplemented!(),
-    }
+    })
 }

@@ -1,7 +1,7 @@
 use crate::{
     Arena, ArraySize, BinaryOperator, Binding, Constant, ConstantInner, EntryPoint, Expression,
-    FastHashMap, Function, GlobalVariable, Handle, Header, LocalVariable, Module, ScalarKind, Type,
-    TypeInner, VectorSize,
+    FastHashMap, Function, GlobalVariable, Handle, Header, LocalVariable, Module, ScalarKind,
+    StructMember, Type, TypeInner, VectorSize,
 };
 use glsl::{
     parser::{Parse, ParseError},
@@ -11,11 +11,17 @@ use spirv::{BuiltIn, ExecutionModel, StorageClass};
 
 mod helpers;
 
+#[derive(Debug, Copy, Clone)]
+pub enum Global {
+    Variable(Handle<GlobalVariable>),
+    StructShorthand(Handle<GlobalVariable>, u32),
+}
+
 struct Parser<'a> {
     source: &'a str,
     types: Arena<Type>,
     globals: Arena<GlobalVariable>,
-    globals_lookup: FastHashMap<String, Handle<GlobalVariable>>,
+    globals_lookup: FastHashMap<String, Global>,
     constants: Arena<Constant>,
     functions: Arena<Function>,
     function_lookup: FastHashMap<String, Handle<Function>>,
@@ -41,7 +47,7 @@ impl<'a> Parser<'a> {
     ) -> Result<crate::Module, ParseError> {
         let ast = TranslationUnit::parse(self.source)?;
 
-        //println!("{:#?}", ast);
+        println!("{:#?}", ast);
 
         let mut entry_point = None;
 
@@ -61,9 +67,93 @@ impl<'a> Parser<'a> {
                     Declaration::InitDeclaratorList(init) => {
                         let handle = self.parse_global(init);
                         let name = self.globals[handle].name.clone().unwrap();
-                        self.globals_lookup.insert(name, handle);
+                        self.globals_lookup.insert(name, Global::Variable(handle));
                     }
-                    Declaration::Block(block) => unimplemented!(),
+                    Declaration::Block(block) => {
+                        let (class, binding) = Self::parse_type_qualifier(block.qualifier);
+                        let ty_name = block.name.0;
+
+                        let name = block.identifier.clone().map(|ident| ident.ident.0);
+
+                        let mut fields = Vec::new();
+                        let mut reexports = Vec::new();
+                        let mut index = 0;
+
+                        for field in block.fields {
+                            let binding = field
+                                .qualifier
+                                .and_then(|qualifier| Self::parse_type_qualifier(qualifier).1);
+
+                            let ty = self.parse_type(field.ty).unwrap();
+
+                            for ident in field.identifiers {
+                                let field_name = ident.ident.0;
+
+                                fields.push(StructMember {
+                                    name: Some(field_name.clone()),
+                                    binding: binding.clone(),
+                                    ty: if let Some(array_spec) = ident.array_spec {
+                                        self.types.fetch_or_append(Type {
+                                            name: None,
+                                            inner: TypeInner::Array {
+                                                base: ty,
+                                                size: match array_spec {
+                                                    ArraySpecifier::Unsized => ArraySize::Dynamic,
+                                                    ArraySpecifier::ExplicitlySized(expr) => {
+                                                        unimplemented!()
+                                                    }
+                                                },
+                                            },
+                                        })
+                                    } else {
+                                        ty
+                                    },
+                                });
+
+                                if name.is_none() {
+                                    reexports.push((field_name, index));
+                                    index += 1;
+                                }
+                            }
+                        }
+
+                        let ty = if let Some(array_spec) =
+                            block.identifier.and_then(|ident| ident.array_spec)
+                        {
+                            let base = self.types.fetch_or_append(Type {
+                                name: Some(ty_name),
+                                inner: TypeInner::Struct { members: fields },
+                            });
+
+                            self.types.fetch_or_append(Type {
+                                name: None,
+                                inner: TypeInner::Array {
+                                    base,
+                                    size: match array_spec {
+                                        ArraySpecifier::Unsized => ArraySize::Dynamic,
+                                        ArraySpecifier::ExplicitlySized(expr) => unimplemented!(),
+                                    },
+                                },
+                            })
+                        } else {
+                            self.types.fetch_or_append(Type {
+                                name: Some(ty_name),
+                                inner: TypeInner::Struct { members: fields },
+                            })
+                        };
+
+                        let handle = self.globals.append(GlobalVariable {
+                            binding,
+                            class,
+                            name,
+                            ty,
+                        });
+
+                        for (name, index) in reexports {
+                            self.globals_lookup
+                                .insert(name, Global::StructShorthand(handle, index));
+                        }
+                    }
                     _ => unimplemented!(),
                 },
             }
@@ -213,87 +303,69 @@ impl<'a> Parser<'a> {
                     );
                     expressions.append(pointer)
                 };
-                let mut value = self.parse_expression(
+
+                let right = self.parse_expression(
                     *value,
                     expressions,
                     locals,
                     locals_map,
                     parameter_lookup,
                 );
-
-                match op {
-                    AssignmentOp::Equal => {}
-                    AssignmentOp::Mult => {
-                        value = Expression::Binary {
-                            op: BinaryOperator::Multiply,
-                            left: pointer,
-                            right: expressions.append(value),
-                        };
-                    }
-                    AssignmentOp::Div => {
-                        value = Expression::Binary {
-                            op: BinaryOperator::Divide,
-                            left: pointer,
-                            right: expressions.append(value),
-                        };
-                    }
-                    AssignmentOp::Mod => {
-                        value = Expression::Binary {
-                            op: BinaryOperator::Modulo,
-                            left: pointer,
-                            right: expressions.append(value),
-                        };
-                    }
-                    AssignmentOp::Add => {
-                        value = Expression::Binary {
-                            op: BinaryOperator::Add,
-                            left: pointer,
-                            right: expressions.append(value),
-                        };
-                    }
-                    AssignmentOp::Sub => {
-                        value = Expression::Binary {
-                            op: BinaryOperator::Subtract,
-                            left: pointer,
-                            right: expressions.append(value),
-                        };
-                    }
-                    AssignmentOp::LShift => {
-                        value = Expression::Binary {
-                            op: BinaryOperator::ShiftLeftLogical,
-                            left: pointer,
-                            right: expressions.append(value),
-                        };
-                    }
+                let value = match op {
+                    AssignmentOp::Equal => right,
+                    AssignmentOp::Mult => Expression::Binary {
+                        op: BinaryOperator::Multiply,
+                        left: pointer,
+                        right: expressions.append(right),
+                    },
+                    AssignmentOp::Div => Expression::Binary {
+                        op: BinaryOperator::Divide,
+                        left: pointer,
+                        right: expressions.append(right),
+                    },
+                    AssignmentOp::Mod => Expression::Binary {
+                        op: BinaryOperator::Modulo,
+                        left: pointer,
+                        right: expressions.append(right),
+                    },
+                    AssignmentOp::Add => Expression::Binary {
+                        op: BinaryOperator::Add,
+                        left: pointer,
+                        right: expressions.append(right),
+                    },
+                    AssignmentOp::Sub => Expression::Binary {
+                        op: BinaryOperator::Subtract,
+                        left: pointer,
+                        right: expressions.append(right),
+                    },
+                    AssignmentOp::LShift => Expression::Binary {
+                        op: BinaryOperator::ShiftLeftLogical,
+                        left: pointer,
+                        right: expressions.append(right),
+                    },
                     AssignmentOp::RShift => {
-                        value = Expression::Binary {
+                        Expression::Binary {
                             op: BinaryOperator::ShiftRightArithmetic, /* ??? */
                             left: pointer,
-                            right: expressions.append(value),
-                        };
+                            right: expressions.append(right),
+                        }
                     }
-                    AssignmentOp::And => {
-                        value = Expression::Binary {
-                            op: BinaryOperator::And,
-                            left: pointer,
-                            right: expressions.append(value),
-                        };
-                    }
-                    AssignmentOp::Xor => {
-                        value = Expression::Binary {
-                            op: BinaryOperator::ExclusiveOr,
-                            left: pointer,
-                            right: expressions.append(value),
-                        };
-                    }
-                    AssignmentOp::Or => {
-                        value = Expression::Binary {
-                            op: BinaryOperator::InclusiveOr,
-                            left: pointer,
-                            right: expressions.append(value),
-                        };
-                    }
-                }
+                    AssignmentOp::And => Expression::Binary {
+                        op: BinaryOperator::And,
+                        left: pointer,
+                        right: expressions.append(right),
+                    },
+                    AssignmentOp::Xor => Expression::Binary {
+                        op: BinaryOperator::ExclusiveOr,
+                        left: pointer,
+                        right: expressions.append(right),
+                    },
+                    AssignmentOp::Or => Expression::Binary {
+                        op: BinaryOperator::InclusiveOr,
+                        left: pointer,
+                        right: expressions.append(right),
+                    },
+                };
 
                 crate::Statement::Store {
                     pointer,
@@ -449,7 +521,16 @@ impl<'a> Parser<'a> {
                     }
                     other => {
                         if let Some(global) = self.globals_lookup.get(other) {
-                            Expression::GlobalVariable(*global)
+                            match *global {
+                                Global::Variable(handle) => Expression::GlobalVariable(handle),
+                                Global::StructShorthand(struct_handle, index) => {
+                                    Expression::AccessIndex {
+                                        base: expressions
+                                            .append(Expression::GlobalVariable(struct_handle)),
+                                        index,
+                                    }
+                                }
+                            }
                         } else if let Some(expr) = parameter_lookup.get(other) {
                             expr.clone()
                         } else if let Some(local) = locals_map.get(other) {
@@ -552,25 +633,59 @@ impl<'a> Parser<'a> {
             Expr::Ternary(condition, accept, reject) => unimplemented!(),
             Expr::Assignment(_, _, _) => panic!(),
             Expr::Bracket(reg, index) => unimplemented!(),
-            Expr::FunCall(ident, args) => Expression::Call {
-                name: match ident {
+            Expr::FunCall(ident, args) => {
+                let name = match ident {
                     FunIdentifier::Identifier(ident) => ident.0,
                     FunIdentifier::Expr(expr) => todo!(),
-                },
-                arguments: args
-                    .into_iter()
-                    .map(|arg| {
-                        let expr = self.parse_expression(
-                            arg,
-                            expressions,
-                            locals,
-                            locals_map,
-                            parameter_lookup,
-                        );
-                        expressions.append(expr)
-                    })
-                    .collect(),
-            },
+                };
+
+                match name.as_str() {
+                    "vec2" | "vec3" | "vec4" => Expression::Compose {
+                        ty: self.types.fetch_or_append(Type {
+                            name: None,
+                            inner: TypeInner::Vector {
+                                size: match name.chars().last().unwrap() {
+                                    '2' => VectorSize::Bi,
+                                    '3' => VectorSize::Tri,
+                                    '4' => VectorSize::Quad,
+                                    _ => panic!(),
+                                },
+                                kind: ScalarKind::Float,
+                                width: 32,
+                            },
+                        }),
+                        components: args
+                            .into_iter()
+                            .map(|arg| {
+                                let expr = self.parse_expression(
+                                    arg,
+                                    expressions,
+                                    locals,
+                                    locals_map,
+                                    parameter_lookup,
+                                );
+                                expressions.append(expr)
+                            })
+                            .collect(),
+                    },
+                    _ => Expression::Call {
+                        name,
+                        arguments: args
+                            .into_iter()
+                            .map(|arg| {
+                                let expr = self.parse_expression(
+                                    arg,
+                                    expressions,
+                                    locals,
+                                    locals_map,
+                                    parameter_lookup,
+                                );
+                                expressions.append(expr)
+                            })
+                            .collect(),
+                    },
+                }
+            }
             Expr::Dot(reg, ident) => {
                 let handle = {
                     let expr = self.parse_expression(
@@ -619,6 +734,7 @@ impl<'a> Parser<'a> {
                         const MEMBERS: [char; 4] = ['x', 'y', 'z', 'w'];
                         if name.len() > 1 {
                             let mut components = Vec::with_capacity(name.len());
+
                             for ch in name.chars() {
                                 let expr = crate::Expression::AccessIndex {
                                     base: handle,
@@ -787,7 +903,7 @@ impl<'a> Parser<'a> {
 
                                             bind = Some(word);
                                         }
-                                        "set " => {
+                                        "set" => {
                                             assert!(set.is_none(),);
                                             assert!(location.is_none());
 
@@ -834,35 +950,7 @@ mod tests {
 
     #[test]
     fn test_vertex() {
-        let data = r#"#version 450 core
-
-layout(location=0) in vec3 a_position;
-layout(location=1) in vec3 a_color;
-layout(location=2) in vec3 a_normal;
-        
-layout(location=0) out vec3 v_position;
-layout(location=1) out vec3 v_color;
-layout(location=2) out vec3 v_normal;
-        
-layout(set=0, binding=0)
-uniform Globals {
-    mat4 u_view_proj;
-    vec3 u_view_position;
-};
-        
-layout(set=2, binding=0)
-uniform Locals {
-    mat4 u_transform;
-    vec2 U_min_max;
-};
-        
-void main() {
-    v_color = a_color;
-    v_normal = a_normal;
-        
-    v_position = (u_transform * vec4(a_position, 1.0)).xyz;
-    gl_Position = u_view_proj * u_transform * vec4(a_position, 1.0);
-}"#;
+        let data = include_str!("../../test-data/shader.vert");
 
         println!(
             "{:#?}",
@@ -872,62 +960,7 @@ void main() {
 
     #[test]
     fn test() {
-        let data = r#"#version 450
-
-layout(location=0) in vec3 v_position;
-layout(location=1) in vec3 v_color;
-layout(location=2) in vec3 v_normal;
-        
-layout(location=0) out vec4 f_color;
-        
-layout(set=0, binding=0)
-uniform Globals {
-    mat4 u_view_proj;
-    vec3 u_view_position;
-};
-        
-layout(set = 1, binding = 0) uniform Light {
-    vec3 u_position;
-    vec3 u_color;
-};
-        
-layout(set=2, binding=0)
-uniform Locals {
-    mat4 u_transform;
-    vec2 u_min_max;
-};
-        
-layout (set = 2, binding = 1) uniform texture2D t_color;
-layout (set = 2, binding = 2) uniform sampler s_color;
-        
-float invLerp(float from, float to, float value){
-    return (value - from) / (to - from);
-}
-        
-void main() {
-    vec3 object_color = 
-        texture(sampler2D(t_color,s_color), vec2(invLerp(u_min_max.x,u_min_max.y,length(v_position)),0.0)).xyz;
-        
-    float ambient_strength = 0.1;
-    vec3 ambient_color = u_color * ambient_strength;
-        
-    vec3 normal = normalize(v_normal);
-    vec3 light_dir = normalize(u_position - v_position);
-        
-    float diffuse_strength = max(dot(normal, light_dir), 0.0);
-    vec3 diffuse_color = u_color * diffuse_strength;
-        
-    vec3 view_dir = normalize(u_view_position - v_position);
-    vec3 half_dir = normalize(view_dir + light_dir);
-        
-    float specular_strength = pow(max(dot(normal, half_dir), 0.0), 32);
-        
-    vec3 specular_color = specular_strength * u_color;
-        
-    vec3 result = (ambient_color + diffuse_color + specular_color) * object_color;
-        
-    f_color = vec4(result, 1.0);
-}"#;
+        let data = include_str!("../../test-data/shader.frag");
 
         println!(
             "{:#?}",
