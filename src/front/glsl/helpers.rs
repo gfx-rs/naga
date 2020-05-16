@@ -1,5 +1,6 @@
-use crate::{ScalarKind, TypeInner, VectorSize};
+use crate::{Arena, ImageFlags, ScalarKind, Type, TypeInner, VectorSize};
 use glsl::syntax::{BinaryOp, TypeSpecifierNonArray};
+use spirv::Dim;
 
 pub fn glsl_to_spirv_binary_op(op: BinaryOp) -> crate::BinaryOperator {
     match op {
@@ -25,7 +26,7 @@ pub fn glsl_to_spirv_binary_op(op: BinaryOp) -> crate::BinaryOperator {
     }
 }
 
-pub fn glsl_to_spirv_type(ty: TypeSpecifierNonArray) -> Option<TypeInner> {
+pub fn glsl_to_spirv_type(ty: TypeSpecifierNonArray, types: &mut Arena<Type>) -> Option<TypeInner> {
     use TypeSpecifierNonArray::*;
 
     Some(match ty {
@@ -235,6 +236,87 @@ pub fn glsl_to_spirv_type(ty: TypeSpecifierNonArray) -> Option<TypeInner> {
             kind: ScalarKind::Float,
             width: 64,
         },
+        TypeName(ty_name) => {
+            if ty_name.0.contains("texture") {
+                let (base, offset) = match &ty_name.0[..1] {
+                    "t" => {
+                        if &ty_name.0[..7] != "texture" {
+                            panic!()
+                        }
+
+                        (
+                            types.fetch_or_append(Type {
+                                name: None,
+                                inner: TypeInner::Scalar {
+                                    kind: ScalarKind::Float,
+                                    width: 32,
+                                },
+                            }),
+                            7,
+                        )
+                    }
+                    "i" => {
+                        if &ty_name.0[..8] != "itexture" {
+                            panic!()
+                        }
+
+                        (
+                            types.fetch_or_append(Type {
+                                name: None,
+                                inner: TypeInner::Scalar {
+                                    kind: ScalarKind::Sint,
+                                    width: 32,
+                                },
+                            }),
+                            8,
+                        )
+                    }
+                    "u" => {
+                        if &ty_name.0[..8] != "utexture" {
+                            panic!()
+                        }
+
+                        (
+                            types.fetch_or_append(Type {
+                                name: None,
+                                inner: TypeInner::Scalar {
+                                    kind: ScalarKind::Uint,
+                                    width: 32,
+                                },
+                            }),
+                            8,
+                        )
+                    }
+                    _ => panic!(),
+                };
+
+                let (dim, flags) = match &ty_name.0[offset..] {
+                    "1D" => (Dim::Dim1D, ImageFlags::SAMPLED),
+                    "2D" => (Dim::Dim2D, ImageFlags::SAMPLED),
+                    "3D" => (Dim::Dim3D, ImageFlags::SAMPLED),
+                    "1DArray" => (Dim::Dim1D, ImageFlags::SAMPLED | ImageFlags::ARRAYED),
+                    "2DArray" => (Dim::Dim2D, ImageFlags::SAMPLED | ImageFlags::ARRAYED),
+                    "3DArray" => (Dim::Dim3D, ImageFlags::SAMPLED | ImageFlags::ARRAYED),
+                    "2DMS" => (Dim::Dim2D, ImageFlags::SAMPLED | ImageFlags::MULTISAMPLED),
+                    "2DMSArray" => (
+                        Dim::Dim2D,
+                        ImageFlags::SAMPLED | ImageFlags::ARRAYED | ImageFlags::MULTISAMPLED,
+                    ),
+                    "2DRect" => (Dim::DimRect, ImageFlags::SAMPLED),
+                    "Cube" => (Dim::DimCube, ImageFlags::SAMPLED),
+                    "CubeArray" => (Dim::DimCube, ImageFlags::SAMPLED | ImageFlags::ARRAYED),
+                    "Buffer" => (Dim::DimBuffer, ImageFlags::SAMPLED),
+                    _ => panic!(),
+                };
+
+                return Some(TypeInner::Image { base, dim, flags });
+            }
+
+            if ty_name.0 == "sampler" {
+                return Some(TypeInner::Sampler);
+            }
+            unimplemented!()
+        }
         _ => unimplemented!(),
     })
 }

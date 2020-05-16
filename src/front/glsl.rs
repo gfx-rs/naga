@@ -227,7 +227,18 @@ impl<'a> Parser<'a> {
             match statement {
                 Statement::Compound(_) => unimplemented!(),
                 Statement::Simple(statement) => match *statement {
-                    SimpleStatement::Declaration(_) => unimplemented!(),
+                    SimpleStatement::Declaration(declaration) => match declaration {
+                        Declaration::InitDeclaratorList(init) => {
+                            self.parse_local_variable(
+                                init,
+                                &mut expressions,
+                                &mut local_variables,
+                                &mut locals_map,
+                                &mut parameter_lookup,
+                            );
+                        }
+                        _ => unimplemented!(),
+                    },
                     SimpleStatement::Expression(expr) => {
                         let expr = match expr {
                             Some(expr) => expr,
@@ -281,6 +292,74 @@ impl<'a> Parser<'a> {
         self.function_lookup.insert(name, handle);
 
         handle
+    }
+
+    fn parse_local_variable(
+        &mut self,
+        init: InitDeclaratorList,
+        expressions: &mut Arena<Expression>,
+        locals: &mut Arena<LocalVariable>,
+        locals_map: &mut FastHashMap<String, Handle<LocalVariable>>,
+        parameter_lookup: &FastHashMap<String, Expression>,
+    ) -> Handle<LocalVariable> {
+        let name = init.head.name.map(|d| d.0);
+        let ty = {
+            let ty = self.parse_type(init.head.ty.ty).unwrap();
+
+            if let Some(specifier) = init.head.array_specifier {
+                match specifier {
+                    ArraySpecifier::Unsized => self.types.fetch_or_append(Type {
+                        name: None,
+                        inner: TypeInner::Array {
+                            base: ty,
+                            size: ArraySize::Dynamic,
+                        },
+                    }),
+                    ArraySpecifier::ExplicitlySized(_) => unimplemented!(),
+                }
+            } else {
+                ty
+            }
+        };
+
+        let initializer = init.head.initializer.map(|initializer| {
+            self.parse_initializer(
+                initializer,
+                expressions,
+                locals,
+                locals_map,
+                parameter_lookup,
+            )
+        });
+
+        let handle = locals.append(LocalVariable {
+            name: name.clone(),
+            ty,
+            init: initializer,
+        });
+
+        locals_map.insert(name.unwrap(), handle);
+
+        handle
+    }
+
+    fn parse_initializer(
+        &mut self,
+        initializer: Initializer,
+        expressions: &mut Arena<Expression>,
+        locals: &mut Arena<LocalVariable>,
+        locals_map: &mut FastHashMap<String, Handle<LocalVariable>>,
+        parameter_lookup: &FastHashMap<String, Expression>,
+    ) -> Handle<Expression> {
+        match initializer {
+            Initializer::Simple(expr) => {
+                let handle =
+                    self.parse_expression(*expr, expressions, locals, locals_map, parameter_lookup);
+
+                expressions.append(handle)
+            }
+            Initializer::List(exprs) => unimplemented!(),
+        }
     }
 
     fn parse_statement(
@@ -633,7 +712,7 @@ impl<'a> Parser<'a> {
             Expr::Ternary(condition, accept, reject) => unimplemented!(),
             Expr::Assignment(_, _, _) => panic!(),
             Expr::Bracket(reg, index) => unimplemented!(),
-            Expr::FunCall(ident, args) => {
+            Expr::FunCall(ident, mut args) => {
                 let name = match ident {
                     FunIdentifier::Identifier(ident) => ident.0,
                     FunIdentifier::Expr(expr) => todo!(),
@@ -668,6 +747,51 @@ impl<'a> Parser<'a> {
                             })
                             .collect(),
                     },
+                    "texture" => {
+                        let (image, sampler) =
+                            if let Expr::FunCall(ident, mut sample_args) = args.remove(0) {
+                                let name = match ident {
+                                    FunIdentifier::Expr(_) => unimplemented!(),
+                                    FunIdentifier::Identifier(ident) => ident.0,
+                                };
+
+                                match name.as_str() {
+                                    "sampler2D" => (
+                                        self.parse_expression(
+                                            sample_args.remove(0),
+                                            expressions,
+                                            locals,
+                                            locals_map,
+                                            parameter_lookup,
+                                        ),
+                                        self.parse_expression(
+                                            sample_args.remove(0),
+                                            expressions,
+                                            locals,
+                                            locals_map,
+                                            parameter_lookup,
+                                        ),
+                                    ),
+                                    _ => unimplemented!(),
+                                }
+                            } else {
+                                panic!()
+                            };
+
+                        let coordinate = self.parse_expression(
+                            args.remove(0),
+                            expressions,
+                            locals,
+                            locals_map,
+                            parameter_lookup,
+                        );
+
+                        Expression::ImageSample {
+                            image: expressions.append(image),
+                            sampler: expressions.append(sampler),
+                            coordinate: expressions.append(coordinate),
+                        }
+                    }
                     _ => Expression::Call {
                         name,
                         arguments: args
@@ -792,7 +916,7 @@ impl<'a> Parser<'a> {
 
     // None = void
     fn parse_type(&mut self, ty: TypeSpecifier) -> Option<Handle<Type>> {
-        let base_ty = match helpers::glsl_to_spirv_type(ty.ty) {
+        let base_ty = match helpers::glsl_to_spirv_type(ty.ty, &mut self.types) {
             Some(ty) => ty,
             None => return None,
         };
@@ -959,7 +1083,7 @@ mod tests {
     }
 
     #[test]
-    fn test() {
+    fn test_frag() {
         let data = include_str!("../../test-data/shader.frag");
 
         println!(
