@@ -10,6 +10,7 @@ use glsl::{
 use spirv::{BuiltIn, ExecutionModel, StorageClass};
 
 mod helpers;
+mod preprocessor;
 
 #[derive(Debug, Copy, Clone)]
 pub enum Global {
@@ -47,13 +48,13 @@ impl<'a> Parser<'a> {
     ) -> Result<crate::Module, ParseError> {
         let ast = TranslationUnit::parse(self.source)?;
 
-        println!("{:#?}", ast);
+        //println!("{:#?}", ast);
 
         let mut entry_point = None;
 
         for declaration in ast {
             match declaration {
-                ExternalDeclaration::Preprocessor(_) => { /* TODO */ }
+                ExternalDeclaration::Preprocessor(_) => unreachable!(),
                 ExternalDeclaration::FunctionDefinition(function) => {
                     let function = self.parse_function_definition(function);
 
@@ -1065,7 +1066,13 @@ pub fn parse_str(
     entry: String,
     exec: ExecutionModel,
 ) -> Result<crate::Module, ParseError> {
-    Parser::new(source)?.parse(entry, exec)
+    let input = preprocessor::preprocess(source).unwrap();
+
+    log::debug!("------GLSL PREPROCESSOR------");
+    log::debug!("\n{}", input);
+    log::debug!("-----------------------------");
+
+    Parser::new(&input)?.parse(entry, exec)
 }
 
 #[cfg(test)]
@@ -1074,7 +1081,7 @@ mod tests {
 
     #[test]
     fn test_vertex() {
-        let data = include_str!("../../test-data/shader.vert");
+        let data = include_str!("../../test-data/glsl_vertex_test_shader.vert");
 
         println!(
             "{:#?}",
@@ -1085,6 +1092,18 @@ mod tests {
     #[test]
     fn test_frag() {
         let data = include_str!("../../test-data/shader.frag");
+
+        println!(
+            "{:#?}",
+            parse_str(data, String::from("main"), spirv::ExecutionModel::Fragment)
+        );
+    }
+
+    #[test]
+    fn test_preprocess() {
+        let _ = env_logger::try_init();
+
+        let data = include_str!("../../test-data/glsl_preprocessor_abuse.vert");
 
         println!(
             "{:#?}",
