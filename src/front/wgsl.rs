@@ -142,6 +142,7 @@ mod lex {
 #[derive(Debug)]
 pub enum Error<'a> {
     Unexpected(Token<'a>),
+    UnexpectedConstantType(crate::ConstantInner, crate::TypeInner),
     BadInteger(&'a str, std::num::ParseIntError),
     BadFloat(&'a str, std::num::ParseFloatError),
     BadAccessor(&'a str),
@@ -352,6 +353,38 @@ pub enum Scope {
     PrimaryExpr,
     SingularExpr,
     GeneralExpr,
+}
+
+fn check_constant_types<'a>(
+    inner: &crate::ConstantInner,
+    type_inner: &crate::TypeInner
+) -> Result<(), Error<'a>> {
+    match (inner, type_inner) {
+        (
+            crate::ConstantInner::Sint(_),
+            crate::TypeInner::Scalar { kind: crate::ScalarKind::Sint, width: _ },
+        ) => Ok(()),
+        (
+            crate::ConstantInner::Uint(_),
+            crate::TypeInner::Scalar { kind: crate::ScalarKind::Uint, width: _ },
+        ) => Ok(()),
+        (
+            crate::ConstantInner::Float(_),
+            crate::TypeInner::Scalar { kind: crate::ScalarKind::Float, width: _ },
+        ) => Ok(()),
+        (
+            crate::ConstantInner::Bool(_),
+            crate::TypeInner::Scalar { kind: crate::ScalarKind::Bool, width: _ },
+        ) => Ok(()),
+        (
+            crate::ConstantInner::Composite(inner),
+            _
+        ) => Ok(()), // TODO recursively check composite types
+        (other_inner, other_type_inner) => return Err(Error::UnexpectedConstantType(
+            other_inner.clone(),
+            other_type_inner.clone(),
+        )),
+    }
 }
 
 #[derive(Debug)]
@@ -1300,6 +1333,7 @@ impl Parser {
                 lexer.expect(Token::Operation('='))?;
                 let inner = self.parse_const_expression(lexer, &mut module.types, &mut module.constants)?;
                 lexer.expect(Token::Separator(';'))?;
+                check_constant_types(&inner, &module.types[ty].inner)?;
                 let const_handle = module.constants.append(crate::Constant {
                     name: Some(name.to_owned()),
                     specialization: None,
@@ -1399,4 +1433,19 @@ impl Parser {
 
 pub fn parse_str(source: &str) -> Result<crate::Module, ParseError> {
     Parser::new().parse(source)
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn check_constant_type_scalar_ok() {
+        let wgsl = "const a : i32 = 2;";
+        assert!(super::parse_str(wgsl).is_ok());
+    }
+
+    #[test]
+    fn check_constant_type_scalar_err() {
+        let wgsl = "const a : i32 = 2.0;";
+        assert!(super::parse_str(wgsl).is_err());
+    }
 }
