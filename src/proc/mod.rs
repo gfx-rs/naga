@@ -1,4 +1,4 @@
 mod interface;
-mod typifier;
+pub(crate) mod typifier;
 
 pub use typifier::{ResolveError, Typifier};
