@@ -157,7 +157,7 @@ impl Typifier {
 #[derive(Debug)]
 pub struct UnexpectedConstantTypeError(crate::ConstantInner, crate::TypeInner);
 
-pub(crate) fn check_constant_types(
+pub fn check_constant_types(
     inner: &crate::ConstantInner,
     type_inner: &crate::TypeInner
 ) -> Result<(), UnexpectedConstantTypeError> {

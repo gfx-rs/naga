@@ -1,4 +1,4 @@
 mod interface;
-pub(crate) mod typifier;
+mod typifier;
 
-pub use typifier::{ResolveError, Typifier};
+pub use typifier::{ResolveError, Typifier, UnexpectedConstantTypeError, check_constant_types};

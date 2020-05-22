@@ -3,7 +3,7 @@ use crate::{
     proc::{Typifier, ResolveError},
     FastHashMap,
 };
-use crate::proc::typifier::UnexpectedConstantTypeError;
+use crate::proc::UnexpectedConstantTypeError;
 
 
 #[derive(Debug, PartialEq)]
@@ -143,7 +143,7 @@ mod lex {
 #[derive(Debug)]
 pub enum Error<'a> {
     Unexpected(Token<'a>),
-    UnexpectedConstantType(crate::proc::typifier::UnexpectedConstantTypeError),
+    UnexpectedConstantType(crate::proc::UnexpectedConstantTypeError),
     BadInteger(&'a str, std::num::ParseIntError),
     BadFloat(&'a str, std::num::ParseFloatError),
     BadAccessor(&'a str),
@@ -160,7 +160,7 @@ pub enum Error<'a> {
     Other,
 }
 
-impl<'a> From<crate::proc::typifier::UnexpectedConstantTypeError> for Error<'a> {
+impl<'a> From<crate::proc::UnexpectedConstantTypeError> for Error<'a> {
     fn from(error: UnexpectedConstantTypeError) -> Self {
         Error::UnexpectedConstantType(error)
     }
@@ -1308,7 +1308,7 @@ impl Parser {
                 lexer.expect(Token::Operation('='))?;
                 let inner = self.parse_const_expression(lexer, &mut module.types, &mut module.constants)?;
                 lexer.expect(Token::Separator(';'))?;
-                crate::proc::typifier::check_constant_types(&inner, &module.types[ty].inner)?;
+                crate::proc::check_constant_types(&inner, &module.types[ty].inner)?;
                 let const_handle = module.constants.append(crate::Constant {
                     name: Some(name.to_owned()),
                     specialization: None,
