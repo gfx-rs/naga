@@ -78,7 +78,7 @@ mod lex {
                     } else {
                         (
                             Token::Float(number.parse().unwrap()),
-                            input,
+                            chars.as_str(),
                             start,
                             start + pos,
                         )

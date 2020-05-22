@@ -1313,6 +1313,8 @@ mod tests {
 
     #[test]
     fn test_frag() {
+        let _ = env_logger::try_init();
+
         let data = include_str!("../../test-data/shader.frag");
 
         println!(
@@ -1334,6 +1336,7 @@ mod tests {
     }
 
     #[test]
+    #[should_panic]
     fn test_preprocess_ifs() {
         let _ = env_logger::try_init();
 
