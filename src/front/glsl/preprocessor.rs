@@ -55,7 +55,7 @@ mod lex {
                 } else if next == Some(cur) {
                     (Token::ShiftOperation(cur), chars.as_str(), start, start + 2)
                 } else {
-                    (Token::Paren(cur), input, start, start + 1)
+                    (Token::Operation(cur), input, start, start + 1)
                 }
             }
             '0'..='9' => {
@@ -183,7 +183,7 @@ mod lex {
         }
     }
 
-    #[derive(Clone)]
+    #[derive(Clone, Debug)]
     pub struct Lexer<'a> {
         lines: Enumerate<Lines<'a>>,
         input: String,
@@ -262,10 +262,13 @@ mod lex {
     }
 }
 
+use super::{BinaryOp, Error, ErrorKind, Literal, Node, UnaryOp};
 use crate::FastHashMap;
 use std::{
     fmt,
+    iter::Peekable,
     ops::{Deref, Range},
+    vec::IntoIter,
 };
 
 #[derive(Debug, Clone)]
@@ -361,112 +364,35 @@ impl fmt::Display for Token {
     }
 }
 
-#[derive(Debug)]
-pub enum ErrorKind {
-    UnexpectedToken {
-        expected: Vec<Token>,
-        got: TokenMetadata,
-    },
-    ExpectedEOL {
-        got: TokenMetadata,
-    },
-    UnknownPragma {
-        pragma: String,
-    },
-    ExtensionNotSupported {
-        extension: String,
-    },
-    AllExtensionsEnabled,
-    ExtensionUnknownBehavior {
-        behavior: String,
-    },
-    UnsupportedVersion {
-        version: usize,
-    },
-    UnsupportedProfile {
-        profile: String,
-    },
-    UnknownProfile {
-        profile: String,
-    },
-    UnknownPreprocessorDirective {
-        directive: String,
-    },
-    ReservedMacro,
-    EOL,
-    EOF,
-}
-
-impl fmt::Display for ErrorKind {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            ErrorKind::UnexpectedToken { expected, got } => write!(
-                f,
-                "Unexpected token:\nexpected: {}\ngot: {}",
-                expected
-                    .iter()
-                    .map(|token| {
-                        let mut type_string = token.type_to_string();
-                        type_string.push_str(" |");
-                        type_string
-                    })
-                    .collect::<String>(),
-                got.token.to_string()
-            ),
-            ErrorKind::ExpectedEOL { got } => {
-                write!(f, "Expected end of line:\ngot: {}", got.token.to_string())
-            }
-            ErrorKind::UnknownPragma { pragma } => write!(f, "Unknown pragma: {}", pragma),
-            ErrorKind::ExtensionNotSupported { extension } => {
-                write!(f, "The extension \"{}\" is not supported", extension)
-            }
-            ErrorKind::AllExtensionsEnabled => {
-                write!(f, "All extensions can't be require or enable")
-            }
-            ErrorKind::ExtensionUnknownBehavior { behavior } => write!(
-                f,
-                "The extension behavior must be one of require|enable|warn|disable got: {}",
-                behavior
-            ),
-            ErrorKind::UnsupportedVersion { version } => write!(
-                f,
-                "The version {} isn't supported use either 450 or 460",
-                version
-            ),
-            ErrorKind::UnsupportedProfile { profile } => {
-                write!(f, "The profile {} isn't supported use core", profile)
-            }
-            ErrorKind::UnknownProfile { profile } => {
-                write!(f, "The profile {} isn't defined use core", profile)
-            }
-            ErrorKind::UnknownPreprocessorDirective { directive } => {
-                write!(f, "The preprocessor directive {} isn't defined", directive)
-            }
-            ErrorKind::ReservedMacro => write!(f, "Macro can't begin with GL_"),
-            ErrorKind::EOL => write!(f, "End of line"),
-            ErrorKind::EOF => write!(f, "End of file"),
-        }
-    }
-}
-
-#[derive(Debug)]
-pub struct Error {
-    pub kind: ErrorKind,
-}
-
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self)
-    }
-}
-
-impl std::error::Error for Error {}
-
 pub fn preprocess(input: &str) -> Result<String, Error> {
     let lexer = lex::Lexer::new(input);
 
     let stripped_tokens = parse_comments(lexer)?;
-    let tokens = parse_preprocessor(stripped_tokens)?;
+
+    let mut macros: FastHashMap<String, Vec<TokenMetadata>> = FastHashMap::default();
+
+    macros.insert(
+        String::from("GL_SPIRV"),
+        vec![TokenMetadata {
+            token: Token::Integral(100),
+            line: 0,
+            chars: 0..1,
+        }],
+    );
+    macros.insert(
+        String::from("VULKAN"),
+        vec![TokenMetadata {
+            token: Token::Integral(100),
+            line: 0,
+            chars: 0..1,
+        }],
+    );
+
+    log::trace!("------GLSL COMMENT STRIPPED------");
+    log::trace!("\n{:#?}", stripped_tokens);
+    log::trace!("---------------------------------");
+
+    let tokens = parse_preprocessor(&mut stripped_tokens.into_iter().peekable(), &mut macros)?;
 
     let mut line = 0;
     let mut start = 0;
@@ -488,7 +414,7 @@ pub fn preprocess(input: &str) -> Result<String, Error> {
     }))
 }
 
-fn parse_comments(mut lexer: lex::Lexer) -> Result<Vec<TokenMetadata>, Error> {
+pub(self) fn parse_comments(mut lexer: lex::Lexer) -> Result<Vec<TokenMetadata>, Error> {
     let mut tokens = Vec::new();
 
     loop {
@@ -511,7 +437,7 @@ fn parse_comments(mut lexer: lex::Lexer) -> Result<Vec<TokenMetadata>, Error> {
                 }
             }
             Token::LineComment => {
-                while token.line != lexer.peek().line || Token::End != lexer.peek().token {
+                while token.line == lexer.peek().line && Token::End != lexer.peek().token {
                     let _ = lexer.next();
                 }
             }
@@ -526,31 +452,14 @@ fn parse_comments(mut lexer: lex::Lexer) -> Result<Vec<TokenMetadata>, Error> {
     Ok(tokens)
 }
 
-fn parse_preprocessor(stripped_tokens: Vec<TokenMetadata>) -> Result<Vec<TokenMetadata>, Error> {
-    let mut lexer = stripped_tokens.into_iter().peekable();
-
+fn parse_preprocessor(
+    lexer: &mut Peekable<IntoIter<TokenMetadata>>,
+    macros: &mut FastHashMap<String, Vec<TokenMetadata>>,
+) -> Result<Vec<TokenMetadata>, Error> {
     let mut tokens = Vec::new();
-    let mut macros: FastHashMap<String, Vec<TokenMetadata>> = FastHashMap::default();
     let mut line_offset = 0i32;
 
     let mut offset = (0, 0);
-
-    macros.insert(
-        String::from("GL_SPIRV"),
-        vec![TokenMetadata {
-            token: Token::Integral(100),
-            line: 0,
-            chars: 0..1,
-        }],
-    );
-    macros.insert(
-        String::from("VULKAN"),
-        vec![TokenMetadata {
-            token: Token::Integral(100),
-            line: 0,
-            chars: 0..1,
-        }],
-    );
 
     macro_rules! get_macro {
         ($name:expr, $token:expr) => {
@@ -593,9 +502,10 @@ fn parse_preprocessor(stripped_tokens: Vec<TokenMetadata>) -> Result<Vec<TokenMe
     }
 
     loop {
-        let token = lexer.next().ok_or(Error {
-            kind: ErrorKind::EOF,
-        })?;
+        let token = match lexer.next() {
+            Some(t) => t,
+            None => break,
+        };
 
         match token.token {
             Token::Preprocessor => {
@@ -663,14 +573,7 @@ fn parse_preprocessor(stripped_tokens: Vec<TokenMetadata>) -> Result<Vec<TokenMe
 
                         let mut macro_tokens = Vec::new();
 
-                        while token.line
-                            == lexer
-                                .peek()
-                                .ok_or(Error {
-                                    kind: ErrorKind::EOF,
-                                })?
-                                .line
-                        {
+                        while Some(token.line) == lexer.peek().map(|t| t.line) {
                             let macro_token = lexer.next().ok_or(Error {
                                 kind: ErrorKind::EOF,
                             })?;
@@ -717,12 +620,86 @@ fn parse_preprocessor(stripped_tokens: Vec<TokenMetadata>) -> Result<Vec<TokenMe
 
                         macros.remove(&macro_name);
                     }
-                    "if" => unimplemented!(),
-                    "ifdef" => unimplemented!(),
-                    "ifndef" => unimplemented!(),
-                    "else" => unimplemented!(),
-                    "elif" => unimplemented!(),
-                    "endif" => unimplemented!(),
+                    "if" => {
+                        let mut expr = Vec::new();
+
+                        while lexer
+                            .peek()
+                            .ok_or(Error {
+                                kind: ErrorKind::EOF,
+                            })?
+                            .line
+                            == token.line
+                        {
+                            expr.push(lexer.next().unwrap());
+                        }
+
+                        let condition = evaluate_preprocessor_if(expr, macros)?;
+
+                        let mut body_tokens = parse_preprocessor_if(lexer, macros, condition)?;
+
+                        tokens.append(&mut body_tokens);
+                    }
+                    "ifdef" | "ifndef" => {
+                        let macro_name_token = if token.line
+                            == lexer
+                                .peek()
+                                .ok_or(Error {
+                                    kind: ErrorKind::EOF,
+                                })?
+                                .line
+                        {
+                            lexer.next().unwrap()
+                        } else {
+                            return Err(Error {
+                                kind: ErrorKind::EOL,
+                            });
+                        };
+
+                        let macro_name = if let Token::Word(name) = macro_name_token.token {
+                            name
+                        } else {
+                            return Err(Error {
+                                kind: ErrorKind::UnexpectedToken {
+                                    expected: vec![Token::Word(String::new())],
+                                    got: macro_name_token,
+                                },
+                            });
+                        };
+
+                        // There shouldn't be any more tokens on this line so we throw a error
+                        if token.line
+                            == lexer
+                                .peek()
+                                .ok_or(Error {
+                                    kind: ErrorKind::EOF,
+                                })?
+                                .line
+                        {
+                            return Err(Error {
+                                kind: ErrorKind::ExpectedEOL {
+                                    got: lexer.next().unwrap(),
+                                },
+                            });
+                        }
+
+                        let mut body_tokens = parse_preprocessor_if(
+                            lexer,
+                            macros,
+                            match preprocessor_op.as_str() {
+                                "ifdef" => macros.get(&macro_name).is_some(),
+                                "ifndef" => macros.get(&macro_name).is_none(),
+                                _ => unreachable!(),
+                            },
+                        )?;
+
+                        tokens.append(&mut body_tokens);
+                    }
+                    "else" | "elif" | "endif" => {
+                        return Err(Error {
+                            kind: ErrorKind::UnboundedIfCloserOrVariant { token },
+                        })
+                    }
                     "error" => {
                         let mut error_token = lexer.next();
 
@@ -1281,4 +1258,711 @@ fn parse_preprocessor(stripped_tokens: Vec<TokenMetadata>) -> Result<Vec<TokenMe
     }
 
     Ok(tokens)
+}
+
+fn parse_preprocessor_if(
+    lexer: &mut Peekable<IntoIter<TokenMetadata>>,
+    macros: &mut FastHashMap<String, Vec<TokenMetadata>>,
+    mut condition: bool,
+) -> Result<Vec<TokenMetadata>, Error> {
+    let mut body = Vec::new();
+    let mut else_block = false;
+
+    loop {
+        let macro_token = lexer.peek().ok_or(Error {
+            kind: ErrorKind::EOF,
+        })?;
+
+        if let Token::Preprocessor = macro_token.token {
+            let macro_token = lexer.next().unwrap();
+
+            let directive_token = if macro_token.line
+                == lexer
+                    .peek()
+                    .ok_or(Error {
+                        kind: ErrorKind::EOF,
+                    })?
+                    .line
+            {
+                lexer.next().unwrap()
+            } else {
+                return Err(Error {
+                    kind: ErrorKind::EOL,
+                });
+            };
+
+            let directive = if let Token::Word(name) = directive_token.token {
+                name
+            } else {
+                return Err(Error {
+                    kind: ErrorKind::UnexpectedToken {
+                        expected: vec![Token::Word(String::new())],
+                        got: macro_token,
+                    },
+                });
+            };
+
+            match directive.as_str() {
+                "if" => {
+                    let mut expr = Vec::new();
+
+                    while lexer
+                        .peek()
+                        .ok_or(Error {
+                            kind: ErrorKind::EOF,
+                        })?
+                        .line
+                        == macro_token.line
+                    {
+                        expr.push(lexer.next().unwrap());
+                    }
+
+                    let condition = evaluate_preprocessor_if(expr, macros)?;
+
+                    let mut body_tokens = parse_preprocessor_if(lexer, macros, condition)?;
+
+                    body.append(&mut body_tokens);
+                }
+                "elif" => {
+                    let mut expr = Vec::new();
+
+                    while lexer
+                        .peek()
+                        .ok_or(Error {
+                            kind: ErrorKind::EOF,
+                        })?
+                        .line
+                        == macro_token.line
+                    {
+                        expr.push(lexer.next().unwrap());
+                    }
+
+                    if !condition {
+                        condition = evaluate_preprocessor_if(expr, macros)?;
+                    }
+                }
+                "ifdef" | "ifndef" => {
+                    let macro_name_token = if macro_token.line
+                        == lexer
+                            .peek()
+                            .ok_or(Error {
+                                kind: ErrorKind::EOF,
+                            })?
+                            .line
+                    {
+                        lexer.next().unwrap()
+                    } else {
+                        return Err(Error {
+                            kind: ErrorKind::EOL,
+                        });
+                    };
+
+                    let macro_name = if let Token::Word(name) = macro_name_token.token {
+                        name
+                    } else {
+                        return Err(Error {
+                            kind: ErrorKind::UnexpectedToken {
+                                expected: vec![Token::Word(String::new())],
+                                got: macro_name_token,
+                            },
+                        });
+                    };
+
+                    // There shouldn't be any more tokens on this line so we throw a error
+                    if macro_token.line
+                        == lexer
+                            .peek()
+                            .ok_or(Error {
+                                kind: ErrorKind::EOF,
+                            })?
+                            .line
+                    {
+                        return Err(Error {
+                            kind: ErrorKind::ExpectedEOL {
+                                got: lexer.next().unwrap(),
+                            },
+                        });
+                    }
+
+                    let mut body_tokens = parse_preprocessor_if(
+                        lexer,
+                        macros,
+                        match directive.as_str() {
+                            "ifdef" => macros.get(&macro_name).is_some(),
+                            "ifndef" => macros.get(&macro_name).is_none(),
+                            _ => unreachable!(),
+                        },
+                    )?;
+
+                    body.append(&mut body_tokens);
+                }
+                "else" => {
+                    // There shouldn't be any more tokens on this line so we throw a error
+                    if directive_token.line
+                        == lexer
+                            .peek()
+                            .ok_or(Error {
+                                kind: ErrorKind::EOF,
+                            })?
+                            .line
+                    {
+                        return Err(Error {
+                            kind: ErrorKind::ExpectedEOL {
+                                got: lexer.next().unwrap(),
+                            },
+                        });
+                    }
+
+                    if else_block {
+                        return Err(Error {
+                            kind: ErrorKind::UnexpectedWord {
+                                expected: vec!["endif"],
+                                got: directive,
+                            },
+                        });
+                    }
+
+                    else_block = true;
+                    condition = !condition;
+                }
+                "endif" => {
+                    // There shouldn't be any more tokens on this line so we throw a error
+                    if directive_token.line
+                        == lexer
+                            .peek()
+                            .ok_or(Error {
+                                kind: ErrorKind::EOF,
+                            })?
+                            .line
+                    {
+                        if lexer.peek().unwrap().token != Token::End {
+                            return Err(Error {
+                                kind: ErrorKind::ExpectedEOL {
+                                    got: lexer.next().unwrap(),
+                                },
+                            });
+                        } else {
+                            body.push(lexer.next().unwrap());
+                        }
+                    }
+
+                    break;
+                }
+                _ => {}
+            }
+        }
+
+        if condition {
+            body.push(lexer.next().unwrap());
+        } else {
+            lexer.next().unwrap();
+        }
+    }
+
+    let body_tokens = parse_preprocessor(&mut body.into_iter().peekable(), macros)?;
+
+    Ok(body_tokens)
+}
+
+fn evaluate_preprocessor_if(
+    expr: Vec<TokenMetadata>,
+    macros: &mut FastHashMap<String, Vec<TokenMetadata>>,
+) -> Result<bool, Error> {
+    let tree = logical_or_parser(&mut expr.into_iter().peekable(), macros)?;
+    log::trace!("{:#?}", tree);
+    evaluate_node(tree)?.as_bool()
+}
+
+fn evaluate_node(node: Node) -> Result<Literal, Error> {
+    Ok(match node {
+        Node::Literal(literal) => literal,
+        Node::Unary { op, tgt } => {
+            let literal = evaluate_node(*tgt)?;
+
+            match op {
+                UnaryOp::Positive => literal,
+                UnaryOp::Negative => Literal::Sint(-literal.as_isize()),
+                UnaryOp::BitWiseNot => Literal::Sint(!literal.as_isize()),
+                UnaryOp::LogicalNot => Literal::Sint((!literal.as_bool()?) as isize),
+            }
+        }
+        Node::Binary { left, op, right } => {
+            let left = evaluate_node(*left)?;
+            let right = evaluate_node(*right)?;
+
+            match op {
+                BinaryOp::Multiply => Literal::Sint(left.as_isize() * right.as_isize()),
+                BinaryOp::Divide => Literal::Sint(left.as_isize() / right.as_isize()),
+                BinaryOp::Remainder => Literal::Sint(left.as_isize() % right.as_isize()),
+                BinaryOp::Add => Literal::Sint(left.as_isize() + right.as_isize()),
+                BinaryOp::Subtract => Literal::Sint(left.as_isize() - right.as_isize()),
+
+                BinaryOp::LeftShift => Literal::Sint(left.as_isize() << right.as_isize()),
+                BinaryOp::RightShift => Literal::Sint(left.as_isize() << right.as_isize()),
+
+                BinaryOp::GreaterThan => {
+                    Literal::Sint((left.as_isize() > right.as_isize()) as isize)
+                }
+                BinaryOp::LessThan => Literal::Sint((left.as_isize() < right.as_isize()) as isize),
+                BinaryOp::GreaterOrEqual => {
+                    Literal::Sint((left.as_isize() >= right.as_isize()) as isize)
+                }
+                BinaryOp::LessOrEqual => {
+                    Literal::Sint((left.as_isize() <= right.as_isize()) as isize)
+                }
+
+                BinaryOp::Equal => Literal::Sint((left.as_isize() == right.as_isize()) as isize),
+                BinaryOp::NotEqual => Literal::Sint((left.as_isize() != right.as_isize()) as isize),
+
+                BinaryOp::BitWiseAnd => Literal::Sint(left.as_isize() & right.as_isize()),
+                BinaryOp::BitWiseXor => Literal::Sint(left.as_isize() ^ right.as_isize()),
+                BinaryOp::BitWiseOr => Literal::Sint(left.as_isize() | right.as_isize()),
+
+                BinaryOp::LogicalOr => {
+                    Literal::Sint((left.as_bool()? || right.as_bool()?) as isize)
+                }
+                BinaryOp::LogicalAnd => {
+                    Literal::Sint((left.as_bool()? && right.as_bool()?) as isize)
+                }
+            }
+        }
+    })
+}
+
+pub(self) fn logical_or_parser(
+    expr: &mut Peekable<impl Iterator<Item = TokenMetadata>>,
+    macros: &mut FastHashMap<String, Vec<TokenMetadata>>,
+) -> Result<Node, Error> {
+    let left = logical_and_parser(expr, macros)?;
+
+    let mut node = left;
+
+    while expr.peek().map(|t| &t.token) == Some(&Token::LogicalOperation('|')) {
+        let _ = expr.next().unwrap();
+
+        let right = logical_and_parser(expr, macros)?;
+
+        node = Node::Binary {
+            left: Box::new(node),
+            op: BinaryOp::LogicalOr,
+            right: Box::new(right),
+        }
+    }
+
+    Ok(node)
+}
+
+fn logical_and_parser(
+    expr: &mut Peekable<impl Iterator<Item = TokenMetadata>>,
+    macros: &mut FastHashMap<String, Vec<TokenMetadata>>,
+) -> Result<Node, Error> {
+    let left = bitwise_or_parser(expr, macros)?;
+
+    let mut node = left;
+
+    while expr.peek().map(|t| &t.token) == Some(&Token::LogicalOperation('&')) {
+        let _ = expr.next().unwrap();
+
+        let right = bitwise_or_parser(expr, macros)?;
+
+        node = Node::Binary {
+            left: Box::new(node),
+            op: BinaryOp::LogicalAnd,
+            right: Box::new(right),
+        }
+    }
+
+    Ok(node)
+}
+
+fn bitwise_or_parser(
+    expr: &mut Peekable<impl Iterator<Item = TokenMetadata>>,
+    macros: &mut FastHashMap<String, Vec<TokenMetadata>>,
+) -> Result<Node, Error> {
+    let left = bitwise_xor_parser(expr, macros)?;
+
+    let mut node = left;
+
+    while expr.peek().map(|t| &t.token) == Some(&Token::Operation('|')) {
+        let _ = expr.next().unwrap();
+
+        let right = bitwise_xor_parser(expr, macros)?;
+
+        node = Node::Binary {
+            left: Box::new(node),
+            op: BinaryOp::BitWiseOr,
+            right: Box::new(right),
+        }
+    }
+
+    Ok(node)
+}
+
+fn bitwise_xor_parser(
+    expr: &mut Peekable<impl Iterator<Item = TokenMetadata>>,
+    macros: &mut FastHashMap<String, Vec<TokenMetadata>>,
+) -> Result<Node, Error> {
+    let left = bitwise_and_parser(expr, macros)?;
+
+    let mut node = left;
+
+    while expr.peek().map(|t| &t.token) == Some(&Token::Operation('^')) {
+        let _ = expr.next().unwrap();
+
+        let right = bitwise_and_parser(expr, macros)?;
+
+        node = Node::Binary {
+            left: Box::new(node),
+            op: BinaryOp::BitWiseXor,
+            right: Box::new(right),
+        }
+    }
+
+    Ok(node)
+}
+
+fn bitwise_and_parser(
+    expr: &mut Peekable<impl Iterator<Item = TokenMetadata>>,
+    macros: &mut FastHashMap<String, Vec<TokenMetadata>>,
+) -> Result<Node, Error> {
+    let left = equality_parser(expr, macros)?;
+
+    let mut node = left;
+
+    while expr.peek().map(|t| &t.token) == Some(&Token::Operation('&')) {
+        let _ = expr.next().unwrap();
+
+        let right = equality_parser(expr, macros)?;
+
+        node = Node::Binary {
+            left: Box::new(node),
+            op: BinaryOp::BitWiseAnd,
+            right: Box::new(right),
+        }
+    }
+
+    Ok(node)
+}
+
+fn equality_parser(
+    expr: &mut Peekable<impl Iterator<Item = TokenMetadata>>,
+    macros: &mut FastHashMap<String, Vec<TokenMetadata>>,
+) -> Result<Node, Error> {
+    let left = relational_parser(expr, macros)?;
+
+    let mut node = left;
+
+    loop {
+        let equality_token = match expr.peek() {
+            Some(t) => t,
+            None => break,
+        };
+
+        let op = match equality_token.token {
+            Token::LogicalOperation('=') => BinaryOp::Equal,
+            Token::LogicalOperation('!') => BinaryOp::NotEqual,
+            _ => break,
+        };
+
+        let _ = expr.next().unwrap();
+
+        let right = relational_parser(expr, macros)?;
+
+        node = Node::Binary {
+            left: Box::new(node),
+            op,
+            right: Box::new(right),
+        }
+    }
+
+    Ok(node)
+}
+
+fn relational_parser(
+    expr: &mut Peekable<impl Iterator<Item = TokenMetadata>>,
+    macros: &mut FastHashMap<String, Vec<TokenMetadata>>,
+) -> Result<Node, Error> {
+    let left = shift_parser(expr, macros)?;
+
+    let mut node = left;
+
+    loop {
+        let relational_token = match expr.peek() {
+            Some(t) => t,
+            None => break,
+        };
+
+        let op = match relational_token.token {
+            Token::LogicalOperation('<') => BinaryOp::LessOrEqual,
+            Token::LogicalOperation('>') => BinaryOp::GreaterOrEqual,
+            Token::Operation('<') => BinaryOp::LessThan,
+            Token::Operation('>') => BinaryOp::GreaterThan,
+            _ => break,
+        };
+
+        let _ = expr.next().unwrap();
+
+        let right = shift_parser(expr, macros)?;
+
+        node = Node::Binary {
+            left: Box::new(node),
+            op,
+            right: Box::new(right),
+        }
+    }
+
+    Ok(node)
+}
+
+fn shift_parser(
+    expr: &mut Peekable<impl Iterator<Item = TokenMetadata>>,
+    macros: &mut FastHashMap<String, Vec<TokenMetadata>>,
+) -> Result<Node, Error> {
+    let left = additive_parser(expr, macros)?;
+
+    let mut node = left;
+
+    loop {
+        let shift_token = match expr.peek() {
+            Some(t) => t,
+            None => break,
+        };
+
+        let op = match shift_token.token {
+            Token::ShiftOperation('<') => BinaryOp::LeftShift,
+            Token::ShiftOperation('>') => BinaryOp::RightShift,
+            _ => break,
+        };
+
+        let _ = expr.next().unwrap();
+
+        let right = additive_parser(expr, macros)?;
+
+        node = Node::Binary {
+            left: Box::new(node),
+            op,
+            right: Box::new(right),
+        }
+    }
+
+    Ok(node)
+}
+
+fn additive_parser(
+    expr: &mut Peekable<impl Iterator<Item = TokenMetadata>>,
+    macros: &mut FastHashMap<String, Vec<TokenMetadata>>,
+) -> Result<Node, Error> {
+    let left = multiplicative_parser(expr, macros)?;
+
+    let mut node = left;
+
+    loop {
+        let additive_token = match expr.peek() {
+            Some(t) => t,
+            None => break,
+        };
+
+        let op = match additive_token.token {
+            Token::Operation('+') => BinaryOp::Add,
+            Token::Operation('-') => BinaryOp::Subtract,
+            _ => break,
+        };
+
+        let _ = expr.next().unwrap();
+
+        let right = multiplicative_parser(expr, macros)?;
+
+        node = Node::Binary {
+            left: Box::new(node),
+            op,
+            right: Box::new(right),
+        }
+    }
+
+    Ok(node)
+}
+
+fn multiplicative_parser(
+    expr: &mut Peekable<impl Iterator<Item = TokenMetadata>>,
+    macros: &mut FastHashMap<String, Vec<TokenMetadata>>,
+) -> Result<Node, Error> {
+    let left = unary_parser(expr, macros)?;
+
+    let mut node = left;
+
+    loop {
+        let multiplicative_token = match expr.peek() {
+            Some(t) => t,
+            None => break,
+        };
+
+        let op = match multiplicative_token.token {
+            Token::Operation('*') => BinaryOp::Multiply,
+            Token::Operation('/') => BinaryOp::Divide,
+            Token::Operation('%') => BinaryOp::Remainder,
+            _ => break,
+        };
+
+        let _ = expr.next().unwrap();
+
+        let right = unary_parser(expr, macros)?;
+
+        node = Node::Binary {
+            left: Box::new(node),
+            op,
+            right: Box::new(right),
+        }
+    }
+
+    Ok(node)
+}
+
+fn unary_parser(
+    expr: &mut Peekable<impl Iterator<Item = TokenMetadata>>,
+    macros: &mut FastHashMap<String, Vec<TokenMetadata>>,
+) -> Result<Node, Error> {
+    let unary_or_atom_token = expr.peek().ok_or(Error {
+        kind: ErrorKind::EOF,
+    })?;
+
+    Ok(match unary_or_atom_token.token {
+        Token::Operation(op) => {
+            let unary_token = expr.next().unwrap();
+
+            Node::Unary {
+                op: match op {
+                    '+' => UnaryOp::Positive,
+                    '-' => UnaryOp::Negative,
+                    '!' => UnaryOp::BitWiseNot,
+                    '~' => UnaryOp::LogicalNot,
+                    _ => {
+                        return Err(Error {
+                            kind: ErrorKind::UnexpectedToken {
+                                expected: vec![
+                                    Token::Operation('+'),
+                                    Token::Operation('-'),
+                                    Token::Operation('!'),
+                                    Token::Operation('~'),
+                                ],
+                                got: unary_token,
+                            },
+                        })
+                    }
+                },
+                tgt: Box::new(atom_parser(expr, macros)?),
+            }
+        }
+        _ => atom_parser(expr, macros)?,
+    })
+}
+
+fn atom_parser(
+    expr: &mut Peekable<impl Iterator<Item = TokenMetadata>>,
+    macros: &mut FastHashMap<String, Vec<TokenMetadata>>,
+) -> Result<Node, Error> {
+    let atom = expr.next().ok_or(Error {
+        kind: ErrorKind::EOF,
+    })?;
+
+    Ok(match atom.token {
+        Token::Double(_) | Token::Float(_) => {
+            return Err(Error {
+                kind: ErrorKind::NonIntegralType { token: atom },
+            })
+        }
+        Token::Integral(int) => Node::Literal(Literal::Uint(int)),
+        Token::Word(word) => Node::Literal(match word.as_str() {
+            "defined" => {
+                let macro_name_or_paren_token = expr.next().ok_or(Error {
+                    kind: ErrorKind::EOF,
+                })?;
+
+                match macro_name_or_paren_token.token {
+                    Token::Paren('(') => {
+                        let macro_name_token = expr.next().ok_or(Error {
+                            kind: ErrorKind::EOF,
+                        })?;
+
+                        let node = if let Token::Word(macro_name) = macro_name_token.token {
+                            Literal::Sint(macros.get(&macro_name).is_some() as isize)
+                        } else {
+                            return Err(Error {
+                                kind: ErrorKind::UnexpectedToken {
+                                    expected: vec![Token::Word(String::new())],
+                                    got: macro_name_token,
+                                },
+                            });
+                        };
+
+                        let close_paren_token = expr.next().ok_or(Error {
+                            kind: ErrorKind::EOF,
+                        })?;
+
+                        if Token::Paren(')') != close_paren_token.token {
+                            return Err(Error {
+                                kind: ErrorKind::UnexpectedToken {
+                                    expected: vec![Token::Paren(')')],
+                                    got: close_paren_token,
+                                },
+                            });
+                        }
+
+                        node
+                    }
+                    Token::Word(macro_name) => {
+                        Literal::Sint(macros.get(&macro_name).is_some() as isize)
+                    }
+                    _ => {
+                        return Err(Error {
+                            kind: ErrorKind::UnexpectedToken {
+                                expected: vec![Token::Word(String::new())],
+                                got: macro_name_or_paren_token,
+                            },
+                        })
+                    }
+                }
+            }
+            _ => {
+                return logical_or_parser(
+                    &mut macros
+                        .get_mut(&word)
+                        .cloned()
+                        .unwrap()
+                        .into_iter()
+                        .peekable(),
+                    macros,
+                )
+            }
+        }),
+        Token::Paren('(') => {
+            let node = logical_or_parser(expr, macros)?;
+
+            let close_paren = expr.next().ok_or(Error {
+                kind: ErrorKind::EOF,
+            })?;
+
+            if close_paren.token != Token::Paren(')') {
+                return Err(Error {
+                    kind: ErrorKind::UnexpectedToken {
+                        expected: vec![Token::Paren(')')],
+                        got: close_paren,
+                    },
+                });
+            }
+
+            node
+        }
+        _ => {
+            return Err(Error {
+                kind: ErrorKind::UnexpectedToken {
+                    expected: vec![
+                        Token::Word(String::new()),
+                        Token::Paren('('),
+                        Token::Integral(0),
+                    ],
+                    got: atom,
+                },
+            })
+        }
+    })
 }

@@ -7,10 +7,232 @@ use glsl::{
     parser::{Parse, ParseError},
     syntax::*,
 };
+use preprocessor::{Token, TokenMetadata};
 use spirv::{BuiltIn, ExecutionModel, StorageClass};
+use std::fmt;
 
 mod helpers;
 mod preprocessor;
+
+#[derive(Debug)]
+pub enum ErrorKind {
+    UnexpectedToken {
+        expected: Vec<Token>,
+        got: TokenMetadata,
+    },
+    UnexpectedWord {
+        expected: Vec<&'static str>,
+        got: String,
+    },
+    ExpectedEOL {
+        got: TokenMetadata,
+    },
+    UnknownPragma {
+        pragma: String,
+    },
+    ExtensionNotSupported {
+        extension: String,
+    },
+    AllExtensionsEnabled,
+    ExtensionUnknownBehavior {
+        behavior: String,
+    },
+    UnsupportedVersion {
+        version: usize,
+    },
+    UnsupportedProfile {
+        profile: String,
+    },
+    UnknownProfile {
+        profile: String,
+    },
+    UnknownPreprocessorDirective {
+        directive: String,
+    },
+    UnboundedIfCloserOrVariant {
+        token: TokenMetadata,
+    },
+    NonIntegralType {
+        token: TokenMetadata,
+    },
+    ReservedMacro,
+    EOL,
+    EOF,
+}
+
+impl fmt::Display for ErrorKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ErrorKind::UnexpectedToken { expected, got } => write!(
+                f,
+                "Unexpected token:\nexpected: {}\ngot: {}",
+                expected
+                    .iter()
+                    .map(|token| {
+                        let mut type_string = token.type_to_string();
+                        type_string.push_str(" |");
+                        type_string
+                    })
+                    .collect::<String>(),
+                got.token.to_string()
+            ),
+            ErrorKind::UnexpectedWord { expected, got } => write!(
+                f,
+                "Unexpected word:\nexpected: {}\ngot: {}",
+                expected.iter().fold(String::new(), |mut acc, word| {
+                    acc.push_str(*word);
+
+                    acc.push_str("|");
+
+                    acc
+                }),
+                got
+            ),
+            ErrorKind::ExpectedEOL { got } => {
+                write!(f, "Expected end of line:\ngot: {}", got.token.to_string())
+            }
+            ErrorKind::UnknownPragma { pragma } => write!(f, "Unknown pragma: {}", pragma),
+            ErrorKind::ExtensionNotSupported { extension } => {
+                write!(f, "The extension \"{}\" is not supported", extension)
+            }
+            ErrorKind::AllExtensionsEnabled => {
+                write!(f, "All extensions can't be require or enable")
+            }
+            ErrorKind::ExtensionUnknownBehavior { behavior } => write!(
+                f,
+                "The extension behavior must be one of require|enable|warn|disable got: {}",
+                behavior
+            ),
+            ErrorKind::UnsupportedVersion { version } => write!(
+                f,
+                "The version {} isn't supported use either 450 or 460",
+                version
+            ),
+            ErrorKind::UnsupportedProfile { profile } => {
+                write!(f, "The profile {} isn't supported use core", profile)
+            }
+            ErrorKind::UnknownProfile { profile } => {
+                write!(f, "The profile {} isn't defined use core", profile)
+            }
+            ErrorKind::UnknownPreprocessorDirective { directive } => {
+                write!(f, "The preprocessor directive {} isn't defined", directive)
+            }
+            ErrorKind::UnboundedIfCloserOrVariant { token } => {
+                write!(f, "The preprocessor directives \"else\", \"elif\" or \"endif\" must be preceded by an \"if\", token: {}", token.token.to_string())
+            }
+            ErrorKind::NonIntegralType { token } => {
+                write!(f, "The preprocessor \"if\" directive can only contain integrals found: {}", token.token.to_string())
+            }
+            ErrorKind::ReservedMacro => write!(f, "Macro can't begin with GL_"),
+            ErrorKind::EOL => write!(f, "End of line"),
+            ErrorKind::EOF => write!(f, "End of file"),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct Error {
+    pub kind: ErrorKind,
+}
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+impl std::error::Error for Error {}
+
+#[derive(Debug)]
+pub enum Node {
+    Literal(Literal),
+    Unary {
+        op: UnaryOp,
+        tgt: Box<Node>,
+    },
+    Binary {
+        left: Box<Node>,
+        op: BinaryOp,
+        right: Box<Node>,
+    },
+}
+
+#[derive(Debug, Copy, Clone)]
+pub enum Literal {
+    Double(f64),
+    Float(f32),
+    Uint(usize),
+    Sint(isize),
+    Bool(bool),
+}
+
+impl Literal {
+    pub fn as_isize(&self) -> isize {
+        match self {
+            Literal::Double(double) => *double as isize,
+            Literal::Float(float) => *float as isize,
+            Literal::Uint(uint) => *uint as isize,
+            Literal::Sint(sint) => *sint,
+            Literal::Bool(val) => *val as isize,
+        }
+    }
+
+    pub fn as_bool(&self) -> Result<bool, Error> {
+        Ok(match self {
+            Literal::Double(_) | Literal::Float(_) => panic!(),
+            Literal::Uint(uint) => {
+                if *uint == 0 {
+                    false
+                } else {
+                    true
+                }
+            }
+            Literal::Sint(sint) => {
+                if *sint == 0 {
+                    false
+                } else {
+                    true
+                }
+            }
+            Literal::Bool(val) => *val,
+        })
+    }
+}
+
+#[derive(Debug, Copy, Clone)]
+pub enum UnaryOp {
+    Positive,
+    Negative,
+    BitWiseNot,
+    LogicalNot,
+}
+
+#[derive(Debug, Copy, Clone)]
+pub enum BinaryOp {
+    Multiply,
+    Divide,
+    Remainder,
+    Add,
+    Subtract,
+
+    LeftShift,
+    RightShift,
+
+    GreaterThan,
+    LessThan,
+    GreaterOrEqual,
+    LessOrEqual,
+
+    Equal,
+    NotEqual,
+
+    BitWiseAnd,
+    BitWiseXor,
+    BitWiseOr,
+
+    LogicalOr,
+    LogicalAnd,
+}
 
 #[derive(Debug, Copy, Clone)]
 pub enum Global {
@@ -1104,6 +1326,18 @@ mod tests {
         let _ = env_logger::try_init();
 
         let data = include_str!("../../test-data/glsl_preprocessor_abuse.vert");
+
+        println!(
+            "{:#?}",
+            parse_str(data, String::from("main"), spirv::ExecutionModel::Vertex)
+        );
+    }
+
+    #[test]
+    fn test_preprocess_ifs() {
+        let _ = env_logger::try_init();
+
+        let data = include_str!("../../test-data/glsl_if_preprocessor.vert");
 
         println!(
             "{:#?}",
