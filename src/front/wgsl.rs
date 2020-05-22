@@ -3,7 +3,6 @@ use crate::{
     proc::{Typifier, ResolveError},
     FastHashMap,
 };
-use crate::proc::UnexpectedConstantTypeError;
 
 
 #[derive(Debug, PartialEq)]
@@ -161,7 +160,7 @@ pub enum Error<'a> {
 }
 
 impl<'a> From<crate::proc::UnexpectedConstantTypeError> for Error<'a> {
-    fn from(error: UnexpectedConstantTypeError) -> Self {
+    fn from(error: crate::proc::UnexpectedConstantTypeError) -> Self {
         Error::UnexpectedConstantType(error)
     }
 }
