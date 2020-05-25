@@ -4,6 +4,7 @@ mod arena;
 pub mod back;
 pub mod front;
 pub mod proc;
+pub mod wasm;
 
 use crate::arena::{Arena, Handle};
 

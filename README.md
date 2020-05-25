@@ -9,21 +9,40 @@ This is an experimental shader translation library for the needs of gfx-rs proje
 
 ## Supported end-points
 
-Front-end       |       Status       | Notes |
---------------- | ------------------ | ----- |
-SPIR-V (binary) | :construction:     |       |
-WGSL (Tint)     | :construction:     |       |
-GLSL (Vulkan)   |                    |       |
-Rust            |                    |       |
+| Front-end       | Status         | Notes |
+| --------------- | -------------- | ----- |
+| SPIR-V (binary) | :construction: |       |
+| WGSL (Tint)     | :construction: |       |
+| GLSL (Vulkan)   |                |       |
+| Rust            |                |       |
 
-Back-end        |       Status       | Notes |
---------------- | ------------------ | ----- |
-SPIR-V (binary) |                    |       |
-WGSL            |                    |       |
-Metal           | :construction:     |       |
-HLSL            |                    |       |
-GLSL            |                    |       |
-AIR             |                    |       |
-DXIR            |                    |       |
-DXIL            |                    |       |
-DXBC            |                    |       |
+| Back-end        | Status         | Notes |
+| --------------- | -------------- | ----- |
+| SPIR-V (binary) |                |       |
+| WGSL            |                |       |
+| Metal           | :construction: |       |
+| HLSL            |                |       |
+| GLSL            |                |       |
+| AIR             |                |       |
+| DXIR            |                |       |
+| DXIL            |                |       |
+| DXBC            |                |       |
+
+## WASM
+
+You need [wasm-pack](https://rustwasm.github.io/wasm-pack/)
+
+Building (for nodejs):
+
+```
+wasm-pack build --release --target nodejs -- --features wee_alloc
+```
+
+Output is in `pkg` and can be usde like this:
+
+```js
+const naga = require("./pkg/naga");
+const fs = require("fs");
+const input = fs.readFileSync("test-data/quad.wgsl", "utf8");
+naga.wgsl2msl(input);
+```
