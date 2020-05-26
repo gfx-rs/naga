@@ -35,7 +35,7 @@ You need [wasm-pack](https://rustwasm.github.io/wasm-pack/)
 Building (for nodejs):
 
 ```
-wasm-pack build --release --target nodejs -- --features wasm-bindgen,wee_alloc
+wasm-pack build --release --target nodejs
 ```
 
 Output is in `pkg` and can be usde like this:
