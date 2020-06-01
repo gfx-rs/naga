@@ -1,268 +1,7 @@
-mod lex {
-    use super::{Token, TokenMetadata};
-    use std::{iter::Enumerate, str::Lines};
-
-    fn _consume_str<'a>(input: &'a str, what: &str) -> Option<&'a str> {
-        if input.starts_with(what) {
-            Some(&input[what.len()..])
-        } else {
-            None
-        }
-    }
-
-    fn consume_any(input: &str, what: impl Fn(char) -> bool) -> (&str, &str, usize) {
-        let pos = input.find(|c| !what(c)).unwrap_or_else(|| input.len());
-        let (o, i) = input.split_at(pos);
-        (o, i, pos)
-    }
-
-    pub fn consume_token(input: &String) -> (Token, &str, usize, usize) {
-        let mut input = input.as_str();
-
-        let start = input
-            .find(|c: char| !c.is_whitespace())
-            .unwrap_or(input.chars().count());
-        input = &input[start..];
-
-        let mut chars = input.chars();
-        let cur = match chars.next() {
-            Some(c) => c,
-            None => return (Token::End, input, start, start + 1),
-        };
-        match cur {
-            ':' => {
-                input = chars.as_str();
-                if chars.next() == Some(':') {
-                    (Token::DoubleColon, chars.as_str(), start, start + 2)
-                } else {
-                    (Token::Separator(cur), input, start, start + 1)
-                }
-            }
-            ';' | ',' | '.' => (Token::Separator(cur), chars.as_str(), start, start + 1),
-            '(' | ')' | '{' | '}' | '[' | ']' => {
-                (Token::Paren(cur), chars.as_str(), start, start + 1)
-            }
-            '<' | '>' => {
-                input = chars.as_str();
-                let next = chars.next();
-                if next == Some('=') {
-                    (
-                        Token::LogicalOperation(cur),
-                        chars.as_str(),
-                        start,
-                        start + 1,
-                    )
-                } else if next == Some(cur) {
-                    (Token::ShiftOperation(cur), chars.as_str(), start, start + 2)
-                } else {
-                    (Token::Operation(cur), input, start, start + 1)
-                }
-            }
-            '0'..='9' => {
-                let (number, rest, pos) =
-                    consume_any(input, |c| (c >= '0' && c <= '9' || c == '.'));
-                if let Some(_) = number.find('.') {
-                    input = chars.as_str();
-
-                    if (
-                        chars.next().map(|c| c.to_lowercase().next().unwrap()),
-                        chars.next().map(|c| c.to_lowercase().next().unwrap()),
-                    ) == (Some('l'), Some('f'))
-                    {
-                        (
-                            Token::Double(number.parse().unwrap()),
-                            chars.as_str(),
-                            start,
-                            start + pos + 2,
-                        )
-                    } else {
-                        (
-                            Token::Float(number.parse().unwrap()),
-                            chars.as_str(),
-                            start,
-                            start + pos,
-                        )
-                    }
-                } else {
-                    (
-                        Token::Integral(number.parse().unwrap()),
-                        rest,
-                        start,
-                        start + pos,
-                    )
-                }
-            }
-            'a'..='z' | 'A'..='Z' | '_' => {
-                let (word, rest, pos) = consume_any(input, |c| c.is_alphanumeric() || c == '_');
-                (Token::Word(String::from(word)), rest, start, start + pos)
-            }
-            '+' | '-' => {
-                input = chars.as_str();
-                match chars.next() {
-                    Some('=') => (Token::OpAssign(cur), chars.as_str(), start, start + 2),
-                    Some(next) if cur == next => {
-                        (Token::Sufix(cur), chars.as_str(), start, start + 2)
-                    }
-                    _ => (Token::Operation(cur), input, start, start + 1),
-                }
-            }
-            '%' | '^' => {
-                input = chars.as_str();
-
-                if chars.next() == Some('=') {
-                    (Token::OpAssign(cur), chars.as_str(), start, start + 2)
-                } else {
-                    (Token::Operation(cur), input, start, start + 1)
-                }
-            }
-            '!' => {
-                input = chars.as_str();
-
-                if chars.next() == Some('=') {
-                    (
-                        Token::LogicalOperation(cur),
-                        chars.as_str(),
-                        start,
-                        start + 2,
-                    )
-                } else {
-                    (Token::Operation(cur), input, start, start + 1)
-                }
-            }
-            '*' => {
-                input = chars.as_str();
-                match chars.next() {
-                    Some('=') => (Token::OpAssign(cur), chars.as_str(), start, start + 2),
-                    Some('/') => (
-                        Token::MultiLineCommentClose,
-                        chars.as_str(),
-                        start,
-                        start + 2,
-                    ),
-                    _ => (Token::Operation(cur), input, start, start + 1),
-                }
-            }
-            '/' => {
-                input = chars.as_str();
-                match chars.next() {
-                    Some('=') => (Token::OpAssign(cur), chars.as_str(), start, start + 2),
-                    Some('/') => (Token::LineComment, chars.as_str(), start, start + 2),
-                    Some('*') => (
-                        Token::MultiLineCommentOpen,
-                        chars.as_str(),
-                        start,
-                        start + 2,
-                    ),
-                    _ => (Token::Operation(cur), input, start, start + 1),
-                }
-            }
-            '=' | '&' | '|' => {
-                input = chars.as_str();
-                if chars.next() == Some(cur) {
-                    (
-                        Token::LogicalOperation(cur),
-                        chars.as_str(),
-                        start,
-                        start + 2,
-                    )
-                } else {
-                    (Token::Operation(cur), input, start, start + 1)
-                }
-            }
-            '#' => {
-                input = chars.as_str();
-                if chars.next() == Some(cur) {
-                    (Token::TokenPasting, chars.as_str(), start, start + 2)
-                } else {
-                    (Token::Preprocessor, input, start, start + 1)
-                }
-            }
-            '~' => (Token::Operation(cur), chars.as_str(), start, start + 1),
-            '?' => (Token::Selection, chars.as_str(), start, start + 1),
-            _ => (Token::Unknown(cur), chars.as_str(), start, start + 1),
-        }
-    }
-
-    #[derive(Clone, Debug)]
-    pub struct Lexer<'a> {
-        lines: Enumerate<Lines<'a>>,
-        input: String,
-        line: usize,
-        offset: usize,
-    }
-
-    impl<'a> Lexer<'a> {
-        pub fn new(input: &'a str) -> Self {
-            let mut lines = input.lines().enumerate();
-            let (line, input) = lines.next().unwrap_or((0, ""));
-            let mut input = String::from(input);
-
-            while input.chars().last() == Some('\\') {
-                if let Some((_, next)) = lines.next() {
-                    input.pop();
-                    input.push_str(next);
-                } else {
-                    break;
-                }
-            }
-
-            Lexer {
-                lines,
-                input,
-                line,
-                offset: 0,
-            }
-        }
-
-        #[must_use]
-        pub fn next(&mut self) -> TokenMetadata {
-            let (token, rest, start, end) = consume_token(&self.input);
-
-            if token == Token::End {
-                match self.lines.next() {
-                    Some((line, input)) => {
-                        let mut input = String::from(input);
-
-                        while input.chars().last() == Some('\\') {
-                            if let Some((_, next)) = self.lines.next() {
-                                input.pop();
-                                input.push_str(next);
-                            } else {
-                                break;
-                            }
-                        }
-
-                        self.input = input;
-                        self.line = line;
-                        self.offset = 0;
-                        self.next()
-                    }
-                    None => TokenMetadata {
-                        token: Token::End,
-                        line: self.line,
-                        chars: self.offset + start..end + self.offset,
-                    },
-                }
-            } else {
-                self.input = String::from(rest);
-                let metadata = TokenMetadata {
-                    token,
-                    line: self.line,
-                    chars: self.offset + start..end + self.offset,
-                };
-                self.offset += end;
-                metadata
-            }
-        }
-
-        #[must_use]
-        pub fn peek(&mut self) -> TokenMetadata {
-            self.clone().next()
-        }
-    }
-}
-
-use super::{BinaryOp, Error, ErrorKind, Literal, Node, UnaryOp};
+use super::{
+    super::{Error, ErrorKind},
+    lex, Literal, Token, TokenMetadata,
+};
 use crate::FastHashMap;
 use std::{
     fmt,
@@ -271,97 +10,86 @@ use std::{
     vec::IntoIter,
 };
 
-#[derive(Debug, Clone)]
-pub struct TokenMetadata {
-    pub token: Token,
-    pub line: usize,
-    pub chars: Range<usize>,
+#[derive(Debug)]
+pub enum PreprocessorIfNode {
+    Literal(Literal),
+    Unary {
+        op: UnaryOp,
+        tgt: Box<PreprocessorIfNode>,
+    },
+    Binary {
+        left: Box<PreprocessorIfNode>,
+        op: BinaryOp,
+        right: Box<PreprocessorIfNode>,
+    },
 }
 
-impl Deref for TokenMetadata {
-    type Target = Token;
-
-    fn deref(&self) -> &Token {
-        &self.token
-    }
-}
-
-#[derive(Debug, PartialEq, Clone)]
-pub enum Token {
-    Separator(char),
-    DoubleColon,
-    Paren(char),
-    Integral(usize),
-    Float(f32),
-    Double(f64),
-    Word(String),
-    Operation(char),
-    OpAssign(char),
-    LogicalOperation(char),
-    ShiftOperation(char),
-    Unknown(char),
-    LineComment,
-    MultiLineCommentOpen,
-    MultiLineCommentClose,
-    Preprocessor,
-    End,
-    Selection,
-    Sufix(char),
-    TokenPasting,
-}
-
-impl Token {
-    pub fn type_to_string(&self) -> String {
+impl Literal {
+    pub fn as_isize(&self) -> isize {
         match self {
-            Token::Separator(separator) => separator.to_string(),
-            Token::DoubleColon => ":".to_string(),
-            Token::Paren(paren) => paren.to_string(),
-            Token::Integral(_) => "integer".to_string(),
-            Token::Float(_) => "float".to_string(),
-            Token::Double(_) => "double".to_string(),
-            Token::Word(_) => "word".to_string(),
-            Token::Operation(op) => op.to_string(),
-            Token::OpAssign(op) => format!("{}=", op),
-            Token::LogicalOperation(op) => format!("{}=", op),
-            Token::ShiftOperation(op) => format!("{0}{0}", op),
-            Token::Unknown(_) => "unknown".to_string(),
-            Token::LineComment => "//".to_string(),
-            Token::MultiLineCommentOpen => "/*".to_string(),
-            Token::MultiLineCommentClose => "*/".to_string(),
-            Token::Preprocessor => "#".to_string(),
-            Token::End => "EOF".to_string(),
-            Token::Selection => "?".to_string(),
-            Token::Sufix(op) => format!("{0}{0}", op),
-            Token::TokenPasting => "##".to_string(),
+            Literal::Double(double) => *double as isize,
+            Literal::Float(float) => *float as isize,
+            Literal::Uint(uint) => *uint as isize,
+            Literal::Sint(sint) => *sint,
+            Literal::Bool(val) => *val as isize,
         }
     }
+
+    pub fn as_bool(&self) -> Result<bool, Error> {
+        Ok(match self {
+            Literal::Double(_) | Literal::Float(_) => panic!(),
+            Literal::Uint(uint) => {
+                if *uint == 0 {
+                    false
+                } else {
+                    true
+                }
+            }
+            Literal::Sint(sint) => {
+                if *sint == 0 {
+                    false
+                } else {
+                    true
+                }
+            }
+            Literal::Bool(val) => *val,
+        })
+    }
 }
 
-impl fmt::Display for Token {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Token::Separator(sep) => write!(f, "{}", sep),
-            Token::DoubleColon => write!(f, ":"),
-            Token::Paren(paren) => write!(f, "{}", paren),
-            Token::Integral(int) => write!(f, "{}", int),
-            Token::Float(float) => write!(f, "{}", float),
-            Token::Double(double) => write!(f, "{}", double),
-            Token::Word(word) => write!(f, "{}", word),
-            Token::Operation(op) => write!(f, "{}", op),
-            Token::OpAssign(op) => write!(f, "{}=", op),
-            Token::LogicalOperation(op) => write!(f, "{0}=", op),
-            Token::ShiftOperation(op) => write!(f, "{0}{0}", op),
-            Token::Unknown(unknown) => write!(f, "{}", unknown),
-            Token::LineComment => write!(f, "//"),
-            Token::MultiLineCommentOpen => write!(f, "/*"),
-            Token::MultiLineCommentClose => write!(f, "*/"),
-            Token::Preprocessor => write!(f, "#"),
-            Token::End => write!(f, ""),
-            Token::Selection => write!(f, "?"),
-            Token::Sufix(op) => write!(f, "{0}{0}", op),
-            Token::TokenPasting => write!(f, "##"),
-        }
-    }
+#[derive(Debug, Copy, Clone)]
+pub enum UnaryOp {
+    Positive,
+    Negative,
+    BitWiseNot,
+    LogicalNot,
+}
+
+#[derive(Debug, Copy, Clone)]
+pub enum BinaryOp {
+    Multiply,
+    Divide,
+    Remainder,
+    Add,
+    Subtract,
+
+    LeftShift,
+    RightShift,
+
+    GreaterThan,
+    LessThan,
+    GreaterOrEqual,
+    LessOrEqual,
+
+    Equal,
+    NotEqual,
+
+    BitWiseAnd,
+    BitWiseXor,
+    BitWiseOr,
+
+    LogicalOr,
+    LogicalAnd,
 }
 
 pub fn preprocess(input: &str) -> Result<String, Error> {
@@ -416,6 +144,9 @@ pub fn preprocess(input: &str) -> Result<String, Error> {
 
 pub(self) fn parse_comments(mut lexer: lex::Lexer) -> Result<Vec<TokenMetadata>, Error> {
     let mut tokens = Vec::new();
+    let mut line_offset = 0i32;
+
+    let mut offset = (0, 0);
 
     loop {
         let token = lexer.next();
@@ -452,6 +183,46 @@ pub(self) fn parse_comments(mut lexer: lex::Lexer) -> Result<Vec<TokenMetadata>,
     Ok(tokens)
 }
 
+macro_rules! get_macro {
+    ($name:expr, $token:expr, $line_offset:expr,$macros:expr) => {
+        match $name.as_str() {
+            "__LINE__" => Some(vec![TokenMetadata {
+                token: Token::Integral(($token.line as i32 + $line_offset + 1) as usize),
+                line: 0,
+                chars: 0..1,
+            }]),
+            "__FILE__" => Some(vec![TokenMetadata {
+                token: Token::Integral(0),
+                line: 0,
+                chars: 0..1,
+            }]),
+            "__VERSION__" => Some(vec![TokenMetadata {
+                token: Token::Integral(460),
+                line: 0,
+                chars: 0..1,
+            }]), /* TODO */
+            other => $macros.get(other).cloned().map(|mut tokens| {
+                let mut start = tokens[0].chars.start;
+                let mut offset = 0;
+
+                for token in tokens.iter_mut() {
+                    token.line = $token.line;
+
+                    let length = token.chars.end - token.chars.start;
+
+                    offset += token.chars.start - start;
+                    start = token.chars.start;
+
+                    token.chars.start = $token.chars.start + offset;
+
+                    token.chars.end = length + $token.chars.start + offset;
+                }
+                tokens
+            }),
+        }
+    };
+}
+
 fn parse_preprocessor(
     lexer: &mut Peekable<IntoIter<TokenMetadata>>,
     macros: &mut FastHashMap<String, Vec<TokenMetadata>>,
@@ -460,46 +231,6 @@ fn parse_preprocessor(
     let mut line_offset = 0i32;
 
     let mut offset = (0, 0);
-
-    macro_rules! get_macro {
-        ($name:expr, $token:expr) => {
-            match $name.as_str() {
-                "__LINE__" => Some(vec![TokenMetadata {
-                    token: Token::Integral(($token.line as i32 + line_offset + 1) as usize),
-                    line: 0,
-                    chars: 0..1,
-                }]),
-                "__FILE__" => Some(vec![TokenMetadata {
-                    token: Token::Integral(0),
-                    line: 0,
-                    chars: 0..1,
-                }]),
-                "__VERSION__" => Some(vec![TokenMetadata {
-                    token: Token::Integral(460),
-                    line: 0,
-                    chars: 0..1,
-                }]), /* TODO */
-                other => macros.get(other).cloned().map(|mut tokens| {
-                    let mut start = tokens[0].chars.start;
-                    let mut offset = 0;
-
-                    for token in tokens.iter_mut() {
-                        token.line = $token.line;
-
-                        let length = token.chars.end - token.chars.start;
-
-                        offset += token.chars.start - start;
-                        start = token.chars.start;
-
-                        token.chars.start = $token.chars.start + offset;
-
-                        token.chars.end = length + $token.chars.start + offset;
-                    }
-                    tokens
-                }),
-            }
-        };
-    }
 
     loop {
         let token = match lexer.next() {
@@ -579,10 +310,12 @@ fn parse_preprocessor(
                             })?;
 
                             match macro_token.token {
-                                Token::Word(ref word) => match get_macro!(word, &token) {
-                                    Some(stream) => macro_tokens.append(&mut stream.clone()),
-                                    None => macro_tokens.push(macro_token),
-                                },
+                                Token::Word(ref word) => {
+                                    match get_macro!(word, &token, line_offset, macros) {
+                                        Some(stream) => macro_tokens.append(&mut stream.clone()),
+                                        None => macro_tokens.push(macro_token),
+                                    }
+                                }
                                 _ => macro_tokens.push(macro_token),
                             }
                         }
@@ -631,12 +364,21 @@ fn parse_preprocessor(
                             .line
                             == token.line
                         {
-                            expr.push(lexer.next().unwrap());
+                            let expr_token = lexer.next().unwrap();
+
+                            match expr_token.token {
+                                Token::Word(ref macro_name) => expr.append(
+                                    &mut get_macro!(macro_name, expr_token, line_offset, macros)
+                                        .unwrap(),
+                                ),
+                                _ => expr.push(expr_token),
+                            }
                         }
 
                         let condition = evaluate_preprocessor_if(expr, macros)?;
 
-                        let mut body_tokens = parse_preprocessor_if(lexer, macros, condition)?;
+                        let mut body_tokens =
+                            parse_preprocessor_if(lexer, macros, condition, line_offset, offset)?;
 
                         tokens.append(&mut body_tokens);
                     }
@@ -691,6 +433,8 @@ fn parse_preprocessor(
                                 "ifndef" => macros.get(&macro_name).is_none(),
                                 _ => unreachable!(),
                             },
+                            line_offset,
+                            offset,
                         )?;
 
                         tokens.append(&mut body_tokens);
@@ -1217,7 +961,7 @@ fn parse_preprocessor(
                 tokens.push(token);
                 break;
             }
-            Token::Word(ref word) => match get_macro!(word, &token) {
+            Token::Word(ref word) => match get_macro!(word, &token, line_offset, macros) {
                 Some(mut stream) => {
                     for macro_token in stream.iter_mut() {
                         if offset.0 == token.line {
@@ -1264,6 +1008,8 @@ fn parse_preprocessor_if(
     lexer: &mut Peekable<IntoIter<TokenMetadata>>,
     macros: &mut FastHashMap<String, Vec<TokenMetadata>>,
     mut condition: bool,
+    line_offset: i32,
+    offset: (usize, isize),
 ) -> Result<Vec<TokenMetadata>, Error> {
     let mut body = Vec::new();
     let mut else_block = false;
@@ -1314,12 +1060,21 @@ fn parse_preprocessor_if(
                         .line
                         == macro_token.line
                     {
-                        expr.push(lexer.next().unwrap());
+                        let expr_token = lexer.next().unwrap();
+
+                        match expr_token.token {
+                            Token::Word(ref macro_name) => expr.append(
+                                &mut get_macro!(macro_name, expr_token, line_offset, macros)
+                                    .unwrap(),
+                            ),
+                            _ => expr.push(expr_token),
+                        }
                     }
 
                     let condition = evaluate_preprocessor_if(expr, macros)?;
 
-                    let mut body_tokens = parse_preprocessor_if(lexer, macros, condition)?;
+                    let mut body_tokens =
+                        parse_preprocessor_if(lexer, macros, condition, line_offset, offset)?;
 
                     body.append(&mut body_tokens);
                 }
@@ -1334,7 +1089,15 @@ fn parse_preprocessor_if(
                         .line
                         == macro_token.line
                     {
-                        expr.push(lexer.next().unwrap());
+                        let expr_token = lexer.next().unwrap();
+
+                        match expr_token.token {
+                            Token::Word(ref macro_name) => expr.append(
+                                &mut get_macro!(macro_name, expr_token, line_offset, macros)
+                                    .unwrap(),
+                            ),
+                            _ => expr.push(expr_token),
+                        }
                     }
 
                     if !condition {
@@ -1392,6 +1155,8 @@ fn parse_preprocessor_if(
                             "ifndef" => macros.get(&macro_name).is_none(),
                             _ => unreachable!(),
                         },
+                        line_offset,
+                        offset,
                     )?;
 
                     body.append(&mut body_tokens);
@@ -1473,10 +1238,10 @@ fn evaluate_preprocessor_if(
     evaluate_node(tree)?.as_bool()
 }
 
-fn evaluate_node(node: Node) -> Result<Literal, Error> {
+fn evaluate_node(node: PreprocessorIfNode) -> Result<Literal, Error> {
     Ok(match node {
-        Node::Literal(literal) => literal,
-        Node::Unary { op, tgt } => {
+        PreprocessorIfNode::Literal(literal) => literal,
+        PreprocessorIfNode::Unary { op, tgt } => {
             let literal = evaluate_node(*tgt)?;
 
             match op {
@@ -1486,7 +1251,7 @@ fn evaluate_node(node: Node) -> Result<Literal, Error> {
                 UnaryOp::LogicalNot => Literal::Sint((!literal.as_bool()?) as isize),
             }
         }
-        Node::Binary { left, op, right } => {
+        PreprocessorIfNode::Binary { left, op, right } => {
             let left = evaluate_node(*left)?;
             let right = evaluate_node(*right)?;
 
@@ -1532,7 +1297,7 @@ fn evaluate_node(node: Node) -> Result<Literal, Error> {
 pub(self) fn logical_or_parser(
     expr: &mut Peekable<impl Iterator<Item = TokenMetadata>>,
     macros: &mut FastHashMap<String, Vec<TokenMetadata>>,
-) -> Result<Node, Error> {
+) -> Result<PreprocessorIfNode, Error> {
     let left = logical_and_parser(expr, macros)?;
 
     let mut node = left;
@@ -1542,7 +1307,7 @@ pub(self) fn logical_or_parser(
 
         let right = logical_and_parser(expr, macros)?;
 
-        node = Node::Binary {
+        node = PreprocessorIfNode::Binary {
             left: Box::new(node),
             op: BinaryOp::LogicalOr,
             right: Box::new(right),
@@ -1555,7 +1320,7 @@ pub(self) fn logical_or_parser(
 fn logical_and_parser(
     expr: &mut Peekable<impl Iterator<Item = TokenMetadata>>,
     macros: &mut FastHashMap<String, Vec<TokenMetadata>>,
-) -> Result<Node, Error> {
+) -> Result<PreprocessorIfNode, Error> {
     let left = bitwise_or_parser(expr, macros)?;
 
     let mut node = left;
@@ -1565,7 +1330,7 @@ fn logical_and_parser(
 
         let right = bitwise_or_parser(expr, macros)?;
 
-        node = Node::Binary {
+        node = PreprocessorIfNode::Binary {
             left: Box::new(node),
             op: BinaryOp::LogicalAnd,
             right: Box::new(right),
@@ -1578,7 +1343,7 @@ fn logical_and_parser(
 fn bitwise_or_parser(
     expr: &mut Peekable<impl Iterator<Item = TokenMetadata>>,
     macros: &mut FastHashMap<String, Vec<TokenMetadata>>,
-) -> Result<Node, Error> {
+) -> Result<PreprocessorIfNode, Error> {
     let left = bitwise_xor_parser(expr, macros)?;
 
     let mut node = left;
@@ -1588,7 +1353,7 @@ fn bitwise_or_parser(
 
         let right = bitwise_xor_parser(expr, macros)?;
 
-        node = Node::Binary {
+        node = PreprocessorIfNode::Binary {
             left: Box::new(node),
             op: BinaryOp::BitWiseOr,
             right: Box::new(right),
@@ -1601,7 +1366,7 @@ fn bitwise_or_parser(
 fn bitwise_xor_parser(
     expr: &mut Peekable<impl Iterator<Item = TokenMetadata>>,
     macros: &mut FastHashMap<String, Vec<TokenMetadata>>,
-) -> Result<Node, Error> {
+) -> Result<PreprocessorIfNode, Error> {
     let left = bitwise_and_parser(expr, macros)?;
 
     let mut node = left;
@@ -1611,7 +1376,7 @@ fn bitwise_xor_parser(
 
         let right = bitwise_and_parser(expr, macros)?;
 
-        node = Node::Binary {
+        node = PreprocessorIfNode::Binary {
             left: Box::new(node),
             op: BinaryOp::BitWiseXor,
             right: Box::new(right),
@@ -1624,7 +1389,7 @@ fn bitwise_xor_parser(
 fn bitwise_and_parser(
     expr: &mut Peekable<impl Iterator<Item = TokenMetadata>>,
     macros: &mut FastHashMap<String, Vec<TokenMetadata>>,
-) -> Result<Node, Error> {
+) -> Result<PreprocessorIfNode, Error> {
     let left = equality_parser(expr, macros)?;
 
     let mut node = left;
@@ -1634,7 +1399,7 @@ fn bitwise_and_parser(
 
         let right = equality_parser(expr, macros)?;
 
-        node = Node::Binary {
+        node = PreprocessorIfNode::Binary {
             left: Box::new(node),
             op: BinaryOp::BitWiseAnd,
             right: Box::new(right),
@@ -1647,7 +1412,7 @@ fn bitwise_and_parser(
 fn equality_parser(
     expr: &mut Peekable<impl Iterator<Item = TokenMetadata>>,
     macros: &mut FastHashMap<String, Vec<TokenMetadata>>,
-) -> Result<Node, Error> {
+) -> Result<PreprocessorIfNode, Error> {
     let left = relational_parser(expr, macros)?;
 
     let mut node = left;
@@ -1668,7 +1433,7 @@ fn equality_parser(
 
         let right = relational_parser(expr, macros)?;
 
-        node = Node::Binary {
+        node = PreprocessorIfNode::Binary {
             left: Box::new(node),
             op,
             right: Box::new(right),
@@ -1681,7 +1446,7 @@ fn equality_parser(
 fn relational_parser(
     expr: &mut Peekable<impl Iterator<Item = TokenMetadata>>,
     macros: &mut FastHashMap<String, Vec<TokenMetadata>>,
-) -> Result<Node, Error> {
+) -> Result<PreprocessorIfNode, Error> {
     let left = shift_parser(expr, macros)?;
 
     let mut node = left;
@@ -1704,7 +1469,7 @@ fn relational_parser(
 
         let right = shift_parser(expr, macros)?;
 
-        node = Node::Binary {
+        node = PreprocessorIfNode::Binary {
             left: Box::new(node),
             op,
             right: Box::new(right),
@@ -1717,7 +1482,7 @@ fn relational_parser(
 fn shift_parser(
     expr: &mut Peekable<impl Iterator<Item = TokenMetadata>>,
     macros: &mut FastHashMap<String, Vec<TokenMetadata>>,
-) -> Result<Node, Error> {
+) -> Result<PreprocessorIfNode, Error> {
     let left = additive_parser(expr, macros)?;
 
     let mut node = left;
@@ -1738,7 +1503,7 @@ fn shift_parser(
 
         let right = additive_parser(expr, macros)?;
 
-        node = Node::Binary {
+        node = PreprocessorIfNode::Binary {
             left: Box::new(node),
             op,
             right: Box::new(right),
@@ -1751,7 +1516,7 @@ fn shift_parser(
 fn additive_parser(
     expr: &mut Peekable<impl Iterator<Item = TokenMetadata>>,
     macros: &mut FastHashMap<String, Vec<TokenMetadata>>,
-) -> Result<Node, Error> {
+) -> Result<PreprocessorIfNode, Error> {
     let left = multiplicative_parser(expr, macros)?;
 
     let mut node = left;
@@ -1772,7 +1537,7 @@ fn additive_parser(
 
         let right = multiplicative_parser(expr, macros)?;
 
-        node = Node::Binary {
+        node = PreprocessorIfNode::Binary {
             left: Box::new(node),
             op,
             right: Box::new(right),
@@ -1785,7 +1550,7 @@ fn additive_parser(
 fn multiplicative_parser(
     expr: &mut Peekable<impl Iterator<Item = TokenMetadata>>,
     macros: &mut FastHashMap<String, Vec<TokenMetadata>>,
-) -> Result<Node, Error> {
+) -> Result<PreprocessorIfNode, Error> {
     let left = unary_parser(expr, macros)?;
 
     let mut node = left;
@@ -1807,7 +1572,7 @@ fn multiplicative_parser(
 
         let right = unary_parser(expr, macros)?;
 
-        node = Node::Binary {
+        node = PreprocessorIfNode::Binary {
             left: Box::new(node),
             op,
             right: Box::new(right),
@@ -1820,7 +1585,7 @@ fn multiplicative_parser(
 fn unary_parser(
     expr: &mut Peekable<impl Iterator<Item = TokenMetadata>>,
     macros: &mut FastHashMap<String, Vec<TokenMetadata>>,
-) -> Result<Node, Error> {
+) -> Result<PreprocessorIfNode, Error> {
     let unary_or_atom_token = expr.peek().ok_or(Error {
         kind: ErrorKind::EOF,
     })?;
@@ -1829,7 +1594,7 @@ fn unary_parser(
         Token::Operation(op) => {
             let unary_token = expr.next().unwrap();
 
-            Node::Unary {
+            PreprocessorIfNode::Unary {
                 op: match op {
                     '+' => UnaryOp::Positive,
                     '-' => UnaryOp::Negative,
@@ -1859,7 +1624,7 @@ fn unary_parser(
 fn atom_parser(
     expr: &mut Peekable<impl Iterator<Item = TokenMetadata>>,
     macros: &mut FastHashMap<String, Vec<TokenMetadata>>,
-) -> Result<Node, Error> {
+) -> Result<PreprocessorIfNode, Error> {
     let atom = expr.next().ok_or(Error {
         kind: ErrorKind::EOF,
     })?;
@@ -1870,8 +1635,8 @@ fn atom_parser(
                 kind: ErrorKind::NonIntegralType { token: atom },
             })
         }
-        Token::Integral(int) => Node::Literal(Literal::Uint(int)),
-        Token::Word(word) => Node::Literal(match word.as_str() {
+        Token::Integral(int) => PreprocessorIfNode::Literal(Literal::Uint(int)),
+        Token::Word(word) => PreprocessorIfNode::Literal(match word.as_str() {
             "defined" => {
                 let macro_name_or_paren_token = expr.next().ok_or(Error {
                     kind: ErrorKind::EOF,
@@ -1908,9 +1673,6 @@ fn atom_parser(
                         }
 
                         node
-                    }
-                    Token::Word(macro_name) => {
-                        Literal::Sint(macros.get(&macro_name).is_some() as isize)
                     }
                     _ => {
                         return Err(Error {

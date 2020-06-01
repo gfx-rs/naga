@@ -7,12 +7,12 @@ use glsl::{
     parser::{Parse, ParseError},
     syntax::*,
 };
-use preprocessor::{Token, TokenMetadata};
+use parser::{Token, TokenMetadata};
 use spirv::{BuiltIn, ExecutionModel, StorageClass};
 use std::fmt;
 
 mod helpers;
-mod preprocessor;
+mod parser;
 
 #[derive(Debug)]
 pub enum ErrorKind {
@@ -142,97 +142,6 @@ impl fmt::Display for Error {
 }
 
 impl std::error::Error for Error {}
-
-#[derive(Debug)]
-pub enum Node {
-    Literal(Literal),
-    Unary {
-        op: UnaryOp,
-        tgt: Box<Node>,
-    },
-    Binary {
-        left: Box<Node>,
-        op: BinaryOp,
-        right: Box<Node>,
-    },
-}
-
-#[derive(Debug, Copy, Clone)]
-pub enum Literal {
-    Double(f64),
-    Float(f32),
-    Uint(usize),
-    Sint(isize),
-    Bool(bool),
-}
-
-impl Literal {
-    pub fn as_isize(&self) -> isize {
-        match self {
-            Literal::Double(double) => *double as isize,
-            Literal::Float(float) => *float as isize,
-            Literal::Uint(uint) => *uint as isize,
-            Literal::Sint(sint) => *sint,
-            Literal::Bool(val) => *val as isize,
-        }
-    }
-
-    pub fn as_bool(&self) -> Result<bool, Error> {
-        Ok(match self {
-            Literal::Double(_) | Literal::Float(_) => panic!(),
-            Literal::Uint(uint) => {
-                if *uint == 0 {
-                    false
-                } else {
-                    true
-                }
-            }
-            Literal::Sint(sint) => {
-                if *sint == 0 {
-                    false
-                } else {
-                    true
-                }
-            }
-            Literal::Bool(val) => *val,
-        })
-    }
-}
-
-#[derive(Debug, Copy, Clone)]
-pub enum UnaryOp {
-    Positive,
-    Negative,
-    BitWiseNot,
-    LogicalNot,
-}
-
-#[derive(Debug, Copy, Clone)]
-pub enum BinaryOp {
-    Multiply,
-    Divide,
-    Remainder,
-    Add,
-    Subtract,
-
-    LeftShift,
-    RightShift,
-
-    GreaterThan,
-    LessThan,
-    GreaterOrEqual,
-    LessOrEqual,
-
-    Equal,
-    NotEqual,
-
-    BitWiseAnd,
-    BitWiseXor,
-    BitWiseOr,
-
-    LogicalOr,
-    LogicalAnd,
-}
 
 #[derive(Debug, Copy, Clone)]
 pub enum Global {
@@ -1288,7 +1197,7 @@ pub fn parse_str(
     entry: String,
     exec: ExecutionModel,
 ) -> Result<crate::Module, ParseError> {
-    let input = preprocessor::preprocess(source).unwrap();
+    let input = parser::preprocessor::preprocess(source).unwrap();
 
     log::debug!("------GLSL PREPROCESSOR------");
     log::debug!("\n{}", input);
