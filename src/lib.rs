@@ -48,7 +48,8 @@ pub enum ArraySize {
     Dynamic,
 }
 
-#[derive(Debug, PartialEq)]
+// Clone is used only for error reporting and is not intended for end users
+#[derive(Clone, Debug, PartialEq)]
 pub struct StructMember {
     pub name: Option<String>,
     pub binding: Option<Binding>,
@@ -71,7 +72,8 @@ pub struct Type {
     pub inner: TypeInner,
 }
 
-#[derive(Debug, PartialEq)]
+// Clone is used only for error reporting and is not intended for end users
+#[derive(Clone, Debug, PartialEq)]
 pub enum TypeInner {
     Scalar { kind: ScalarKind, width: Bytes },
     Vector { size: VectorSize, kind: ScalarKind, width: Bytes },
@@ -91,7 +93,8 @@ pub struct Constant {
     pub ty: Handle<Type>,
 }
 
-#[derive(Debug, PartialEq)]
+// Clone is used only for error reporting and is not intended for end users
+#[derive(Clone, Debug, PartialEq)]
 pub enum ConstantInner {
     Sint(i64),
     Uint(u64),
@@ -228,10 +231,13 @@ pub enum Expression {
 }
 
 pub type Block = Vec<Statement>;
-#[derive(Debug)]
+
+// Clone is used only for error reporting and is not intended for end users
+#[derive(Clone, Debug)]
 pub struct FallThrough;
 
-#[derive(Debug)]
+// Clone is used only for error reporting and is not intended for end users
+#[derive(Clone, Debug)]
 pub enum Statement {
     Empty,
     Block(Block),
