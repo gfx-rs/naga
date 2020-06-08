@@ -434,10 +434,8 @@ impl<W: Write> Writer<W> {
                                     return Ok(MaybeOwned::Borrowed(base_inner));
                                 }
                             }
-                        } else {
-                            if let crate::TypeInner::Struct { .. } = *inner {
+                        } else if let crate::TypeInner::Struct { .. } = *inner {
                                 return Ok(MaybeOwned::Borrowed(inner));
-                            }
                         }
                         write!(self.out, "{}.", OUTPUT_STRUCT_NAME)?;
                     }
@@ -851,12 +849,10 @@ impl<W: Write> Writer<W> {
                                     writeln!(self.out, "\t{} {} [[{}]];", ty_name, name, resolved)?;
                                 }
                             }
-                        } else {
-                            if let Some(ref binding@crate::Binding::Location(_)) = var.binding {
-                                let tyvar = TypedGlobalVariable { module, handle, usage: crate::GlobalUse::empty() };
-                                let resolved = options.resolve_binding(binding, in_mode)?;
-                                writeln!(self.out, "\t{} [[{}]];", tyvar, resolved)?;
-                            }
+                        } else if let Some(ref binding@crate::Binding::Location(_)) = var.binding {
+                            let tyvar = TypedGlobalVariable { module, handle, usage: crate::GlobalUse::empty() };
+                            let resolved = options.resolve_binding(binding, in_mode)?;
+                            writeln!(self.out, "\t{} [[{}]];", tyvar, resolved)?;
                         }
                     }
                     writeln!(self.out, "}};")?;
