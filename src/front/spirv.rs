@@ -804,7 +804,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         let (name, left) = self.next_string(inst.wc - 3)?;
         let ep = EntryPoint {
             exec_model,
-            name: name,
+            name,
             function_id,
             variable_ids: self.data
                 .by_ref()
