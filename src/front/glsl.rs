@@ -74,7 +74,7 @@ impl fmt::Display for ErrorKind {
                         type_string
                     })
                     .collect::<String>(),
-                got.token.to_string()
+                got.token
             ),
             ErrorKind::UnexpectedWord { expected, got } => write!(
                 f,
@@ -89,7 +89,7 @@ impl fmt::Display for ErrorKind {
                 got
             ),
             ErrorKind::ExpectedEOL { got } => {
-                write!(f, "Expected end of line:\ngot: {}", got.token.to_string())
+                write!(f, "Expected end of line:\ngot: {}", got.token)
             }
             ErrorKind::UnknownPragma { pragma } => write!(f, "Unknown pragma: {}", pragma),
             ErrorKind::ExtensionNotSupported { extension } => {
@@ -118,10 +118,10 @@ impl fmt::Display for ErrorKind {
                 write!(f, "The preprocessor directive {} isn't defined", directive)
             }
             ErrorKind::UnboundedIfCloserOrVariant { token } => {
-                write!(f, "The preprocessor directives \"else\", \"elif\" or \"endif\" must be preceded by an \"if\", token: {}", token.token.to_string())
+                write!(f, "The preprocessor directives \"else\", \"elif\" or \"endif\" must be preceded by an \"if\", token: {}", token.token)
             }
             ErrorKind::NonIntegralType { token } => {
-                write!(f, "The preprocessor \"if\" directive can only contain integrals found: {}", token.token.to_string())
+                write!(f, "The preprocessor \"if\" directive can only contain integrals found: {}", token.token)
             }
             ErrorKind::ReservedMacro => write!(f, "Macro can't begin with GL_"),
             ErrorKind::EOL => write!(f, "End of line"),
@@ -144,7 +144,7 @@ impl fmt::Display for Error {
 impl std::error::Error for Error {}
 
 #[derive(Debug, Copy, Clone)]
-pub enum Global {
+enum Global {
     Variable(Handle<GlobalVariable>),
     StructShorthand(Handle<GlobalVariable>, u32),
 }
@@ -157,10 +157,11 @@ struct Parser<'a> {
     constants: Arena<Constant>,
     functions: Arena<Function>,
     function_lookup: FastHashMap<String, Handle<Function>>,
+    exec_model: ExecutionModel,
 }
 
 impl<'a> Parser<'a> {
-    pub fn new(source: &'a str) -> Result<Self, ParseError> {
+    pub fn new(source: &'a str, exec_model: ExecutionModel) -> Result<Self, ParseError> {
         Ok(Self {
             source,
             types: Arena::new(),
@@ -169,14 +170,11 @@ impl<'a> Parser<'a> {
             constants: Arena::new(),
             functions: Arena::new(),
             function_lookup: FastHashMap::default(),
+            exec_model,
         })
     }
 
-    pub fn parse(
-        mut self,
-        entry: String,
-        exec: ExecutionModel,
-    ) -> Result<crate::Module, ParseError> {
+    pub fn parse(mut self, entry: String) -> Result<crate::Module, ParseError> {
         let ast = TranslationUnit::parse(self.source)?;
 
         //println!("{:#?}", ast);
@@ -185,7 +183,11 @@ impl<'a> Parser<'a> {
 
         for declaration in ast {
             match declaration {
-                ExternalDeclaration::Preprocessor(_) => unreachable!(),
+                ExternalDeclaration::Preprocessor(_) =>
+                {
+                    #[cfg(feature = "glsl_preprocessor")]
+                    unreachable!()
+                }
                 ExternalDeclaration::FunctionDefinition(function) => {
                     let function = self.parse_function_definition(function);
 
@@ -301,7 +303,7 @@ impl<'a> Parser<'a> {
             global_variables: self.globals,
             functions: self.functions,
             entry_points: vec![EntryPoint {
-                exec_model: exec,
+                exec_model: self.exec_model,
                 function: entry_point.unwrap(),
                 name: entry,
             }],
@@ -676,7 +678,11 @@ impl<'a> Parser<'a> {
                     "gl_Position" => {
                         Expression::GlobalVariable(self.globals.fetch_or_append(GlobalVariable {
                             name: Some(name),
-                            class: StorageClass::Input,
+                            class: match self.exec_model {
+                                ExecutionModel::Vertex => StorageClass::Output,
+                                ExecutionModel::Fragment => StorageClass::Input,
+                                _ => panic!(),
+                            },
                             binding: Some(Binding::BuiltIn(BuiltIn::Position)),
                             ty: self.types.fetch_or_append(Type {
                                 name: None,
@@ -691,7 +697,7 @@ impl<'a> Parser<'a> {
                     "gl_PointSize" => {
                         Expression::GlobalVariable(self.globals.fetch_or_append(GlobalVariable {
                             name: Some(name),
-                            class: StorageClass::Input,
+                            class: StorageClass::Output,
                             binding: Some(Binding::BuiltIn(BuiltIn::PointSize)),
                             ty: self.types.fetch_or_append(Type {
                                 name: None,
@@ -705,7 +711,7 @@ impl<'a> Parser<'a> {
                     "gl_ClipDistance" => {
                         Expression::GlobalVariable(self.globals.fetch_or_append(GlobalVariable {
                             name: Some(name),
-                            class: StorageClass::Input,
+                            class: StorageClass::Output,
                             binding: Some(Binding::BuiltIn(BuiltIn::ClipDistance)),
                             ty: self.types.fetch_or_append(Type {
                                 name: None,
@@ -719,7 +725,7 @@ impl<'a> Parser<'a> {
                     "gl_CullDistance" => {
                         Expression::GlobalVariable(self.globals.fetch_or_append(GlobalVariable {
                             name: Some(name),
-                            class: StorageClass::Input,
+                            class: StorageClass::Output,
                             binding: Some(Binding::BuiltIn(BuiltIn::CullDistance)),
                             ty: self.types.fetch_or_append(Type {
                                 name: None,
@@ -1048,10 +1054,7 @@ impl<'a> Parser<'a> {
 
     // None = void
     fn parse_type(&mut self, ty: TypeSpecifier) -> Option<Handle<Type>> {
-        let base_ty = match helpers::glsl_to_spirv_type(ty.ty, &mut self.types) {
-            Some(ty) => ty,
-            None => return None,
-        };
+        let base_ty = helpers::glsl_to_spirv_type(ty.ty, &mut self.types)?;
 
         let ty = if let Some(specifier) = ty.array_specifier {
             let handle = self.types.fetch_or_append(Type {
@@ -1167,7 +1170,7 @@ impl<'a> Parser<'a> {
                                     }
                                 }
                             }
-                            _ => unimplemented!()
+                            _ => unimplemented!(),
                         }
                     }
 
@@ -1195,13 +1198,13 @@ pub fn parse_str(
     entry: String,
     exec: ExecutionModel,
 ) -> Result<crate::Module, ParseError> {
-    let input = parser::preprocessor::preprocess(source).unwrap();
+    let input = parser::parse(source).unwrap();
 
     log::debug!("------GLSL PREPROCESSOR------");
     log::debug!("\n{}", input);
     log::debug!("-----------------------------");
 
-    Parser::new(&input)?.parse(entry, exec)
+    Parser::new(&input, exec)?.parse(entry)
 }
 
 #[cfg(test)]
@@ -1222,7 +1225,7 @@ mod tests {
     fn test_frag() {
         let _ = env_logger::try_init();
 
-        let data = include_str!("../../test-data/shader.frag");
+        let data = include_str!("../../test-data/glsl_phong_lighting.frag");
 
         println!(
             "{:#?}",
@@ -1230,6 +1233,7 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "glsl_preprocessor")]
     #[test]
     fn test_preprocess() {
         let _ = env_logger::try_init();
@@ -1242,6 +1246,7 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "glsl_preprocessor")]
     #[test]
     #[should_panic]
     fn test_preprocess_ifs() {

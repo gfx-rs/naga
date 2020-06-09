@@ -17,6 +17,9 @@ num-traits = "0.2"
 spirv = { package = "spirv_headers", version = "1" }
 glsl = { version = "4", optional = true }
 
+[features]
+glsl_preprocessor = ["glsl"]
+
 [dev-dependencies]
 env_logger = "0.6"
 ron = "0.5"

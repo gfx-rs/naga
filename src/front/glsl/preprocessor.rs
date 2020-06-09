@@ -1,8 +1,8 @@
 use super::{
     super::{Error, ErrorKind},
-    lex, Literal, Token, TokenMetadata,
+    Literal, Token, TokenMetadata,
 };
-use crate::FastHashMap;
+use crate::{BinaryOperator, FastHashMap};
 use std::{iter::Peekable, vec::IntoIter};
 
 #[derive(Debug)]
@@ -14,7 +14,7 @@ pub enum PreprocessorIfNode {
     },
     Binary {
         left: Box<PreprocessorIfNode>,
-        op: BinaryOp,
+        op: BinaryOperator,
         right: Box<PreprocessorIfNode>,
     },
 }
@@ -60,121 +60,6 @@ pub enum UnaryOp {
     LogicalNot,
 }
 
-#[derive(Debug, Copy, Clone)]
-pub enum BinaryOp {
-    Multiply,
-    Divide,
-    Remainder,
-    Add,
-    Subtract,
-
-    LeftShift,
-    RightShift,
-
-    GreaterThan,
-    LessThan,
-    GreaterOrEqual,
-    LessOrEqual,
-
-    Equal,
-    NotEqual,
-
-    BitWiseAnd,
-    BitWiseXor,
-    BitWiseOr,
-
-    LogicalOr,
-    LogicalAnd,
-}
-
-pub fn preprocess(input: &str) -> Result<String, Error> {
-    let lexer = lex::Lexer::new(input);
-
-    let stripped_tokens = parse_comments(lexer)?;
-
-    let mut macros: FastHashMap<String, Vec<TokenMetadata>> = FastHashMap::default();
-
-    macros.insert(
-        String::from("GL_SPIRV"),
-        vec![TokenMetadata {
-            token: Token::Integral(100),
-            line: 0,
-            chars: 0..1,
-        }],
-    );
-    macros.insert(
-        String::from("VULKAN"),
-        vec![TokenMetadata {
-            token: Token::Integral(100),
-            line: 0,
-            chars: 0..1,
-        }],
-    );
-
-    log::trace!("------GLSL COMMENT STRIPPED------");
-    log::trace!("\n{:#?}", stripped_tokens);
-    log::trace!("---------------------------------");
-
-    let tokens = parse_preprocessor(&mut stripped_tokens.into_iter().peekable(), &mut macros)?;
-
-    let mut line = 0;
-    let mut start = 0;
-
-    Ok(tokens.into_iter().fold(String::new(), |mut acc, token| {
-        if token.line - line != 0 {
-            acc.push_str(&"\n".repeat(token.line - line));
-            start = 0;
-            line = token.line;
-        }
-
-        acc.push_str(&" ".repeat(token.chars.start - start));
-
-        acc.push_str(&token.token.to_string());
-
-        start = token.chars.end;
-
-        acc
-    }))
-}
-
-pub(self) fn parse_comments(mut lexer: lex::Lexer) -> Result<Vec<TokenMetadata>, Error> {
-    let mut tokens = Vec::new();
-
-    loop {
-        let token = lexer.next();
-
-        match token.token {
-            Token::MultiLineCommentOpen => {
-                let mut token = lexer.next();
-                while Token::MultiLineCommentClose != token.token {
-                    match token.token {
-                        Token::End => {
-                            return Err(Error {
-                                kind: ErrorKind::EOF,
-                            })
-                        }
-                        _ => {}
-                    }
-
-                    token = lexer.next();
-                }
-            }
-            Token::LineComment => {
-                while token.line == lexer.peek().line && Token::End != lexer.peek().token {
-                    let _ = lexer.next();
-                }
-            }
-            Token::End => {
-                tokens.push(token);
-                break;
-            }
-            _ => tokens.push(token),
-        }
-    }
-
-    Ok(tokens)
-}
-
 macro_rules! get_macro {
     ($name:expr, $token:expr, $line_offset:expr,$macros:expr) => {
         match $name.as_str() {
@@ -215,7 +100,7 @@ macro_rules! get_macro {
     };
 }
 
-fn parse_preprocessor(
+pub fn preprocess(
     lexer: &mut Peekable<IntoIter<TokenMetadata>>,
     macros: &mut FastHashMap<String, Vec<TokenMetadata>>,
 ) -> Result<Vec<TokenMetadata>, Error> {
@@ -1216,7 +1101,7 @@ fn parse_preprocessor_if(
         }
     }
 
-    let body_tokens = parse_preprocessor(&mut body.into_iter().peekable(), macros)?;
+    let body_tokens = preprocess(&mut body.into_iter().peekable(), macros)?;
 
     Ok(body_tokens)
 }
@@ -1248,39 +1133,50 @@ fn evaluate_node(node: PreprocessorIfNode) -> Result<Literal, Error> {
             let right = evaluate_node(*right)?;
 
             match op {
-                BinaryOp::Multiply => Literal::Sint(left.as_isize() * right.as_isize()),
-                BinaryOp::Divide => Literal::Sint(left.as_isize() / right.as_isize()),
-                BinaryOp::Remainder => Literal::Sint(left.as_isize() % right.as_isize()),
-                BinaryOp::Add => Literal::Sint(left.as_isize() + right.as_isize()),
-                BinaryOp::Subtract => Literal::Sint(left.as_isize() - right.as_isize()),
+                BinaryOperator::Multiply => Literal::Sint(left.as_isize() * right.as_isize()),
+                BinaryOperator::Divide => Literal::Sint(left.as_isize() / right.as_isize()),
+                BinaryOperator::Modulo => Literal::Sint(left.as_isize() % right.as_isize()),
+                BinaryOperator::Add => Literal::Sint(left.as_isize() + right.as_isize()),
+                BinaryOperator::Subtract => Literal::Sint(left.as_isize() - right.as_isize()),
 
-                BinaryOp::LeftShift => Literal::Sint(left.as_isize() << right.as_isize()),
-                BinaryOp::RightShift => Literal::Sint(left.as_isize() << right.as_isize()),
+                BinaryOperator::ShiftLeftLogical => {
+                    Literal::Sint(left.as_isize() << right.as_isize())
+                }
+                BinaryOperator::ShiftRightArithmetic => {
+                    Literal::Sint(left.as_isize() << right.as_isize())
+                }
 
-                BinaryOp::GreaterThan => {
+                BinaryOperator::Greater => {
                     Literal::Sint((left.as_isize() > right.as_isize()) as isize)
                 }
-                BinaryOp::LessThan => Literal::Sint((left.as_isize() < right.as_isize()) as isize),
-                BinaryOp::GreaterOrEqual => {
+                BinaryOperator::Less => {
+                    Literal::Sint((left.as_isize() < right.as_isize()) as isize)
+                }
+                BinaryOperator::GreaterEqual => {
                     Literal::Sint((left.as_isize() >= right.as_isize()) as isize)
                 }
-                BinaryOp::LessOrEqual => {
+                BinaryOperator::LessEqual => {
                     Literal::Sint((left.as_isize() <= right.as_isize()) as isize)
                 }
 
-                BinaryOp::Equal => Literal::Sint((left.as_isize() == right.as_isize()) as isize),
-                BinaryOp::NotEqual => Literal::Sint((left.as_isize() != right.as_isize()) as isize),
+                BinaryOperator::Equal => {
+                    Literal::Sint((left.as_isize() == right.as_isize()) as isize)
+                }
+                BinaryOperator::NotEqual => {
+                    Literal::Sint((left.as_isize() != right.as_isize()) as isize)
+                }
 
-                BinaryOp::BitWiseAnd => Literal::Sint(left.as_isize() & right.as_isize()),
-                BinaryOp::BitWiseXor => Literal::Sint(left.as_isize() ^ right.as_isize()),
-                BinaryOp::BitWiseOr => Literal::Sint(left.as_isize() | right.as_isize()),
+                BinaryOperator::And => Literal::Sint(left.as_isize() & right.as_isize()),
+                BinaryOperator::ExclusiveOr => Literal::Sint(left.as_isize() ^ right.as_isize()),
+                BinaryOperator::InclusiveOr => Literal::Sint(left.as_isize() | right.as_isize()),
 
-                BinaryOp::LogicalOr => {
+                BinaryOperator::LogicalOr => {
                     Literal::Sint((left.as_bool()? || right.as_bool()?) as isize)
                 }
-                BinaryOp::LogicalAnd => {
+                BinaryOperator::LogicalAnd => {
                     Literal::Sint((left.as_bool()? && right.as_bool()?) as isize)
                 }
+                _ => unreachable!(),
             }
         }
     })
@@ -1301,7 +1197,7 @@ pub(self) fn logical_or_parser(
 
         node = PreprocessorIfNode::Binary {
             left: Box::new(node),
-            op: BinaryOp::LogicalOr,
+            op: BinaryOperator::LogicalOr,
             right: Box::new(right),
         }
     }
@@ -1324,7 +1220,7 @@ fn logical_and_parser(
 
         node = PreprocessorIfNode::Binary {
             left: Box::new(node),
-            op: BinaryOp::LogicalAnd,
+            op: BinaryOperator::LogicalAnd,
             right: Box::new(right),
         }
     }
@@ -1347,7 +1243,7 @@ fn bitwise_or_parser(
 
         node = PreprocessorIfNode::Binary {
             left: Box::new(node),
-            op: BinaryOp::BitWiseOr,
+            op: BinaryOperator::InclusiveOr,
             right: Box::new(right),
         }
     }
@@ -1370,7 +1266,7 @@ fn bitwise_xor_parser(
 
         node = PreprocessorIfNode::Binary {
             left: Box::new(node),
-            op: BinaryOp::BitWiseXor,
+            op: BinaryOperator::ExclusiveOr,
             right: Box::new(right),
         }
     }
@@ -1393,7 +1289,7 @@ fn bitwise_and_parser(
 
         node = PreprocessorIfNode::Binary {
             left: Box::new(node),
-            op: BinaryOp::BitWiseAnd,
+            op: BinaryOperator::And,
             right: Box::new(right),
         }
     }
@@ -1416,8 +1312,8 @@ fn equality_parser(
         };
 
         let op = match equality_token.token {
-            Token::LogicalOperation('=') => BinaryOp::Equal,
-            Token::LogicalOperation('!') => BinaryOp::NotEqual,
+            Token::LogicalOperation('=') => BinaryOperator::Equal,
+            Token::LogicalOperation('!') => BinaryOperator::NotEqual,
             _ => break,
         };
 
@@ -1450,10 +1346,10 @@ fn relational_parser(
         };
 
         let op = match relational_token.token {
-            Token::LogicalOperation('<') => BinaryOp::LessOrEqual,
-            Token::LogicalOperation('>') => BinaryOp::GreaterOrEqual,
-            Token::Operation('<') => BinaryOp::LessThan,
-            Token::Operation('>') => BinaryOp::GreaterThan,
+            Token::LogicalOperation('<') => BinaryOperator::LessEqual,
+            Token::LogicalOperation('>') => BinaryOperator::GreaterEqual,
+            Token::Operation('<') => BinaryOperator::Less,
+            Token::Operation('>') => BinaryOperator::Greater,
             _ => break,
         };
 
@@ -1486,8 +1382,8 @@ fn shift_parser(
         };
 
         let op = match shift_token.token {
-            Token::ShiftOperation('<') => BinaryOp::LeftShift,
-            Token::ShiftOperation('>') => BinaryOp::RightShift,
+            Token::ShiftOperation('<') => BinaryOperator::ShiftLeftLogical,
+            Token::ShiftOperation('>') => BinaryOperator::ShiftRightArithmetic,
             _ => break,
         };
 
@@ -1520,8 +1416,8 @@ fn additive_parser(
         };
 
         let op = match additive_token.token {
-            Token::Operation('+') => BinaryOp::Add,
-            Token::Operation('-') => BinaryOp::Subtract,
+            Token::Operation('+') => BinaryOperator::Add,
+            Token::Operation('-') => BinaryOperator::Subtract,
             _ => break,
         };
 
@@ -1554,9 +1450,9 @@ fn multiplicative_parser(
         };
 
         let op = match multiplicative_token.token {
-            Token::Operation('*') => BinaryOp::Multiply,
-            Token::Operation('/') => BinaryOp::Divide,
-            Token::Operation('%') => BinaryOp::Remainder,
+            Token::Operation('*') => BinaryOperator::Multiply,
+            Token::Operation('/') => BinaryOperator::Divide,
+            Token::Operation('%') => BinaryOperator::Modulo,
             _ => break,
         };
 

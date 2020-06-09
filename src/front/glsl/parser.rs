@@ -2,6 +2,7 @@
 #![allow(dead_code)]
 
 use super::{Error, ErrorKind};
+use crate::FastHashMap;
 use std::{
     fmt,
     iter::Peekable,
@@ -10,6 +11,8 @@ use std::{
 };
 
 pub mod lex;
+
+#[cfg(feature = "glsl_preprocessor")]
 #[path = "./preprocessor.rs"]
 pub mod preprocessor;
 
@@ -151,4 +154,93 @@ fn parse_primary_expression(tokens: &mut Tokens) -> Result<Node, Error> {
             },
         }),
     }
+}
+
+pub(self) fn parse_comments(mut lexer: lex::Lexer) -> Result<Vec<TokenMetadata>, Error> {
+    let mut tokens = Vec::new();
+
+    loop {
+        let token = lexer.next();
+
+        match token.token {
+            Token::MultiLineCommentOpen => {
+                let mut token = lexer.next();
+                while Token::MultiLineCommentClose != token.token {
+                    match token.token {
+                        Token::End => {
+                            return Err(Error {
+                                kind: ErrorKind::EOF,
+                            })
+                        }
+                        _ => {}
+                    }
+
+                    token = lexer.next();
+                }
+            }
+            Token::LineComment => {
+                while token.line == lexer.peek().line && Token::End != lexer.peek().token {
+                    let _ = lexer.next();
+                }
+            }
+            Token::End => {
+                tokens.push(token);
+                break;
+            }
+            _ => tokens.push(token),
+        }
+    }
+
+    Ok(tokens)
+}
+
+pub fn parse(input: &str) -> Result<String, Error> {
+    let lexer = lex::Lexer::new(input);
+
+    let tokens = parse_comments(lexer)?;
+
+    let mut macros = FastHashMap::default();
+
+    macros.insert(
+        String::from("GL_SPIRV"),
+        vec![TokenMetadata {
+            token: Token::Integral(100),
+            line: 0,
+            chars: 0..1,
+        }],
+    );
+    macros.insert(
+        String::from("VULKAN"),
+        vec![TokenMetadata {
+            token: Token::Integral(100),
+            line: 0,
+            chars: 0..1,
+        }],
+    );
+
+    log::trace!("------GLSL COMMENT STRIPPED------");
+    log::trace!("\n{:#?}", tokens);
+    log::trace!("---------------------------------");
+
+    #[cfg(feature = "glsl_preprocessor")]
+    let tokens = preprocessor::preprocess(&mut tokens.into_iter().peekable(), &mut macros)?;
+
+    let mut line = 0;
+    let mut start = 0;
+
+    Ok(tokens.into_iter().fold(String::new(), |mut acc, token| {
+        if token.line - line != 0 {
+            acc.push_str(&"\n".repeat(token.line - line));
+            start = 0;
+            line = token.line;
+        }
+
+        acc.push_str(&" ".repeat(token.chars.start - start));
+
+        acc.push_str(&token.token.to_string());
+
+        start = token.chars.end;
+
+        acc
+    }))
 }

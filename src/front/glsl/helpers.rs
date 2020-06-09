@@ -237,60 +237,22 @@ pub fn glsl_to_spirv_type(ty: TypeSpecifierNonArray, types: &mut Arena<Type>) ->
             width: 64,
         },
         TypeName(ty_name) => {
-            if ty_name.0.contains("texture") {
-                let (base, offset) = match &ty_name.0[..1] {
-                    "t" => {
-                        if &ty_name.0[..7] != "texture" {
-                            panic!()
-                        }
-
-                        (
-                            types.fetch_or_append(Type {
-                                name: None,
-                                inner: TypeInner::Scalar {
-                                    kind: ScalarKind::Float,
-                                    width: 32,
-                                },
-                            }),
-                            7,
-                        )
-                    }
-                    "i" => {
-                        if &ty_name.0[..8] != "itexture" {
-                            panic!()
-                        }
-
-                        (
-                            types.fetch_or_append(Type {
-                                name: None,
-                                inner: TypeInner::Scalar {
-                                    kind: ScalarKind::Sint,
-                                    width: 32,
-                                },
-                            }),
-                            8,
-                        )
-                    }
-                    "u" => {
-                        if &ty_name.0[..8] != "utexture" {
-                            panic!()
-                        }
-
-                        (
-                            types.fetch_or_append(Type {
-                                name: None,
-                                inner: TypeInner::Scalar {
-                                    kind: ScalarKind::Uint,
-                                    width: 32,
-                                },
-                            }),
-                            8,
-                        )
-                    }
+            if let Some(t_pos) = ty_name.0.find("texture") {
+                let scalar_kind = match &ty_name.0[..t_pos] {
+                    "" => ScalarKind::Float,
+                    "i" => ScalarKind::Sint,
+                    "u" => ScalarKind::Uint,
                     _ => panic!(),
                 };
+                let base = types.fetch_or_append(Type {
+                    name: None,
+                    inner: TypeInner::Scalar {
+                        kind: scalar_kind,
+                        width: 32,
+                    },
+                });
 
-                let (dim, flags) = match &ty_name.0[offset..] {
+                let (dim, flags) = match &ty_name.0[(t_pos + 7)..] {
                     "1D" => (Dim::Dim1D, ImageFlags::SAMPLED),
                     "2D" => (Dim::Dim2D, ImageFlags::SAMPLED),
                     "3D" => (Dim::Dim3D, ImageFlags::SAMPLED),
