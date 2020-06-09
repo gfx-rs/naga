@@ -231,7 +231,7 @@ impl<'a> Parser<'a> {
                                                 base: ty,
                                                 size: match array_spec {
                                                     ArraySpecifier::Unsized => ArraySize::Dynamic,
-                                                    ArraySpecifier::ExplicitlySized(expr) => {
+                                                    ArraySpecifier::ExplicitlySized(_expr) => {
                                                         unimplemented!()
                                                     }
                                                 },
@@ -263,7 +263,7 @@ impl<'a> Parser<'a> {
                                     base,
                                     size: match array_spec {
                                         ArraySpecifier::Unsized => ArraySize::Dynamic,
-                                        ArraySpecifier::ExplicitlySized(expr) => unimplemented!(),
+                                        ArraySpecifier::ExplicitlySized(_expr) => unimplemented!(),
                                     },
                                 },
                             })
@@ -366,7 +366,7 @@ impl<'a> Parser<'a> {
                                 &mut expressions,
                                 &mut local_variables,
                                 &mut locals_map,
-                                &mut parameter_lookup,
+                                &parameter_lookup,
                             );
                         }
                         _ => unimplemented!(),
@@ -413,7 +413,7 @@ impl<'a> Parser<'a> {
         let handle = self.functions.append(Function {
             name: Some(name.clone()),
             control: spirv::FunctionControl::NONE,
-            parameter_types: parameter_types,
+            parameter_types,
             return_type: ty,
             global_usage: vec![],
             local_variables,
@@ -490,7 +490,7 @@ impl<'a> Parser<'a> {
 
                 expressions.append(handle)
             }
-            Initializer::List(exprs) => unimplemented!(),
+            Initializer::List(_exprs) => unimplemented!(),
         }
     }
 
@@ -823,7 +823,7 @@ impl<'a> Parser<'a> {
                     }),
                 }))
             }
-            Expr::Unary(op, reg) => unimplemented!(),
+            Expr::Unary(_op, _reg) => unimplemented!(),
             Expr::Binary(op, left, right) => {
                 let left =
                     self.parse_expression(*left, expressions, locals, locals_map, parameter_lookup);
@@ -841,13 +841,13 @@ impl<'a> Parser<'a> {
                     right: expressions.append(right),
                 }
             }
-            Expr::Ternary(condition, accept, reject) => unimplemented!(),
+            Expr::Ternary(_condition, _accept, _reject) => unimplemented!(),
             Expr::Assignment(_, _, _) => panic!(),
-            Expr::Bracket(reg, index) => unimplemented!(),
+            Expr::Bracket(_reg, _index) => unimplemented!(),
             Expr::FunCall(ident, mut args) => {
                 let name = match ident {
                     FunIdentifier::Identifier(ident) => ident.0,
-                    FunIdentifier::Expr(expr) => todo!(),
+                    FunIdentifier::Expr(_expr) => todo!(),
                 };
 
                 match name.as_str() {
@@ -973,7 +973,7 @@ impl<'a> Parser<'a> {
                     crate::TypeInner::Struct { ref members } => {
                         let index = members
                             .iter()
-                            .position(|m| m.name.as_ref().map(|s| s.as_str()) == Some(name))
+                            .position(|m| m.name.as_deref() == Some(name))
                             .unwrap() as u32;
                         crate::Expression::AccessIndex {
                             base: handle,
@@ -1005,7 +1005,7 @@ impl<'a> Parser<'a> {
                                 2 => crate::VectorSize::Bi,
                                 3 => crate::VectorSize::Tri,
                                 4 => crate::VectorSize::Quad,
-                                _ => return panic!(),
+                                _ => panic!(),
                             };
                             let inner =
                                 if let crate::TypeInner::Matrix { rows, .. } = base_type.inner {
@@ -1040,8 +1040,8 @@ impl<'a> Parser<'a> {
                     _ => panic!(),
                 }
             }
-            Expr::PostInc(reg) => unimplemented!(),
-            Expr::PostDec(reg) => unimplemented!(),
+            Expr::PostInc(_reg) => unimplemented!(),
+            Expr::PostDec(_reg) => unimplemented!(),
             Expr::Comma(_, _) => unimplemented!(),
         }
     }
@@ -1101,7 +1101,7 @@ impl<'a> Parser<'a> {
             .head
             .ty
             .qualifier
-            .map(|qualifiers| Self::parse_type_qualifier(qualifiers))
+            .map(Self::parse_type_qualifier)
             .unwrap_or((StorageClass::Private, None));
 
         self.globals.append(GlobalVariable {
@@ -1133,8 +1133,6 @@ impl<'a> Parser<'a> {
                     }
                 }
                 TypeQualifierSpec::Layout(layout_qualifier) => {
-                    use glsl::syntax::{Expr, LayoutQualifierSpec};
-
                     assert!(binding.is_none());
 
                     let mut set = None;
@@ -1169,7 +1167,7 @@ impl<'a> Parser<'a> {
                                     }
                                 }
                             }
-                            _ => {}
+                            _ => unimplemented!()
                         }
                     }
 

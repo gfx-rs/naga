@@ -58,8 +58,6 @@ pub fn consume_token(input: &String) -> (Token, &str, usize, usize) {
         '0'..='9' => {
             let (number, rest, pos) = consume_any(input, |c| (c >= '0' && c <= '9' || c == '.'));
             if let Some(_) = number.find('.') {
-                input = chars.as_str();
-
                 if (
                     chars.next().map(|c| c.to_lowercase().next().unwrap()),
                     chars.next().map(|c| c.to_lowercase().next().unwrap()),

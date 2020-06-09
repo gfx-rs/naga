@@ -19,6 +19,7 @@ impl Typifier {
         Typifier { types: Vec::new() }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn resolve(
         &mut self,
         expr_handle: Handle<crate::Expression>,

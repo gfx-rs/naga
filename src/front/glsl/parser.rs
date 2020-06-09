@@ -1,3 +1,6 @@
+#![allow(clippy::all)]
+#![allow(dead_code)]
+
 use super::{Error, ErrorKind};
 use std::{
     fmt,

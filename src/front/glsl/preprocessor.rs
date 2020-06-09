@@ -3,12 +3,7 @@ use super::{
     lex, Literal, Token, TokenMetadata,
 };
 use crate::FastHashMap;
-use std::{
-    fmt,
-    iter::Peekable,
-    ops::{Deref, Range},
-    vec::IntoIter,
-};
+use std::{iter::Peekable, vec::IntoIter};
 
 #[derive(Debug)]
 pub enum PreprocessorIfNode {
@@ -144,9 +139,6 @@ pub fn preprocess(input: &str) -> Result<String, Error> {
 
 pub(self) fn parse_comments(mut lexer: lex::Lexer) -> Result<Vec<TokenMetadata>, Error> {
     let mut tokens = Vec::new();
-    let mut line_offset = 0i32;
-
-    let mut offset = (0, 0);
 
     loop {
         let token = lexer.next();
