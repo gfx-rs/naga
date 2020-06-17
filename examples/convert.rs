@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::{env, fs};
+use std::{env, fs, path::Path};
 
 #[derive(Hash, PartialEq, Eq, Serialize, Deserialize)]
 struct BindSource {
@@ -29,24 +29,28 @@ fn main() {
         println!("Call with <input> <output>");
         return;
     }
-    let in_ext_pos = args[1].rfind(".").expect("Input has no extension?");
-    let module = match &args[1][in_ext_pos..] {
-        ".spv" => {
+    let ext = Path::new(&args[1])
+        .extension()
+        .expect("Input has no extension?")
+        .to_str()
+        .unwrap();
+    let module = match ext {
+        "spv" => {
             let input = fs::read(&args[1]).unwrap();
             naga::front::spv::parse_u8_slice(&input).unwrap()
         }
-        ".wgsl" => {
+        "wgsl" => {
             let input = fs::read_to_string(&args[1]).unwrap();
             naga::front::wgsl::parse_str(&input).unwrap()
         }
         #[cfg(feature = "glsl")]
-        ".vert" => {
+        "vert" => {
             let input = fs::read_to_string(&args[1]).unwrap();
             naga::front::glsl::parse_str(&input, "main".to_string(), spirv::ExecutionModel::Vertex)
                 .unwrap()
         }
         #[cfg(feature = "glsl")]
-        ".frag" => {
+        "frag" => {
             let input = fs::read_to_string(&args[1]).unwrap();
             naga::front::glsl::parse_str(
                 &input,
