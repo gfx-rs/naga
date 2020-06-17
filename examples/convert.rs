@@ -60,7 +60,7 @@ fn main() {
             .unwrap()
         }
         #[cfg(feature = "glsl")]
-        ".comp" => {
+        "comp" => {
             let input = fs::read_to_string(&args[1]).unwrap();
             naga::front::glsl::parse_str(
                 &input,
