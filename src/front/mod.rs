@@ -1,6 +1,6 @@
-pub mod glsl;
 #[cfg(feature = "glsl")]
-pub mod glsl_old;
+pub mod glsl;
+pub mod glsl_new;
 #[cfg(feature = "spirv")]
 pub mod spv;
 pub mod wgsl;
