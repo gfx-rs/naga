@@ -2,7 +2,7 @@ use std::io::{BufRead, Read};
 use std::ops::Range;
 use std::str::FromStr;
 
-use super::error::{ParseError, ErrorKind};
+use super::error::{ErrorKind, ParseError};
 use super::parser;
 use super::token::TokenMetadata;
 
@@ -56,7 +56,9 @@ impl<R: BufRead> Lexer<R> {
                 (None, Some(k2)) => Some((k2, vec![b])),
                 (Some((k1, mut bs)), t2) => {
                     //extend a Number or Alpha, but not a Punct
-                    if Some(k1) == t2 && k1 != CharKind::Punct {
+                    if (Some(k1) == t2 || k1 == CharKind::Alpha && Some(CharKind::Number) == t2)
+                        && k1 != CharKind::Punct
+                    {
                         bs.push(b);
                         Some((k1, bs))
                     } else {
