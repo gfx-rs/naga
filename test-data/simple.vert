@@ -1,5 +1,5 @@
 #version 450 core
 
 void main() {
-    gl_FragDepth = 0;
+    gl_Position = vec4(1);
 }

@@ -33,37 +33,68 @@ fn main() {
         .extension()
         .expect("Input has no extension?")
         .to_str()
-        .unwrap()
-    {
-        #[cfg(feature = "spirv")]
-        "spv" => {
-            let input = fs::read(&args[1]).unwrap();
-            naga::front::spv::parse_u8_slice(&input).unwrap()
+        .unwrap();
+    let prefer_glsl_new =
+        !cfg!(feature = "glsl") || env::var("PREFER_GLSL_NEW").unwrap_or_default() == "1";
+    let mut module_option: Option<naga::Module> = None;
+    #[cfg(feature = "spirv")]
+    if ext == "spv" {
+        let input = fs::read(&args[1]).unwrap();
+        module_option = Some(naga::front::spv::parse_u8_slice(&input).unwrap());
+    } else if ext == "wgsl" {
+        let input = fs::read_to_string(&args[1]).unwrap();
+        module_option = Some(naga::front::wgsl::parse_str(&input).unwrap());
+    } else if ext == "vert" {
+        let input = fs::read_to_string(&args[1]).unwrap();
+        if prefer_glsl_new {
+            module_option = Some(
+                naga::front::glsl_new::parse_str(
+                    &input,
+                    "main".to_string(),
+                    naga::ShaderStage::Vertex,
+                )
+                .unwrap(),
+            );
+        } else {
+            #[cfg(feature = "glsl")]
+            {
+                module_option = Some(
+                    naga::front::glsl::parse_str(
+                        &input,
+                        "main".to_string(),
+                        naga::ShaderStage::Vertex,
+                    )
+                    .unwrap(),
+                );
+            }
         }
-        "wgsl" => {
-            let input = fs::read_to_string(&args[1]).unwrap();
-            naga::front::wgsl::parse_str(&input).unwrap()
-        }
-        #[cfg(feature = "glsl")]
-        "vert" => {
-            let input = fs::read_to_string(&args[1]).unwrap();
-            naga::front::glsl::parse_str(&input, "main".to_string(), naga::ShaderStage::Vertex)
-                .unwrap()
-        }
-        #[cfg(feature = "glsl")]
-        "frag" => {
-            let input = fs::read_to_string(&args[1]).unwrap();
-            naga::front::glsl::parse_str(&input, "main".to_string(), naga::ShaderStage::Fragment)
-                .unwrap()
-        }
-        #[cfg(feature = "glsl")]
-        "comp" => {
-            let input = fs::read_to_string(&args[1]).unwrap();
-            naga::front::glsl::parse_str(&input, "main".to_string(), naga::ShaderStage::Compute)
-                .unwrap()
-        }
-        other => panic!("Unknown input extension: {}", other),
-    };
+    }
+    #[cfg(feature = "glsl")]
+    if ext == "frag" {
+        let input = fs::read_to_string(&args[1]).unwrap();
+        module_option = Some(
+            naga::front::glsl::parse_str(
+                &input,
+                "main".to_string(),
+                naga::ShaderStage::Fragment,
+            )
+            .unwrap(),
+        );
+    }
+    #[cfg(feature = "glsl")]
+    if ext == "comp" {
+        let input = fs::read_to_string(&args[1]).unwrap();
+        module_option = Some(
+            naga::front::glsl::parse_str(
+                &input,
+                "main".to_string(),
+                naga::ShaderStage::Compute,
+            )
+            .unwrap(),
+        );
+    }
+
+    let module = module_option.unwrap_or_else(|| panic!("Unknown input extension: {}", ext));
 
     if args.len() <= 2 {
         println!("{:#?}", module);
