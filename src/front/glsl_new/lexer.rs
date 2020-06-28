@@ -115,6 +115,7 @@ impl<R: BufRead> Lexer<R> {
                 line: 0,
                 chars: Range { start: 0, end: 0 },
             };
+            log::debug!("token: {:#?}", token);
             let token = match token {
                 None => None,
                 Some((kind, s)) => {
@@ -126,21 +127,15 @@ impl<R: BufRead> Lexer<R> {
                             parser::Token::Number((meta, val))
                         }
                         CharKind::Alpha => match &s[..] {
-                            b"void" => parser::Token::Fn(meta),
-                            b"var" => parser::Token::Var(meta),
-                            b"if" => parser::Token::If(meta),
-                            b"else" => parser::Token::Else(meta),
-                            b"while" => parser::Token::While(meta),
-                            b"return" => parser::Token::Return(meta),
-                            b"continue" => parser::Token::Continue(meta),
-                            b"break" => parser::Token::Break(meta),
+                            b"void" => parser::Token::Void(meta),
+                            b"vec4" => parser::Token::Vec4(meta),
                             b"and" => parser::Token::And(meta),
                             b"or" => parser::Token::Or(meta),
                             b"not" => parser::Token::Not(meta),
                             _ => {
                                 let s =
                                     String::from_utf8(s).map_err(|_| ErrorKind::InvalidInput)?;
-                                parser::Token::Ident((meta, s))
+                                parser::Token::Identifier((meta, s))
                             }
                         },
                         CharKind::String => {
@@ -167,19 +162,21 @@ impl<R: BufRead> Lexer<R> {
                                 return Ok(tt);
                             }
                             match s {
-                                b'(' => parser::Token::LParen(meta),
-                                b')' => parser::Token::RParen(meta),
-                                b'{' => parser::Token::LBrace(meta),
-                                b'}' => parser::Token::RBrace(meta),
+                                b'(' => parser::Token::LeftParen(meta),
+                                b')' => parser::Token::RightParen(meta),
+                                b'{' => parser::Token::LeftBrace(meta),
+                                b'}' => parser::Token::RightBrace(meta),
                                 b',' => parser::Token::Comma(meta),
                                 b';' => parser::Token::Semicolon(meta),
-                                b'=' => parser::Token::Assign(meta),
+                                b'=' => parser::Token::Equal(meta),
                                 b'+' => parser::Token::Plus(meta),
                                 b'-' => parser::Token::Minus(meta),
                                 b'*' => parser::Token::Mult(meta),
                                 b'/' => parser::Token::Div(meta),
                                 b'<' => parser::Token::Less(meta),
                                 b'>' => parser::Token::Greater(meta),
+                                b'?' => parser::Token::Question(meta),
+                                b':' => parser::Token::Colon(meta),
                                 _ => return Err(ErrorKind::InvalidInput.into()),
                             }
                         }

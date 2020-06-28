@@ -4,7 +4,6 @@ use std::io::BufReader;
 
 mod lexer;
 use lexer::Lexer;
-mod ast;
 mod error;
 use error::{ErrorKind, ParseError};
 mod parser;
