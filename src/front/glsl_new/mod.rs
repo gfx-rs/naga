@@ -1,5 +1,4 @@
-use crate::{Arena, Constant, EntryPoint, Function, GlobalVariable, Header, Module, Type};
-use spirv::ExecutionModel;
+use crate::{Arena, Constant, EntryPoint, Function, GlobalVariable, Header, Module, ShaderStage, Type};
 
 mod lex;
 use lex::Lexer;
@@ -8,7 +7,7 @@ use error::{ErrorKind, ParseError};
 mod parser;
 mod token;
 
-pub fn parse_str(source: &str, entry: String, exec: ExecutionModel) -> Result<Module, ParseError> {
+pub fn parse_str(source: &str, entry: String, stage: ShaderStage) -> Result<Module, ParseError> {
     log::debug!("------ GLSL-pomelo ------");
 
     let module = Module {
@@ -39,7 +38,7 @@ pub fn parse_str(source: &str, entry: String, exec: ExecutionModel) -> Result<Mo
         .find(|(_, f)| f.name.as_ref().filter(|n| **n == entry).is_some());
     if let Some((h, _)) = entry_func {
         parsed_module.entry_points.push(EntryPoint {
-            exec_model: exec,
+            stage: stage,
             name: entry,
             function: h,
         });

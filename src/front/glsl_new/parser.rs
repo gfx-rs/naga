@@ -172,7 +172,6 @@ pomelo! {
     function_definition ::= function_prototype compound_statement_no_new_scope {
         Function {
             name: Some(String::from("main")),
-            control: spirv::FunctionControl::NONE,
             parameter_types: vec![],
             return_type: None,
             global_usage: vec![],
