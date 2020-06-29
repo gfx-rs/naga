@@ -11,12 +11,14 @@ pomelo! {
     %extra_argument Module;
     %extra_token TokenMetadata;
     %type Identifier String;
-    %type Version String;
-    %type Number i64;
+    %type IntConstant i64;
+    %type UintConstant u64;
+    %type FloatConstant f32;
+    %type BoolConstant bool;
+    %type DoubleConstant f64;
     %type String String;
     %type arg_list Vec<String>;
     %type function_definition Function;
-    %type f_decl Function;
 
     %left Else;
     %right Assign;
@@ -29,13 +31,17 @@ pomelo! {
     %nonassoc Not;
 
     root ::= version_pragma translation_unit;
-    version_pragma ::= Version Number Identifier?;
+    version_pragma ::= Version IntConstant Identifier?;
 
     // expression
     variable_identifier ::= Identifier;
 
     primary_expression ::= variable_identifier;
-    primary_expression ::= Number;
+    primary_expression ::= IntConstant;
+    primary_expression ::= UintConstant;
+    primary_expression ::= FloatConstant;
+    primary_expression ::= BoolConstant;
+    primary_expression ::= DoubleConstant;
     primary_expression ::= LeftParen expression RightParen;
 
     postfix_expression ::= primary_expression;
@@ -89,7 +95,7 @@ pomelo! {
     equality_expression ::= equality_expression EqOp relational_expression;
     equality_expression ::= equality_expression NeOp relational_expression;
     and_expression ::= equality_expression;
-    and_expression ::= and_expression AMPERSAND equality_expression;
+    and_expression ::= and_expression Ampersand equality_expression;
     exclusive_or_expression ::= and_expression;
     exclusive_or_expression ::= exclusive_or_expression Caret and_expression;
     inclusive_or_expression ::= exclusive_or_expression;
@@ -108,6 +114,16 @@ pomelo! {
     assignment_expression ::= unary_expression assignment_operator assignment_expression;
 
     assignment_operator ::= Equal;
+    assignment_operator ::= MulAssign;
+    assignment_operator ::= DivAssign;
+    assignment_operator ::= ModAssign;
+    assignment_operator ::= AddAssign;
+    assignment_operator ::= SubAssign;
+    assignment_operator ::= LeftAssign;
+    assignment_operator ::= RightAssign;
+    assignment_operator ::= AndAssign;
+    assignment_operator ::= XorAssign;
+    assignment_operator ::= OrAssign;
 
     expression ::= assignment_expression;
     expression ::= expression Comma assignment_expression;
@@ -145,6 +161,7 @@ pomelo! {
 
     type_specifier_nonarray ::= Void;
     type_specifier_nonarray ::= Vec4;
+    //TODO: remaining types
 
     // misc
     translation_unit ::= external_declaration;

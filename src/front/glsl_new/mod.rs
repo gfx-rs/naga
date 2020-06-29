@@ -1,9 +1,8 @@
 use crate::{Arena, Constant, EntryPoint, Function, GlobalVariable, Header, Module, Type};
 use spirv::ExecutionModel;
-use std::io::BufReader;
 
-mod lexer;
-use lexer::Lexer;
+mod lex;
+use lex::Lexer;
 mod error;
 use error::{ErrorKind, ParseError};
 mod parser;
@@ -24,12 +23,11 @@ pub fn parse_str(source: &str, entry: String, exec: ExecutionModel) -> Result<Mo
         entry_points: vec![],
     };
 
-    let buf_rdr = BufReader::new(source.as_bytes());
-    let lex = Lexer::new(buf_rdr);
+    let lex = Lexer::new(source);
     let mut parser = parser::Parser::new(module);
 
     for token in lex {
-        let token = token?;
+        log::debug!("token: {:#?}", token);
         parser.parse(token).map_err(|_| ErrorKind::InvalidInput)?;
     }
     let (_, mut parsed_module) = parser.end_of_input().map_err(|_| ErrorKind::InvalidInput)?;
