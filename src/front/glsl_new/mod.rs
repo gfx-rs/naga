@@ -38,7 +38,7 @@ pub fn parse_str(source: &str, entry: String, stage: ShaderStage) -> Result<Modu
         .find(|(_, f)| f.name.as_ref().filter(|n| **n == entry).is_some());
     if let Some((h, _)) = entry_func {
         parsed_module.entry_points.push(EntryPoint {
-            stage: stage,
+            stage,
             name: entry,
             function: h,
         });
