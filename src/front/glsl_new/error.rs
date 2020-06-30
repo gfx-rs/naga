@@ -1,16 +1,15 @@
-use std::fmt;
-use std::io;
+use std::{fmt, io};
 
 #[derive(Debug)]
 pub enum ErrorKind {
     InvalidInput,
-    IoError { error: io::Error },
+    IoError(io::Error),
 }
 
 impl fmt::Display for ErrorKind {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            ErrorKind::IoError { error } => write!(f, "IO Error {}", error),
+            ErrorKind::IoError(error) => write!(f, "IO Error {}", error),
             ErrorKind::InvalidInput => write!(f, "InvalidInput"),
         }
     }
@@ -30,7 +29,7 @@ impl fmt::Display for ParseError {
 impl From<io::Error> for ParseError {
     fn from(error: io::Error) -> Self {
         ParseError {
-            kind: ErrorKind::IoError { error },
+            kind: ErrorKind::IoError(error),
         }
     }
 }

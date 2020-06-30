@@ -277,26 +277,23 @@ impl<'a> Lexer<'a> {
             self.offset += end;
             Some(token)
         } else {
-            match self.lines.next() {
-                Some((line, input)) => {
-                    let mut input = String::from(input);
+            let (line, input) = self.lines.next()?;
 
-                    while input.ends_with('\\') {
-                        if let Some((_, next)) = self.lines.next() {
-                            input.pop();
-                            input.push_str(next);
-                        } else {
-                            break;
-                        }
-                    }
+            let mut input = String::from(input);
 
-                    self.input = input;
-                    self.line = line;
-                    self.offset = 0;
-                    self.next()
+            while input.ends_with('\\') {
+                if let Some((_, next)) = self.lines.next() {
+                    input.pop();
+                    input.push_str(next);
+                } else {
+                    break;
                 }
-                None => None,
             }
+
+            self.input = input;
+            self.line = line;
+            self.offset = 0;
+            self.next()
         }
     }
 
