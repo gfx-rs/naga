@@ -264,21 +264,19 @@ impl<'a> Lexer<'a> {
 
         if let Some(mut token) = token {
             self.input = String::from(rest);
+            let meta = token.extra_mut();
+            let end = meta.chars.end;
+            meta.line = self.line;
+            meta.chars.start += self.offset;
+            meta.chars.end += self.offset;
+            self.offset += end;
             if !self.inside_comment {
                 match token {
                     Token::CommentStart(_) => {
                         self.inside_comment = true;
                         self.next()
                     }
-                    _ => {
-                        let meta = token.extra_mut();
-                        let end = meta.chars.end;
-                        meta.line = self.line;
-                        meta.chars.start += self.offset;
-                        meta.chars.end += self.offset;
-                        self.offset += end;
-                        Some(token)
-                    }
+                    _ => Some(token),
                 }
             } else {
                 if let Token::CommentEnd(_) = token {

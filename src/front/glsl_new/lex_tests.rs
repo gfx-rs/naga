@@ -79,11 +79,11 @@ fn glsl_lex_multi_line_comment() {
     );
     assert_eq!(
         format!("{:?}", iter.next().unwrap()),
-        "LeftBrace(TokenMetadata { line: 2, chars: 0..1 })"
+        "LeftBrace(TokenMetadata { line: 2, chars: 4..5 })"
     );
     assert_eq!(
         format!("{:?}", iter.next().unwrap()),
-        "RightBrace(TokenMetadata { line: 2, chars: 1..2 })"
+        "RightBrace(TokenMetadata { line: 2, chars: 5..6 })"
     );
 }
 
