@@ -33,7 +33,7 @@ pub fn parse_str(source: &str, entry: String, stage: ShaderStage) -> Result<Modu
         module.entry_points.push(EntryPoint {
             stage,
             name: entry,
-            function: entry_handle.clone(),
+            function: *entry_handle,
         });
     }
 
