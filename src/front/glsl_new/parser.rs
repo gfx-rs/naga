@@ -44,7 +44,7 @@ pomelo! {
     version_pragma ::= Version IntConstant(V) Identifier?(P) {
         match V.1 {
             450 => (),
-            _ => Err(ErrorKind::InvalidVersion(V.0, V.1))?
+            _ => return Err(ErrorKind::InvalidVersion(V.0, V.1))
         }
         extra.version = V.1 as u16;
         match P {
@@ -53,7 +53,7 @@ pomelo! {
                     "compatibility" => extra.profile = Profile::Compatibility,
                     "core" => extra.profile = Profile::Core,
                     "es" => extra.profile = Profile::Es,
-                    _ => Err(ErrorKind::InvalidProfile(meta, profile))?
+                    _ => return Err(ErrorKind::InvalidProfile(meta, profile))
                 }
             },
             None => extra.profile = Profile::Core,
