@@ -49,14 +49,14 @@ pomelo! {
             _ => return Err(ErrorKind::InvalidVersion(V.0, V.1))
         }
         extra.version = V.1 as u16;
-        match P {
+        extra.profile = match P {
             Some((meta, profile)) => {
-                extra.profile = match profile.as_str() {
+                match profile.as_str() {
                     "core" => Profile::Core,
                     _ => return Err(ErrorKind::InvalidProfile(meta, profile))
                 }
             },
-            None => extra.profile = Profile::Core,
+            None => Profile::Core,
         }
     };
 
