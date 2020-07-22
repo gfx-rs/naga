@@ -19,6 +19,7 @@ pub fn parse_str(source: &str, entry: String, stage: ShaderStage) -> Result<Modu
     log::debug!("------ GLSL-pomelo ------");
 
     let mut program = Program::new();
+    program.shader_stage = stage;
     let lex = Lexer::new(source);
     let mut parser = parser::Parser::new(&mut program);
 
@@ -31,6 +32,7 @@ pub fn parse_str(source: &str, entry: String, stage: ShaderStage) -> Result<Modu
     module.functions = program.functions;
     module.types = program.types;
     module.constants = program.constants;
+    module.global_variables = program.global_variables;
 
     // find entry point
     if let Some(entry_handle) = program.lookup_function.get(&entry) {

@@ -1,15 +1,16 @@
-use crate::{Arena, Constant, FastHashMap, Function, Handle, Type};
+use crate::{Arena, Constant, FastHashMap, Function, GlobalVariable, Handle, ShaderStage, Type};
 
 #[derive(Debug)]
 pub struct Program {
     pub version: u16,
     pub profile: Profile,
-    pub ext_decls: Vec<ExtDecl>,
+    pub shader_stage: ShaderStage,
     pub lookup_function: FastHashMap<String, Handle<Function>>,
     pub functions: Arena<Function>,
     pub lookup_type: FastHashMap<String, Handle<Type>>,
     pub types: Arena<Type>,
     pub constants: Arena<Constant>,
+    pub global_variables: Arena<GlobalVariable>,
 }
 
 impl Program {
@@ -17,12 +18,13 @@ impl Program {
         Program {
             version: 0,
             profile: Profile::Core,
-            ext_decls: vec![],
+            shader_stage: ShaderStage::Vertex,
             lookup_function: FastHashMap::default(),
             functions: Arena::<Function>::new(),
             lookup_type: FastHashMap::default(),
             types: Arena::<Type>::new(),
             constants: Arena::<Constant>::new(),
+            global_variables: Arena::<GlobalVariable>::new(),
         }
     }
 }
@@ -30,9 +32,4 @@ impl Program {
 #[derive(Debug)]
 pub enum Profile {
     Core,
-}
-
-#[derive(Debug)]
-pub enum ExtDecl {
-    // FunctionDecl,
 }
