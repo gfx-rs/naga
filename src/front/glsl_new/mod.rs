@@ -18,8 +18,7 @@ mod token;
 pub fn parse_str(source: &str, entry: String, stage: ShaderStage) -> Result<Module, ParseError> {
     log::debug!("------ GLSL-pomelo ------");
 
-    let mut program = Program::new();
-    program.shader_stage = stage;
+    let mut program = Program::new(stage);
     let lex = Lexer::new(source);
     let mut parser = parser::Parser::new(&mut program);
 

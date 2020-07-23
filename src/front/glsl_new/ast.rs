@@ -14,11 +14,11 @@ pub struct Program {
 }
 
 impl Program {
-    pub fn new() -> Program {
+    pub fn new(shader_stage: ShaderStage) -> Program {
         Program {
             version: 0,
             profile: Profile::Core,
-            shader_stage: ShaderStage::Vertex,
+            shader_stage,
             lookup_function: FastHashMap::default(),
             functions: Arena::<Function>::new(),
             lookup_type: FastHashMap::default(),
