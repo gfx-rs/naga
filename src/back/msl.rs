@@ -545,6 +545,7 @@ impl<W: Write> Writer<W> {
                     crate::BinaryOperator::LessEqual => "<=",
                     crate::BinaryOperator::Greater => "==",
                     crate::BinaryOperator::GreaterEqual => ">=",
+                    crate::BinaryOperator::And => "&",
                     other => return Err(Error::UnsupportedBinaryOp(other)),
                 };
                 //write!(self.out, "(")?;
