@@ -1,4 +1,7 @@
-use crate::{Arena, Constant, FastHashMap, Function, GlobalVariable, Handle, ShaderStage, Type};
+use crate::{
+    Arena, Constant, Expression, FastHashMap, Function, GlobalVariable, Handle, LocalVariable,
+    ShaderStage, Type,
+};
 
 #[derive(Debug)]
 pub struct Program {
@@ -11,6 +14,7 @@ pub struct Program {
     pub types: Arena<Type>,
     pub constants: Arena<Constant>,
     pub global_variables: Arena<GlobalVariable>,
+    pub context: Option<Context>,
 }
 
 impl Program {
@@ -25,11 +29,35 @@ impl Program {
             types: Arena::<Type>::new(),
             constants: Arena::<Constant>::new(),
             global_variables: Arena::<GlobalVariable>::new(),
+            context: None,
         }
+    }
+
+    pub fn get_context(&mut self) -> &mut Context {
+        match self.context {
+            Some(ref mut c) => c,
+            None => {
+                self.context = Some(Context {
+                    expressions: Arena::<Expression>::new(),
+                    local_variables: Arena::<LocalVariable>::new(),
+                });
+                self.context.as_mut().unwrap()
+            }
+        }
+    }
+
+    pub fn take_context(&mut self) -> Option<Context> {
+        self.context.take()
     }
 }
 
 #[derive(Debug)]
 pub enum Profile {
     Core,
+}
+
+#[derive(Debug)]
+pub struct Context {
+    pub expressions: Arena<Expression>,
+    pub local_variables: Arena<LocalVariable>,
 }
