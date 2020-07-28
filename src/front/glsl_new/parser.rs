@@ -135,7 +135,7 @@ pomelo! {
             );
             extra.get_context().expressions.append(Expression::GlobalVariable(h))
         } else {
-            return Err(ErrorKind::NotImplemented(String::from("var")))
+            return Err(ErrorKind::NotImplemented("var"))
         }
     }
 
@@ -165,20 +165,20 @@ pomelo! {
     postfix_expression ::= primary_expression;
     postfix_expression ::= postfix_expression LeftBracket integer_expression RightBracket {
         // TODO
-        return Err(ErrorKind::NotImplemented(String::from("[]")))
+        return Err(ErrorKind::NotImplemented("[]"))
     }
     postfix_expression ::= function_call;
     postfix_expression ::= postfix_expression Dot FieldSelection {
         // TODO
-        return Err(ErrorKind::NotImplemented(String::from(".field")))
+        return Err(ErrorKind::NotImplemented(".field"))
     }
     postfix_expression ::= postfix_expression(pe) IncOp {
         // TODO
-        return Err(ErrorKind::NotImplemented(String::from("post++")))
+        return Err(ErrorKind::NotImplemented("post++"))
     }
     postfix_expression ::= postfix_expression(pe) DecOp {
         // TODO
-        return Err(ErrorKind::NotImplemented(String::from("post--")))
+        return Err(ErrorKind::NotImplemented("post--"))
     }
 
     integer_expression ::= expression;
@@ -214,7 +214,7 @@ pomelo! {
                 components: vec![],
             })
         } else {
-            return Err(ErrorKind::NotImplemented(String::from("bad type ctor")))
+            return Err(ErrorKind::NotImplemented("bad type ctor"))
         }
     }
     function_identifier ::= postfix_expression;
@@ -222,15 +222,15 @@ pomelo! {
     unary_expression ::= postfix_expression;
     unary_expression ::= IncOp unary_expression {
         // TODO
-        return Err(ErrorKind::NotImplemented(String::from("++pre")))
+        return Err(ErrorKind::NotImplemented("++pre"))
     }
     unary_expression ::= DecOp unary_expression {
         // TODO
-        return Err(ErrorKind::NotImplemented(String::from("--pre")))
+        return Err(ErrorKind::NotImplemented("--pre"))
     }
     unary_expression ::= unary_operator unary_expression {
         // TODO
-        return Err(ErrorKind::NotImplemented(String::from("unary_op")))
+        return Err(ErrorKind::NotImplemented("unary_op"))
     }
 
     unary_operator ::= Plus;
@@ -300,7 +300,7 @@ pomelo! {
     }
     logical_xor_expression ::= logical_and_expression;
     logical_xor_expression ::= logical_xor_expression(left) XorOp logical_and_expression(right) {
-        return Err(ErrorKind::NotImplemented(String::from("logical xor")))
+        return Err(ErrorKind::NotImplemented("logical xor"))
         //TODO: naga doesn't have BinaryOperator::LogicalXor
         // extra.get_context().expressions.append(Expression::Binary{op: BinaryOperator::LogicalXor, left, right})
     }
@@ -312,7 +312,7 @@ pomelo! {
     conditional_expression ::= logical_or_expression;
     conditional_expression ::= logical_or_expression Question expression Colon assignment_expression(ae) {
         //TODO: how to do ternary here in naga?
-        return Err(ErrorKind::NotImplemented(String::from("ternary exp")))
+        return Err(ErrorKind::NotImplemented("ternary exp"))
     }
 
     assignment_expression ::= conditional_expression(ce) {
@@ -322,7 +322,7 @@ pomelo! {
         match op {
             BinaryOperator::Equal => (Statement::Store{pointer, value: value.1}, pointer),
             //TODO: op != Equal
-        _ => {return Err(ErrorKind::NotImplemented(String::from("assign op")))}
+        _ => {return Err(ErrorKind::NotImplemented("assign op"))}
         }
     }
 

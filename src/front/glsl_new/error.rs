@@ -12,7 +12,7 @@ pub enum ErrorKind {
     IoError(io::Error),
     ParserFail,
     ParserStackOverflow,
-    NotImplemented(String),
+    NotImplemented(&'static str),
 }
 
 impl fmt::Display for ErrorKind {
