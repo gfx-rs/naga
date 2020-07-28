@@ -14,7 +14,7 @@ pub struct Program {
     pub types: Arena<Type>,
     pub constants: Arena<Constant>,
     pub global_variables: Arena<GlobalVariable>,
-    pub context: Option<Context>,
+    pub context: Context,
 }
 
 impl Program {
@@ -29,25 +29,11 @@ impl Program {
             types: Arena::<Type>::new(),
             constants: Arena::<Constant>::new(),
             global_variables: Arena::<GlobalVariable>::new(),
-            context: None,
+            context: Context {
+                expressions: Arena::<Expression>::new(),
+                local_variables: Arena::<LocalVariable>::new(),
+            },
         }
-    }
-
-    pub fn get_context(&mut self) -> &mut Context {
-        match self.context {
-            Some(ref mut c) => c,
-            None => {
-                self.context = Some(Context {
-                    expressions: Arena::<Expression>::new(),
-                    local_variables: Arena::<LocalVariable>::new(),
-                });
-                self.context.as_mut().unwrap()
-            }
-        }
-    }
-
-    pub fn take_context(&mut self) -> Option<Context> {
-        self.context.take()
     }
 }
 

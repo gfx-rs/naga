@@ -133,7 +133,7 @@ pomelo! {
                     }),
                 },
             );
-            extra.get_context().expressions.append(Expression::GlobalVariable(h))
+            extra.context.expressions.append(Expression::GlobalVariable(h))
         } else {
             return Err(ErrorKind::NotImplemented("var"))
         }
@@ -154,7 +154,7 @@ pomelo! {
             ty,
             inner: ConstantInner::Sint(i.1)
         });
-        extra.get_context().expressions.append(Expression::Constant(ch))
+        extra.context.expressions.append(Expression::Constant(ch))
     }
     // primary_expression ::= UintConstant;
     // primary_expression ::= FloatConstant;
@@ -189,14 +189,14 @@ pomelo! {
     function_call_header_no_parameters ::= function_call_header(h) Void {h}
     function_call_header_no_parameters ::= function_call_header;
     function_call_header_with_parameters ::= function_call_header(h) assignment_expression(ae) {
-        if let Expression::Compose{ty, components} = extra.get_context().expressions.get_mut(h) {
+        if let Expression::Compose{ty, components} = extra.context.expressions.get_mut(h) {
             components.push(ae.1);
         }
         //TODO: Call
         h
     }
     function_call_header_with_parameters ::= function_call_header_with_parameters(h) Comma assignment_expression(ae) {
-        if let Expression::Compose{ty, components} = extra.get_context().expressions.get_mut(h) {
+        if let Expression::Compose{ty, components} = extra.context.expressions.get_mut(h) {
             components.push(ae.1);
         }
         //TODO: Call
@@ -209,7 +209,7 @@ pomelo! {
     // Methods (.length), subroutine array calls, and identifiers are recognized through postfix_expression.
     function_identifier ::= type_specifier(t) {
         if let Some(ty) = t {
-            extra.get_context().expressions.append(Expression::Compose{
+            extra.context.expressions.append(Expression::Compose{
                 ty,
                 components: vec![],
             })
@@ -239,74 +239,74 @@ pomelo! {
     unary_operator ::= Tilde;
     multiplicative_expression ::= unary_expression;
     multiplicative_expression ::= multiplicative_expression(left) Star unary_expression(right) {
-        extra.get_context().expressions.append(Expression::Binary{op: BinaryOperator::Multiply, left, right})
+        extra.context.expressions.append(Expression::Binary{op: BinaryOperator::Multiply, left, right})
     }
     multiplicative_expression ::= multiplicative_expression(left) Slash unary_expression(right) {
-        extra.get_context().expressions.append(Expression::Binary{op: BinaryOperator::Divide, left, right})
+        extra.context.expressions.append(Expression::Binary{op: BinaryOperator::Divide, left, right})
     }
     multiplicative_expression ::= multiplicative_expression(left) Percent unary_expression(right) {
-        extra.get_context().expressions.append(Expression::Binary{op: BinaryOperator::Modulo, left, right})
+        extra.context.expressions.append(Expression::Binary{op: BinaryOperator::Modulo, left, right})
     }
     additive_expression ::= multiplicative_expression;
     additive_expression ::= additive_expression(left) Plus multiplicative_expression(right) {
-        extra.get_context().expressions.append(Expression::Binary{op: BinaryOperator::Add, left, right})
+        extra.context.expressions.append(Expression::Binary{op: BinaryOperator::Add, left, right})
     }
     additive_expression ::= additive_expression(left) Dash multiplicative_expression(right) {
-        extra.get_context().expressions.append(Expression::Binary{op: BinaryOperator::Subtract, left, right})
+        extra.context.expressions.append(Expression::Binary{op: BinaryOperator::Subtract, left, right})
     }
     shift_expression ::= additive_expression;
     shift_expression ::= shift_expression(left) LeftOp additive_expression(right) {
-        extra.get_context().expressions.append(Expression::Binary{op: BinaryOperator::ShiftLeftLogical, left, right})
+        extra.context.expressions.append(Expression::Binary{op: BinaryOperator::ShiftLeftLogical, left, right})
     }
     shift_expression ::= shift_expression(left) RightOp additive_expression(right) {
         //TODO: when to use ShiftRightArithmetic
-        extra.get_context().expressions.append(Expression::Binary{op: BinaryOperator::ShiftRightLogical, left, right})
+        extra.context.expressions.append(Expression::Binary{op: BinaryOperator::ShiftRightLogical, left, right})
     }
     relational_expression ::= shift_expression;
     relational_expression ::= relational_expression(left) LeftAngle shift_expression(right) {
-        extra.get_context().expressions.append(Expression::Binary{op: BinaryOperator::Less, left, right})
+        extra.context.expressions.append(Expression::Binary{op: BinaryOperator::Less, left, right})
     }
     relational_expression ::= relational_expression(left) RightAngle shift_expression(right) {
-        extra.get_context().expressions.append(Expression::Binary{op: BinaryOperator::Greater, left, right})
+        extra.context.expressions.append(Expression::Binary{op: BinaryOperator::Greater, left, right})
     }
     relational_expression ::= relational_expression(left) LeOp shift_expression(right) {
-        extra.get_context().expressions.append(Expression::Binary{op: BinaryOperator::LessEqual, left, right})
+        extra.context.expressions.append(Expression::Binary{op: BinaryOperator::LessEqual, left, right})
     }
     relational_expression ::= relational_expression(left) GeOp shift_expression(right) {
-        extra.get_context().expressions.append(Expression::Binary{op: BinaryOperator::GreaterEqual, left, right})
+        extra.context.expressions.append(Expression::Binary{op: BinaryOperator::GreaterEqual, left, right})
     }
     equality_expression ::= relational_expression;
     equality_expression ::= equality_expression(left) EqOp relational_expression(right) {
-        extra.get_context().expressions.append(Expression::Binary{op: BinaryOperator::Equal, left, right})
+        extra.context.expressions.append(Expression::Binary{op: BinaryOperator::Equal, left, right})
     }
     equality_expression ::= equality_expression(left) NeOp relational_expression(right) {
-        extra.get_context().expressions.append(Expression::Binary{op: BinaryOperator::NotEqual, left, right})
+        extra.context.expressions.append(Expression::Binary{op: BinaryOperator::NotEqual, left, right})
     }
     and_expression ::= equality_expression;
     and_expression ::= and_expression(left) Ampersand equality_expression(right) {
-        extra.get_context().expressions.append(Expression::Binary{op: BinaryOperator::And, left, right})
+        extra.context.expressions.append(Expression::Binary{op: BinaryOperator::And, left, right})
     }
     exclusive_or_expression ::= and_expression;
     exclusive_or_expression ::= exclusive_or_expression(left) Caret and_expression(right) {
-        extra.get_context().expressions.append(Expression::Binary{op: BinaryOperator::ExclusiveOr, left, right})
+        extra.context.expressions.append(Expression::Binary{op: BinaryOperator::ExclusiveOr, left, right})
     }
     inclusive_or_expression ::= exclusive_or_expression;
     inclusive_or_expression ::= inclusive_or_expression(left) VerticalBar exclusive_or_expression(right) {
-        extra.get_context().expressions.append(Expression::Binary{op: BinaryOperator::InclusiveOr, left, right})
+        extra.context.expressions.append(Expression::Binary{op: BinaryOperator::InclusiveOr, left, right})
     }
     logical_and_expression ::= inclusive_or_expression;
     logical_and_expression ::= logical_and_expression(left) AndOp inclusive_or_expression(right) {
-        extra.get_context().expressions.append(Expression::Binary{op: BinaryOperator::LogicalAnd, left, right})
+        extra.context.expressions.append(Expression::Binary{op: BinaryOperator::LogicalAnd, left, right})
     }
     logical_xor_expression ::= logical_and_expression;
     logical_xor_expression ::= logical_xor_expression(left) XorOp logical_and_expression(right) {
         return Err(ErrorKind::NotImplemented("logical xor"))
         //TODO: naga doesn't have BinaryOperator::LogicalXor
-        // extra.get_context().expressions.append(Expression::Binary{op: BinaryOperator::LogicalXor, left, right})
+        // extra.context.expressions.append(Expression::Binary{op: BinaryOperator::LogicalXor, left, right})
     }
     logical_or_expression ::= logical_xor_expression;
     logical_or_expression ::= logical_or_expression(left) OrOp logical_xor_expression(right) {
-        extra.get_context().expressions.append(Expression::Binary{op: BinaryOperator::LogicalOr, left, right})
+        extra.context.expressions.append(Expression::Binary{op: BinaryOperator::LogicalOr, left, right})
     }
 
     conditional_expression ::= logical_or_expression;
@@ -427,10 +427,8 @@ pomelo! {
     }
 
     function_definition ::= function_prototype(mut f) compound_statement_no_new_scope(cs) {
-        let ctx = extra.take_context();
-        if let Some(ctx) = ctx {
-            f.expressions = ctx.expressions;
-        }
+        std::mem::swap(&mut f.expressions, &mut extra.context.expressions);
+        std::mem::swap(&mut f.local_variables, &mut extra.context.local_variables);
         f.body = cs;
         f
     };
