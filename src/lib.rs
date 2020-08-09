@@ -171,7 +171,7 @@ bitflags::bitflags! {
 }
 
 /// A data type declared in the module.
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Type {
     /// The name of the type, if any.
     pub name: Option<String>,
