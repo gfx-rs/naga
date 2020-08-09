@@ -157,6 +157,19 @@ fn main() {
 
             fs::write(&args[2], bytes.as_slice()).unwrap();
         }
+        #[cfg(feature = "glsl450-backend")]
+        "vert" | "frag" => {
+            use naga::back::glsl450;
+
+            let mut file = fs::OpenOptions::new()
+                .write(true)
+                .truncate(true)
+                .create(true)
+                .open(&args[2])
+                .unwrap();
+
+            glsl450::write(&module, &mut file).unwrap();
+        }
         other => {
             panic!("Unknown output extension: {}", other);
         }
