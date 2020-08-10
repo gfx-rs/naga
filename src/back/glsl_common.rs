@@ -1,8 +1,8 @@
 use crate::{
     proc::ResolveError, Arena, ArraySize, BinaryOperator, Constant, ConstantInner, DerivativeAxis,
     Expression, FastHashMap, Function, FunctionOrigin, GlobalVariable, Handle, ImageDimension,
-    ImageFlags, LocalVariable, Module, ScalarKind, Statement, StorageClass, Type, TypeInner,
-    UnaryOperator,
+    ImageFlags, IntrinsicFunction, LocalVariable, Module, ScalarKind, Statement, StorageClass,
+    Type, TypeInner, UnaryOperator,
 };
 use std::{
     fmt::{self, Error as FmtError, Write},
@@ -55,6 +55,7 @@ pub(crate) struct StatementBuilder<'a> {
     pub expressions: &'a Arena<Expression>,
     pub types: &'a mut Arena<Type>,
     pub locals: &'a Arena<LocalVariable>,
+    pub typifier: &'a mut crate::proc::Typifier,
 }
 
 impl Statement {
@@ -171,7 +172,7 @@ impl Expression {
                 builder.expressions[*index].write_glsl(module, builder)?
             ),
             Expression::AccessIndex { base, index } => {
-                let handle = crate::proc::Typifier::new().resolve(
+                let handle = builder.typifier.resolve(
                     *base,
                     builder.expressions,
                     builder.types,
@@ -197,7 +198,7 @@ impl Expression {
                     _ => {
                         return Err(Error::Custom(format!(
                             "Cannot index {}",
-                            handle.write_glsl(builder.types, builder.structs)?
+                            write_type(handle, builder.types, builder.structs)?
                         )))
                     }
                 }
@@ -207,7 +208,7 @@ impl Expression {
             }
             Expression::Compose { ty, components } => format!(
                 "{}({})",
-                match module.types[*ty].inner {
+                match builder.types[*ty].inner {
                     TypeInner::Scalar { kind, width } => String::from(match kind {
                         ScalarKind::Sint => "int",
                         ScalarKind::Uint => "uint",
@@ -264,12 +265,12 @@ impl Expression {
                         columns as u8,
                         rows as u8,
                     ),
-                    TypeInner::Array { .. } => ty.write_glsl(builder.types, builder.structs)?,
+                    TypeInner::Array { .. } => write_type(*ty, builder.types, builder.structs)?,
                     TypeInner::Struct { .. } => builder.structs.get(ty).unwrap().clone().0,
                     _ =>
                         return Err(Error::Custom(format!(
                             "Cannot compose type {}",
-                            ty.write_glsl(builder.types, builder.structs)?
+                            write_type(*ty, builder.types, builder.structs)?
                         ))),
                 },
                 components
@@ -283,14 +284,16 @@ impl Expression {
             Expression::LocalVariable(handle) => {
                 builder.locals_lookup.get(&handle).unwrap().clone()
             }
-            Expression::Load { pointer } => todo!(),
+            Expression::Load { pointer } => {
+                builder.expressions[*pointer].write_glsl(module, builder)?
+            }
             Expression::ImageSample {
                 image,
                 sampler,
                 coordinate,
                 depth_ref,
             } => {
-                let image_ty = crate::proc::Typifier::new().resolve(
+                let image_ty = builder.typifier.resolve(
                     *image,
                     builder.expressions,
                     builder.types,
@@ -299,7 +302,7 @@ impl Expression {
                     builder.locals,
                     &module.functions,
                 )?;
-                let sampler_ty = crate::proc::Typifier::new().resolve(
+                let sampler_ty = builder.typifier.resolve(
                     *sampler,
                     builder.expressions,
                     builder.types,
@@ -308,7 +311,7 @@ impl Expression {
                     builder.locals,
                     &module.functions,
                 )?;
-                let coordinate_ty = crate::proc::Typifier::new().resolve(
+                let coordinate_ty = builder.typifier.resolve(
                     *coordinate,
                     builder.expressions,
                     builder.types,
@@ -329,7 +332,7 @@ impl Expression {
                         _ => {
                             return Err(Error::Custom(format!(
                                 "Cannot build image of {}",
-                                image_ty.write_glsl(builder.types, builder.structs)?
+                                write_type(image_ty, builder.types, builder.structs)?
                             )))
                         }
                     },
@@ -339,7 +342,7 @@ impl Expression {
                     _ => {
                         return Err(Error::Custom(format!(
                             "Cannot sample {}",
-                            image_ty.write_glsl(builder.types, builder.structs)?
+                            write_type(image_ty, builder.types, builder.structs)?
                         )))
                     }
                 };
@@ -349,7 +352,7 @@ impl Expression {
                     _ => {
                         return Err(Error::Custom(format!(
                             "Cannot have a sampler of {}",
-                            sampler_ty.write_glsl(builder.types, builder.structs)?
+                            write_type(sampler_ty, builder.types, builder.structs)?
                         )))
                     }
                 };
@@ -359,7 +362,7 @@ impl Expression {
                     _ => {
                         return Err(Error::Custom(format!(
                             "Cannot sample with coordinates of type {}",
-                            sampler_ty.write_glsl(builder.types, builder.structs)?
+                            write_type(coordinate_ty, builder.types, builder.structs)?
                         )))
                     }
                 };
@@ -431,7 +434,18 @@ impl Expression {
                 },
                 builder.expressions[*right].write_glsl(module, builder)?
             ),
-            Expression::Intrinsic { fun, argument } => todo!(),
+            Expression::Intrinsic { fun, argument } => format!(
+                "{:?}({})",
+                match fun {
+                    IntrinsicFunction::IsFinite => "!isinf",
+                    IntrinsicFunction::IsInf => "isinf",
+                    IntrinsicFunction::IsNan => "isnan",
+                    IntrinsicFunction::IsNormal => "!isnan",
+                    IntrinsicFunction::All => "all",
+                    IntrinsicFunction::Any => "any",
+                },
+                builder.expressions[*argument].write_glsl(module, builder)?
+            ),
             Expression::DotProduct(left, right) => format!(
                 "dot({},{})",
                 builder.expressions[*left].write_glsl(module, builder)?,
@@ -447,7 +461,7 @@ impl Expression {
                 match axis {
                     DerivativeAxis::X => "dFdx",
                     DerivativeAxis::Y => "dFdy",
-                    _ => todo!(),
+                    DerivativeAxis::Width => "fwidth",
                 },
                 builder.expressions[*expr].write_glsl(module, builder)?
             ),
@@ -473,24 +487,23 @@ impl Constant {
         module: &Module,
         builder: &StatementBuilder<'_>,
     ) -> Result<String, Error> {
-        Ok(match &self.inner {
+        Ok(match self.inner {
             ConstantInner::Sint(int) => int.to_string(),
             ConstantInner::Uint(int) => int.to_string(),
-            ConstantInner::Float(float) => float.to_string(),
+            ConstantInner::Float(float) => format!("{:?}", float),
             ConstantInner::Bool(boolean) => boolean.to_string(),
-            ConstantInner::Composite(components) => format!(
+            ConstantInner::Composite(ref components) => format!(
                 "{}({})",
-                match module.types[self.ty].inner {
+                match builder.types[self.ty].inner {
                     TypeInner::Vector { size, .. } => format!("vec{}", size as u8,),
                     TypeInner::Matrix { columns, rows, .. } =>
                         format!("mat{}x{}", columns as u8, rows as u8,),
                     TypeInner::Struct { .. } => builder.structs.get(&self.ty).unwrap().0.clone(),
-                    TypeInner::Array { .. } =>
-                        self.ty.write_glsl(builder.types, builder.structs)?,
+                    TypeInner::Array { .. } => write_type(self.ty, builder.types, builder.structs)?,
                     _ =>
                         return Err(Error::Custom(format!(
                             "Cannot build constant of type {}",
-                            self.ty.write_glsl(builder.types, builder.structs)?
+                            write_type(self.ty, builder.types, builder.structs)?
                         ))),
                 },
                 components
@@ -503,107 +516,105 @@ impl Constant {
     }
 }
 
-impl Handle<Type> {
-    pub(crate) fn write_glsl<'a>(
-        &self,
-        types: &'a Arena<Type>,
-        structs: &'a FastHashMap<Handle<Type>, (String, Vec<String>)>,
-    ) -> Result<String, Error> {
-        Ok(match &types[*self].inner {
-            TypeInner::Scalar { kind, width } => match kind {
-                ScalarKind::Sint => String::from("int"),
-                ScalarKind::Uint => String::from("uint"),
+pub(crate) fn write_type<'a>(
+    ty: Handle<Type>,
+    types: &'a Arena<Type>,
+    structs: &'a FastHashMap<Handle<Type>, (String, Vec<String>)>,
+) -> Result<String, Error> {
+    Ok(match types[ty].inner {
+        TypeInner::Scalar { kind, width } => match kind {
+            ScalarKind::Sint => String::from("int"),
+            ScalarKind::Uint => String::from("uint"),
+            ScalarKind::Float => match width {
+                4 => String::from("float"),
+                8 => String::from("double"),
+                _ => {
+                    return Err(Error::Custom(format!(
+                        "Cannot build float of width {}",
+                        width
+                    )))
+                }
+            },
+            ScalarKind::Bool => String::from("bool"),
+        },
+        TypeInner::Vector { size, kind, width } => format!(
+            "{}vec{}",
+            match kind {
+                ScalarKind::Sint => "i",
+                ScalarKind::Uint => "u",
                 ScalarKind::Float => match width {
-                    4 => String::from("float"),
-                    8 => String::from("double"),
-                    _ => {
+                    4 => "",
+                    8 => "d",
+                    _ =>
                         return Err(Error::Custom(format!(
                             "Cannot build float of width {}",
                             width
-                        )))
-                    }
-                },
-                ScalarKind::Bool => String::from("bool"),
-            },
-            TypeInner::Vector { size, kind, width } => format!(
-                "{}vec{}",
-                match kind {
-                    ScalarKind::Sint => "i",
-                    ScalarKind::Uint => "u",
-                    ScalarKind::Float => match width {
-                        4 => "",
-                        8 => "d",
-                        _ =>
-                            return Err(Error::Custom(format!(
-                                "Cannot build float of width {}",
-                                width
-                            ))),
-                    },
-                    ScalarKind::Bool => "b",
-                },
-                *size as u8
-            ),
-            TypeInner::Matrix {
-                columns,
-                rows,
-                kind,
-                width,
-            } => format!(
-                "{}mat{}x{}",
-                match kind {
-                    ScalarKind::Sint => "i",
-                    ScalarKind::Uint => "u",
-                    ScalarKind::Float => match width {
-                        4 => "",
-                        8 => "d",
-                        _ =>
-                            return Err(Error::Custom(format!(
-                                "Cannot build float of width {}",
-                                width
-                            ))),
-                    },
-                    ScalarKind::Bool => "b",
-                },
-                *columns as u8,
-                *rows as u8
-            ),
-            TypeInner::Pointer { base, class } => todo!(),
-            TypeInner::Array { base, size, stride } => format!(
-                "{}[{}]",
-                base.write_glsl(types, structs)?,
-                size.write_glsl()
-            ),
-            TypeInner::Struct { .. } => structs.get(self).unwrap().0.clone(),
-            TypeInner::Image { base, dim, flags } => format!(
-                "{}texture{}{}",
-                match types[*base].inner {
-                    TypeInner::Scalar { kind, .. } => match kind {
-                        ScalarKind::Sint => "i",
-                        ScalarKind::Uint => "u",
-                        ScalarKind::Float => "",
-                        _ => return Err(Error::Custom(format!("Cannot build image of booleans",))),
-                    },
-                    _ =>
-                        return Err(Error::Custom(format!(
-                            "Cannot build image of type {}",
-                            base.write_glsl(types, structs)?
                         ))),
                 },
-                dim.write_glsl(),
-                flags.write_glsl()
-            ),
-            TypeInner::DepthImage { dim, arrayed } => format!(
-                "texture{}{}",
-                dim.write_glsl(),
-                if *arrayed { "Array" } else { "" }
-            ),
-            TypeInner::Sampler { comparison } => String::from(if *comparison {
-                "sampler"
-            } else {
-                "samplerShadow"
-            }),
-        })
-    }
+                ScalarKind::Bool => "b",
+            },
+            size as u8
+        ),
+        TypeInner::Matrix {
+            columns,
+            rows,
+            kind,
+            width,
+        } => format!(
+            "{}mat{}x{}",
+            match kind {
+                ScalarKind::Sint => "i",
+                ScalarKind::Uint => "u",
+                ScalarKind::Float => match width {
+                    4 => "",
+                    8 => "d",
+                    _ =>
+                        return Err(Error::Custom(format!(
+                            "Cannot build float of width {}",
+                            width
+                        ))),
+                },
+                ScalarKind::Bool => "b",
+            },
+            columns as u8,
+            rows as u8
+        ),
+        TypeInner::Pointer { base, .. } => write_type(base, types, structs)?,
+        TypeInner::Array { base, size, .. } => format!(
+            "{}[{}]",
+            write_type(base, types, structs)?,
+            size.write_glsl()
+        ),
+        TypeInner::Struct { .. } => structs.get(&ty).unwrap().0.clone(),
+        TypeInner::Image { base, dim, flags } => format!(
+            "{}texture{}{}",
+            match types[base].inner {
+                TypeInner::Scalar { kind, .. } => match kind {
+                    ScalarKind::Sint => "i",
+                    ScalarKind::Uint => "u",
+                    ScalarKind::Float => "",
+                    _ => return Err(Error::Custom(format!("Cannot build image of booleans",))),
+                },
+                _ =>
+                    return Err(Error::Custom(format!(
+                        "Cannot build image of type {}",
+                        write_type(base, types, structs)?
+                    ))),
+            },
+            dim.write_glsl(),
+            flags.write_glsl()
+        ),
+        TypeInner::DepthImage { dim, arrayed } => format!(
+            "texture{}{}",
+            dim.write_glsl(),
+            if arrayed { "Array" } else { "" }
+        ),
+        TypeInner::Sampler { comparison } => String::from(if comparison {
+            "sampler"
+        } else {
+            "samplerShadow"
+        }),
+    })
 }
 
 impl StorageClass {
@@ -619,7 +630,7 @@ impl StorageClass {
                     "{}",
                     match self.inner {
                         StorageClass::Constant => "const ",
-                        StorageClass::Function => todo!(),
+                        StorageClass::Function => "",
                         StorageClass::Input => "in ",
                         StorageClass::Output => "out ",
                         StorageClass::Private => "",

@@ -1,9 +1,9 @@
 use crate::{
-    back::glsl_common::{Error, StatementBuilder},
+    back::glsl_common::{write_type, Error, StatementBuilder},
     Binding, BuiltIn, FastHashMap, Module, TypeInner,
 };
 use std::{
-    fmt::{self, Write as FmtWrite},
+    fmt::{self},
     io::Write,
 };
 
@@ -30,8 +30,8 @@ pub fn write(module: &Module, out: &mut impl Write) -> Result<(), Error> {
 
     // Do a first pass to collect names
     for (handle, ty) in module.types.iter() {
-        match &ty.inner {
-            TypeInner::Struct { members } => {
+        match ty.inner {
+            TypeInner::Struct { ref members } => {
                 let name = namer(ty.name.as_ref());
                 let mut idxs = Vec::new();
 
@@ -48,8 +48,8 @@ pub fn write(module: &Module, out: &mut impl Write) -> Result<(), Error> {
     // Do a second pass to build the structs
     // TODO: glsl is order dependent so we need to build structs in order
     for (handle, ty) in module.types.iter() {
-        match &ty.inner {
-            TypeInner::Struct { members } => {
+        match ty.inner {
+            TypeInner::Struct { ref members } => {
                 let (name, idxs) = structs.get(&handle).unwrap();
 
                 writeln!(out, "struct {} {{", name)?;
@@ -57,7 +57,7 @@ pub fn write(module: &Module, out: &mut impl Write) -> Result<(), Error> {
                     writeln!(
                         out,
                         "   {} {}",
-                        member.ty.write_glsl(&module.types, &structs)?,
+                        write_type(member.ty, &module.types, &structs)?,
                         name
                     )?;
                 }
@@ -71,39 +71,25 @@ pub fn write(module: &Module, out: &mut impl Write) -> Result<(), Error> {
 
     for (handle, global) in module.global_variables.iter() {
         if let Some(Binding::BuiltIn(built_in)) = global.binding {
-            match built_in {
-                BuiltIn::Position => globals_lookup.insert(handle, String::from("gl_position")),
-                BuiltIn::GlobalInvocationId => {
-                    globals_lookup.insert(handle, String::from("gl_GlobalInvocationID"))
-                }
-                BuiltIn::BaseInstance => todo!(),
-                BuiltIn::BaseVertex => todo!(),
-                BuiltIn::ClipDistance => {
-                    globals_lookup.insert(handle, String::from("gl_ClipDistance"))
-                }
-                BuiltIn::InstanceIndex => {
-                    globals_lookup.insert(handle, String::from("gl_InstanceIndex"))
-                }
-                BuiltIn::VertexIndex => {
-                    globals_lookup.insert(handle, String::from("gl_VertexIndex"))
-                }
-                BuiltIn::PointSize => globals_lookup.insert(handle, String::from("gl_PointSize")),
-                BuiltIn::FragCoord => globals_lookup.insert(handle, String::from("gl_FragCoord")),
-                BuiltIn::FrontFacing => {
-                    globals_lookup.insert(handle, String::from("gl_FrontFacing"))
-                }
-                BuiltIn::SampleIndex => globals_lookup.insert(handle, String::from("gl_SampleID")),
-                BuiltIn::FragDepth => globals_lookup.insert(handle, String::from("gl_FragDepth")),
-                BuiltIn::LocalInvocationId => {
-                    globals_lookup.insert(handle, String::from("gl_LocalInvocationID"))
-                }
-                BuiltIn::LocalInvocationIndex => {
-                    globals_lookup.insert(handle, String::from("gl_LocalInvocationIndex"))
-                }
-                BuiltIn::WorkGroupId => {
-                    globals_lookup.insert(handle, String::from("gl_WorkGroupID"))
-                }
+            let semantic = match built_in {
+                BuiltIn::Position => "gl_position",
+                BuiltIn::GlobalInvocationId => "gl_GlobalInvocationID",
+                BuiltIn::BaseInstance => "gl_BaseInstance",
+                BuiltIn::BaseVertex => "gl_BaseVertex",
+                BuiltIn::ClipDistance => "gl_ClipDistance",
+                BuiltIn::InstanceIndex => "gl_InstanceIndex",
+                BuiltIn::VertexIndex => "gl_VertexIndex",
+                BuiltIn::PointSize => "gl_PointSize",
+                BuiltIn::FragCoord => "gl_FragCoord",
+                BuiltIn::FrontFacing => "gl_FrontFacing",
+                BuiltIn::SampleIndex => "gl_SampleID",
+                BuiltIn::FragDepth => "gl_FragDepth",
+                BuiltIn::LocalInvocationId => "gl_LocalInvocationID",
+                BuiltIn::LocalInvocationIndex => "gl_LocalInvocationIndex",
+                BuiltIn::WorkGroupId => "gl_WorkGroupID",
             };
+
+            globals_lookup.insert(handle, String::from(semantic));
             continue;
         }
 
@@ -117,7 +103,7 @@ pub fn write(module: &Module, out: &mut impl Write) -> Result<(), Error> {
             out,
             "{}{} {};",
             global.class.write_glsl(),
-            global.ty.write_glsl(&module.types, &structs)?,
+            write_type(global.ty, &module.types, &structs)?,
             name
         )?;
 
@@ -132,6 +118,7 @@ pub fn write(module: &Module, out: &mut impl Write) -> Result<(), Error> {
     }
 
     let mut types = module.types.clone();
+    let mut typifier = crate::proc::Typifier::new();
 
     // TODO: glsl is order dependent so we need to build functions in order
     for (handle, func) in module.functions.iter() {
@@ -140,12 +127,14 @@ pub fn write(module: &Module, out: &mut impl Write) -> Result<(), Error> {
         writeln!(
             out,
             "{} {}({}) {{",
-            func.return_type.map_or(Ok(String::from("void")), |ty| ty
-                .write_glsl(&module.types, &structs))?,
+            func.return_type
+                .map_or(Ok(String::from("void")), |ty| write_type(
+                    ty, &types, &structs
+                ))?,
             name,
             func.parameter_types
                 .iter()
-                .map(|ty| ty.write_glsl(&module.types, &structs))
+                .map(|ty| write_type(*ty, &types, &structs))
                 .collect::<Result<Vec<_>, _>>()?
                 .join(","),
         )?;
@@ -168,6 +157,7 @@ pub fn write(module: &Module, out: &mut impl Write) -> Result<(), Error> {
             expressions: &func.expressions,
             types: &mut types,
             locals: &func.local_variables,
+            typifier: &mut typifier,
         };
 
         for sta in func.body.iter() {
