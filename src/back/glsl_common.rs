@@ -203,7 +203,7 @@ impl Expression {
                 }
             }
             Expression::Constant(constant) => {
-                module.constants[*constant].write_glsl(module).to_string()
+                module.constants[*constant].write_glsl(module, builder)?
             }
             Expression::Compose { ty, components } => format!(
                 "{}({})",
@@ -289,7 +289,114 @@ impl Expression {
                 sampler,
                 coordinate,
                 depth_ref,
-            } => todo!(),
+            } => {
+                let image_ty = crate::proc::Typifier::new().resolve(
+                    *image,
+                    builder.expressions,
+                    builder.types,
+                    &module.constants,
+                    &module.global_variables,
+                    builder.locals,
+                    &module.functions,
+                )?;
+                let sampler_ty = crate::proc::Typifier::new().resolve(
+                    *sampler,
+                    builder.expressions,
+                    builder.types,
+                    &module.constants,
+                    &module.global_variables,
+                    builder.locals,
+                    &module.functions,
+                )?;
+                let coordinate_ty = crate::proc::Typifier::new().resolve(
+                    *coordinate,
+                    builder.expressions,
+                    builder.types,
+                    &module.constants,
+                    &module.global_variables,
+                    builder.locals,
+                    &module.functions,
+                )?;
+
+                let (kind, dim, arrayed, ms) = match builder.types[image_ty].inner {
+                    TypeInner::Image { base, dim, flags } => match builder.types[base].inner {
+                        TypeInner::Scalar { kind, .. } => (
+                            kind,
+                            dim,
+                            flags.contains(ImageFlags::ARRAYED),
+                            flags.contains(ImageFlags::MULTISAMPLED),
+                        ),
+                        _ => {
+                            return Err(Error::Custom(format!(
+                                "Cannot build image of {}",
+                                image_ty.write_glsl(builder.types, builder.structs)?
+                            )))
+                        }
+                    },
+                    TypeInner::DepthImage { dim, arrayed } => {
+                        (ScalarKind::Float, dim, arrayed, false)
+                    }
+                    _ => {
+                        return Err(Error::Custom(format!(
+                            "Cannot sample {}",
+                            image_ty.write_glsl(builder.types, builder.structs)?
+                        )))
+                    }
+                };
+
+                let shadow = match builder.types[sampler_ty].inner {
+                    TypeInner::Sampler { comparison } => comparison,
+                    _ => {
+                        return Err(Error::Custom(format!(
+                            "Cannot have a sampler of {}",
+                            sampler_ty.write_glsl(builder.types, builder.structs)?
+                        )))
+                    }
+                };
+
+                let size = match builder.types[coordinate_ty].inner {
+                    TypeInner::Vector { size, .. } => size,
+                    _ => {
+                        return Err(Error::Custom(format!(
+                            "Cannot sample with coordinates of type {}",
+                            sampler_ty.write_glsl(builder.types, builder.structs)?
+                        )))
+                    }
+                };
+
+                let sampler_constructor = format!(
+                    "{}sampler{}{}{}{}({},{})",
+                    match kind {
+                        ScalarKind::Sint => "i",
+                        ScalarKind::Uint => "u",
+                        ScalarKind::Float => "",
+                        _ => return Err(Error::Custom(format!("Cannot build image of bools",))),
+                    },
+                    dim.write_glsl(),
+                    if ms { "MS" } else { "" },
+                    if arrayed { "Array" } else { "" },
+                    if shadow { "Shadow" } else { "" },
+                    builder.expressions[*image].write_glsl(module, builder)?,
+                    builder.expressions[*sampler].write_glsl(module, builder)?
+                );
+
+                let coordinate = if let Some(depth_ref) = depth_ref {
+                    format!(
+                        "vec{}({},{})",
+                        size as u8 + 1,
+                        builder.expressions[*coordinate].write_glsl(module, builder)?,
+                        builder.expressions[*depth_ref].write_glsl(module, builder)?
+                    )
+                } else {
+                    builder.expressions[*coordinate].write_glsl(module, builder)?
+                };
+
+                if !ms {
+                    format!("texture({},{})", sampler_constructor, coordinate)
+                } else {
+                    todo!()
+                }
+            }
             Expression::Unary { op, expr } => format!(
                 "({} {})",
                 match op {
@@ -360,60 +467,39 @@ impl Expression {
     }
 }
 
-pub(crate) struct ConstantWriter<'a> {
-    inner: &'a Constant,
-    module: &'a Module,
-}
-
 impl Constant {
-    pub(crate) fn write_glsl<'a>(&'a self, module: &'a Module) -> ConstantWriter<'a> {
-        ConstantWriter {
-            inner: self,
-            module,
-        }
-    }
-}
-
-impl<'a> fmt::Display for ConstantWriter<'a> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match &self.inner.inner {
-            ConstantInner::Sint(int) => write!(f, "{}", int),
-            ConstantInner::Uint(int) => write!(f, "{}", int),
-            ConstantInner::Float(float) => write!(f, "{}", float),
-            ConstantInner::Bool(boolean) => write!(f, "{}", boolean),
-            ConstantInner::Composite(components) => match self.module.types[self.inner.ty].inner {
-                _ => todo!(),
-            },
-        }
-    }
-}
-
-pub(crate) struct StorageClassWriter<'a> {
-    inner: &'a StorageClass,
-}
-
-impl StorageClass {
-    pub(crate) fn write_glsl<'a>(&'a self) -> StorageClassWriter<'a> {
-        StorageClassWriter { inner: self }
-    }
-}
-
-impl<'a> fmt::Display for StorageClassWriter<'a> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self.inner {
-                StorageClass::Constant => "const ",
-                StorageClass::Function => todo!(),
-                StorageClass::Input => "in ",
-                StorageClass::Output => "out ",
-                StorageClass::Private => "",
-                StorageClass::StorageBuffer => "buffer ",
-                StorageClass::Uniform => "uniform ",
-                StorageClass::WorkGroup => "shared ",
-            }
-        )
+    pub(crate) fn write_glsl(
+        &self,
+        module: &Module,
+        builder: &StatementBuilder<'_>,
+    ) -> Result<String, Error> {
+        Ok(match &self.inner {
+            ConstantInner::Sint(int) => int.to_string(),
+            ConstantInner::Uint(int) => int.to_string(),
+            ConstantInner::Float(float) => float.to_string(),
+            ConstantInner::Bool(boolean) => boolean.to_string(),
+            ConstantInner::Composite(components) => format!(
+                "{}({})",
+                match module.types[self.ty].inner {
+                    TypeInner::Vector { size, .. } => format!("vec{}", size as u8,),
+                    TypeInner::Matrix { columns, rows, .. } =>
+                        format!("mat{}x{}", columns as u8, rows as u8,),
+                    TypeInner::Struct { .. } => builder.structs.get(&self.ty).unwrap().0.clone(),
+                    TypeInner::Array { .. } =>
+                        self.ty.write_glsl(builder.types, builder.structs)?,
+                    _ =>
+                        return Err(Error::Custom(format!(
+                            "Cannot build constant of type {}",
+                            self.ty.write_glsl(builder.types, builder.structs)?
+                        ))),
+                },
+                components
+                    .iter()
+                    .map(|component| module.constants[*component].write_glsl(module, builder))
+                    .collect::<Result<Vec<_>, _>>()?
+                    .join(","),
+            ),
+        })
     }
 }
 
@@ -489,7 +575,7 @@ impl Handle<Type> {
             ),
             TypeInner::Struct { .. } => structs.get(self).unwrap().0.clone(),
             TypeInner::Image { base, dim, flags } => format!(
-                "{}image{}{}",
+                "{}texture{}{}",
                 match types[*base].inner {
                     TypeInner::Scalar { kind, .. } => match kind {
                         ScalarKind::Sint => "i",
@@ -507,7 +593,7 @@ impl Handle<Type> {
                 flags.write_glsl()
             ),
             TypeInner::DepthImage { dim, arrayed } => format!(
-                "image{}{}",
+                "texture{}{}",
                 dim.write_glsl(),
                 if *arrayed { "Array" } else { "" }
             ),
@@ -520,70 +606,99 @@ impl Handle<Type> {
     }
 }
 
-pub(crate) struct ArraySizeWriter<'a> {
-    inner: &'a ArraySize,
+impl StorageClass {
+    pub(crate) fn write_glsl<'a>(&'a self) -> impl fmt::Display + 'a {
+        struct StorageClassWriter<'a> {
+            inner: &'a StorageClass,
+        }
+
+        impl<'a> fmt::Display for StorageClassWriter<'a> {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                write!(
+                    f,
+                    "{}",
+                    match self.inner {
+                        StorageClass::Constant => "const ",
+                        StorageClass::Function => todo!(),
+                        StorageClass::Input => "in ",
+                        StorageClass::Output => "out ",
+                        StorageClass::Private => "",
+                        StorageClass::StorageBuffer => "buffer ",
+                        StorageClass::Uniform => "uniform ",
+                        StorageClass::WorkGroup => "shared ",
+                    }
+                )
+            }
+        }
+
+        StorageClassWriter { inner: self }
+    }
 }
 
 impl ArraySize {
-    pub(crate) fn write_glsl<'a>(&'a self) -> ArraySizeWriter<'a> {
+    pub(crate) fn write_glsl<'a>(&'a self) -> impl fmt::Display + 'a {
+        struct ArraySizeWriter<'a> {
+            inner: &'a ArraySize,
+        }
+
+        impl<'a> fmt::Display for ArraySizeWriter<'a> {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                match self.inner {
+                    ArraySize::Static(size) => write!(f, "{}", size),
+                    ArraySize::Dynamic => Ok(()),
+                }
+            }
+        }
+
         ArraySizeWriter { inner: self }
     }
 }
 
-impl<'a> fmt::Display for ArraySizeWriter<'a> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self.inner {
-            ArraySize::Static(size) => write!(f, "{}", size),
-            ArraySize::Dynamic => Ok(()),
-        }
-    }
-}
-
-pub(crate) struct DimWriter<'a> {
-    inner: &'a ImageDimension,
-}
-
 impl ImageDimension {
-    pub(crate) fn write_glsl<'a>(&'a self) -> DimWriter<'a> {
+    pub(crate) fn write_glsl<'a>(&'a self) -> impl fmt::Display + 'a {
+        struct DimWriter<'a> {
+            inner: &'a ImageDimension,
+        }
+
+        impl<'a> fmt::Display for DimWriter<'a> {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                write!(
+                    f,
+                    "{}",
+                    match self.inner {
+                        ImageDimension::D1 => "1D",
+                        ImageDimension::D2 => "2D",
+                        ImageDimension::D3 => "3D",
+                        ImageDimension::Cube => "Cube",
+                    }
+                )
+            }
+        }
+
         DimWriter { inner: self }
     }
 }
 
-impl<'a> fmt::Display for DimWriter<'a> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self.inner {
-                ImageDimension::D1 => "1D",
-                ImageDimension::D2 => "2D",
-                ImageDimension::D3 => "3D",
-                ImageDimension::Cube => "Cube",
-            }
-        )
-    }
-}
-
-pub(crate) struct ImageFlagsWriter<'a> {
-    inner: &'a ImageFlags,
-}
-
 impl ImageFlags {
-    pub(crate) fn write_glsl<'a>(&'a self) -> ImageFlagsWriter<'a> {
+    pub(crate) fn write_glsl<'a>(&'a self) -> impl fmt::Display + 'a {
+        struct ImageFlagsWriter<'a> {
+            inner: &'a ImageFlags,
+        }
+
+        impl<'a> fmt::Display for ImageFlagsWriter<'a> {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                if self.inner.contains(ImageFlags::MULTISAMPLED) {
+                    write!(f, "MS")?;
+                }
+
+                if self.inner.contains(ImageFlags::ARRAYED) {
+                    write!(f, "Array")?;
+                }
+
+                Ok(())
+            }
+        }
+
         ImageFlagsWriter { inner: self }
-    }
-}
-
-impl<'a> fmt::Display for ImageFlagsWriter<'a> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if self.inner.contains(ImageFlags::MULTISAMPLED) {
-            write!(f, "MS")?;
-        }
-
-        if self.inner.contains(ImageFlags::ARRAYED) {
-            write!(f, "Array")?;
-        }
-
-        Ok(())
     }
 }

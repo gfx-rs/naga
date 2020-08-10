@@ -82,9 +82,11 @@ pub fn write(module: &Module, out: &mut impl Write) -> Result<(), Error> {
                     globals_lookup.insert(handle, String::from("gl_ClipDistance"))
                 }
                 BuiltIn::InstanceIndex => {
-                    globals_lookup.insert(handle, String::from("gl_InstanceID"))
+                    globals_lookup.insert(handle, String::from("gl_InstanceIndex"))
                 }
-                BuiltIn::VertexIndex => globals_lookup.insert(handle, String::from("gl_VertexID")),
+                BuiltIn::VertexIndex => {
+                    globals_lookup.insert(handle, String::from("gl_VertexIndex"))
+                }
                 BuiltIn::PointSize => globals_lookup.insert(handle, String::from("gl_PointSize")),
                 BuiltIn::FragCoord => globals_lookup.insert(handle, String::from("gl_FragCoord")),
                 BuiltIn::FrontFacing => {
