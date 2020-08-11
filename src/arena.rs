@@ -77,7 +77,7 @@ impl<T> Handle<T> {
 /// Adding new items to the arena produces a strongly-typed [`Handle`].
 /// The arena can be indexed using the given handle to obtain
 /// a reference to the stored item.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Arena<T> {
     /// Values of this arena.
     data: Vec<T>,
