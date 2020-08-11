@@ -1,8 +1,7 @@
 use crate::{
-    Arena, ArraySize, BinaryOperator, Binding, BuiltIn, Constant, ConstantInner, DerivativeAxis,
-    Expression, FastHashMap, Function, FunctionOrigin, GlobalVariable, Handle, ImageFlags,
-    IntrinsicFunction, LocalVariable, Module, ScalarKind, Statement, StorageClass, Type, TypeInner,
-    UnaryOperator,
+    Arena, ArraySize, BinaryOperator, BuiltIn, Constant, ConstantInner, DerivativeAxis, Expression,
+    FastHashMap, Function, FunctionOrigin, GlobalVariable, Handle, ImageFlags, IntrinsicFunction,
+    LocalVariable, Module, ScalarKind, Statement, StorageClass, Type, TypeInner, UnaryOperator,
 };
 use std::{
     borrow::Cow,
@@ -97,7 +96,7 @@ pub fn write(module: &Module, out: &mut impl Write) -> Result<(), Error> {
     let mut globals_lookup = FastHashMap::default();
 
     for (handle, global) in module.global_variables.iter() {
-        if let Some(Binding::BuiltIn(built_in)) = global.binding {
+        if let Some(crate::Binding::BuiltIn(built_in)) = global.binding {
             let semantic = match built_in {
                 BuiltIn::Position => "gl_position",
                 BuiltIn::GlobalInvocationId => "gl_GlobalInvocationID",
@@ -121,7 +120,7 @@ pub fn write(module: &Module, out: &mut impl Write) -> Result<(), Error> {
         }
 
         if let Some(ref binding) = global.binding {
-            write!(out, "layout({}) ", binding.writer())?;
+            write!(out, "layout({}) ", Binding(binding.clone()))?;
         }
 
         let name = namer(global.name.as_ref());
@@ -196,7 +195,7 @@ pub fn write(module: &Module, out: &mut impl Write) -> Result<(), Error> {
         };
 
         for sta in func.body.iter() {
-            writeln!(out, "{}", sta.write_glsl(module, &mut builder)?)?;
+            writeln!(out, "{}", write_statement(sta, module, &mut builder)?)?;
         }
 
         writeln!(out, "}}")?;
@@ -205,22 +204,15 @@ pub fn write(module: &Module, out: &mut impl Write) -> Result<(), Error> {
     Ok(())
 }
 
-struct BindingWriter<'a> {
-    inner: &'a Binding,
-}
-
-impl Binding {
-    fn writer(&self) -> BindingWriter<'_> {
-        BindingWriter { inner: self }
-    }
-}
-
-impl<'a> fmt::Display for BindingWriter<'a> {
+struct Binding(crate::Binding);
+impl fmt::Display for Binding {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self.inner {
-            Binding::BuiltIn(_) => write!(f, ""), // Ignore because they are variables with a predefined name
-            Binding::Location(location) => write!(f, "location={}", location),
-            Binding::Descriptor { set, binding } => write!(f, "set={},binding={}", set, binding),
+        match self.0 {
+            crate::Binding::BuiltIn(_) => write!(f, ""), // Ignore because they are variables with a predefined name
+            crate::Binding::Location(location) => write!(f, "location={}", location),
+            crate::Binding::Descriptor { set, binding } => {
+                write!(f, "set={},binding={}", set, binding)
+            }
         }
     }
 }
@@ -235,552 +227,545 @@ struct StatementBuilder<'a> {
     pub locals: &'a Arena<LocalVariable>,
 }
 
-impl Statement {
-    fn write_glsl(
-        &self,
-        module: &Module,
-        builder: &mut StatementBuilder<'_>,
-    ) -> Result<String, Error> {
-        Ok(match self {
-            Statement::Empty => String::new(),
-            Statement::Block(block) => block
-                .iter()
-                .map(|sta| sta.write_glsl(module, builder))
-                .collect::<Result<Vec<_>, _>>()?
-                .join("\n"),
-            Statement::If {
-                condition,
-                accept,
-                reject,
-            } => {
-                let mut out = String::new();
+fn write_statement(
+    sta: &Statement,
+    module: &Module,
+    builder: &mut StatementBuilder<'_>,
+) -> Result<String, Error> {
+    Ok(match sta {
+        Statement::Empty => String::new(),
+        Statement::Block(block) => block
+            .iter()
+            .map(|sta| write_statement(sta, module, builder))
+            .collect::<Result<Vec<_>, _>>()?
+            .join("\n"),
+        Statement::If {
+            condition,
+            accept,
+            reject,
+        } => {
+            let mut out = String::new();
 
-                writeln!(
-                    &mut out,
-                    "if({}) {{",
-                    builder.expressions[*condition]
-                        .write_glsl(module, builder)?
-                        .0
-                )?;
-                for sta in accept {
-                    writeln!(&mut out, "{}", sta.write_glsl(module, builder)?)?;
-                }
-                writeln!(&mut out, "}} else {{")?;
-                for sta in reject {
-                    writeln!(&mut out, "{}", sta.write_glsl(module, builder)?)?;
-                }
-                write!(&mut out, "}}")?;
-
-                out
+            writeln!(
+                &mut out,
+                "if({}) {{",
+                write_expression(&builder.expressions[*condition], module, builder)?.0
+            )?;
+            for sta in accept {
+                writeln!(&mut out, "{}", write_statement(sta, module, builder)?)?;
             }
-            Statement::Switch {
-                selector,
-                cases,
-                default,
-            } => {
-                let mut out = String::new();
-
-                writeln!(
-                    &mut out,
-                    "switch({}) {{",
-                    builder.expressions[*selector]
-                        .write_glsl(module, builder)?
-                        .0
-                )?;
-
-                for (label, (block, fallthrough)) in cases {
-                    writeln!(&mut out, "   case {}:", label)?;
-
-                    for sta in block {
-                        writeln!(&mut out, "      {}", sta.write_glsl(module, builder)?)?;
-                    }
-
-                    if fallthrough.is_some() {
-                        writeln!(&mut out, "      break;")?;
-                    }
-                }
-
-                writeln!(&mut out, "   default:")?;
-
-                for sta in default {
-                    writeln!(&mut out, "      {}", sta.write_glsl(module, builder)?)?;
-                }
-
-                write!(&mut out, "}}")?;
-
-                out
+            writeln!(&mut out, "}} else {{")?;
+            for sta in reject {
+                writeln!(&mut out, "{}", write_statement(sta, module, builder)?)?;
             }
-            Statement::Loop { body, continuing } => {
-                let mut out = String::new();
+            write!(&mut out, "}}")?;
 
-                writeln!(&mut out, "while(true) {{",)?;
+            out
+        }
+        Statement::Switch {
+            selector,
+            cases,
+            default,
+        } => {
+            let mut out = String::new();
 
-                for sta in body.iter().chain(continuing.iter()) {
-                    writeln!(&mut out, "    {}", sta.write_glsl(module, builder)?)?;
+            writeln!(
+                &mut out,
+                "switch({}) {{",
+                write_expression(&builder.expressions[*selector], module, builder)?.0
+            )?;
+
+            for (label, (block, fallthrough)) in cases {
+                writeln!(&mut out, "   case {}:", label)?;
+
+                for sta in block {
+                    writeln!(&mut out, "      {}", write_statement(sta, module, builder)?)?;
                 }
 
-                write!(&mut out, "}}")?;
-
-                out
+                if fallthrough.is_some() {
+                    writeln!(&mut out, "      break;")?;
+                }
             }
-            Statement::Break => String::from("break;"),
-            Statement::Continue => String::from("continue;"),
-            Statement::Return { value } => format!(
-                "return  {};",
-                value.map_or::<Result<_, Error>, _>(Ok(String::from("")), |expr| Ok(builder
-                    .expressions[expr]
-                    .write_glsl(module, builder)?
-                    .0))?
-            ),
-            Statement::Kill => String::from("discard;"),
-            Statement::Store { pointer, value } => format!(
-                "{} = {};",
-                builder.expressions[*pointer].write_glsl(module, builder)?.0,
-                builder.expressions[*value].write_glsl(module, builder)?.0
-            ),
-        })
-    }
+
+            writeln!(&mut out, "   default:")?;
+
+            for sta in default {
+                writeln!(&mut out, "      {}", write_statement(sta, module, builder)?)?;
+            }
+
+            write!(&mut out, "}}")?;
+
+            out
+        }
+        Statement::Loop { body, continuing } => {
+            let mut out = String::new();
+
+            writeln!(&mut out, "while(true) {{",)?;
+
+            for sta in body.iter().chain(continuing.iter()) {
+                writeln!(&mut out, "    {}", write_statement(sta, module, builder)?)?;
+            }
+
+            write!(&mut out, "}}")?;
+
+            out
+        }
+        Statement::Break => String::from("break;"),
+        Statement::Continue => String::from("continue;"),
+        Statement::Return { value } => format!(
+            "return  {};",
+            value.map_or::<Result<_, Error>, _>(Ok(String::from("")), |expr| Ok(
+                write_expression(&builder.expressions[expr], module, builder)?.0
+            ))?
+        ),
+        Statement::Kill => String::from("discard;"),
+        Statement::Store { pointer, value } => format!(
+            "{} = {};",
+            write_expression(&builder.expressions[*pointer], module, builder)?.0,
+            write_expression(&builder.expressions[*value], module, builder)?.0
+        ),
+    })
 }
 
-impl Expression {
-    fn write_glsl<'a>(
-        &self,
-        module: &'a Module,
-        builder: &mut StatementBuilder<'_>,
-    ) -> Result<(String, Cow<'a, TypeInner>), Error> {
-        Ok(match self {
-            Expression::Access { base, index } => {
-                let (base_expr, ty) = builder.expressions[*base].write_glsl(module, builder)?;
+fn write_expression<'a>(
+    expr: &Expression,
+    module: &'a Module,
+    builder: &mut StatementBuilder<'_>,
+) -> Result<(String, Cow<'a, TypeInner>), Error> {
+    Ok(match expr {
+        Expression::Access { base, index } => {
+            let (base_expr, ty) = write_expression(&builder.expressions[*base], module, builder)?;
 
-                let inner = match ty.as_ref() {
-                    TypeInner::Vector { kind, width, .. }
-                    | TypeInner::Matrix { kind, width, .. } => Cow::Owned(TypeInner::Scalar {
+            let inner = match ty.as_ref() {
+                TypeInner::Vector { kind, width, .. } | TypeInner::Matrix { kind, width, .. } => {
+                    Cow::Owned(TypeInner::Scalar {
+                        kind: *kind,
+                        width: *width,
+                    })
+                }
+                TypeInner::Array { base, .. } => Cow::Borrowed(&module.types[*base].inner),
+                _ => return Err(Error::Custom(format!("Cannot dynamically index {:?}", ty))),
+            };
+
+            (
+                format!(
+                    "{}[{}]",
+                    base_expr,
+                    write_expression(&builder.expressions[*index], module, builder)?.0
+                ),
+                inner,
+            )
+        }
+        Expression::AccessIndex { base, index } => {
+            let (base_expr, ty) = write_expression(&builder.expressions[*base], module, builder)?;
+
+            match ty.as_ref() {
+                TypeInner::Vector { kind, width, .. } | TypeInner::Matrix { kind, width, .. } => (
+                    format!("{}[{}]", base_expr, index),
+                    Cow::Owned(TypeInner::Scalar {
                         kind: *kind,
                         width: *width,
                     }),
-                    TypeInner::Array { base, .. } => Cow::Borrowed(&module.types[*base].inner),
-                    _ => return Err(Error::Custom(format!("Cannot dynamically index {:?}", ty))),
-                };
-
-                (
+                ),
+                TypeInner::Array { base, .. } => (
+                    format!("{}[{}]", base_expr, index),
+                    Cow::Borrowed(&module.types[*base].inner),
+                ),
+                TypeInner::Struct { members } => (
                     format!(
-                        "{}[{}]",
+                        "{}.{}",
                         base_expr,
-                        builder.expressions[*index].write_glsl(module, builder)?.0
+                        members[*index as usize]
+                            .name
+                            .as_ref()
+                            .unwrap_or(&index.to_string())
                     ),
-                    inner,
-                )
+                    Cow::Borrowed(&module.types[members[*index as usize].ty].inner),
+                ),
+                _ => return Err(Error::Custom(format!("Cannot index {:?}", ty))),
             }
-            Expression::AccessIndex { base, index } => {
-                let (base_expr, ty) = builder.expressions[*base].write_glsl(module, builder)?;
-
-                match ty.as_ref() {
-                    TypeInner::Vector { kind, width, .. }
-                    | TypeInner::Matrix { kind, width, .. } => (
-                        format!("{}[{}]", base_expr, index),
-                        Cow::Owned(TypeInner::Scalar {
-                            kind: *kind,
-                            width: *width,
-                        }),
-                    ),
-                    TypeInner::Array { base, .. } => (
-                        format!("{}[{}]", base_expr, index),
-                        Cow::Borrowed(&module.types[*base].inner),
-                    ),
-                    TypeInner::Struct { members } => (
-                        format!(
-                            "{}.{}",
-                            base_expr,
-                            members[*index as usize]
-                                .name
-                                .as_ref()
-                                .unwrap_or(&index.to_string())
-                        ),
-                        Cow::Borrowed(&module.types[members[*index as usize].ty].inner),
-                    ),
-                    _ => return Err(Error::Custom(format!("Cannot index {:?}", ty))),
-                }
-            }
-            Expression::Constant(constant) => (
-                module.constants[*constant].write_glsl(module, builder)?,
-                Cow::Borrowed(&module.types[module.constants[*constant].ty].inner),
-            ),
-            Expression::Compose { ty, components } => {
-                let constructor = match module.types[*ty].inner {
-                    TypeInner::Vector { size, kind, width } => format!(
-                        "{}vec{}",
-                        match kind {
-                            ScalarKind::Sint => "i",
-                            ScalarKind::Uint => "u",
-                            ScalarKind::Float => match width {
-                                4 => "",
-                                8 => "d",
-                                _ =>
-                                    return Err(Error::Custom(format!(
-                                        "Cannot build float of width {}",
-                                        width
-                                    ))),
-                            },
-                            ScalarKind::Bool => "b",
-                        },
-                        size as u8,
-                    ),
-                    TypeInner::Matrix {
-                        columns,
-                        rows,
-                        kind,
-                        width,
-                    } => format!(
-                        "{}mat{}x{}",
-                        match kind {
-                            ScalarKind::Sint => "i",
-                            ScalarKind::Uint => "u",
-                            ScalarKind::Float => match width {
-                                4 => "",
-                                8 => "d",
-                                _ =>
-                                    return Err(Error::Custom(format!(
-                                        "Cannot build float of width {}",
-                                        width
-                                    ))),
-                            },
-                            ScalarKind::Bool => "b",
-                        },
-                        columns as u8,
-                        rows as u8,
-                    ),
-                    TypeInner::Array { .. } => write_type(*ty, &module.types, builder.structs)?,
-                    TypeInner::Struct { .. } => builder.structs.get(ty).unwrap().clone(),
-                    _ => {
-                        return Err(Error::Custom(format!(
-                            "Cannot compose type {}",
-                            write_type(*ty, &module.types, builder.structs)?
-                        )))
-                    }
-                };
-
-                (
-                    format!(
-                        "{}({})",
-                        constructor,
-                        components
-                            .iter()
-                            .map::<Result<_, Error>, _>(|arg| Ok(builder.expressions[*arg]
-                                .write_glsl(module, builder)?
-                                .0))
-                            .collect::<Result<Vec<_>, _>>()?
-                            .join(","),
-                    ),
-                    Cow::Borrowed(&module.types[*ty].inner),
-                )
-            }
-            Expression::FunctionParameter(pos) => {
-                let (arg, ty) = builder.args.get(&pos).unwrap().clone();
-
-                (arg, Cow::Borrowed(&module.types[ty].inner))
-            }
-            Expression::GlobalVariable(handle) => (
-                builder.globals.get(&handle).unwrap().clone(),
-                Cow::Borrowed(&module.types[module.global_variables[*handle].ty].inner),
-            ),
-            Expression::LocalVariable(handle) => (
-                builder.locals_lookup.get(&handle).unwrap().clone(),
-                Cow::Borrowed(&module.types[builder.locals[*handle].ty].inner),
-            ),
-            Expression::Load { pointer } => {
-                builder.expressions[*pointer].write_glsl(module, builder)?
-            }
-            Expression::ImageSample {
-                image,
-                sampler,
-                coordinate,
-                depth_ref,
-            } => {
-                let (image_expr, image_ty) =
-                    builder.expressions[*image].write_glsl(module, builder)?;
-                let (sampler_expr, sampler_ty) =
-                    builder.expressions[*sampler].write_glsl(module, builder)?;
-                let (coordinate_expr, coordinate_ty) =
-                    builder.expressions[*coordinate].write_glsl(module, builder)?;
-
-                let (kind, dim, arrayed, ms, width) = match image_ty.as_ref() {
-                    TypeInner::Image { base, dim, flags } => match module.types[*base].inner {
-                        TypeInner::Scalar { kind, width } => (
-                            kind,
-                            *dim,
-                            flags.contains(ImageFlags::ARRAYED),
-                            flags.contains(ImageFlags::MULTISAMPLED),
-                            width,
-                        ),
-                        _ => {
-                            return Err(Error::Custom(format!(
-                                "Cannot build image of {}",
-                                write_type(*base, &module.types, builder.structs)?
-                            )))
-                        }
-                    },
-                    TypeInner::DepthImage { dim, arrayed } => {
-                        (ScalarKind::Float, *dim, *arrayed, false, 4)
-                    }
-                    _ => return Err(Error::Custom(format!("Cannot sample {:?}", image_ty))),
-                };
-
-                let shadow = match sampler_ty.as_ref() {
-                    TypeInner::Sampler { comparison } => *comparison,
-                    _ => {
-                        return Err(Error::Custom(format!(
-                            "Cannot have a sampler of {:?}",
-                            sampler_ty
-                        )))
-                    }
-                };
-
-                let size = match coordinate_ty.as_ref() {
-                    TypeInner::Vector { size, .. } => *size,
-                    _ => {
-                        return Err(Error::Custom(format!(
-                            "Cannot sample with coordinates of type {:?}",
-                            coordinate_ty
-                        )))
-                    }
-                };
-
-                let sampler_constructor = format!(
-                    "{}sampler{}{}{}{}({},{})",
+        }
+        Expression::Constant(constant) => (
+            write_constant(&module.constants[*constant], module, builder)?,
+            Cow::Borrowed(&module.types[module.constants[*constant].ty].inner),
+        ),
+        Expression::Compose { ty, components } => {
+            let constructor = match module.types[*ty].inner {
+                TypeInner::Vector { size, kind, width } => format!(
+                    "{}vec{}",
                     match kind {
                         ScalarKind::Sint => "i",
                         ScalarKind::Uint => "u",
-                        ScalarKind::Float => "",
-                        _ =>
-                            return Err(Error::Custom(String::from("Cannot build image of bools",))),
+                        ScalarKind::Float => match width {
+                            4 => "",
+                            8 => "d",
+                            _ =>
+                                return Err(Error::Custom(format!(
+                                    "Cannot build float of width {}",
+                                    width
+                                ))),
+                        },
+                        ScalarKind::Bool => "b",
                     },
-                    ImageDimension(dim),
-                    if ms { "MS" } else { "" },
-                    if arrayed { "Array" } else { "" },
-                    if shadow { "Shadow" } else { "" },
-                    image_expr,
-                    sampler_expr
-                );
-
-                let coordinate = if let Some(depth_ref) = depth_ref {
-                    format!(
-                        "vec{}({},{})",
-                        size as u8 + 1,
-                        coordinate_expr,
-                        builder.expressions[*depth_ref]
-                            .write_glsl(module, builder)?
-                            .0
-                    )
-                } else {
-                    coordinate_expr
-                };
-
-                let expr = if !ms {
-                    format!("texture({},{})", sampler_constructor, coordinate)
-                } else {
-                    todo!()
-                };
-
-                let ty = if shadow {
-                    Cow::Owned(TypeInner::Scalar { kind, width })
-                } else {
-                    Cow::Owned(TypeInner::Vector { kind, width, size })
-                };
-
-                (expr, ty)
-            }
-            Expression::Unary { op, expr } => {
-                let (expr, ty) = builder.expressions[*expr].write_glsl(module, builder)?;
-
-                (
-                    format!(
-                        "({} {})",
-                        match op {
-                            UnaryOperator::Negate => "-",
-                            UnaryOperator::Not => "~",
+                    size as u8,
+                ),
+                TypeInner::Matrix {
+                    columns,
+                    rows,
+                    kind,
+                    width,
+                } => format!(
+                    "{}mat{}x{}",
+                    match kind {
+                        ScalarKind::Sint => "i",
+                        ScalarKind::Uint => "u",
+                        ScalarKind::Float => match width {
+                            4 => "",
+                            8 => "d",
+                            _ =>
+                                return Err(Error::Custom(format!(
+                                    "Cannot build float of width {}",
+                                    width
+                                ))),
                         },
-                        expr
+                        ScalarKind::Bool => "b",
+                    },
+                    columns as u8,
+                    rows as u8,
+                ),
+                TypeInner::Array { .. } => write_type(*ty, &module.types, builder.structs)?,
+                TypeInner::Struct { .. } => builder.structs.get(ty).unwrap().clone(),
+                _ => {
+                    return Err(Error::Custom(format!(
+                        "Cannot compose type {}",
+                        write_type(*ty, &module.types, builder.structs)?
+                    )))
+                }
+            };
+
+            (
+                format!(
+                    "{}({})",
+                    constructor,
+                    components
+                        .iter()
+                        .map::<Result<_, Error>, _>(|arg| Ok(write_expression(
+                            &builder.expressions[*arg],
+                            module,
+                            builder
+                        )?
+                        .0))
+                        .collect::<Result<Vec<_>, _>>()?
+                        .join(","),
+                ),
+                Cow::Borrowed(&module.types[*ty].inner),
+            )
+        }
+        Expression::FunctionParameter(pos) => {
+            let (arg, ty) = builder.args.get(&pos).unwrap().clone();
+
+            (arg, Cow::Borrowed(&module.types[ty].inner))
+        }
+        Expression::GlobalVariable(handle) => (
+            builder.globals.get(&handle).unwrap().clone(),
+            Cow::Borrowed(&module.types[module.global_variables[*handle].ty].inner),
+        ),
+        Expression::LocalVariable(handle) => (
+            builder.locals_lookup.get(&handle).unwrap().clone(),
+            Cow::Borrowed(&module.types[builder.locals[*handle].ty].inner),
+        ),
+        Expression::Load { pointer } => {
+            write_expression(&builder.expressions[*pointer], module, builder)?
+        }
+        Expression::ImageSample {
+            image,
+            sampler,
+            coordinate,
+            depth_ref,
+        } => {
+            let (image_expr, image_ty) =
+                write_expression(&builder.expressions[*image], module, builder)?;
+            let (sampler_expr, sampler_ty) =
+                write_expression(&builder.expressions[*sampler], module, builder)?;
+            let (coordinate_expr, coordinate_ty) =
+                write_expression(&builder.expressions[*coordinate], module, builder)?;
+
+            let (kind, dim, arrayed, ms, width) = match image_ty.as_ref() {
+                TypeInner::Image { base, dim, flags } => match module.types[*base].inner {
+                    TypeInner::Scalar { kind, width } => (
+                        kind,
+                        *dim,
+                        flags.contains(ImageFlags::ARRAYED),
+                        flags.contains(ImageFlags::MULTISAMPLED),
+                        width,
                     ),
-                    ty,
-                )
-            }
-            Expression::Binary { op, left, right } => {
-                let (left_expr, left_ty) =
-                    builder.expressions[*left].write_glsl(module, builder)?;
-                let (right_expr, right_ty) =
-                    builder.expressions[*right].write_glsl(module, builder)?;
-
-                let op = match op {
-                    BinaryOperator::Add => "+",
-                    BinaryOperator::Subtract => "-",
-                    BinaryOperator::Multiply => "*",
-                    BinaryOperator::Divide => "/",
-                    BinaryOperator::Modulo => "%",
-                    BinaryOperator::Equal => "==",
-                    BinaryOperator::NotEqual => "!=",
-                    BinaryOperator::Less => "<",
-                    BinaryOperator::LessEqual => "<=",
-                    BinaryOperator::Greater => ">",
-                    BinaryOperator::GreaterEqual => ">=",
-                    BinaryOperator::And => "&",
-                    BinaryOperator::ExclusiveOr => "^",
-                    BinaryOperator::InclusiveOr => "|",
-                    BinaryOperator::LogicalAnd => "&&",
-                    BinaryOperator::LogicalOr => "||",
-                    BinaryOperator::ShiftLeftLogical => "<<",
-                    BinaryOperator::ShiftRightLogical => todo!(),
-                    BinaryOperator::ShiftRightArithmetic => ">>",
-                };
-
-                let ty = match (left_ty.as_ref(), right_ty.as_ref()) {
-                    (TypeInner::Scalar { .. }, TypeInner::Scalar { .. }) => left_ty,
-                    (TypeInner::Scalar { .. }, TypeInner::Vector { .. }) => right_ty,
-                    (TypeInner::Scalar { .. }, TypeInner::Matrix { .. }) => right_ty,
-                    (TypeInner::Vector { .. }, TypeInner::Scalar { .. }) => left_ty,
-                    (TypeInner::Vector { .. }, TypeInner::Vector { .. }) => left_ty,
-                    (TypeInner::Vector { .. }, TypeInner::Matrix { .. }) => left_ty,
-                    (TypeInner::Matrix { .. }, TypeInner::Scalar { .. }) => left_ty,
-                    (TypeInner::Matrix { .. }, TypeInner::Vector { .. }) => right_ty,
-                    (TypeInner::Matrix { .. }, TypeInner::Matrix { .. }) => left_ty,
                     _ => {
                         return Err(Error::Custom(format!(
-                            "Cannot apply {} to {} and {}",
-                            op, left_expr, right_expr
+                            "Cannot build image of {}",
+                            write_type(*base, &module.types, builder.structs)?
                         )))
                     }
-                };
+                },
+                TypeInner::DepthImage { dim, arrayed } => {
+                    (ScalarKind::Float, *dim, *arrayed, false, 4)
+                }
+                _ => return Err(Error::Custom(format!("Cannot sample {:?}", image_ty))),
+            };
 
-                (format!("({} {} {})", left_expr, op, right_expr), ty)
-            }
-            Expression::Intrinsic { fun, argument } => {
-                let (expr, ty) = builder.expressions[*argument].write_glsl(module, builder)?;
+            let shadow = match sampler_ty.as_ref() {
+                TypeInner::Sampler { comparison } => *comparison,
+                _ => {
+                    return Err(Error::Custom(format!(
+                        "Cannot have a sampler of {:?}",
+                        sampler_ty
+                    )))
+                }
+            };
 
-                (
-                    format!(
-                        "{:?}({})",
-                        match fun {
-                            IntrinsicFunction::IsFinite => "!isinf",
-                            IntrinsicFunction::IsInf => "isinf",
-                            IntrinsicFunction::IsNan => "isnan",
-                            IntrinsicFunction::IsNormal => "!isnan",
-                            IntrinsicFunction::All => "all",
-                            IntrinsicFunction::Any => "any",
-                        },
-                        expr
-                    ),
-                    ty,
+            let size = match coordinate_ty.as_ref() {
+                TypeInner::Vector { size, .. } => *size,
+                _ => {
+                    return Err(Error::Custom(format!(
+                        "Cannot sample with coordinates of type {:?}",
+                        coordinate_ty
+                    )))
+                }
+            };
+
+            let sampler_constructor = format!(
+                "{}sampler{}{}{}{}({},{})",
+                match kind {
+                    ScalarKind::Sint => "i",
+                    ScalarKind::Uint => "u",
+                    ScalarKind::Float => "",
+                    _ => return Err(Error::Custom(String::from("Cannot build image of bools",))),
+                },
+                ImageDimension(dim),
+                if ms { "MS" } else { "" },
+                if arrayed { "Array" } else { "" },
+                if shadow { "Shadow" } else { "" },
+                image_expr,
+                sampler_expr
+            );
+
+            let coordinate = if let Some(depth_ref) = depth_ref {
+                format!(
+                    "vec{}({},{})",
+                    size as u8 + 1,
+                    coordinate_expr,
+                    write_expression(&builder.expressions[*depth_ref], module, builder)?.0
                 )
-            }
-            Expression::DotProduct(left, right) => {
-                let (left_expr, left_ty) =
-                    builder.expressions[*left].write_glsl(module, builder)?;
-                let (right_expr, _) = builder.expressions[*right].write_glsl(module, builder)?;
+            } else {
+                coordinate_expr
+            };
 
-                let ty = match left_ty.as_ref() {
-                    TypeInner::Vector { kind, width, .. } => Cow::Owned(TypeInner::Scalar {
-                        kind: *kind,
-                        width: *width,
-                    }),
-                    _ => {
-                        return Err(Error::Custom(format!(
-                            "Cannot apply dot product to {}",
-                            left_expr
-                        )))
-                    }
-                };
+            let expr = if !ms {
+                format!("texture({},{})", sampler_constructor, coordinate)
+            } else {
+                todo!()
+            };
 
-                (format!("dot({},{})", left_expr, right_expr), ty)
-            }
-            Expression::CrossProduct(left, right) => {
-                let (left_expr, left_ty) =
-                    builder.expressions[*left].write_glsl(module, builder)?;
-                let (right_expr, _) = builder.expressions[*right].write_glsl(module, builder)?;
+            let ty = if shadow {
+                Cow::Owned(TypeInner::Scalar { kind, width })
+            } else {
+                Cow::Owned(TypeInner::Vector { kind, width, size })
+            };
 
-                (format!("cross({},{})", left_expr, right_expr), left_ty)
-            }
-            Expression::Derivative { axis, expr } => {
-                let (expr, ty) = builder.expressions[*expr].write_glsl(module, builder)?;
+            (expr, ty)
+        }
+        Expression::Unary { op, expr } => {
+            let (expr, ty) = write_expression(&builder.expressions[*expr], module, builder)?;
 
-                (
-                    format!(
-                        "{}({})",
-                        match axis {
-                            DerivativeAxis::X => "dFdx",
-                            DerivativeAxis::Y => "dFdy",
-                            DerivativeAxis::Width => "fwidth",
-                        },
-                        expr
-                    ),
-                    ty,
-                )
-            }
-            Expression::Call { origin, arguments } => {
-                let ty = match origin {
-                    FunctionOrigin::Local(function) => module.functions[*function]
-                        .return_type
-                        .map(|ty| Cow::Borrowed(&module.types[ty].inner))
-                        .unwrap_or(Cow::Owned(
-                            TypeInner::Sampler { comparison: false }, /*Dummy type*/
-                        )),
-                    FunctionOrigin::External(_) => {
-                        builder.expressions[arguments[0]]
-                            .write_glsl(module, builder)?
-                            .1
-                    }
-                };
+            (
+                format!(
+                    "({} {})",
+                    match op {
+                        UnaryOperator::Negate => "-",
+                        UnaryOperator::Not => "~",
+                    },
+                    expr
+                ),
+                ty,
+            )
+        }
+        Expression::Binary { op, left, right } => {
+            let (left_expr, left_ty) =
+                write_expression(&builder.expressions[*left], module, builder)?;
+            let (right_expr, right_ty) =
+                write_expression(&builder.expressions[*right], module, builder)?;
 
-                (
-                    format!(
-                        "{}({})",
-                        match origin {
-                            FunctionOrigin::External(name) => name,
-                            FunctionOrigin::Local(handle) =>
-                                builder.functions.get(&handle).unwrap(),
-                        },
-                        arguments
-                            .iter()
-                            .map::<Result<_, Error>, _>(|arg| Ok(builder.expressions[*arg]
-                                .write_glsl(module, builder)?
-                                .0))
-                            .collect::<Result<Vec<_>, _>>()?
-                            .join(","),
-                    ),
-                    ty,
-                )
-            }
-        })
-    }
+            let op = match op {
+                BinaryOperator::Add => "+",
+                BinaryOperator::Subtract => "-",
+                BinaryOperator::Multiply => "*",
+                BinaryOperator::Divide => "/",
+                BinaryOperator::Modulo => "%",
+                BinaryOperator::Equal => "==",
+                BinaryOperator::NotEqual => "!=",
+                BinaryOperator::Less => "<",
+                BinaryOperator::LessEqual => "<=",
+                BinaryOperator::Greater => ">",
+                BinaryOperator::GreaterEqual => ">=",
+                BinaryOperator::And => "&",
+                BinaryOperator::ExclusiveOr => "^",
+                BinaryOperator::InclusiveOr => "|",
+                BinaryOperator::LogicalAnd => "&&",
+                BinaryOperator::LogicalOr => "||",
+                BinaryOperator::ShiftLeftLogical => "<<",
+                BinaryOperator::ShiftRightLogical => todo!(),
+                BinaryOperator::ShiftRightArithmetic => ">>",
+            };
+
+            let ty = match (left_ty.as_ref(), right_ty.as_ref()) {
+                (TypeInner::Scalar { .. }, TypeInner::Scalar { .. }) => left_ty,
+                (TypeInner::Scalar { .. }, TypeInner::Vector { .. }) => right_ty,
+                (TypeInner::Scalar { .. }, TypeInner::Matrix { .. }) => right_ty,
+                (TypeInner::Vector { .. }, TypeInner::Scalar { .. }) => left_ty,
+                (TypeInner::Vector { .. }, TypeInner::Vector { .. }) => left_ty,
+                (TypeInner::Vector { .. }, TypeInner::Matrix { .. }) => left_ty,
+                (TypeInner::Matrix { .. }, TypeInner::Scalar { .. }) => left_ty,
+                (TypeInner::Matrix { .. }, TypeInner::Vector { .. }) => right_ty,
+                (TypeInner::Matrix { .. }, TypeInner::Matrix { .. }) => left_ty,
+                _ => {
+                    return Err(Error::Custom(format!(
+                        "Cannot apply {} to {} and {}",
+                        op, left_expr, right_expr
+                    )))
+                }
+            };
+
+            (format!("({} {} {})", left_expr, op, right_expr), ty)
+        }
+        Expression::Intrinsic { fun, argument } => {
+            let (expr, ty) = write_expression(&builder.expressions[*argument], module, builder)?;
+
+            (
+                format!(
+                    "{:?}({})",
+                    match fun {
+                        IntrinsicFunction::IsFinite => "!isinf",
+                        IntrinsicFunction::IsInf => "isinf",
+                        IntrinsicFunction::IsNan => "isnan",
+                        IntrinsicFunction::IsNormal => "!isnan",
+                        IntrinsicFunction::All => "all",
+                        IntrinsicFunction::Any => "any",
+                    },
+                    expr
+                ),
+                ty,
+            )
+        }
+        Expression::DotProduct(left, right) => {
+            let (left_expr, left_ty) =
+                write_expression(&builder.expressions[*left], module, builder)?;
+            let (right_expr, _) = write_expression(&builder.expressions[*right], module, builder)?;
+
+            let ty = match left_ty.as_ref() {
+                TypeInner::Vector { kind, width, .. } => Cow::Owned(TypeInner::Scalar {
+                    kind: *kind,
+                    width: *width,
+                }),
+                _ => {
+                    return Err(Error::Custom(format!(
+                        "Cannot apply dot product to {}",
+                        left_expr
+                    )))
+                }
+            };
+
+            (format!("dot({},{})", left_expr, right_expr), ty)
+        }
+        Expression::CrossProduct(left, right) => {
+            let (left_expr, left_ty) =
+                write_expression(&builder.expressions[*left], module, builder)?;
+            let (right_expr, _) = write_expression(&builder.expressions[*right], module, builder)?;
+
+            (format!("cross({},{})", left_expr, right_expr), left_ty)
+        }
+        Expression::Derivative { axis, expr } => {
+            let (expr, ty) = write_expression(&builder.expressions[*expr], module, builder)?;
+
+            (
+                format!(
+                    "{}({})",
+                    match axis {
+                        DerivativeAxis::X => "dFdx",
+                        DerivativeAxis::Y => "dFdy",
+                        DerivativeAxis::Width => "fwidth",
+                    },
+                    expr
+                ),
+                ty,
+            )
+        }
+        Expression::Call { origin, arguments } => {
+            let ty = match origin {
+                FunctionOrigin::Local(function) => module.functions[*function]
+                    .return_type
+                    .map(|ty| Cow::Borrowed(&module.types[ty].inner))
+                    .unwrap_or(Cow::Owned(
+                        TypeInner::Sampler { comparison: false }, /*Dummy type*/
+                    )),
+                FunctionOrigin::External(_) => {
+                    write_expression(&builder.expressions[arguments[0]], module, builder)?.1
+                }
+            };
+
+            (
+                format!(
+                    "{}({})",
+                    match origin {
+                        FunctionOrigin::External(name) => name,
+                        FunctionOrigin::Local(handle) => builder.functions.get(&handle).unwrap(),
+                    },
+                    arguments
+                        .iter()
+                        .map::<Result<_, Error>, _>(|arg| Ok(write_expression(
+                            &builder.expressions[*arg],
+                            module,
+                            builder
+                        )?
+                        .0))
+                        .collect::<Result<Vec<_>, _>>()?
+                        .join(","),
+                ),
+                ty,
+            )
+        }
+    })
 }
 
-impl Constant {
-    fn write_glsl(&self, module: &Module, builder: &StatementBuilder<'_>) -> Result<String, Error> {
-        Ok(match self.inner {
-            ConstantInner::Sint(int) => int.to_string(),
-            ConstantInner::Uint(int) => int.to_string(),
-            ConstantInner::Float(float) => format!("{:?}", float),
-            ConstantInner::Bool(boolean) => boolean.to_string(),
-            ConstantInner::Composite(ref components) => format!(
-                "{}({})",
-                match module.types[self.ty].inner {
-                    TypeInner::Vector { size, .. } => format!("vec{}", size as u8,),
-                    TypeInner::Matrix { columns, rows, .. } =>
-                        format!("mat{}x{}", columns as u8, rows as u8,),
-                    TypeInner::Struct { .. } => builder.structs.get(&self.ty).unwrap().clone(),
-                    TypeInner::Array { .. } => write_type(self.ty, &module.types, builder.structs)?,
-                    _ =>
-                        return Err(Error::Custom(format!(
-                            "Cannot build constant of type {}",
-                            write_type(self.ty, &module.types, builder.structs)?
-                        ))),
-                },
-                components
-                    .iter()
-                    .map(|component| module.constants[*component].write_glsl(module, builder))
-                    .collect::<Result<Vec<_>, _>>()?
-                    .join(","),
-            ),
-        })
-    }
+fn write_constant(
+    constant: &Constant,
+    module: &Module,
+    builder: &StatementBuilder<'_>,
+) -> Result<String, Error> {
+    Ok(match constant.inner {
+        ConstantInner::Sint(int) => int.to_string(),
+        ConstantInner::Uint(int) => int.to_string(),
+        ConstantInner::Float(float) => format!("{:?}", float),
+        ConstantInner::Bool(boolean) => boolean.to_string(),
+        ConstantInner::Composite(ref components) => format!(
+            "{}({})",
+            match module.types[constant.ty].inner {
+                TypeInner::Vector { size, .. } => format!("vec{}", size as u8,),
+                TypeInner::Matrix { columns, rows, .. } =>
+                    format!("mat{}x{}", columns as u8, rows as u8,),
+                TypeInner::Struct { .. } => builder.structs.get(&constant.ty).unwrap().clone(),
+                TypeInner::Array { .. } => write_type(constant.ty, &module.types, builder.structs)?,
+                _ =>
+                    return Err(Error::Custom(format!(
+                        "Cannot build constant of type {}",
+                        write_type(constant.ty, &module.types, builder.structs)?
+                    ))),
+            },
+            components
+                .iter()
+                .map(|component| write_constant(&module.constants[*component], module, builder))
+                .collect::<Result<Vec<_>, _>>()?
+                .join(","),
+        ),
+    })
 }
 
 fn write_type<'a>(
