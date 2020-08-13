@@ -49,22 +49,23 @@ pub enum Profile {
 pub struct Context {
     pub expressions: Arena<Expression>,
     pub local_variables: Arena<LocalVariable>,
+    //TODO: Find less allocation heavy representation
     pub scopes: Vec<FastHashMap<String, Handle<LocalVariable>>>,
 }
 
 impl Context {
-    pub fn lookup_local_var(&self, name: &str) -> Option<&Handle<LocalVariable>> {
+    pub fn lookup_local_var(&self, name: &str) -> Option<Handle<LocalVariable>> {
         for scope in self.scopes.iter().rev() {
             if let Some(var) = scope.get(name) {
-                return Some(var);
+                return Some(*var);
             }
         }
         None
     }
 
-    pub fn lookup_local_var_current_scope(&self, name: &str) -> Option<&Handle<LocalVariable>> {
+    pub fn lookup_local_var_current_scope(&self, name: &str) -> Option<Handle<LocalVariable>> {
         if let Some(current) = self.scopes.last() {
-            current.get(name)
+            current.get(name).cloned()
         } else {
             None
         }
@@ -83,7 +84,7 @@ impl Context {
     }
 
     /// Add new empty scope
-    pub fn add_scope(&mut self) {
+    pub fn push_scope(&mut self) {
         self.scopes.push(FastHashMap::default());
     }
 

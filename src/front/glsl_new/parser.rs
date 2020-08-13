@@ -157,10 +157,10 @@ pomelo! {
         } else {
             // try global and local vars
             let expr =
-                if let Some(global_var) = extra.lookup_global_variables.get(&v.1) {
+                if let Some(local_var) = extra.context.lookup_local_var(&v.1) {
+                    Expression::LocalVariable(local_var)
+                } else if let Some(global_var) = extra.lookup_global_variables.get(&v.1) {
                     Expression::GlobalVariable(*global_var)
-                } else if let Some(local_var) = extra.context.lookup_local_var(&v.1) {
-                    Expression::LocalVariable(*local_var)
                 } else {
                     return Err(ErrorKind::UnknownVariable(v.0, v.1))
                 };
@@ -587,7 +587,7 @@ pomelo! {
 
     // extra rule to add scope before statement_list
     left_brace_scope ::= LeftBrace {
-        extra.context.add_scope();
+        extra.context.push_scope();
     }
 
 
