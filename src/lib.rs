@@ -20,10 +20,10 @@ use std::{
     num::NonZeroU32,
 };
 
-#[cfg(feature = "serialize")]
-use serde::Serialize;
 #[cfg(feature = "deserialize")]
 use serde::Deserialize;
+#[cfg(feature = "serialize")]
+use serde::Serialize;
 
 /// Hash map that is faster but not resilient to DoS attacks.
 pub type FastHashMap<K, T> = HashMap<K, T, BuildHasherDefault<fxhash::FxHasher>>;

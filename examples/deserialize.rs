@@ -65,9 +65,8 @@ fn main() {
         return;
     }
 
-    let module = ron::de::from_str(
-        &fs::read_to_string(&args[1]).expect("unable to read input")
-    ).expect("unable to deserialize input");
+    let module = ron::de::from_str(&fs::read_to_string(&args[1]).expect("unable to read input"))
+        .expect("unable to deserialize input");
 
     module_to_shader(&args[2], module);
 

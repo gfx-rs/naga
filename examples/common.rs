@@ -1,7 +1,7 @@
-use std::{fs, path::Path};
+use naga::Module;
 #[cfg(feature = "glsl")]
 use std::env;
-use naga::Module;
+use std::{fs, path::Path};
 
 pub fn load_shader_as_module(source: impl AsRef<Path>) -> Module {
     #[cfg(any(feature = "glsl", feature = "glsl-new"))]
