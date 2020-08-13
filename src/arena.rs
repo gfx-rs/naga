@@ -11,8 +11,10 @@ type Index = NonZeroU32;
 /// A strongly typed reference to a SPIR-V element.
 #[cfg_attr(feature = "serialize", derive(crate::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(crate::Deserialize))]
+#[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(transparent))]
 pub struct Handle<T> {
     index: Index,
+    #[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(skip))]
     marker: PhantomData<T>,
 }
 
@@ -82,6 +84,7 @@ impl<T> Handle<T> {
 #[derive(Debug)]
 #[cfg_attr(feature = "serialize", derive(crate::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(crate::Deserialize))]
+#[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(transparent))]
 pub struct Arena<T> {
     /// Values of this arena.
     data: Vec<T>,
