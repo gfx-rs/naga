@@ -1,8 +1,8 @@
 use crate::{
     Arena, ArraySize, BinaryOperator, BuiltIn, Constant, ConstantInner, DerivativeAxis, Expression,
     FastHashMap, Function, FunctionOrigin, GlobalVariable, Handle, ImageFlags, Interpolation,
-    IntrinsicFunction, LocalVariable, Module, ScalarKind, Statement, StorageClass, Type, TypeInner,
-    UnaryOperator,
+    IntrinsicFunction, LocalVariable, Module, ScalarKind, ShaderStage, Statement, StorageClass,
+    Type, TypeInner, UnaryOperator,
 };
 use std::{
     borrow::Cow,
@@ -39,16 +39,61 @@ impl fmt::Display for Error {
     }
 }
 
-pub fn write(module: &Module, out: &mut impl Write) -> Result<(), Error> {
-    writeln!(out, "#version 450 core")?;
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub enum Version {
+    Desktop(u16),
+    Embedded(u16),
+}
+
+#[derive(Debug, Clone)]
+pub struct Options {
+    pub version: Version,
+    pub entry_point: (String, ShaderStage),
+}
+
+const SUPPORTED_CORE_VERSIONS: &[u16] = &[450, 460];
+const SUPPORTED_ES_VERSIONS: &[u16] = &[300];
+
+pub fn write(module: &Module, out: &mut impl Write, options: Options) -> Result<(), Error> {
+    let (version, es) = match options.version {
+        Version::Desktop(v) => {
+            if !SUPPORTED_CORE_VERSIONS.contains(&v) {
+                return Err(Error::Custom(format!("Version not supported {} core", v)));
+            }
+
+            (v, false)
+        }
+        Version::Embedded(v) => {
+            if !SUPPORTED_ES_VERSIONS.contains(&v) {
+                return Err(Error::Custom(format!("Version not supported {} es", v)));
+            }
+
+            (v, true)
+        }
+    };
+
+    writeln!(
+        out,
+        "#version {} {}",
+        version,
+        if es { "es" } else { "core" }
+    )?;
 
     let mut counter = 0;
     let mut names = FastHashMap::default();
 
     let mut namer = |name: Option<&String>| {
         if let Some(name) = name {
-            names.insert(name.clone(), ());
-            name.clone()
+            if name.starts_with("gl_") || name == "main" || names.get(name).is_some() {
+                counter += 1;
+                while names.get(&format!("_{}", counter)).is_some() {
+                    counter += 1;
+                }
+                format!("_{}", counter)
+            } else {
+                names.insert(name.clone(), ());
+                name.clone()
+            }
         } else {
             counter += 1;
             while names.get(&format!("_{}", counter)).is_some() {
@@ -95,11 +140,21 @@ pub fn write(module: &Module, out: &mut impl Write) -> Result<(), Error> {
     }
 
     let mut globals_lookup = FastHashMap::default();
+    let entry_point = module
+        .entry_points
+        .iter()
+        .find(|entry| entry.name == options.entry_point.0 && entry.stage == options.entry_point.1)
+        .ok_or_else(|| Error::Custom(String::from("Entry point not found")))?;
+    let func = &module.functions[entry_point.function];
 
-    for (handle, global) in module.global_variables.iter() {
+    for ((handle, global), usage) in module.global_variables.iter().zip(func.global_usage.iter()) {
+        if usage.is_empty() {
+            continue;
+        }
+
         if let Some(crate::Binding::BuiltIn(built_in)) = global.binding {
             let semantic = match built_in {
-                BuiltIn::Position => "gl_position",
+                BuiltIn::Position => "gl_Position",
                 BuiltIn::GlobalInvocationId => "gl_GlobalInvocationID",
                 BuiltIn::BaseInstance => "gl_BaseInstance",
                 BuiltIn::BaseVertex => "gl_BaseVertex",
@@ -119,6 +174,8 @@ pub fn write(module: &Module, out: &mut impl Write) -> Result<(), Error> {
             globals_lookup.insert(handle, String::from(semantic));
             continue;
         }
+
+        let name = namer(global.name.as_ref());
 
         if let Some(ref binding) = global.binding {
             write!(out, "layout({}) ", Binding(binding.clone()))?;
@@ -143,14 +200,40 @@ pub fn write(module: &Module, out: &mut impl Write) -> Result<(), Error> {
 
     let mut functions = FastHashMap::default();
 
-    // Do a first pass to collect names
     for (handle, func) in module.functions.iter() {
-        functions.insert(handle, namer(func.name.as_ref()));
+        // Discard all entry points
+        if module
+            .entry_points
+            .iter()
+            .any(|entry| entry.function == handle && entry_point.function != handle)
+        {
+            continue;
+        }
+
+        let name = namer(func.name.as_ref());
+
+        writeln!(
+            out,
+            "{} {}({});",
+            func.return_type
+                .map_or(Ok(String::from("void")), |ty| write_type(
+                    ty,
+                    &module.types,
+                    &structs
+                ))?,
+            name,
+            func.parameter_types
+                .iter()
+                .map(|ty| write_type(*ty, &module.types, &structs))
+                .collect::<Result<Vec<_>, _>>()?
+                .join(","),
+        )?;
+
+        functions.insert(handle, name);
     }
 
-    // TODO: glsl is order dependent so we need to build functions in order
-    for (handle, func) in module.functions.iter() {
-        let name = functions.get(&handle).unwrap();
+    for (handle, name) in functions.iter() {
+        let func = &module.functions[*handle];
 
         writeln!(
             out,

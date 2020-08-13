@@ -190,7 +190,10 @@ fn main() {
         }
         #[cfg(feature = "glsl-out")]
         "vert" | "frag" => {
-            use naga::back::glsl;
+            use naga::{
+                back::glsl::{self, Options, Version},
+                ShaderStage,
+            };
 
             let mut file = fs::OpenOptions::new()
                 .write(true)
@@ -199,7 +202,12 @@ fn main() {
                 .open(&args[2])
                 .unwrap();
 
-            glsl::write(&module, &mut file).unwrap();
+            let options = Options {
+                version: Version::Desktop(460),
+                entry_point: (String::from("main"), ShaderStage::Compute),
+            };
+
+            glsl::write(&module, &mut file, options).unwrap();
         }
         #[cfg(feature = "serialize")]
         "ron" => {
