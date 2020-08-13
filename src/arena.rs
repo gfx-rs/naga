@@ -9,6 +9,8 @@ use std::{cmp::Ordering, fmt, hash, marker::PhantomData, num::NonZeroU32};
 type Index = NonZeroU32;
 
 /// A strongly typed reference to a SPIR-V element.
+#[cfg_attr(feature = "serialize", derive(crate::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(crate::Deserialize))]
 pub struct Handle<T> {
     index: Index,
     marker: PhantomData<T>,
@@ -78,6 +80,8 @@ impl<T> Handle<T> {
 /// The arena can be indexed using the given handle to obtain
 /// a reference to the stored item.
 #[derive(Debug)]
+#[cfg_attr(feature = "serialize", derive(crate::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(crate::Deserialize))]
 pub struct Arena<T> {
     /// Values of this arena.
     data: Vec<T>,
