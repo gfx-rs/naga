@@ -79,6 +79,10 @@ pub fn write(module: &Module, out: &mut impl Write, options: Options) -> Result<
         if es { "es" } else { "core" }
     )?;
 
+    if es {
+        writeln!(out, "precision highp float;",)?;
+    }
+
     let mut counter = 0;
     let mut names = FastHashMap::default();
 
@@ -175,10 +179,18 @@ pub fn write(module: &Module, out: &mut impl Write, options: Options) -> Result<
             continue;
         }
 
-        let name = namer(global.name.as_ref());
+        let name = if !es {
+            namer(global.name.as_ref())
+        } else {
+            global.name.clone().ok_or(Error::Custom(String::from(
+                "Global names must be specified in es",
+            )))?
+        };
 
         if let Some(ref binding) = global.binding {
-            write!(out, "layout({}) ", Binding(binding.clone()))?;
+            if !es {
+                write!(out, "layout({}) ", Binding(binding.clone()))?;
+            }
         }
 
         if let Some(interpolation) = global.interpolation {
@@ -210,7 +222,11 @@ pub fn write(module: &Module, out: &mut impl Write, options: Options) -> Result<
             continue;
         }
 
-        let name = namer(func.name.as_ref());
+        let name = if entry_point.function != handle {
+            namer(func.name.as_ref())
+        } else {
+            String::from("main")
+        };
 
         writeln!(
             out,
