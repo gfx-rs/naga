@@ -2,7 +2,7 @@ use crate::{
     Arena, ArraySize, BinaryOperator, BuiltIn, Constant, ConstantInner, DerivativeAxis, Expression,
     FastHashMap, Function, FunctionOrigin, GlobalVariable, Handle, ImageFlags, Interpolation,
     IntrinsicFunction, LocalVariable, Module, ScalarKind, ShaderStage, Statement, StorageClass,
-    Type, TypeInner, UnaryOperator,
+    StructMember, Type, TypeInner, UnaryOperator,
 };
 use std::{
     borrow::Cow,
@@ -80,7 +80,7 @@ pub fn write(module: &Module, out: &mut impl Write, options: Options) -> Result<
     )?;
 
     if es {
-        writeln!(out, "precision highp float;",)?;
+        writeln!(out, "precision highp float;")?;
     }
 
     let mut counter = 0;
@@ -107,7 +107,15 @@ pub fn write(module: &Module, out: &mut impl Write, options: Options) -> Result<
         }
     };
 
+    let entry_point = module
+        .entry_points
+        .iter()
+        .find(|entry| entry.name == options.entry_point.0 && entry.stage == options.entry_point.1)
+        .ok_or_else(|| Error::Custom(String::from("Entry point not found")))?;
+    let func = &module.functions[entry_point.function];
+
     let mut structs = FastHashMap::default();
+    let mut built_structs = FastHashMap::default();
 
     // Do a first pass to collect names
     for (handle, ty) in module.types.iter() {
@@ -121,35 +129,38 @@ pub fn write(module: &Module, out: &mut impl Write, options: Options) -> Result<
         }
     }
 
+    for ((_, global), usage) in module.global_variables.iter().zip(func.global_usage.iter()) {
+        if usage.is_empty() {
+            continue;
+        }
+
+        let block = matches!(
+            global.class,
+            StorageClass::Input
+                | StorageClass::Output
+                | StorageClass::StorageBuffer
+                | StorageClass::Uniform
+        );
+
+        match module.types[global.ty].inner {
+            TypeInner::Struct { .. } if block => {
+                built_structs.insert(global.ty, ());
+            }
+            _ => {}
+        }
+    }
+
     // Do a second pass to build the structs
-    // TODO: glsl is order dependent so we need to build structs in order
     for (handle, ty) in module.types.iter() {
         match ty.inner {
             TypeInner::Struct { ref members } => {
-                let name = structs.get(&handle).unwrap();
-
-                writeln!(out, "struct {} {{", name)?;
-                for (idx, member) in members.iter().enumerate() {
-                    writeln!(
-                        out,
-                        "   {} {};",
-                        write_type(member.ty, &module.types, &structs)?,
-                        member.name.clone().unwrap_or_else(|| idx.to_string())
-                    )?;
-                }
-                writeln!(out, "}};")?;
+                write_struct(handle, members, module, &structs, out, &mut built_structs)?;
             }
             _ => continue,
         }
     }
 
     let mut globals_lookup = FastHashMap::default();
-    let entry_point = module
-        .entry_points
-        .iter()
-        .find(|entry| entry.name == options.entry_point.0 && entry.stage == options.entry_point.1)
-        .ok_or_else(|| Error::Custom(String::from("Entry point not found")))?;
-    let func = &module.functions[entry_point.function];
 
     for ((handle, global), usage) in module.global_variables.iter().zip(func.global_usage.iter()) {
         if usage.is_empty() {
@@ -182,9 +193,9 @@ pub fn write(module: &Module, out: &mut impl Write, options: Options) -> Result<
         let name = if !es {
             namer(global.name.as_ref())
         } else {
-            global.name.clone().ok_or(Error::Custom(String::from(
-                "Global names must be specified in es",
-            )))?
+            global.name.clone().ok_or_else(|| {
+                Error::Custom(String::from("Global names must be specified in es"))
+            })?
         };
 
         if let Some(ref binding) = global.binding {
@@ -197,13 +208,19 @@ pub fn write(module: &Module, out: &mut impl Write, options: Options) -> Result<
             write!(out, "{} ", write_interpolation(interpolation)?)?;
         }
 
-        let name = namer(global.name.as_ref());
+        let block = matches!(
+            global.class,
+            StorageClass::Input
+                | StorageClass::Output
+                | StorageClass::StorageBuffer
+                | StorageClass::Uniform
+        );
 
         writeln!(
             out,
             "{}{} {};",
-            write_storage_class(global.class)?,
-            write_type(global.ty, &module.types, &structs)?,
+            write_storage_class(global.class, es)?,
+            write_type(global.ty, &module.types, &structs, block)?,
             name
         )?;
 
@@ -235,12 +252,13 @@ pub fn write(module: &Module, out: &mut impl Write, options: Options) -> Result<
                 .map_or(Ok(String::from("void")), |ty| write_type(
                     ty,
                     &module.types,
-                    &structs
+                    &structs,
+                    false
                 ))?,
             name,
             func.parameter_types
                 .iter()
-                .map(|ty| write_type(*ty, &module.types, &structs))
+                .map(|ty| write_type(*ty, &module.types, &structs, false))
                 .collect::<Result<Vec<_>, _>>()?
                 .join(","),
         )?;
@@ -248,6 +266,7 @@ pub fn write(module: &Module, out: &mut impl Write, options: Options) -> Result<
         functions.insert(handle, name);
     }
 
+    // TODO: glsl is order dependent so we need to build functions in order
     for (handle, name) in functions.iter() {
         let func = &module.functions[*handle];
 
@@ -258,12 +277,13 @@ pub fn write(module: &Module, out: &mut impl Write, options: Options) -> Result<
                 .map_or(Ok(String::from("void")), |ty| write_type(
                     ty,
                     &module.types,
-                    &structs
+                    &structs,
+                    false
                 ))?,
             name,
             func.parameter_types
                 .iter()
-                .map(|ty| write_type(*ty, &module.types, &structs))
+                .map(|ty| write_type(*ty, &module.types, &structs, false))
                 .collect::<Result<Vec<_>, _>>()?
                 .join(","),
         )?;
@@ -273,6 +293,20 @@ pub fn write(module: &Module, out: &mut impl Write, options: Options) -> Result<
             .iter()
             .map(|(handle, local)| (handle, namer(local.name.as_ref())))
             .collect();
+
+        for (handle, name) in locals.iter() {
+            writeln!(
+                out,
+                "{} {};",
+                write_type(
+                    func.local_variables[*handle].ty,
+                    &module.types,
+                    &structs,
+                    false
+                )?,
+                name
+            )?;
+        }
 
         let mut builder = StatementBuilder {
             functions: &functions,
@@ -290,7 +324,12 @@ pub fn write(module: &Module, out: &mut impl Write, options: Options) -> Result<
         };
 
         for (handle, name) in locals.iter() {
-            let ty = write_type(func.local_variables[*handle].ty, &module.types, &structs)?;
+            let ty = write_type(
+                func.local_variables[*handle].ty,
+                &module.types,
+                &structs,
+                false,
+            )?;
             let init = func.local_variables[*handle].init;
             if let Some(init) = init {
                 writeln!(
@@ -544,12 +583,12 @@ fn write_expression<'a>(
                     columns as u8,
                     rows as u8,
                 ),
-                TypeInner::Array { .. } => write_type(*ty, &module.types, builder.structs)?,
+                TypeInner::Array { .. } => write_type(*ty, &module.types, builder.structs, false)?,
                 TypeInner::Struct { .. } => builder.structs.get(ty).unwrap().clone(),
                 _ => {
                     return Err(Error::Custom(format!(
                         "Cannot compose type {}",
-                        write_type(*ty, &module.types, builder.structs)?
+                        write_type(*ty, &module.types, builder.structs, false)?
                     )))
                 }
             };
@@ -613,7 +652,7 @@ fn write_expression<'a>(
                     _ => {
                         return Err(Error::Custom(format!(
                             "Cannot build image of {}",
-                            write_type(*base, &module.types, builder.structs)?
+                            write_type(*base, &module.types, builder.structs, false)?
                         )))
                     }
                 },
@@ -863,11 +902,12 @@ fn write_constant(
                 TypeInner::Matrix { columns, rows, .. } =>
                     format!("mat{}x{}", columns as u8, rows as u8,),
                 TypeInner::Struct { .. } => builder.structs.get(&constant.ty).unwrap().clone(),
-                TypeInner::Array { .. } => write_type(constant.ty, &module.types, builder.structs)?,
+                TypeInner::Array { .. } =>
+                    write_type(constant.ty, &module.types, builder.structs, false)?,
                 _ =>
                     return Err(Error::Custom(format!(
                         "Cannot build constant of type {}",
-                        write_type(constant.ty, &module.types, builder.structs)?
+                        write_type(constant.ty, &module.types, builder.structs, false)?
                     ))),
             },
             components
@@ -883,6 +923,7 @@ fn write_type<'a>(
     ty: Handle<Type>,
     types: &'a Arena<Type>,
     structs: &'a FastHashMap<Handle<Type>, String>,
+    block: bool,
 ) -> Result<String, Error> {
     Ok(match types[ty].inner {
         TypeInner::Scalar { kind, width } => match kind {
@@ -942,13 +983,33 @@ fn write_type<'a>(
             columns as u8,
             rows as u8
         ),
-        TypeInner::Pointer { base, .. } => write_type(base, types, structs)?,
+        TypeInner::Pointer { base, .. } => write_type(base, types, structs, false)?,
         TypeInner::Array { base, size, .. } => format!(
             "{}[{}]",
-            write_type(base, types, structs)?,
+            write_type(base, types, structs, false)?,
             write_array_size(size)?
         ),
-        TypeInner::Struct { .. } => structs.get(&ty).unwrap().clone(),
+        TypeInner::Struct { ref members } => {
+            if block {
+                let mut out = String::new();
+                writeln!(&mut out, "{} {{", structs.get(&ty).unwrap().clone(),)?;
+
+                for (idx, member) in members.iter().enumerate() {
+                    writeln!(
+                        &mut out,
+                        "{} {};",
+                        write_type(member.ty, types, structs, false)?,
+                        member.name.clone().unwrap_or_else(|| idx.to_string())
+                    )?;
+                }
+
+                write!(&mut out, "}}")?;
+
+                out
+            } else {
+                structs.get(&ty).unwrap().clone()
+            }
+        }
         TypeInner::Image { base, dim, flags } => format!(
             "{}texture{}{}",
             match types[base].inner {
@@ -964,7 +1025,7 @@ fn write_type<'a>(
                 _ =>
                     return Err(Error::Custom(format!(
                         "Cannot build image of type {}",
-                        write_type(base, types, structs)?
+                        write_type(base, types, structs, block)?
                     ))),
             },
             ImageDimension(dim),
@@ -983,16 +1044,32 @@ fn write_type<'a>(
     })
 }
 
-fn write_storage_class(class: StorageClass) -> Result<String, Error> {
+fn write_storage_class(class: StorageClass, es: bool) -> Result<String, Error> {
     Ok(String::from(match class {
         StorageClass::Constant => "const ",
         StorageClass::Function => "",
         StorageClass::Input => "in ",
         StorageClass::Output => "out ",
         StorageClass::Private => "",
-        StorageClass::StorageBuffer => "buffer ",
+        StorageClass::StorageBuffer => {
+            if !es {
+                "buffer "
+            } else {
+                return Err(Error::Custom(String::from(
+                    "buffer storage class isn't supported in glsl es",
+                )));
+            }
+        }
         StorageClass::Uniform => "uniform ",
-        StorageClass::WorkGroup => "shared ",
+        StorageClass::WorkGroup => {
+            if !es {
+                "shared "
+            } else {
+                return Err(Error::Custom(String::from(
+                    "workgroup storage class isn't supported in glsl es",
+                )));
+            }
+        }
     }))
 }
 
@@ -1046,4 +1123,42 @@ impl fmt::Display for ImageDimension {
             }
         )
     }
+}
+
+fn write_struct(
+    handle: Handle<Type>,
+    members: &[StructMember],
+    module: &Module,
+    structs: &FastHashMap<Handle<Type>, String>,
+    out: &mut impl Write,
+    built_structs: &mut FastHashMap<Handle<Type>, ()>,
+) -> Result<(), Error> {
+    if built_structs.get(&handle).is_some() {
+        return Ok(());
+    }
+
+    let mut tmp = String::new();
+
+    let name = structs.get(&handle).unwrap();
+
+    writeln!(&mut tmp, "struct {} {{", name)?;
+    for (idx, member) in members.iter().enumerate() {
+        if let TypeInner::Struct { ref members } = module.types[member.ty].inner {
+            write_struct(member.ty, members, module, structs, out, built_structs)?;
+        }
+
+        writeln!(
+            &mut tmp,
+            "   {} {};",
+            write_type(member.ty, &module.types, &structs, false)?,
+            member.name.clone().unwrap_or_else(|| idx.to_string())
+        )?;
+    }
+    writeln!(&mut tmp, "}};")?;
+
+    built_structs.insert(handle, ());
+
+    writeln!(out, "{}", tmp)?;
+
+    Ok(())
 }

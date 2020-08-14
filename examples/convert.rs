@@ -207,7 +207,7 @@ fn main() {
                 entry_point: (
                     String::from("main"),
                     if stage == "vert" {
-                        ShaderStage::Vertex
+                        ShaderStage::Compute
                     } else {
                         ShaderStage::Fragment
                     },
