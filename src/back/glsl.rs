@@ -45,6 +45,15 @@ pub enum Version {
     Embedded(u16),
 }
 
+impl fmt::Display for Version {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Version::Desktop(v) => write!(f, "{} core", v),
+            Version::Embedded(v) => write!(f, "{} es", v),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Options {
     pub version: Version,
@@ -52,20 +61,36 @@ pub struct Options {
 }
 
 const SUPPORTED_CORE_VERSIONS: &[u16] = &[450, 460];
-const SUPPORTED_ES_VERSIONS: &[u16] = &[300];
+const SUPPORTED_ES_VERSIONS: &[u16] = &[300, 310];
+
+bitflags::bitflags! {
+    struct SupportedFeatures: u32 {
+        const BUFFER_STORAGE = 1;
+        const SHARED_STORAGE = 1 << 1;
+        const SEPARATE_IMAGE_SAMPLER = 1 << 2;
+        const DOUBLE_TYPE = 1 << 3;
+        const NON_FLOAT_MATRICES = 1 << 4;
+    }
+}
 
 pub fn write(module: &Module, out: &mut impl Write, options: Options) -> Result<(), Error> {
     let (version, es) = match options.version {
         Version::Desktop(v) => {
             if !SUPPORTED_CORE_VERSIONS.contains(&v) {
-                return Err(Error::Custom(format!("Version not supported {} core", v)));
+                return Err(Error::Custom(format!(
+                    "Version not supported {}",
+                    options.version
+                )));
             }
 
             (v, false)
         }
         Version::Embedded(v) => {
             if !SUPPORTED_ES_VERSIONS.contains(&v) {
-                return Err(Error::Custom(format!("Version not supported {} es", v)));
+                return Err(Error::Custom(format!(
+                    "Version not supported {}",
+                    options.version
+                )));
             }
 
             (v, true)
@@ -114,6 +139,32 @@ pub fn write(module: &Module, out: &mut impl Write, options: Options) -> Result<
         .ok_or_else(|| Error::Custom(String::from("Entry point not found")))?;
     let func = &module.functions[entry_point.function];
 
+    if entry_point.stage == ShaderStage::Compute {
+        if (es && version < 310) || (!es && version < 430) {
+            return Err(Error::Custom(format!(
+                "Version {} doesn't support compute shaders",
+                options.version
+            )));
+        }
+
+        if !es && version < 460 {
+            writeln!(out, "#extension ARB_compute_shader : require")?;
+        }
+    }
+
+    let mut features = SupportedFeatures::empty();
+
+    if !es && version >= 450 {
+        features |= SupportedFeatures::SEPARATE_IMAGE_SAMPLER;
+        features |= SupportedFeatures::DOUBLE_TYPE;
+        features |= SupportedFeatures::NON_FLOAT_MATRICES;
+    }
+
+    if !es || version > 300 {
+        features |= SupportedFeatures::BUFFER_STORAGE;
+        features |= SupportedFeatures::SHARED_STORAGE;
+    }
+
     let mut structs = FastHashMap::default();
     let mut built_structs = FastHashMap::default();
 
@@ -154,7 +205,15 @@ pub fn write(module: &Module, out: &mut impl Write, options: Options) -> Result<
     for (handle, ty) in module.types.iter() {
         match ty.inner {
             TypeInner::Struct { ref members } => {
-                write_struct(handle, members, module, &structs, out, &mut built_structs)?;
+                write_struct(
+                    handle,
+                    members,
+                    module,
+                    &structs,
+                    out,
+                    &mut built_structs,
+                    features,
+                )?;
             }
             _ => continue,
         }
@@ -208,19 +267,19 @@ pub fn write(module: &Module, out: &mut impl Write, options: Options) -> Result<
             write!(out, "{} ", write_interpolation(interpolation)?)?;
         }
 
-        let block = matches!(
-            global.class,
+        let block = match global.class {
             StorageClass::Input
-                | StorageClass::Output
-                | StorageClass::StorageBuffer
-                | StorageClass::Uniform
-        );
+            | StorageClass::Output
+            | StorageClass::StorageBuffer
+            | StorageClass::Uniform => Some(namer(None)),
+            _ => None,
+        };
 
         writeln!(
             out,
             "{}{} {};",
-            write_storage_class(global.class, es)?,
-            write_type(global.ty, &module.types, &structs, block)?,
+            write_storage_class(global.class, features)?,
+            write_type(global.ty, &module.types, &structs, block, features)?,
             name
         )?;
 
@@ -253,12 +312,13 @@ pub fn write(module: &Module, out: &mut impl Write, options: Options) -> Result<
                     ty,
                     &module.types,
                     &structs,
-                    false
+                    None,
+                    features
                 ))?,
             name,
             func.parameter_types
                 .iter()
-                .map(|ty| write_type(*ty, &module.types, &structs, false))
+                .map(|ty| write_type(*ty, &module.types, &structs, None, features))
                 .collect::<Result<Vec<_>, _>>()?
                 .join(","),
         )?;
@@ -266,7 +326,6 @@ pub fn write(module: &Module, out: &mut impl Write, options: Options) -> Result<
         functions.insert(handle, name);
     }
 
-    // TODO: glsl is order dependent so we need to build functions in order
     for (handle, name) in functions.iter() {
         let func = &module.functions[*handle];
 
@@ -278,12 +337,13 @@ pub fn write(module: &Module, out: &mut impl Write, options: Options) -> Result<
                     ty,
                     &module.types,
                     &structs,
-                    false
+                    None,
+                    features
                 ))?,
             name,
             func.parameter_types
                 .iter()
-                .map(|ty| write_type(*ty, &module.types, &structs, false))
+                .map(|ty| write_type(*ty, &module.types, &structs, None, features))
                 .collect::<Result<Vec<_>, _>>()?
                 .join(","),
         )?;
@@ -302,7 +362,8 @@ pub fn write(module: &Module, out: &mut impl Write, options: Options) -> Result<
                     func.local_variables[*handle].ty,
                     &module.types,
                     &structs,
-                    false
+                    None,
+                    features
                 )?,
                 name
             )?;
@@ -321,6 +382,7 @@ pub fn write(module: &Module, out: &mut impl Write, options: Options) -> Result<
                 .collect(),
             expressions: &func.expressions,
             locals: &func.local_variables,
+            features,
         };
 
         for (handle, name) in locals.iter() {
@@ -328,7 +390,8 @@ pub fn write(module: &Module, out: &mut impl Write, options: Options) -> Result<
                 func.local_variables[*handle].ty,
                 &module.types,
                 &structs,
-                false,
+                None,
+                features,
             )?;
             let init = func.local_variables[*handle].init;
             if let Some(init) = init {
@@ -375,6 +438,7 @@ struct StatementBuilder<'a> {
     pub args: &'a FastHashMap<u32, (String, Handle<Type>)>,
     pub expressions: &'a Arena<Expression>,
     pub locals: &'a Arena<LocalVariable>,
+    pub features: SupportedFeatures,
 }
 
 fn write_statement(
@@ -536,7 +600,12 @@ fn write_expression<'a>(
             }
         }
         Expression::Constant(constant) => (
-            write_constant(&module.constants[*constant], module, builder)?,
+            write_constant(
+                &module.constants[*constant],
+                module,
+                builder,
+                builder.features,
+            )?,
             Cow::Borrowed(&module.types[module.constants[*constant].ty].inner),
         ),
         Expression::Compose { ty, components } => {
@@ -583,12 +652,14 @@ fn write_expression<'a>(
                     columns as u8,
                     rows as u8,
                 ),
-                TypeInner::Array { .. } => write_type(*ty, &module.types, builder.structs, false)?,
+                TypeInner::Array { .. } => {
+                    write_type(*ty, &module.types, builder.structs, None, builder.features)?
+                }
                 TypeInner::Struct { .. } => builder.structs.get(ty).unwrap().clone(),
                 _ => {
                     return Err(Error::Custom(format!(
                         "Cannot compose type {}",
-                        write_type(*ty, &module.types, builder.structs, false)?
+                        write_type(*ty, &module.types, builder.structs, None, builder.features)?
                     )))
                 }
             };
@@ -652,7 +723,13 @@ fn write_expression<'a>(
                     _ => {
                         return Err(Error::Custom(format!(
                             "Cannot build image of {}",
-                            write_type(*base, &module.types, builder.structs, false)?
+                            write_type(
+                                *base,
+                                &module.types,
+                                builder.structs,
+                                None,
+                                builder.features
+                            )?
                         )))
                     }
                 },
@@ -889,10 +966,11 @@ fn write_constant(
     constant: &Constant,
     module: &Module,
     builder: &StatementBuilder<'_>,
+    features: SupportedFeatures,
 ) -> Result<String, Error> {
     Ok(match constant.inner {
         ConstantInner::Sint(int) => int.to_string(),
-        ConstantInner::Uint(int) => int.to_string(),
+        ConstantInner::Uint(int) => format!("{}u", int),
         ConstantInner::Float(float) => format!("{:?}", float),
         ConstantInner::Bool(boolean) => boolean.to_string(),
         ConstantInner::Composite(ref components) => format!(
@@ -903,27 +981,33 @@ fn write_constant(
                     format!("mat{}x{}", columns as u8, rows as u8,),
                 TypeInner::Struct { .. } => builder.structs.get(&constant.ty).unwrap().clone(),
                 TypeInner::Array { .. } =>
-                    write_type(constant.ty, &module.types, builder.structs, false)?,
+                    write_type(constant.ty, &module.types, builder.structs, None, features)?,
                 _ =>
                     return Err(Error::Custom(format!(
                         "Cannot build constant of type {}",
-                        write_type(constant.ty, &module.types, builder.structs, false)?
+                        write_type(constant.ty, &module.types, builder.structs, None, features)?
                     ))),
             },
             components
                 .iter()
-                .map(|component| write_constant(&module.constants[*component], module, builder))
+                .map(|component| write_constant(
+                    &module.constants[*component],
+                    module,
+                    builder,
+                    features
+                ))
                 .collect::<Result<Vec<_>, _>>()?
                 .join(","),
         ),
     })
 }
 
-fn write_type<'a>(
+fn write_type(
     ty: Handle<Type>,
-    types: &'a Arena<Type>,
-    structs: &'a FastHashMap<Handle<Type>, String>,
-    block: bool,
+    types: &Arena<Type>,
+    structs: &FastHashMap<Handle<Type>, String>,
+    block: Option<String>,
+    features: SupportedFeatures,
 ) -> Result<String, Error> {
     Ok(match types[ty].inner {
         TypeInner::Scalar { kind, width } => match kind {
@@ -931,7 +1015,7 @@ fn write_type<'a>(
             ScalarKind::Uint => String::from("uint"),
             ScalarKind::Float => match width {
                 4 => String::from("float"),
-                8 => String::from("double"),
+                8 if features.contains(SupportedFeatures::DOUBLE_TYPE) => String::from("double"),
                 _ => {
                     return Err(Error::Custom(format!(
                         "Cannot build float of width {}",
@@ -948,7 +1032,7 @@ fn write_type<'a>(
                 ScalarKind::Uint => "u",
                 ScalarKind::Float => match width {
                     4 => "",
-                    8 => "d",
+                    8 if features.contains(SupportedFeatures::DOUBLE_TYPE) => "d",
                     _ =>
                         return Err(Error::Custom(format!(
                             "Cannot build float of width {}",
@@ -967,38 +1051,46 @@ fn write_type<'a>(
         } => format!(
             "{}mat{}x{}",
             match kind {
-                ScalarKind::Sint => "i",
-                ScalarKind::Uint => "u",
+                ScalarKind::Sint if features.contains(SupportedFeatures::NON_FLOAT_MATRICES) => "i",
+                ScalarKind::Uint if features.contains(SupportedFeatures::NON_FLOAT_MATRICES) => "u",
                 ScalarKind::Float => match width {
                     4 => "",
-                    8 => "d",
+                    8 if features.contains(
+                        SupportedFeatures::DOUBLE_TYPE & SupportedFeatures::NON_FLOAT_MATRICES
+                    ) =>
+                        "d",
                     _ =>
                         return Err(Error::Custom(format!(
                             "Cannot build float of width {}",
                             width
                         ))),
                 },
-                ScalarKind::Bool => "b",
+                ScalarKind::Bool if features.contains(SupportedFeatures::NON_FLOAT_MATRICES) => "b",
+                _ =>
+                    return Err(Error::Custom(format!(
+                        "Cannot build matrix of base type {:?}",
+                        kind
+                    ))),
             },
             columns as u8,
             rows as u8
         ),
-        TypeInner::Pointer { base, .. } => write_type(base, types, structs, false)?,
+        TypeInner::Pointer { base, .. } => write_type(base, types, structs, None, features)?,
         TypeInner::Array { base, size, .. } => format!(
             "{}[{}]",
-            write_type(base, types, structs, false)?,
+            write_type(base, types, structs, None, features)?,
             write_array_size(size)?
         ),
         TypeInner::Struct { ref members } => {
-            if block {
+            if let Some(name) = block {
                 let mut out = String::new();
-                writeln!(&mut out, "{} {{", structs.get(&ty).unwrap().clone(),)?;
+                writeln!(&mut out, "{} {{", name)?;
 
                 for (idx, member) in members.iter().enumerate() {
                     writeln!(
                         &mut out,
                         "{} {};",
-                        write_type(member.ty, types, structs, false)?,
+                        write_type(member.ty, types, structs, None, features)?,
                         member.name.clone().unwrap_or_else(|| idx.to_string())
                     )?;
                 }
@@ -1025,7 +1117,7 @@ fn write_type<'a>(
                 _ =>
                     return Err(Error::Custom(format!(
                         "Cannot build image of type {}",
-                        write_type(base, types, structs, block)?
+                        write_type(base, types, structs, block, features)?
                     ))),
             },
             ImageDimension(dim),
@@ -1044,7 +1136,7 @@ fn write_type<'a>(
     })
 }
 
-fn write_storage_class(class: StorageClass, es: bool) -> Result<String, Error> {
+fn write_storage_class(class: StorageClass, features: SupportedFeatures) -> Result<String, Error> {
     Ok(String::from(match class {
         StorageClass::Constant => "const ",
         StorageClass::Function => "",
@@ -1052,7 +1144,7 @@ fn write_storage_class(class: StorageClass, es: bool) -> Result<String, Error> {
         StorageClass::Output => "out ",
         StorageClass::Private => "",
         StorageClass::StorageBuffer => {
-            if !es {
+            if features.contains(SupportedFeatures::BUFFER_STORAGE) {
                 "buffer "
             } else {
                 return Err(Error::Custom(String::from(
@@ -1062,7 +1154,7 @@ fn write_storage_class(class: StorageClass, es: bool) -> Result<String, Error> {
         }
         StorageClass::Uniform => "uniform ",
         StorageClass::WorkGroup => {
-            if !es {
+            if features.contains(SupportedFeatures::SHARED_STORAGE) {
                 "shared "
             } else {
                 return Err(Error::Custom(String::from(
@@ -1132,6 +1224,7 @@ fn write_struct(
     structs: &FastHashMap<Handle<Type>, String>,
     out: &mut impl Write,
     built_structs: &mut FastHashMap<Handle<Type>, ()>,
+    features: SupportedFeatures,
 ) -> Result<(), Error> {
     if built_structs.get(&handle).is_some() {
         return Ok(());
@@ -1144,13 +1237,21 @@ fn write_struct(
     writeln!(&mut tmp, "struct {} {{", name)?;
     for (idx, member) in members.iter().enumerate() {
         if let TypeInner::Struct { ref members } = module.types[member.ty].inner {
-            write_struct(member.ty, members, module, structs, out, built_structs)?;
+            write_struct(
+                member.ty,
+                members,
+                module,
+                structs,
+                out,
+                built_structs,
+                features,
+            )?;
         }
 
         writeln!(
             &mut tmp,
             "   {} {};",
-            write_type(member.ty, &module.types, &structs, false)?,
+            write_type(member.ty, &module.types, &structs, None, features)?,
             member.name.clone().unwrap_or_else(|| idx.to_string())
         )?;
     }

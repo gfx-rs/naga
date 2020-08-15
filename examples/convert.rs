@@ -189,7 +189,7 @@ fn main() {
             fs::write(&args[2], bytes.as_slice()).unwrap();
         }
         #[cfg(feature = "glsl-out")]
-        stage @ "vert" | stage @ "frag" => {
+        stage @ "vert" | stage @ "frag" | stage @ "comp" => {
             use naga::{
                 back::glsl::{self, Options, Version},
                 ShaderStage,
@@ -203,13 +203,14 @@ fn main() {
                 .unwrap();
 
             let options = Options {
-                version: Version::Embedded(300),
+                version: Version::Embedded(310),
                 entry_point: (
                     String::from("main"),
-                    if stage == "vert" {
-                        ShaderStage::Compute
-                    } else {
-                        ShaderStage::Fragment
+                    match stage {
+                        "vert" => ShaderStage::Vertex,
+                        "frag" => ShaderStage::Fragment,
+                        "comp" => ShaderStage::Compute,
+                        _ => unreachable!(),
                     },
                 ),
             };
