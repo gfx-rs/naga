@@ -170,15 +170,6 @@ pub fn write(module: &Module, out: &mut impl Write) -> Result<(), Error> {
             .map(|(handle, local)| (handle, namer(local.name.as_ref())))
             .collect();
 
-        for (handle, name) in locals.iter() {
-            writeln!(
-                out,
-                "{} {};",
-                write_type(func.local_variables[*handle].ty, &module.types, &structs)?,
-                name
-            )?;
-        }
-
         let mut builder = StatementBuilder {
             functions: &functions,
             globals: &globals_lookup,
@@ -193,6 +184,28 @@ pub fn write(module: &Module, out: &mut impl Write) -> Result<(), Error> {
             expressions: &func.expressions,
             locals: &func.local_variables,
         };
+
+        for (handle, name) in locals.iter() {
+            let init = func.local_variables[*handle].init;
+            if let Some(init) = init {
+                let expr = &func.expressions[init];
+
+                writeln!(
+                    out,
+                    "{ty} {name} = {init};",
+                    ty = write_type(func.local_variables[*handle].ty, &module.types, &structs)?,
+                    name = name,
+                    init = write_expression(expr, &module, &mut builder)?.0,
+                )?;
+            } else {
+                writeln!(
+                    out,
+                    "{} {};",
+                    write_type(func.local_variables[*handle].ty, &module.types, &structs)?,
+                    name
+                )?;
+            }
+        }
 
         for sta in func.body.iter() {
             writeln!(out, "{}", write_statement(sta, module, &mut builder)?)?;
