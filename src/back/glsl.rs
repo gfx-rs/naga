@@ -186,24 +186,18 @@ pub fn write(module: &Module, out: &mut impl Write) -> Result<(), Error> {
         };
 
         for (handle, name) in locals.iter() {
+            let ty = write_type(func.local_variables[*handle].ty, &module.types, &structs)?;
             let init = func.local_variables[*handle].init;
             if let Some(init) = init {
-                let expr = &func.expressions[init];
-
                 writeln!(
                     out,
-                    "{ty} {name} = {init};",
-                    ty = write_type(func.local_variables[*handle].ty, &module.types, &structs)?,
-                    name = name,
-                    init = write_expression(expr, &module, &mut builder)?.0,
+                    "{} {} = {init};",
+                    ty,
+                    name,
+                    init = write_expression(&func.expressions[init], &module, &mut builder)?.0,
                 )?;
             } else {
-                writeln!(
-                    out,
-                    "{} {};",
-                    write_type(func.local_variables[*handle].ty, &module.types, &structs)?,
-                    name
-                )?;
+                writeln!(out, "{} {};", ty, name,)?;
             }
         }
 
