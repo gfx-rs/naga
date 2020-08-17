@@ -119,22 +119,6 @@ pub fn consume_token(mut input: &str) -> (Option<Token>, &str) {
                 "double" => (Some(Token::Double(meta)), rest),
                 "int" => (Some(Token::Int(meta)), rest),
                 "uint" => (Some(Token::Uint(meta)), rest),
-                // "vec2" => (Some(Token::Vec2(meta)), rest),
-                // "bvec2" => (Some(Token::Bvec2(meta)), rest),
-                // "ivec2" => (Some(Token::Ivec2(meta)), rest),
-                // "uvec2" => (Some(Token::Uvec2(meta)), rest),
-                // "dvec2" => (Some(Token::Dvec2(meta)), rest),
-                // "vec3" => (Some(Token::Vec3(meta)), rest),
-                // "bvec3" => (Some(Token::Bvec3(meta)), rest),
-                // "ivec3" => (Some(Token::Ivec3(meta)), rest),
-                // "uvec3" => (Some(Token::Uvec3(meta)), rest),
-                // "dvec3" => (Some(Token::Dvec3(meta)), rest),
-                // "vec4" => (Some(Token::Vec4(meta)), rest),
-                // "bvec4" => (Some(Token::Bvec4(meta)), rest),
-                // "ivec4" => (Some(Token::Ivec4(meta)), rest),
-                // "uvec4" => (Some(Token::Uvec4(meta)), rest),
-                // "dvec4" => (Some(Token::Dvec4(meta)), rest),
-                //TODO: remaining types
                 word => {
                     use crate::{ScalarKind, VectorSize};
 
