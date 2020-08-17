@@ -70,6 +70,9 @@ bitflags::bitflags! {
         const SEPARATE_IMAGE_SAMPLER = 1 << 2;
         const DOUBLE_TYPE = 1 << 3;
         const NON_FLOAT_MATRICES = 1 << 4;
+        const MULTISAMPLED_TEXTURES = 1 << 5;
+        const MULTISAMPLED_TEXTURE_ARRAYS = 1 << 6;
+        const NON_2D_TEXTURE_ARRAYS = 1 << 7;
     }
 }
 
@@ -154,15 +157,18 @@ pub fn write(module: &Module, out: &mut impl Write, options: Options) -> Result<
 
     let mut features = SupportedFeatures::empty();
 
-    if !es && version >= 450 {
+    if !es && version > 440 {
         features |= SupportedFeatures::SEPARATE_IMAGE_SAMPLER;
         features |= SupportedFeatures::DOUBLE_TYPE;
         features |= SupportedFeatures::NON_FLOAT_MATRICES;
+        features |= SupportedFeatures::MULTISAMPLED_TEXTURE_ARRAYS;
+        features |= SupportedFeatures::NON_2D_TEXTURE_ARRAYS;
     }
 
     if !es || version > 300 {
         features |= SupportedFeatures::BUFFER_STORAGE;
         features |= SupportedFeatures::SHARED_STORAGE;
+        features |= SupportedFeatures::MULTISAMPLED_TEXTURES;
     }
 
     let mut structs = FastHashMap::default();
@@ -1102,27 +1108,38 @@ fn write_type(
                 structs.get(&ty).unwrap().clone()
             }
         }
-        TypeInner::Image { base, dim, flags } => format!(
-            "{}texture{}{}",
-            match types[base].inner {
-                TypeInner::Scalar { kind, .. } => match kind {
-                    ScalarKind::Sint => "i",
-                    ScalarKind::Uint => "u",
-                    ScalarKind::Float => "",
+        TypeInner::Image { base, dim, flags } => {
+            if flags.contains(ImageFlags::ARRAYED)
+                && dim != crate::ImageDimension::D2
+                && !features.contains(SupportedFeatures::NON_2D_TEXTURE_ARRAYS)
+            {
+                return Err(Error::Custom(String::from(
+                    "Arrayed non 2d images aren't supported",
+                )));
+            }
+
+            format!(
+                "{}texture{}{}",
+                match types[base].inner {
+                    TypeInner::Scalar { kind, .. } => match kind {
+                        ScalarKind::Sint => "i",
+                        ScalarKind::Uint => "u",
+                        ScalarKind::Float => "",
+                        _ =>
+                            return Err(Error::Custom(String::from(
+                                "Cannot build image of booleans",
+                            ))),
+                    },
                     _ =>
-                        return Err(Error::Custom(String::from(
-                            "Cannot build image of booleans",
+                        return Err(Error::Custom(format!(
+                            "Cannot build image of type {}",
+                            write_type(base, types, structs, block, features)?
                         ))),
                 },
-                _ =>
-                    return Err(Error::Custom(format!(
-                        "Cannot build image of type {}",
-                        write_type(base, types, structs, block, features)?
-                    ))),
-            },
-            ImageDimension(dim),
-            write_image_flags(flags)?
-        ),
+                ImageDimension(dim),
+                write_image_flags(flags, features)?
+            )
+        }
         TypeInner::DepthImage { dim, arrayed } => format!(
             "texture{}{}",
             ImageDimension(dim),
@@ -1187,15 +1204,29 @@ fn write_array_size(size: ArraySize) -> Result<String, Error> {
     })
 }
 
-fn write_image_flags(flags: ImageFlags) -> Result<String, Error> {
+fn write_image_flags(flags: ImageFlags, features: SupportedFeatures) -> Result<String, Error> {
     let mut out = String::new();
 
     if flags.contains(ImageFlags::MULTISAMPLED) {
-        write!(out, "MS")?;
+        if features.contains(SupportedFeatures::MULTISAMPLED_TEXTURES) {
+            write!(out, "MS")?;
+        } else {
+            return Err(Error::Custom(String::from(
+                "Multi sampled textures aren't supported",
+            )));
+        }
     }
 
     if flags.contains(ImageFlags::ARRAYED) {
         write!(out, "Array")?;
+    }
+
+    if flags.contains(ImageFlags::ARRAYED & ImageFlags::MULTISAMPLED)
+        && !features.contains(SupportedFeatures::MULTISAMPLED_TEXTURE_ARRAYS)
+    {
+        return Err(Error::Custom(String::from(
+            "Multi sampled texture arrays aren't supported",
+        )));
     }
 
     Ok(out)
