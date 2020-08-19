@@ -742,7 +742,7 @@ pomelo! {
         });
 
         let interpolation = d.type_qualifiers.iter().find_map(|tq| {
-            if let TypeQualifier::Interpolation(i) = tq { Some(i.clone()) } else { None }
+            if let TypeQualifier::Interpolation(i) = tq { Some(*i) } else { None }
         });
 
         for (id, initializer) in d.ids_initializers {
