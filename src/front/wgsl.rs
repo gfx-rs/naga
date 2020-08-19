@@ -458,7 +458,7 @@ impl Parser {
 
     fn get_interpolation(word: &str) -> Result<crate::Interpolation, Error<'_>> {
         match word {
-            "no_perspective" => Ok(crate::Interpolation::NoPerspective),
+            "linear" => Ok(crate::Interpolation::Linear),
             "flat" => Ok(crate::Interpolation::Flat),
             "centroid" => Ok(crate::Interpolation::Centroid),
             "sample" => Ok(crate::Interpolation::Sample),
@@ -982,7 +982,8 @@ impl Parser {
         let mut members = Vec::new();
         lexer.expect(Token::Paren('{'))?;
         loop {
-            let mut interpolation = None;
+            // Perspective is default when no qualifier is present.
+            let mut interpolation = crate::Interpolation::Perspective;
             let mut offset = !0;
             if lexer.skip(Token::DoubleParen('[')) {
                 self.scopes.push(Scope::Decoration);
@@ -1000,7 +1001,7 @@ impl Parser {
                             ready = false;
                         }
                         Token::Word("interpolate") if ready => {
-                            interpolation = Some(Self::get_interpolation(lexer.next_ident()?)?);
+                            interpolation = Self::get_interpolation(lexer.next_ident()?)?;
                             ready = false;
                         }
                         other => return Err(Error::Unexpected(other)),
@@ -1023,7 +1024,7 @@ impl Parser {
                 name: Some(name.to_owned()),
                 origin: crate::MemberOrigin::Offset(offset),
                 ty,
-                interpolation,
+                interpolation: Some(interpolation),
             });
         }
     }
@@ -1426,7 +1427,8 @@ impl Parser {
     ) -> Result<bool, Error<'a>> {
         // read decorations
         let mut binding = None;
-        let mut interpolation = None;
+        // Perspective is the default qualifier.
+        let mut interpolation = crate::Interpolation::Perspective;
         if lexer.skip(Token::DoubleParen('[')) {
             let (mut bind_index, mut bind_set) = (None, None);
             self.scopes.push(Scope::Decoration);
@@ -1447,7 +1449,7 @@ impl Parser {
                         bind_set = Some(lexer.next_uint_literal()?);
                     }
                     "interpolate" => {
-                        interpolation = Some(Self::get_interpolation(lexer.next_ident()?)?);
+                        interpolation = Self::get_interpolation(lexer.next_ident()?)?;
                     }
                     word => return Err(Error::UnknownDecoration(word)),
                 }
@@ -1529,7 +1531,7 @@ impl Parser {
                     },
                     binding: binding.take(),
                     ty,
-                    interpolation: interpolation.take(),
+                    interpolation: Some(interpolation),
                 });
                 lookup_global_expression
                     .insert(name, crate::Expression::GlobalVariable(var_handle));
