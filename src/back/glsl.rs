@@ -81,9 +81,13 @@ pub fn write(module: &Module, out: &mut impl Write) -> Result<(), Error> {
 
                 writeln!(out, "struct {} {{", name)?;
                 for (idx, member) in members.iter().enumerate() {
+                    write!(out, "   ")?;
+                    if let Some(interpolation) = member.interpolation {
+                        write!(out, "{} ", write_interpolation(interpolation)?)?;
+                    }
                     writeln!(
                         out,
-                        "   {} {};",
+                        "{} {};",
                         write_type(member.ty, &module.types, &structs)?,
                         member.name.clone().unwrap_or_else(|| idx.to_string())
                     )?;
