@@ -270,7 +270,12 @@ pub fn write(module: &Module, out: &mut impl Write, options: Options) -> Result<
         }
 
         if let Some(interpolation) = global.interpolation {
-            write!(out, "{} ", write_interpolation(interpolation)?)?;
+            if (entry_point.stage == ShaderStage::Fragment && global.class == StorageClass::Input)
+                || (entry_point.stage == ShaderStage::Vertex
+                    && global.class == StorageClass::Output)
+            {
+                write!(out, "{} ", write_interpolation(interpolation)?)?;
+            }
         }
 
         let block = match global.class {
@@ -390,28 +395,6 @@ pub fn write(module: &Module, out: &mut impl Write, options: Options) -> Result<
             locals: &func.local_variables,
             features,
         };
-
-        for (handle, name) in locals.iter() {
-            let ty = write_type(
-                func.local_variables[*handle].ty,
-                &module.types,
-                &structs,
-                None,
-                features,
-            )?;
-            let init = func.local_variables[*handle].init;
-            if let Some(init) = init {
-                writeln!(
-                    out,
-                    "{} {} = {init};",
-                    ty,
-                    name,
-                    init = write_expression(&func.expressions[init], &module, &mut builder)?.0,
-                )?;
-            } else {
-                writeln!(out, "{} {};", ty, name,)?;
-            }
-        }
 
         for sta in func.body.iter() {
             writeln!(out, "{}", write_statement(sta, module, &mut builder)?)?;
