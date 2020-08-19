@@ -982,8 +982,6 @@ impl Parser {
         let mut members = Vec::new();
         lexer.expect(Token::Paren('{'))?;
         loop {
-            // Perspective is default when no qualifier is present.
-            let mut interpolation = crate::Interpolation::Perspective;
             let mut offset = !0;
             if lexer.skip(Token::DoubleParen('[')) {
                 self.scopes.push(Scope::Decoration);
@@ -998,10 +996,6 @@ impl Parser {
                         }
                         Token::Word("offset") if ready => {
                             offset = lexer.next_uint_literal()?;
-                            ready = false;
-                        }
-                        Token::Word("interpolate") if ready => {
-                            interpolation = Self::get_interpolation(lexer.next_ident()?)?;
                             ready = false;
                         }
                         other => return Err(Error::Unexpected(other)),
@@ -1024,7 +1018,6 @@ impl Parser {
                 name: Some(name.to_owned()),
                 origin: crate::MemberOrigin::Offset(offset),
                 ty,
-                interpolation: Some(interpolation),
             });
         }
     }
@@ -1516,22 +1509,28 @@ impl Parser {
             Token::Word("var") => {
                 let (name, class, ty) =
                     self.parse_variable_decl(lexer, &mut module.types, &mut module.constants)?;
+                let class = match class {
+                    Some(c) => c,
+                    None => match binding {
+                        Some(crate::Binding::BuiltIn(builtin)) => match builtin {
+                            crate::BuiltIn::GlobalInvocationId => crate::StorageClass::Input,
+                            crate::BuiltIn::Position => crate::StorageClass::Output,
+                            _ => unimplemented!(),
+                        },
+                        _ => crate::StorageClass::Private,
+                    },
+                };
                 let var_handle = module.global_variables.append(crate::GlobalVariable {
                     name: Some(name.to_owned()),
-                    class: match class {
-                        Some(c) => c,
-                        None => match binding {
-                            Some(crate::Binding::BuiltIn(builtin)) => match builtin {
-                                crate::BuiltIn::GlobalInvocationId => crate::StorageClass::Input,
-                                crate::BuiltIn::Position => crate::StorageClass::Output,
-                                _ => unimplemented!(),
-                            },
-                            _ => crate::StorageClass::Private,
-                        },
-                    },
+                    class,
                     binding: binding.take(),
                     ty,
-                    interpolation: Some(interpolation),
+                    interpolation: match class {
+                        crate::StorageClass::Input | crate::StorageClass::Output => {
+                            Some(interpolation)
+                        }
+                        _ => None,
+                    },
                 });
                 lookup_global_expression
                     .insert(name, crate::Expression::GlobalVariable(var_handle));

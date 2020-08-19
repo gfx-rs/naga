@@ -81,13 +81,9 @@ pub fn write(module: &Module, out: &mut impl Write) -> Result<(), Error> {
 
                 writeln!(out, "struct {} {{", name)?;
                 for (idx, member) in members.iter().enumerate() {
-                    write!(out, "   ")?;
-                    if let Some(interpolation) = member.interpolation {
-                        write!(out, "{} ", write_interpolation(interpolation)?)?;
-                    }
                     writeln!(
                         out,
-                        "{} {};",
+                        "   {} {};",
                         write_type(member.ty, &module.types, &structs)?,
                         member.name.clone().unwrap_or_else(|| idx.to_string())
                     )?;
@@ -903,7 +899,8 @@ fn write_storage_class(class: StorageClass) -> Result<String, Error> {
 
 fn write_interpolation(interpolation: Interpolation) -> Result<&'static str, Error> {
     Ok(match interpolation {
-        Interpolation::NoPerspective => "noperspective",
+        Interpolation::Perspective => "smooth",
+        Interpolation::Linear => "noperspective",
         Interpolation::Flat => "flat",
         Interpolation::Centroid => "centroid",
         Interpolation::Sample => "sample",

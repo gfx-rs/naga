@@ -504,7 +504,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             | spirv::Decoration::Sample => {
                 use spirv::Decoration::*;
                 dec.interpolation = Some(match dec_typed {
-                    NoPerspective => crate::Interpolation::NoPerspective,
+                    NoPerspective => crate::Interpolation::Linear,
                     Flat => crate::Interpolation::Flat,
                     Patch => crate::Interpolation::Patch,
                     Centroid => crate::Interpolation::Centroid,
@@ -1743,7 +1743,6 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 name: decor.name,
                 origin,
                 ty,
-                interpolation: decor.interpolation,
             });
         }
         let inner = crate::TypeInner::Struct { members };
@@ -2002,12 +2001,19 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             }
             _ => return Err(Error::UnsupportedType(lookup_type.handle)),
         };
+        let class = map_storage_class(storage)?;
+
         let var = crate::GlobalVariable {
             name: dec.name,
-            class: map_storage_class(storage)?,
+            class,
             binding,
             ty,
-            interpolation: dec.interpolation,
+            interpolation: dec.interpolation.or_else(|| match class {
+                crate::StorageClass::Input | crate::StorageClass::Output => {
+                    Some(crate::Interpolation::Perspective)
+                }
+                _ => None,
+            }),
         };
         self.lookup_variable.insert(
             id,

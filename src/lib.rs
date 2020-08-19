@@ -186,7 +186,6 @@ pub struct StructMember {
     pub name: Option<String>,
     pub origin: MemberOrigin,
     pub ty: Handle<Type>,
-    pub interpolation: Option<Interpolation>,
 }
 
 /// The number of dimensions an image has.

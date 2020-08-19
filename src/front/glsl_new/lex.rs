@@ -118,10 +118,7 @@ pub fn consume_token(mut input: &str) -> (Option<Token>, &str) {
                     rest,
                 ),
                 "noperspective" => (
-                    Some(Token::Interpolation((
-                        meta,
-                        crate::Interpolation::NoPerspective,
-                    ))),
+                    Some(Token::Interpolation((meta, crate::Interpolation::Linear))),
                     rest,
                 ),
                 "smooth" => (None, rest),

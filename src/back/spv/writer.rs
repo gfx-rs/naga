@@ -233,21 +233,6 @@ impl Writer {
         instruction
     }
 
-    fn instruction_member_decorate(
-        &self,
-        target_id: Word,
-        member: Word,
-        decoration: spirv::Decoration,
-        operands: &[Word],
-    ) -> Instruction {
-        let mut instruction = Instruction::new(Op::MemberDecorate);
-        instruction.add_operand(target_id);
-        instruction.add_operand(member);
-        instruction.add_operand(decoration as u32);
-        instruction.add_operands(operands.into());
-        instruction
-    }
-
     ///
     /// Extension Instructions
     ///
@@ -839,23 +824,8 @@ impl Writer {
             }
             crate::TypeInner::Struct { ref members } => {
                 let mut member_ids = Vec::with_capacity(members.len());
-                for (member_index, member) in members.iter().enumerate() {
+                for member in members {
                     let member_id = self.get_type_id(arena, LookupType::Handle(member.ty));
-                    if let Some(interpolation) = member.interpolation {
-                        let decoration = match interpolation {
-                            crate::Interpolation::NoPerspective => spirv::Decoration::NoPerspective,
-                            crate::Interpolation::Flat => spirv::Decoration::Flat,
-                            crate::Interpolation::Patch => spirv::Decoration::Patch,
-                            crate::Interpolation::Centroid => spirv::Decoration::Centroid,
-                            crate::Interpolation::Sample => spirv::Decoration::Sample,
-                        };
-                        self.annotations.push(self.instruction_member_decorate(
-                            id,
-                            member_index as u32,
-                            decoration,
-                            &[],
-                        ));
-                    }
                     member_ids.push(member_id);
                 }
                 self.instruction_type_struct(id, member_ids)
@@ -988,14 +958,17 @@ impl Writer {
 
         if let Some(interpolation) = global_variable.interpolation {
             let decoration = match interpolation {
-                crate::Interpolation::NoPerspective => spirv::Decoration::NoPerspective,
-                crate::Interpolation::Flat => spirv::Decoration::Flat,
-                crate::Interpolation::Patch => spirv::Decoration::Patch,
-                crate::Interpolation::Centroid => spirv::Decoration::Centroid,
-                crate::Interpolation::Sample => spirv::Decoration::Sample,
+                crate::Interpolation::Linear => Some(spirv::Decoration::NoPerspective),
+                crate::Interpolation::Flat => Some(spirv::Decoration::Flat),
+                crate::Interpolation::Patch => Some(spirv::Decoration::Patch),
+                crate::Interpolation::Centroid => Some(spirv::Decoration::Centroid),
+                crate::Interpolation::Sample => Some(spirv::Decoration::Sample),
+                crate::Interpolation::Perspective => None,
             };
-            self.annotations
-                .push(self.instruction_decorate(id, decoration, &[]));
+            if let Some(decoration) = decoration {
+                self.annotations
+                    .push(self.instruction_decorate(id, decoration, &[]));
+            }
         }
 
         match global_variable.binding.as_ref().unwrap() {
