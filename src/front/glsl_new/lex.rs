@@ -121,7 +121,13 @@ pub fn consume_token(mut input: &str) -> (Option<Token>, &str) {
                     Some(Token::Interpolation((meta, crate::Interpolation::Linear))),
                     rest,
                 ),
-                "smooth" => (None, rest),
+                "smooth" => (
+                    Some(Token::Interpolation((
+                        meta,
+                        crate::Interpolation::Perspective,
+                    ))),
+                    rest,
+                ),
                 "centroid" => (
                     Some(Token::Interpolation((meta, crate::Interpolation::Centroid))),
                     rest,

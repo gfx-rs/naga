@@ -497,20 +497,20 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 inst.expect(base_words + 2)?;
                 dec.array_stride = NonZeroU32::new(self.next()?);
             }
-            spirv::Decoration::NoPerspective
-            | spirv::Decoration::Flat
-            | spirv::Decoration::Patch
-            | spirv::Decoration::Centroid
-            | spirv::Decoration::Sample => {
-                use spirv::Decoration::*;
-                dec.interpolation = Some(match dec_typed {
-                    NoPerspective => crate::Interpolation::Linear,
-                    Flat => crate::Interpolation::Flat,
-                    Patch => crate::Interpolation::Patch,
-                    Centroid => crate::Interpolation::Centroid,
-                    Sample => crate::Interpolation::Sample,
-                    _ => unreachable!(),
-                });
+            spirv::Decoration::NoPerspective => {
+                dec.interpolation = Some(crate::Interpolation::Linear);
+            }
+            spirv::Decoration::Flat => {
+                dec.interpolation = Some(crate::Interpolation::Flat);
+            }
+            spirv::Decoration::Patch => {
+                dec.interpolation = Some(crate::Interpolation::Patch);
+            }
+            spirv::Decoration::Centroid => {
+                dec.interpolation = Some(crate::Interpolation::Centroid);
+            }
+            spirv::Decoration::Sample => {
+                dec.interpolation = Some(crate::Interpolation::Sample);
             }
             other => {
                 log::warn!("Unknown decoration {:?}", other);

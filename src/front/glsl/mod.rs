@@ -1243,12 +1243,10 @@ impl<'a> Parser<'a> {
                     }
                 }
                 TypeQualifierSpec::Interpolation(interpolation_qualifier) => {
-                    match interpolation_qualifier {
-                        InterpolationQualifier::NoPerspective => {
-                            interpolation = Interpolation::Linear
-                        }
-                        InterpolationQualifier::Flat => interpolation = Interpolation::Flat,
-                        InterpolationQualifier::Smooth => {}
+                    interpolation = match interpolation_qualifier {
+                        InterpolationQualifier::NoPerspective => Interpolation::Linear,
+                        InterpolationQualifier::Flat => Interpolation::Flat,
+                        InterpolationQualifier::Smooth => Interpolation::Perspective,
                     }
                 }
                 _ => unimplemented!(),
