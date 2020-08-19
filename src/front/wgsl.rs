@@ -982,6 +982,7 @@ impl Parser {
         let mut members = Vec::new();
         lexer.expect(Token::Paren('{'))?;
         loop {
+            let mut interpolation = None;
             let mut offset = !0;
             if lexer.skip(Token::DoubleParen('[')) {
                 self.scopes.push(Scope::Decoration);
@@ -997,6 +998,18 @@ impl Parser {
                         Token::Word("offset") if ready => {
                             offset = lexer.next_uint_literal()?;
                             ready = false;
+                        }
+                        Token::Word(word) if ready => {
+                            if let Ok(found) = Self::get_interpolation(word) {
+                                ready = false;
+                                if interpolation.is_none() {
+                                    interpolation = Some(found);
+                                } else {
+                                    return Err(Error::Unexpected(Token::Word(word)));
+                                }
+                            } else {
+                                return Err(Error::UnknownDecoration(word));
+                            }
                         }
                         other => return Err(Error::Unexpected(other)),
                     }
@@ -1018,7 +1031,7 @@ impl Parser {
                 name: Some(name.to_owned()),
                 origin: crate::MemberOrigin::Offset(offset),
                 ty,
-                interpolation: None,
+                interpolation,
             });
         }
     }
@@ -1170,7 +1183,7 @@ impl Parser {
                         lexer.expect(Token::Paren('>'))?;
                         crate::ArraySize::Static(value)
                     }
-                    Token::Separator('>') => crate::ArraySize::Dynamic,
+                    Token::Paren('>') => crate::ArraySize::Dynamic,
                     other => return Err(Error::Unexpected(other)),
                 };
 
