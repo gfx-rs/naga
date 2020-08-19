@@ -456,6 +456,16 @@ impl Parser {
         }
     }
 
+    fn get_interpolation(word: &str) -> Result<crate::Interpolation, Error<'_>> {
+        match word {
+            "no_perspective" => Ok(crate::Interpolation::NoPerspective),
+            "flat" => Ok(crate::Interpolation::Flat),
+            "centroid" => Ok(crate::Interpolation::Centroid),
+            "sample" => Ok(crate::Interpolation::Sample),
+            _ => Err(Error::UnknownDecoration(word)),
+        }
+    }
+
     fn get_constant_inner(
         word: &str,
     ) -> Result<(crate::ConstantInner, crate::ScalarKind), Error<'_>> {
@@ -1008,6 +1018,7 @@ impl Parser {
                 name: Some(name.to_owned()),
                 origin: crate::MemberOrigin::Offset(offset),
                 ty,
+                interpolation: None,
             });
         }
     }
@@ -1410,6 +1421,7 @@ impl Parser {
     ) -> Result<bool, Error<'a>> {
         // read decorations
         let mut binding = None;
+        let mut interpolation = None;
         if lexer.skip(Token::DoubleParen('[')) {
             let (mut bind_index, mut bind_set) = (None, None);
             self.scopes.push(Scope::Decoration);
@@ -1429,7 +1441,14 @@ impl Parser {
                     "set" => {
                         bind_set = Some(lexer.next_uint_literal()?);
                     }
-                    other => return Err(Error::UnknownDecoration(other)),
+                    word => {
+                        // if match expressions supported `if let`, this could be cleaner.
+                        if let Ok(found) = Self::get_interpolation(word) {
+                            interpolation = Some(found);
+                        } else {
+                            return Err(Error::UnknownDecoration(word));
+                        }
+                    }
                 }
                 match lexer.next() {
                     Token::DoubleParen(']') => {
@@ -1509,6 +1528,7 @@ impl Parser {
                     },
                     binding: binding.take(),
                     ty,
+                    interpolation: interpolation.take(),
                 });
                 lookup_global_expression
                     .insert(name, crate::Expression::GlobalVariable(var_handle));
