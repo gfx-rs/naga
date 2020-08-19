@@ -1246,9 +1246,11 @@ impl<'a> Parser<'a> {
                 TypeQualifierSpec::Interpolation(interpolation_qualifier) => {
                     assert!(interpolation.is_none());
                     match interpolation_qualifier {
-                        InterpolationQualifier::NoPerspective => interpolation = Some(Interpolation::NoPerspective),
+                        InterpolationQualifier::NoPerspective => {
+                            interpolation = Some(Interpolation::NoPerspective)
+                        }
                         InterpolationQualifier::Flat => interpolation = Some(Interpolation::Flat),
-                        InterpolationQualifier::Smooth => {},
+                        InterpolationQualifier::Smooth => {}
                     }
                 }
                 _ => unimplemented!(),
