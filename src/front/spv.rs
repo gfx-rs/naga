@@ -219,6 +219,7 @@ struct Decoration {
     block: Option<Block>,
     offset: Option<spirv::Word>,
     array_stride: Option<NonZeroU32>,
+    interpolation: Option<crate::Interpolation>,
 }
 
 impl Decoration {
@@ -495,6 +496,21 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             spirv::Decoration::ArrayStride => {
                 inst.expect(base_words + 2)?;
                 dec.array_stride = NonZeroU32::new(self.next()?);
+            }
+            spirv::Decoration::NoPerspective
+            | spirv::Decoration::Flat
+            | spirv::Decoration::Patch
+            | spirv::Decoration::Centroid
+            | spirv::Decoration::Sample => {
+                use spirv::Decoration::*;
+                dec.interpolation = Some(match dec_typed {
+                    NoPerspective => crate::Interpolation::NoPerspective,
+                    Flat => crate::Interpolation::Flat,
+                    Patch => crate::Interpolation::Patch,
+                    Centroid => crate::Interpolation::Centroid,
+                    Sample => crate::Interpolation::Sample,
+                    _ => unreachable!(),
+                });
             }
             other => {
                 log::warn!("Unknown decoration {:?}", other);
@@ -1727,6 +1743,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 name: decor.name,
                 origin,
                 ty,
+                interpolation: decor.interpolation,
             });
         }
         let inner = crate::TypeInner::Struct { members };
@@ -1990,6 +2007,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             class: map_storage_class(storage)?,
             binding,
             ty,
+            interpolation: dec.interpolation,
         };
         self.lookup_variable.insert(
             id,
