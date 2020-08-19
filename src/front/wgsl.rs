@@ -999,17 +999,9 @@ impl Parser {
                             offset = lexer.next_uint_literal()?;
                             ready = false;
                         }
-                        Token::Word(word) if ready => {
-                            if let Ok(found) = Self::get_interpolation(word) {
-                                ready = false;
-                                if interpolation.is_none() {
-                                    interpolation = Some(found);
-                                } else {
-                                    return Err(Error::Unexpected(Token::Word(word)));
-                                }
-                            } else {
-                                return Err(Error::UnknownDecoration(word));
-                            }
+                        Token::Word("interpolate") if ready => {
+                            interpolation = Some(Self::get_interpolation(lexer.next_ident()?)?);
+                            ready = false;
                         }
                         other => return Err(Error::Unexpected(other)),
                     }
@@ -1454,14 +1446,10 @@ impl Parser {
                     "set" => {
                         bind_set = Some(lexer.next_uint_literal()?);
                     }
-                    word => {
-                        // if match expressions supported `if let`, this could be cleaner.
-                        if let Ok(found) = Self::get_interpolation(word) {
-                            interpolation = Some(found);
-                        } else {
-                            return Err(Error::UnknownDecoration(word));
-                        }
+                    "interpolate" => {
+                        interpolation = Some(Self::get_interpolation(lexer.next_ident()?)?);
                     }
+                    word => return Err(Error::UnknownDecoration(word)),
                 }
                 match lexer.next() {
                     Token::DoubleParen(']') => {
