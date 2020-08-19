@@ -259,7 +259,7 @@ impl<'a> Lexer<'a> {
         Ok(pair)
     }
 
-    fn next_until_keep(&mut self, what: Token<'a>) -> Result<Lexer<'a>, Error<'a>> {
+    fn take_until(&mut self, what: Token<'a>) -> Result<Lexer<'a>, Error<'a>> {
         let original_input = self.input;
         let initial_len = self.input.len();
         let mut used_len = 0;
@@ -1019,7 +1019,7 @@ impl Parser {
     ) -> Result<Handle<crate::Type>, Error<'a>> {
         self.scopes.push(Scope::TypeDecl);
         let decoration_lexer = if lexer.skip(Token::DoubleParen('[')) {
-            Some(lexer.next_until_keep(Token::DoubleParen(']'))?)
+            Some(lexer.take_until(Token::DoubleParen(']'))?)
         } else {
             None
         };
