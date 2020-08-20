@@ -474,24 +474,17 @@ impl Parser {
         index: usize,
     ) -> Result<Handle<crate::Type>, Error<'static>> {
         let ty = match type_arena[ty].inner {
-            crate::TypeInner::Vector {
-                ref kind,
-                ref width,
-                ..
+            crate::TypeInner::Vector { kind, width, .. }
+            | crate::TypeInner::Matrix { kind, width, .. } => {
+                type_arena.fetch_or_append(crate::Type {
+                    name: None,
+                    inner: crate::TypeInner::Scalar { kind, width },
+                })
             }
-            | crate::TypeInner::Matrix {
-                ref kind,
-                ref width,
-                ..
-            } => Err(crate::TypeInner::Scalar {
-                kind: *kind,
-                width: *width,
-            }),
-            crate::TypeInner::Array { ref base, .. } => Ok(*base),
-            crate::TypeInner::Struct { ref members } => Ok(members[index].ty),
+            crate::TypeInner::Array { base, .. } => base,
+            crate::TypeInner::Struct { ref members } => members[index].ty,
             ref inner => return Err(Error::NotCompositeType(inner.clone())),
-        }
-        .unwrap_or_else(|inner| type_arena.fetch_or_append(crate::Type { name: None, inner }));
+        };
 
         Ok(ty)
     }
