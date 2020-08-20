@@ -278,6 +278,21 @@ impl<'a> Lexer<'a> {
             input: &original_input[..used_len],
         })
     }
+
+    fn skip_same_tokens(&mut self, what: &str) -> bool {
+        let mut this = self.clone();
+        let mut what_lexer = Lexer { input: what };
+
+        loop {
+            if what_lexer.peek() == Token::End {
+                *self = this;
+                return true;
+            }
+            if what_lexer.next() != this.next() {
+                return false;
+            }
+        }
+    }
 }
 
 trait StringValueLookup<'a> {
@@ -510,36 +525,39 @@ impl Parser {
     fn parse_function_call<'a>(
         &mut self,
         lexer: &mut Lexer<'a>,
-        ident: &'a str,
         mut ctx: ExpressionContext<'a, '_, '_>,
     ) -> Result<crate::Expression, Error<'a>> {
-        let origin = if lexer.skip(Token::Paren('(')) {
-            let function = ident;
+        let backup = lexer;
+        let mut lexer = backup.clone();
+        let origin = if self
+            .std_namespace
+            .as_deref()
+            .map(|namespace| lexer.skip_same_tokens(namespace))
+            .unwrap_or(false)
+        {
+            lexer.expect(Token::DoubleColon)?;
+            let function = lexer.next_ident()?;
+            crate::FunctionOrigin::External(function.to_string())
+        } else if let Ok(function) = lexer.next_ident() {
             if let Some(&function) = self.function_lookup.get(function) {
                 crate::FunctionOrigin::Local(function)
             } else {
                 return Err(Error::UnknownFunction(function));
             }
-        } else if lexer.skip(Token::DoubleColon) {
-            let namespace = ident;
-            let function = lexer.next_ident()?;
-            lexer.expect(Token::Paren('('))?;
-            if self.std_namespace.as_deref() != Some(namespace) {
-                return Err(Error::UnknownImport(namespace));
-            }
-            crate::FunctionOrigin::External(function.to_string())
         } else {
-            return Err(Error::Unexpected(lexer.peek()));
+            return Err(Error::Unexpected(lexer.next()));
         };
 
         let mut arguments = Vec::new();
+        lexer.expect(Token::Paren('('))?;
         while !lexer.skip(Token::Paren(')')) {
             if !arguments.is_empty() {
                 lexer.expect(Token::Separator(','))?;
             }
-            let arg = self.parse_general_expression(lexer, ctx.reborrow())?;
+            let arg = self.parse_general_expression(&mut lexer, ctx.reborrow())?;
             arguments.push(arg);
         }
+        *backup = lexer;
         Ok(crate::Expression::Call { origin, arguments })
     }
 
@@ -598,7 +616,7 @@ impl Parser {
         mut ctx: ExpressionContext<'a, '_, '_>,
     ) -> Result<Handle<crate::Expression>, Error<'a>> {
         self.scopes.push(Scope::PrimaryExpr);
-        let backup = lexer.clone();
+        let mut backup = lexer.clone();
         let expression = match lexer.next() {
             Token::Paren('(') => {
                 let expr = self.parse_general_expression(lexer, ctx)?;
@@ -654,7 +672,8 @@ impl Parser {
                     self.scopes.pop();
                     return Ok(*handle);
                 }
-                if let Ok(expr) = self.parse_function_call(lexer, word, ctx.reborrow()) {
+                if let Ok(expr) = self.parse_function_call(&mut backup, ctx.reborrow()) {
+                    *lexer = backup;
                     expr
                 } else {
                     *lexer = backup;
@@ -1281,6 +1300,7 @@ impl Parser {
         lexer: &mut Lexer<'a>,
         mut context: StatementContext<'a, '_, '_>,
     ) -> Result<Option<crate::Statement>, Error<'a>> {
+        let mut backup = lexer.clone();
         match lexer.next() {
             Token::Separator(';') => Ok(Some(crate::Statement::Empty)),
             Token::Paren('}') => Ok(None),
@@ -1385,9 +1405,11 @@ impl Parser {
                                 value,
                             }
                         } else if let Ok(expr) =
-                            self.parse_function_call(lexer, ident, context.as_expression())
+                            self.parse_function_call(&mut backup, context.as_expression())
                         {
+                            *lexer = backup;
                             context.expressions.append(expr);
+                            lexer.expect(Token::Separator(';'))?;
                             crate::Statement::Empty
                         } else {
                             return Err(Error::UnknownIdent(ident));
@@ -1559,8 +1581,7 @@ impl Parser {
                     other => return Err(Error::Unexpected(other)),
                 };
                 lexer.expect(Token::Word("as"))?;
-                let namespace = lexer.next_ident()?;
-                lexer.expect(Token::Separator(';'))?;
+                let namespace = lexer.take_until(Token::Separator(';'))?.input.trim();
                 match path {
                     "GLSL.std.450" => self.std_namespace = Some(namespace.to_owned()),
                     _ => return Err(Error::UnknownImport(path)),
