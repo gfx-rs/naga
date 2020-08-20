@@ -284,11 +284,12 @@ impl<'a> Lexer<'a> {
         let mut what_lexer = Lexer { input: what };
 
         loop {
-            if what_lexer.peek() == Token::End {
+            let token = what_lexer.next();
+            if token == Token::End {
                 *self = this;
                 return true;
             }
-            if what_lexer.next() != this.next() {
+            if token != this.next() {
                 return false;
             }
         }
@@ -524,11 +525,10 @@ impl Parser {
 
     fn parse_function_call<'a>(
         &mut self,
-        lexer: &mut Lexer<'a>,
+        lexer: &Lexer<'a>,
         mut ctx: ExpressionContext<'a, '_, '_>,
-    ) -> Result<crate::Expression, Error<'a>> {
-        let backup = lexer;
-        let mut lexer = backup.clone();
+    ) -> Result<Option<(crate::Expression, Lexer<'a>)>, Error<'a>> {
+        let mut lexer = lexer.clone();
         let origin = if self
             .std_namespace
             .as_deref()
@@ -542,14 +542,17 @@ impl Parser {
             if let Some(&function) = self.function_lookup.get(function) {
                 crate::FunctionOrigin::Local(function)
             } else {
-                return Err(Error::UnknownFunction(function));
+                return Ok(None);
             }
         } else {
-            return Err(Error::Unexpected(lexer.next()));
+            return Ok(None);
         };
 
+        if !lexer.skip(Token::Paren('(')) {
+            return Ok(None);
+        }
+
         let mut arguments = Vec::new();
-        lexer.expect(Token::Paren('('))?;
         while !lexer.skip(Token::Paren(')')) {
             if !arguments.is_empty() {
                 lexer.expect(Token::Separator(','))?;
@@ -557,8 +560,7 @@ impl Parser {
             let arg = self.parse_general_expression(&mut lexer, ctx.reborrow())?;
             arguments.push(arg);
         }
-        *backup = lexer;
-        Ok(crate::Expression::Call { origin, arguments })
+        Ok(Some((crate::Expression::Call { origin, arguments }, lexer)))
     }
 
     fn parse_const_expression<'a>(
@@ -616,7 +618,7 @@ impl Parser {
         mut ctx: ExpressionContext<'a, '_, '_>,
     ) -> Result<Handle<crate::Expression>, Error<'a>> {
         self.scopes.push(Scope::PrimaryExpr);
-        let mut backup = lexer.clone();
+        let backup = lexer.clone();
         let expression = match lexer.next() {
             Token::Paren('(') => {
                 let expr = self.parse_general_expression(lexer, ctx)?;
@@ -672,8 +674,10 @@ impl Parser {
                     self.scopes.pop();
                     return Ok(*handle);
                 }
-                if let Ok(expr) = self.parse_function_call(&mut backup, ctx.reborrow()) {
-                    *lexer = backup;
+                if let Some((expr, new_lexer)) =
+                    self.parse_function_call(&backup, ctx.reborrow())?
+                {
+                    *lexer = new_lexer;
                     expr
                 } else {
                     *lexer = backup;
@@ -1300,7 +1304,7 @@ impl Parser {
         lexer: &mut Lexer<'a>,
         mut context: StatementContext<'a, '_, '_>,
     ) -> Result<Option<crate::Statement>, Error<'a>> {
-        let mut backup = lexer.clone();
+        let backup = lexer.clone();
         match lexer.next() {
             Token::Separator(';') => Ok(Some(crate::Statement::Empty)),
             Token::Paren('}') => Ok(None),
@@ -1404,10 +1408,10 @@ impl Parser {
                                 pointer: left,
                                 value,
                             }
-                        } else if let Ok(expr) =
-                            self.parse_function_call(&mut backup, context.as_expression())
+                        } else if let Some((expr, new_lexer)) =
+                            self.parse_function_call(&backup, context.as_expression())?
                         {
-                            *lexer = backup;
+                            *lexer = new_lexer;
                             context.expressions.append(expr);
                             lexer.expect(Token::Separator(';'))?;
                             crate::Statement::Empty
