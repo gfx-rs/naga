@@ -76,36 +76,22 @@ bitflags::bitflags! {
     }
 }
 
-pub fn write(module: &Module, out: &mut impl Write, options: Options) -> Result<(), Error> {
+pub fn write<'a>(module: &'a Module, out: &mut impl Write, options: Options) -> Result<(), Error> {
     let (version, es) = match options.version {
-        Version::Desktop(v) => {
-            if !SUPPORTED_CORE_VERSIONS.contains(&v) {
-                return Err(Error::Custom(format!(
-                    "Version not supported {}",
-                    options.version
-                )));
-            }
-
-            (v, false)
-        }
-        Version::Embedded(v) => {
-            if !SUPPORTED_ES_VERSIONS.contains(&v) {
-                return Err(Error::Custom(format!(
-                    "Version not supported {}",
-                    options.version
-                )));
-            }
-
-            (v, true)
-        }
+        Version::Desktop(v) => (v, false),
+        Version::Embedded(v) => (v, true),
     };
 
-    writeln!(
-        out,
-        "#version {} {}",
-        version,
-        if es { "es" } else { "core" }
-    )?;
+    if (!es && !SUPPORTED_CORE_VERSIONS.contains(&version))
+        || (es && !SUPPORTED_ES_VERSIONS.contains(&version))
+    {
+        return Err(Error::Custom(format!(
+            "Version not supported {}",
+            options.version
+        )));
+    }
+
+    writeln!(out, "#version {}", options.version)?;
 
     if es {
         writeln!(out, "precision highp float;")?;
@@ -114,21 +100,21 @@ pub fn write(module: &Module, out: &mut impl Write, options: Options) -> Result<
     let mut counter = 0;
     let mut names = FastHashMap::default();
 
-    let mut namer = |name: Option<&String>| {
+    let mut namer = |name: Option<&'a String>| {
         if let Some(name) = name {
-            if name.starts_with("gl_") || name == "main" || names.get(name).is_some() {
+            if name.starts_with("gl_") || name == "main" || names.get(name.as_str()).is_some() {
                 counter += 1;
-                while names.get(&format!("_{}", counter)).is_some() {
+                while names.get(format!("_{}", counter).as_str()).is_some() {
                     counter += 1;
                 }
                 format!("_{}", counter)
             } else {
-                names.insert(name.clone(), ());
+                names.insert(name.as_str(), ());
                 name.clone()
             }
         } else {
             counter += 1;
-            while names.get(&format!("_{}", counter)).is_some() {
+            while names.get(format!("_{}", counter).as_str()).is_some() {
                 counter += 1;
             }
             format!("_{}", counter)
@@ -301,10 +287,11 @@ pub fn write(module: &Module, out: &mut impl Write, options: Options) -> Result<
 
     for (handle, func) in module.functions.iter() {
         // Discard all entry points
-        if module
-            .entry_points
-            .iter()
-            .any(|entry| entry.function == handle && entry_point.function != handle)
+        if entry_point.function != handle
+            && module
+                .entry_points
+                .iter()
+                .any(|entry| entry.function == handle)
         {
             continue;
         }
@@ -319,13 +306,10 @@ pub fn write(module: &Module, out: &mut impl Write, options: Options) -> Result<
             out,
             "{} {}({});",
             func.return_type
-                .map_or(Ok(String::from("void")), |ty| write_type(
-                    ty,
-                    &module.types,
-                    &structs,
-                    None,
-                    features
-                ))?,
+                .map(|ty| write_type(ty, &module.types, &structs, None, features))
+                .transpose()?
+                .as_deref()
+                .unwrap_or("void"),
             name,
             func.parameter_types
                 .iter()
@@ -344,13 +328,10 @@ pub fn write(module: &Module, out: &mut impl Write, options: Options) -> Result<
             out,
             "{} {}({}) {{",
             func.return_type
-                .map_or(Ok(String::from("void")), |ty| write_type(
-                    ty,
-                    &module.types,
-                    &structs,
-                    None,
-                    features
-                ))?,
+                .map(|ty| write_type(ty, &module.types, &structs, None, features))
+                .transpose()?
+                .as_deref()
+                .unwrap_or("void"),
             name,
             func.parameter_types
                 .iter()
@@ -643,6 +624,7 @@ fn write_expression<'a>(
                 ),
                 TypeInner::Array { .. } => {
                     write_type(*ty, &module.types, builder.structs, None, builder.features)?
+                        .into_owned()
                 }
                 TypeInner::Struct { .. } => builder.structs.get(ty).unwrap().clone(),
                 _ => {
@@ -970,7 +952,8 @@ fn write_constant(
                     format!("mat{}x{}", columns as u8, rows as u8,),
                 TypeInner::Struct { .. } => builder.structs.get(&constant.ty).unwrap().clone(),
                 TypeInner::Array { .. } =>
-                    write_type(constant.ty, &module.types, builder.structs, None, features)?,
+                    write_type(constant.ty, &module.types, builder.structs, None, features)?
+                        .into_owned(),
                 _ =>
                     return Err(Error::Custom(format!(
                         "Cannot build constant of type {}",
@@ -997,14 +980,14 @@ fn write_type(
     structs: &FastHashMap<Handle<Type>, String>,
     block: Option<String>,
     features: SupportedFeatures,
-) -> Result<String, Error> {
+) -> Result<Cow<'static, str>, Error> {
     Ok(match types[ty].inner {
         TypeInner::Scalar { kind, width } => match kind {
-            ScalarKind::Sint => String::from("int"),
-            ScalarKind::Uint => String::from("uint"),
+            ScalarKind::Sint => Cow::Borrowed("int"),
+            ScalarKind::Uint => Cow::Borrowed("uint"),
             ScalarKind::Float => match width {
-                4 => String::from("float"),
-                8 if features.contains(SupportedFeatures::DOUBLE_TYPE) => String::from("double"),
+                4 => Cow::Borrowed("float"),
+                8 if features.contains(SupportedFeatures::DOUBLE_TYPE) => Cow::Borrowed("double"),
                 _ => {
                     return Err(Error::Custom(format!(
                         "Cannot build float of width {}",
@@ -1012,9 +995,9 @@ fn write_type(
                     )))
                 }
             },
-            ScalarKind::Bool => String::from("bool"),
+            ScalarKind::Bool => Cow::Borrowed("bool"),
         },
-        TypeInner::Vector { size, kind, width } => format!(
+        TypeInner::Vector { size, kind, width } => Cow::Owned(format!(
             "{}vec{}",
             match kind {
                 ScalarKind::Sint => "i",
@@ -1031,13 +1014,13 @@ fn write_type(
                 ScalarKind::Bool => "b",
             },
             size as u8
-        ),
+        )),
         TypeInner::Matrix {
             columns,
             rows,
             kind,
             width,
-        } => format!(
+        } => Cow::Owned(format!(
             "{}mat{}x{}",
             match kind {
                 ScalarKind::Sint if features.contains(SupportedFeatures::NON_FLOAT_MATRICES) => "i",
@@ -1063,13 +1046,13 @@ fn write_type(
             },
             columns as u8,
             rows as u8
-        ),
+        )),
         TypeInner::Pointer { base, .. } => write_type(base, types, structs, None, features)?,
-        TypeInner::Array { base, size, .. } => format!(
+        TypeInner::Array { base, size, .. } => Cow::Owned(format!(
             "{}[{}]",
             write_type(base, types, structs, None, features)?,
             write_array_size(size)?
-        ),
+        )),
         TypeInner::Struct { ref members } => {
             if let Some(name) = block {
                 let mut out = String::new();
@@ -1086,9 +1069,9 @@ fn write_type(
 
                 write!(&mut out, "}}")?;
 
-                out
+                Cow::Owned(out)
             } else {
-                structs.get(&ty).unwrap().clone()
+                Cow::Owned(structs.get(&ty).unwrap().clone())
             }
         }
         TypeInner::Image { base, dim, flags } => {
@@ -1101,14 +1084,14 @@ fn write_type(
                 )));
             }
 
-            format!(
+            Cow::Owned(format!(
                 "{}texture{}{}",
                 match types[base].inner {
                     TypeInner::Scalar { kind, .. } => match kind {
                         ScalarKind::Sint => "i",
                         ScalarKind::Uint => "u",
                         ScalarKind::Float => "",
-                        _ =>
+                        ScalarKind::Bool =>
                             return Err(Error::Custom(String::from(
                                 "Cannot build image of booleans",
                             ))),
@@ -1121,14 +1104,14 @@ fn write_type(
                 },
                 ImageDimension(dim),
                 write_image_flags(flags, features)?
-            )
+            ))
         }
-        TypeInner::DepthImage { dim, arrayed } => format!(
+        TypeInner::DepthImage { dim, arrayed } => Cow::Owned(format!(
             "texture{}{}",
             ImageDimension(dim),
             if arrayed { "Array" } else { "" }
-        ),
-        TypeInner::Sampler { comparison } => String::from(if comparison {
+        )),
+        TypeInner::Sampler { comparison } => Cow::Borrowed(if comparison {
             "sampler"
         } else {
             "samplerShadow"
@@ -1136,8 +1119,11 @@ fn write_type(
     })
 }
 
-fn write_storage_class(class: StorageClass, features: SupportedFeatures) -> Result<String, Error> {
-    Ok(String::from(match class {
+fn write_storage_class(
+    class: StorageClass,
+    features: SupportedFeatures,
+) -> Result<&'static str, Error> {
+    Ok(match class {
         StorageClass::Constant => "const ",
         StorageClass::Function => "",
         StorageClass::Input => "in ",
@@ -1162,7 +1148,7 @@ fn write_storage_class(class: StorageClass, features: SupportedFeatures) -> Resu
                 )));
             }
         }
-    }))
+    })
 }
 
 fn write_interpolation(interpolation: Interpolation) -> Result<&'static str, Error> {
@@ -1188,21 +1174,23 @@ fn write_array_size(size: ArraySize) -> Result<String, Error> {
 }
 
 fn write_image_flags(flags: ImageFlags, features: SupportedFeatures) -> Result<String, Error> {
-    let mut out = String::new();
-
-    if flags.contains(ImageFlags::MULTISAMPLED) {
+    let ms = if flags.contains(ImageFlags::MULTISAMPLED) {
         if features.contains(SupportedFeatures::MULTISAMPLED_TEXTURES) {
-            write!(out, "MS")?;
+            "MS"
         } else {
             return Err(Error::Custom(String::from(
                 "Multi sampled textures aren't supported",
             )));
         }
-    }
+    } else {
+        ""
+    };
 
-    if flags.contains(ImageFlags::ARRAYED) {
-        write!(out, "Array")?;
-    }
+    let array = if flags.contains(ImageFlags::ARRAYED) {
+        "Array"
+    } else {
+        ""
+    };
 
     if flags.contains(ImageFlags::ARRAYED & ImageFlags::MULTISAMPLED)
         && !features.contains(SupportedFeatures::MULTISAMPLED_TEXTURE_ARRAYS)
@@ -1212,7 +1200,7 @@ fn write_image_flags(flags: ImageFlags, features: SupportedFeatures) -> Result<S
         )));
     }
 
-    Ok(out)
+    Ok(format!("{}{}", ms, array))
 }
 
 struct ImageDimension(crate::ImageDimension);
