@@ -158,9 +158,6 @@ pub enum MemberOrigin {
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 pub enum Interpolation {
-    /// The value will be interpolated in a perspective-correct fashion.
-    /// Also known as "smooth" in glsl.
-    Perspective,
     /// Indicates that linear, non-perspective, correct
     /// interpolation must be used.
     /// Also known as "no_perspective" in glsl.
@@ -341,8 +338,9 @@ pub struct GlobalVariable {
     /// The type of this variable.
     pub ty: Handle<Type>,
     /// The interpolation qualifier, if any.
-    /// Required for global outputs in vertex shaders
-    /// and global inputs in fragment shaders.
+    /// If the this `GlobalVariable` is a vertex output
+    /// or fragment input, `None` corresponds to the
+    /// `smooth`/`perspective` interpolation qualifier.
     pub interpolation: Option<Interpolation>,
 }
 
