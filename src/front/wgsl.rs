@@ -498,15 +498,15 @@ impl Parser {
         }
     }
 
-    fn get_interpolation(word: &str) -> Result<crate::Interpolation, Error<'_>> {
-        match word {
-            "linear" => Ok(crate::Interpolation::Linear),
-            "flat" => Ok(crate::Interpolation::Flat),
-            "centroid" => Ok(crate::Interpolation::Centroid),
-            "sample" => Ok(crate::Interpolation::Sample),
-            _ => Err(Error::UnknownDecoration(word)),
-        }
-    }
+    // fn get_interpolation(word: &str) -> Result<crate::Interpolation, Error<'_>> {
+    //     match word {
+    //         "linear" => Ok(crate::Interpolation::Linear),
+    //         "flat" => Ok(crate::Interpolation::Flat),
+    //         "centroid" => Ok(crate::Interpolation::Centroid),
+    //         "sample" => Ok(crate::Interpolation::Sample),
+    //         _ => Err(Error::UnknownDecoration(word)),
+    //     }
+    // }
 
     fn deconstruct_composite_type(
         type_arena: &mut Arena<crate::Type>,
@@ -1499,7 +1499,7 @@ impl Parser {
         // read decorations
         let mut binding = None;
         // Perspective is the default qualifier.
-        let mut interpolation = crate::Interpolation::Perspective;
+        let interpolation = crate::Interpolation::Perspective;
         if lexer.skip(Token::DoubleParen('[')) {
             let (mut bind_index, mut bind_set) = (None, None);
             self.scopes.push(Scope::Decoration);
@@ -1520,7 +1520,10 @@ impl Parser {
                         bind_set = Some(lexer.next_uint_literal()?);
                     }
                     "interpolate" => {
-                        interpolation = Self::get_interpolation(lexer.next_ident()?)?;
+                        // interpolation = Self::get_interpolation(lexer.next_ident()?)?;
+                        return Err(Error::UnknownDecoration(
+                            "the interpolation decoration is not yet standardized",
+                        ));
                     }
                     word => return Err(Error::UnknownDecoration(word)),
                 }
