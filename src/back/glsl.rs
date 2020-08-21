@@ -899,6 +899,7 @@ fn write_storage_class(class: StorageClass) -> Result<String, Error> {
 
 fn write_interpolation(interpolation: Interpolation) -> Result<&'static str, Error> {
     Ok(match interpolation {
+        Interpolation::Perspective => "smooth",
         Interpolation::Linear => "noperspective",
         Interpolation::Flat => "flat",
         Interpolation::Centroid => "centroid",

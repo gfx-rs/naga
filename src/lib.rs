@@ -158,6 +158,9 @@ pub enum MemberOrigin {
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 pub enum Interpolation {
+    /// The value will be interpolated in a perspective-correct fashion.
+    /// Also known as "smooth" in glsl.
+    Perspective,
     /// Indicates that linear, non-perspective, correct
     /// interpolation must be used.
     /// Also known as "no_perspective" in glsl.
