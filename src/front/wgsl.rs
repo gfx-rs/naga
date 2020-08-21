@@ -204,7 +204,7 @@ impl<'a> Lexer<'a> {
         self.clone().next()
     }
 
-    fn expect(&mut self, expected: Token<'a>) -> Result<(), Error<'a>> {
+    fn expect(&mut self, expected: Token<'_>) -> Result<(), Error<'a>> {
         let token = self.next();
         if token == expected {
             Ok(())
@@ -213,7 +213,7 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    fn skip(&mut self, what: Token<'a>) -> bool {
+    fn skip(&mut self, what: Token<'_>) -> bool {
         let (token, rest) = lex::consume_token(self.input);
         if token == what {
             self.input = rest;
@@ -263,7 +263,7 @@ impl<'a> Lexer<'a> {
         Ok(pair)
     }
 
-    fn take_until(&mut self, what: Token<'a>) -> Result<Lexer<'a>, Error<'a>> {
+    fn take_until(&mut self, what: Token<'_>) -> Result<Lexer<'a>, Error<'a>> {
         let original_input = self.input;
         let initial_len = self.input.len();
         let mut used_len = 0;
@@ -277,22 +277,6 @@ impl<'a> Lexer<'a> {
         Ok(Lexer {
             input: &original_input[..used_len],
         })
-    }
-
-    fn skip_same_tokens(&mut self, what: &str) -> bool {
-        let mut this = self.clone();
-        let mut what_lexer = Lexer { input: what };
-
-        loop {
-            let token = what_lexer.next();
-            if token == Token::End {
-                *self = this;
-                return true;
-            }
-            if token != this.next() {
-                return false;
-            }
-        }
     }
 }
 
@@ -433,7 +417,7 @@ pub struct Parser {
     scopes: Vec<Scope>,
     lookup_type: FastHashMap<String, Handle<crate::Type>>,
     function_lookup: FastHashMap<String, Handle<crate::Function>>,
-    std_namespace: Option<String>,
+    std_namespace: Option<Vec<String>>,
 }
 
 impl Parser {
@@ -529,13 +513,16 @@ impl Parser {
         mut ctx: ExpressionContext<'a, '_, '_>,
     ) -> Result<Option<(crate::Expression, Lexer<'a>)>, Error<'a>> {
         let mut lexer = lexer.clone();
-        let origin = if self
-            .std_namespace
-            .as_deref()
-            .map(|namespace| lexer.skip_same_tokens(namespace))
-            .unwrap_or(false)
-        {
-            lexer.expect(Token::DoubleColon)?;
+
+        let external_function = if let Some(std_namespaces) = self.std_namespace.as_deref() {
+            std_namespaces.iter().all(|namespace| {
+                lexer.skip(Token::Word(namespace)) && lexer.skip(Token::DoubleColon)
+            })
+        } else {
+            false
+        };
+
+        let origin = if external_function {
             let function = lexer.next_ident()?;
             crate::FunctionOrigin::External(function.to_string())
         } else if let Ok(function) = lexer.next_ident() {
@@ -1585,9 +1572,16 @@ impl Parser {
                     other => return Err(Error::Unexpected(other)),
                 };
                 lexer.expect(Token::Word("as"))?;
-                let namespace = lexer.take_until(Token::Separator(';'))?.input.trim();
+                let mut namespaces = Vec::new();
+                loop {
+                    namespaces.push(lexer.next_ident()?.to_owned());
+                    if lexer.skip(Token::Separator(';')) {
+                        break;
+                    }
+                    lexer.expect(Token::DoubleColon)?;
+                }
                 match path {
-                    "GLSL.std.450" => self.std_namespace = Some(namespace.to_owned()),
+                    "GLSL.std.450" => self.std_namespace = Some(namespaces),
                     _ => return Err(Error::UnknownImport(path)),
                 }
                 self.scopes.pop();
