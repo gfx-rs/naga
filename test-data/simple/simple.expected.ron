@@ -106,7 +106,7 @@
         (
             stage: Vertex,
             name: "main",
-            function: 1,
+            function: 2,
         ),
     ],
 )

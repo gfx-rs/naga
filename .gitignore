@@ -3,6 +3,3 @@
 Cargo.lock
 .DS_Store
 .idea
-
-# Rosetta test run output
-/test-data/**/*.out.ron

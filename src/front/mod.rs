@@ -7,6 +7,8 @@ pub mod glsl_new;
 #[cfg(feature = "spirv")]
 pub mod spv;
 pub mod wgsl;
+#[cfg(test)]
+mod wgsl_rosetta_tests;
 
 use crate::arena::Arena;
 
