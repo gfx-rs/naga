@@ -102,12 +102,7 @@ pub fn write<'a>(module: &'a Module, out: &mut impl Write, options: Options) -> 
 
     let mut namer = |name: Option<&'a String>| {
         if let Some(name) = name {
-            if name.starts_with(|c: char| !(c.is_ascii_alphabetic() || c == '_'))
-                || name.contains(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
-                || name.starts_with("gl_")
-                || name == "main"
-                || names.get(name.as_str()).is_some()
-            {
+            if !is_valid_ident(name) || names.get(name.as_str()).is_some() {
                 counter += 1;
                 while names.get(format!("_{}", counter).as_str()).is_some() {
                     counter += 1;
@@ -258,7 +253,7 @@ pub fn write<'a>(module: &'a Module, out: &mut impl Write, options: Options) -> 
 
         if let Some(ref binding) = global.binding {
             if !es {
-                write!(out, "layout({}) ", Binding(binding.clone()))?;
+                write!(out, "layout({}) ", Binding(binding))?;
             }
         }
 
@@ -405,8 +400,8 @@ pub fn write<'a>(module: &'a Module, out: &mut impl Write, options: Options) -> 
     Ok(())
 }
 
-struct Binding(crate::Binding);
-impl fmt::Display for Binding {
+struct Binding<'a>(&'a crate::Binding);
+impl<'a> fmt::Display for Binding<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.0 {
             crate::Binding::BuiltIn(_) => write!(f, ""), // Ignore because they are variables with a predefined name
@@ -429,10 +424,10 @@ struct StatementBuilder<'a> {
     pub features: SupportedFeatures,
 }
 
-fn write_statement(
+fn write_statement<'a, 'b>(
     sta: &Statement,
-    module: &Module,
-    builder: &mut StatementBuilder<'_>,
+    module: &'a Module,
+    builder: &'b mut StatementBuilder<'a>,
     indent: usize,
 ) -> Result<String, Error> {
     Ok(match sta {
@@ -566,11 +561,11 @@ fn write_statement(
     })
 }
 
-fn write_expression<'a>(
+fn write_expression<'a, 'b>(
     expr: &Expression,
     module: &'a Module,
-    builder: &mut StatementBuilder<'_>,
-) -> Result<(String, Cow<'a, TypeInner>), Error> {
+    builder: &'b mut StatementBuilder<'a>,
+) -> Result<(Cow<'a, str>, Cow<'a, TypeInner>), Error> {
     Ok(match *expr {
         Expression::Access { base, index } => {
             let (base_expr, ty) = write_expression(&builder.expressions[base], module, builder)?;
@@ -584,11 +579,11 @@ fn write_expression<'a>(
             };
 
             (
-                format!(
+                Cow::Owned(format!(
                     "{}[{}]",
                     base_expr,
                     write_expression(&builder.expressions[index], module, builder)?.0
-                ),
+                )),
                 inner,
             )
         }
@@ -597,34 +592,35 @@ fn write_expression<'a>(
 
             match *ty.as_ref() {
                 TypeInner::Vector { kind, width, .. } | TypeInner::Matrix { kind, width, .. } => (
-                    format!("{}[{}]", base_expr, index),
+                    Cow::Owned(format!("{}[{}]", base_expr, index)),
                     Cow::Owned(TypeInner::Scalar { kind, width }),
                 ),
                 TypeInner::Array { base, .. } => (
-                    format!("{}[{}]", base_expr, index),
+                    Cow::Owned(format!("{}[{}]", base_expr, index)),
                     Cow::Borrowed(&module.types[base].inner),
                 ),
                 TypeInner::Struct { ref members } => (
-                    format!(
+                    Cow::Owned(format!(
                         "{}.{}",
                         base_expr,
                         members[index as usize]
                             .name
                             .as_ref()
+                            .filter(|s| is_valid_ident(s))
                             .unwrap_or(&format!("_{}", index))
-                    ),
+                    )),
                     Cow::Borrowed(&module.types[members[index as usize].ty].inner),
                 ),
                 _ => return Err(Error::Custom(format!("Cannot index {:?}", ty))),
             }
         }
         Expression::Constant(constant) => (
-            write_constant(
+            Cow::Owned(write_constant(
                 &module.constants[constant],
                 module,
                 builder,
                 builder.features,
-            )?,
+            )?),
             Cow::Borrowed(&module.types[module.constants[constant].ty].inner),
         ),
         Expression::Compose { ty, ref components } => {
@@ -685,7 +681,7 @@ fn write_expression<'a>(
             };
 
             (
-                format!(
+                Cow::Owned(format!(
                     "{}({})",
                     constructor,
                     components
@@ -698,21 +694,21 @@ fn write_expression<'a>(
                         .0))
                         .collect::<Result<Vec<_>, _>>()?
                         .join(","),
-                ),
+                )),
                 Cow::Borrowed(&module.types[ty].inner),
             )
         }
         Expression::FunctionParameter(pos) => {
-            let (arg, ty) = builder.args.get(&pos).unwrap().clone();
+            let (arg, ty) = builder.args.get(&pos).unwrap();
 
-            (arg, Cow::Borrowed(&module.types[ty].inner))
+            (Cow::Borrowed(arg), Cow::Borrowed(&module.types[*ty].inner))
         }
         Expression::GlobalVariable(handle) => (
-            builder.globals.get(&handle).unwrap().clone(),
+            Cow::Borrowed(builder.globals.get(&handle).unwrap()),
             Cow::Borrowed(&module.types[module.global_variables[handle].ty].inner),
         ),
         Expression::LocalVariable(handle) => (
-            builder.locals_lookup.get(&handle).unwrap().clone(),
+            Cow::Borrowed(builder.locals_lookup.get(&handle).unwrap()),
             Cow::Borrowed(&module.types[builder.locals[handle].ty].inner),
         ),
         Expression::Load { pointer } => {
@@ -782,12 +778,12 @@ fn write_expression<'a>(
             );
 
             let coordinate = if let Some(depth_ref) = depth_ref {
-                format!(
+                Cow::Owned(format!(
                     "vec{}({},{})",
                     size as u8 + 1,
                     coordinate_expr,
                     write_expression(&builder.expressions[depth_ref], module, builder)?.0
-                )
+                ))
             } else {
                 coordinate_expr
             };
@@ -815,7 +811,7 @@ fn write_expression<'a>(
                 Cow::Owned(TypeInner::Vector { kind, width, size })
             };
 
-            (expr, ty)
+            (Cow::Owned(expr), ty)
         }
         Expression::ImageLoad {
             image,
@@ -873,20 +869,23 @@ fn write_expression<'a>(
             };
 
             let width = 4;
-            (expr, Cow::Owned(TypeInner::Vector { kind, width, size }))
+            (
+                Cow::Owned(expr),
+                Cow::Owned(TypeInner::Vector { kind, width, size }),
+            )
         }
         Expression::Unary { op, expr } => {
             let (expr, ty) = write_expression(&builder.expressions[expr], module, builder)?;
 
             (
-                format!(
+                Cow::Owned(format!(
                     "({} {})",
                     match op {
                         UnaryOperator::Negate => "-",
                         UnaryOperator::Not => "~",
                     },
                     expr
-                ),
+                )),
                 ty,
             )
         }
@@ -936,13 +935,16 @@ fn write_expression<'a>(
                 }
             };
 
-            (format!("({} {} {})", left_expr, op, right_expr), ty)
+            (
+                Cow::Owned(format!("({} {} {})", left_expr, op, right_expr)),
+                ty,
+            )
         }
         Expression::Intrinsic { fun, argument } => {
             let (expr, ty) = write_expression(&builder.expressions[argument], module, builder)?;
 
             (
-                format!(
+                Cow::Owned(format!(
                     "{:?}({})",
                     match fun {
                         IntrinsicFunction::IsFinite => "!isinf",
@@ -953,7 +955,7 @@ fn write_expression<'a>(
                         IntrinsicFunction::Any => "any",
                     },
                     expr
-                ),
+                )),
                 ty,
             )
         }
@@ -975,20 +977,23 @@ fn write_expression<'a>(
                 }
             };
 
-            (format!("dot({},{})", left_expr, right_expr), ty)
+            (Cow::Owned(format!("dot({},{})", left_expr, right_expr)), ty)
         }
         Expression::CrossProduct(left, right) => {
             let (left_expr, left_ty) =
                 write_expression(&builder.expressions[left], module, builder)?;
             let (right_expr, _) = write_expression(&builder.expressions[right], module, builder)?;
 
-            (format!("cross({},{})", left_expr, right_expr), left_ty)
+            (
+                Cow::Owned(format!("cross({},{})", left_expr, right_expr)),
+                left_ty,
+            )
         }
         Expression::Derivative { axis, expr } => {
             let (expr, ty) = write_expression(&builder.expressions[expr], module, builder)?;
 
             (
-                format!(
+                Cow::Owned(format!(
                     "{}({})",
                     match axis {
                         DerivativeAxis::X => "dFdx",
@@ -996,7 +1001,7 @@ fn write_expression<'a>(
                         DerivativeAxis::Width => "fwidth",
                     },
                     expr
-                ),
+                )),
                 ty,
             )
         }
@@ -1017,7 +1022,7 @@ fn write_expression<'a>(
             };
 
             (
-                format!(
+                Cow::Owned(format!(
                     "{}({})",
                     match *origin {
                         FunctionOrigin::External(ref name) => name,
@@ -1033,7 +1038,7 @@ fn write_expression<'a>(
                         .0))
                         .collect::<Result<Vec<_>, _>>()?
                         .join(","),
-                ),
+                )),
                 ty,
             )
         }
@@ -1054,13 +1059,13 @@ fn write_constant(
         ConstantInner::Composite(ref components) => format!(
             "{}({})",
             match module.types[constant.ty].inner {
-                TypeInner::Vector { size, .. } => format!("vec{}", size as u8,),
+                TypeInner::Vector { size, .. } => Cow::Owned(format!("vec{}", size as u8,)),
                 TypeInner::Matrix { columns, rows, .. } =>
-                    format!("mat{}x{}", columns as u8, rows as u8,),
-                TypeInner::Struct { .. } => builder.structs.get(&constant.ty).unwrap().clone(),
+                    Cow::Owned(format!("mat{}x{}", columns as u8, rows as u8,)),
+                TypeInner::Struct { .. } =>
+                    Cow::<str>::Borrowed(builder.structs.get(&constant.ty).unwrap()),
                 TypeInner::Array { .. } =>
-                    write_type(constant.ty, &module.types, builder.structs, None, features)?
-                        .into_owned(),
+                    write_type(constant.ty, &module.types, builder.structs, None, features)?,
                 _ =>
                     return Err(Error::Custom(format!(
                         "Cannot build constant of type {}",
@@ -1081,13 +1086,13 @@ fn write_constant(
     })
 }
 
-fn write_type(
+fn write_type<'a>(
     ty: Handle<Type>,
     types: &Arena<Type>,
-    structs: &FastHashMap<Handle<Type>, String>,
+    structs: &'a FastHashMap<Handle<Type>, String>,
     block: Option<String>,
     features: SupportedFeatures,
-) -> Result<Cow<'static, str>, Error> {
+) -> Result<Cow<'a, str>, Error> {
     Ok(match types[ty].inner {
         TypeInner::Scalar { kind, width } => match kind {
             ScalarKind::Sint => Cow::Borrowed("int"),
@@ -1170,7 +1175,11 @@ fn write_type(
                         &mut out,
                         "\t{} {};",
                         write_type(member.ty, types, structs, None, features)?,
-                        member.name.clone().unwrap_or_else(|| idx.to_string())
+                        member
+                            .name
+                            .clone()
+                            .filter(|s| is_valid_ident(s))
+                            .unwrap_or_else(|| format!("_{}", idx))
                     )?;
                 }
 
@@ -1178,7 +1187,7 @@ fn write_type(
 
                 Cow::Owned(out)
             } else {
-                Cow::Owned(structs.get(&ty).unwrap().clone())
+                Cow::Borrowed(structs.get(&ty).unwrap())
             }
         }
         TypeInner::Image {
@@ -1351,7 +1360,11 @@ fn write_struct(
             &mut tmp,
             "\t{} {};",
             write_type(member.ty, &module.types, &structs, None, features)?,
-            member.name.clone().unwrap_or_else(|| format!("_{}", idx))
+            member
+                .name
+                .clone()
+                .filter(|s| is_valid_ident(s))
+                .unwrap_or_else(|| format!("_{}", idx))
         )?;
     }
     writeln!(&mut tmp, "}};")?;
@@ -1361,4 +1374,11 @@ fn write_struct(
     writeln!(out, "{}", tmp)?;
 
     Ok(())
+}
+
+fn is_valid_ident(ident: &str) -> bool {
+    !(ident.starts_with(|c: char| !(c.is_ascii_alphabetic() || c == '_'))
+        || ident.contains(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
+        || ident.starts_with("gl_")
+        || ident == "main")
 }
