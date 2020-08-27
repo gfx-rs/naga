@@ -251,7 +251,7 @@ pub fn write<'a>(module: &'a Module, out: &mut impl Write, options: Options) -> 
             })?
         };
 
-        let format = match module.types[global.ty].inner {
+        let storage_format = match module.types[global.ty].inner {
             TypeInner::Image {
                 class: ImageClass::Storage(format, _),
                 ..
@@ -259,7 +259,7 @@ pub fn write<'a>(module: &'a Module, out: &mut impl Write, options: Options) -> 
             _ => None,
         };
 
-        if format.is_some() || global.binding.is_some() {
+        if global.binding.is_some() {
             write!(out, "layout(")?;
 
             if let Some(ref binding) = global.binding {
@@ -268,11 +268,11 @@ pub fn write<'a>(module: &'a Module, out: &mut impl Write, options: Options) -> 
                 }
             }
 
-            if format.is_some() && global.binding.is_some() {
+            if storage_format.is_some() && global.binding.is_some() {
                 write!(out, ",")?;
             }
 
-            if let Some(format) = format {
+            if let Some(format) = storage_format {
                 write!(out, "{}", write_format_glsl(format))?;
             }
 
