@@ -1408,10 +1408,10 @@ fn write_struct(
 }
 
 fn is_valid_ident(ident: &str) -> bool {
-    !(ident.starts_with(|c: char| !(c.is_ascii_alphabetic() || c == '_'))
-        || ident.contains(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
-        || ident.starts_with("gl_")
-        || ident == "main")
+    ident.starts_with(|c: char| c.is_ascii_alphabetic() || c == '_')
+        || ident.contains(|c: char| c.is_ascii_alphanumeric() || c == '_')
+        || !ident.starts_with("gl_")
+        || ident != "main"
 }
 
 fn builtin_to_glsl(builtin: BuiltIn) -> &'static str {
