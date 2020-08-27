@@ -1,8 +1,8 @@
 use crate::{
     Arena, ArraySize, BinaryOperator, BuiltIn, Constant, ConstantInner, DerivativeAxis, Expression,
     FastHashMap, Function, FunctionOrigin, GlobalVariable, Handle, ImageClass, Interpolation,
-    IntrinsicFunction, LocalVariable, Module, ScalarKind, ShaderStage, Statement, StorageClass,
-    StructMember, Type, TypeInner, UnaryOperator,
+    IntrinsicFunction, LocalVariable, MemberOrigin, Module, ScalarKind, ShaderStage, Statement,
+    StorageClass, StructMember, Type, TypeInner, UnaryOperator,
 };
 use std::{
     borrow::Cow,
@@ -571,9 +571,19 @@ fn write_expression<'a, 'b>(
             let (base_expr, ty) = write_expression(&builder.expressions[base], module, builder)?;
 
             let inner = match *ty.as_ref() {
-                TypeInner::Vector { kind, width, .. } | TypeInner::Matrix { kind, width, .. } => {
+                TypeInner::Vector { kind, width, .. } => {
                     Cow::Owned(TypeInner::Scalar { kind, width })
                 }
+                TypeInner::Matrix {
+                    kind,
+                    width,
+                    columns,
+                    ..
+                } => Cow::Owned(TypeInner::Vector {
+                    kind,
+                    width,
+                    size: columns,
+                }),
                 TypeInner::Array { base, .. } => Cow::Borrowed(&module.types[base].inner),
                 _ => return Err(Error::Custom(format!("Cannot dynamically index {:?}", ty))),
             };
@@ -591,24 +601,41 @@ fn write_expression<'a, 'b>(
             let (base_expr, ty) = write_expression(&builder.expressions[base], module, builder)?;
 
             match *ty.as_ref() {
-                TypeInner::Vector { kind, width, .. } | TypeInner::Matrix { kind, width, .. } => (
+                TypeInner::Vector { kind, width, .. } => (
                     Cow::Owned(format!("{}[{}]", base_expr, index)),
                     Cow::Owned(TypeInner::Scalar { kind, width }),
+                ),
+                TypeInner::Matrix {
+                    kind,
+                    width,
+                    columns,
+                    ..
+                } => (
+                    Cow::Owned(format!("{}[{}]", base_expr, index)),
+                    Cow::Owned(TypeInner::Vector {
+                        kind,
+                        width,
+                        size: columns,
+                    }),
                 ),
                 TypeInner::Array { base, .. } => (
                     Cow::Owned(format!("{}[{}]", base_expr, index)),
                     Cow::Borrowed(&module.types[base].inner),
                 ),
                 TypeInner::Struct { ref members } => (
-                    Cow::Owned(format!(
-                        "{}.{}",
-                        base_expr,
-                        members[index as usize]
-                            .name
-                            .as_ref()
-                            .filter(|s| is_valid_ident(s))
-                            .unwrap_or(&format!("_{}", index))
-                    )),
+                    if let MemberOrigin::BuiltIn(builtin) = members[index as usize].origin {
+                        Cow::Borrowed(builtin_to_glsl(builtin))
+                    } else {
+                        Cow::Owned(format!(
+                            "{}.{}",
+                            base_expr,
+                            members[index as usize]
+                                .name
+                                .as_ref()
+                                .filter(|s| is_valid_ident(s))
+                                .unwrap_or(&format!("_{}", index))
+                        ))
+                    },
                     Cow::Borrowed(&module.types[members[index as usize].ty].inner),
                 ),
                 _ => return Err(Error::Custom(format!("Cannot index {:?}", ty))),
@@ -1344,6 +1371,10 @@ fn write_struct(
 
     writeln!(&mut tmp, "struct {} {{", name)?;
     for (idx, member) in members.iter().enumerate() {
+        if let MemberOrigin::BuiltIn(_) = member.origin {
+            continue;
+        }
+
         if let TypeInner::Struct { ref members } = module.types[member.ty].inner {
             write_struct(
                 member.ty,
@@ -1381,4 +1412,24 @@ fn is_valid_ident(ident: &str) -> bool {
         || ident.contains(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
         || ident.starts_with("gl_")
         || ident == "main")
+}
+
+fn builtin_to_glsl(builtin: BuiltIn) -> &'static str {
+    match builtin {
+        BuiltIn::Position => "gl_Position",
+        BuiltIn::GlobalInvocationId => "gl_GlobalInvocationID",
+        BuiltIn::BaseInstance => "gl_BaseInstance",
+        BuiltIn::BaseVertex => "gl_BaseVertex",
+        BuiltIn::ClipDistance => "gl_ClipDistance",
+        BuiltIn::InstanceIndex => "gl_InstanceIndex",
+        BuiltIn::VertexIndex => "gl_VertexIndex",
+        BuiltIn::PointSize => "gl_PointSize",
+        BuiltIn::FragCoord => "gl_FragCoord",
+        BuiltIn::FrontFacing => "gl_FrontFacing",
+        BuiltIn::SampleIndex => "gl_SampleID",
+        BuiltIn::FragDepth => "gl_FragDepth",
+        BuiltIn::LocalInvocationId => "gl_LocalInvocationID",
+        BuiltIn::LocalInvocationIndex => "gl_LocalInvocationIndex",
+        BuiltIn::WorkGroupId => "gl_WorkGroupID",
+    }
 }
