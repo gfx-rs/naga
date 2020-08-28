@@ -7,7 +7,7 @@ pomelo! {
         use super::super::{error::ErrorKind, token::*, ast::*};
         use crate::{Arena, BinaryOperator, Binding, Block, BuiltIn, Constant, ConstantInner, Expression,
             Function, GlobalVariable, Handle, LocalVariable, ScalarKind,
-            ShaderStage, Statement, StorageClass, Type, TypeInner, VectorSize, Bytes, Interpolation};
+            ShaderStage, Statement, StorageClass, Type, TypeInner, VectorSize, Interpolation};
     }
     %token #[derive(Debug)] pub enum Token {};
     %parser pub struct Parser<'a> {};
