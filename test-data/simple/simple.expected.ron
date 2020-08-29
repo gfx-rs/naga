@@ -94,7 +94,10 @@
                 ),
             ],
             body: [
-                Empty,
+                Store(
+                    pointer: 4,
+                    value: 3,
+                ),
                 Store(
                     pointer: 2,
                     value: 6,

@@ -1142,10 +1142,12 @@ impl Parser {
                             .append(crate::Expression::LocalVariable(var_id));
                         context.lookup_ident.insert(name, expr_id);
                         match init {
-                            Init::Variable(value) => crate::Statement::Store {
-                                pointer: expr_id,
-                                value,
-                            },
+                            Init::Variable(value) | Init::Uniform(value) => {
+                                crate::Statement::Store {
+                                    pointer: expr_id,
+                                    value,
+                                }
+                            }
                             _ => crate::Statement::Empty,
                         }
                     }
