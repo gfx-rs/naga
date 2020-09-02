@@ -41,7 +41,7 @@ impl Program {
     }
 
     pub fn binary_expr(
-        self: &mut Program,
+        &mut self,
         op: BinaryOperator,
         left: ExpressionRule,
         right: ExpressionRule,
