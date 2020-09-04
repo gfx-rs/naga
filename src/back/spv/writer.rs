@@ -302,7 +302,7 @@ impl Writer {
             exec_model,
             function_id,
             entry_point.name.as_str(),
-            interface_ids,
+            interface_ids.as_slice(),
         )
     }
 
@@ -443,7 +443,7 @@ impl Writer {
                     let member_id = self.get_type_id(arena, LookupType::Handle(member.ty));
                     member_ids.push(member_id);
                 }
-                super::instructions::instruction_type_struct(id, member_ids)
+                super::instructions::instruction_type_struct(id, member_ids.as_slice())
             }
             crate::TypeInner::Pointer { base, class } => {
                 let type_id = self.get_type_id(arena, LookupType::Handle(base));
@@ -557,7 +557,7 @@ impl Writer {
                 let instruction = super::instructions::instruction_constant_composite(
                     type_id,
                     id,
-                    constituent_ids,
+                    constituent_ids.as_slice(),
                 );
                 (instruction, id)
             }
@@ -676,7 +676,7 @@ impl Writer {
                 let instruction = super::instructions::instruction_type_function(
                     id,
                     lookup_function_type.return_type_id,
-                    parameter_pointer_ids,
+                    parameter_pointer_ids.as_slice(),
                 );
                 instruction.to_words(&mut self.logical_layout.declarations);
                 self.lookup_function_type.insert(lookup_function_type, id);
@@ -724,7 +724,7 @@ impl Writer {
                 let instruction = super::instructions::instruction_composite_construct(
                     type_id,
                     id,
-                    constituent_ids,
+                    constituent_ids.as_slice(),
                 );
                 block.body.push(instruction);
                 Some((id, Some(*ty)))
@@ -867,9 +867,11 @@ impl Writer {
                                 None,
                             ),
                         });
-                        block
-                            .body
-                            .push(super::instructions::instruction_store(variable_id, id, None));
+                        block.body.push(super::instructions::instruction_store(
+                            variable_id,
+                            id,
+                            None,
+                        ));
                         argument_ids.push(variable_id);
                     }
 
@@ -882,7 +884,7 @@ impl Writer {
                             return_type_id,
                             id,
                             *self.lookup_function.get(local_function).unwrap(),
-                            argument_ids,
+                            argument_ids.as_slice(),
                         ));
                     Some((id, None))
                 }
@@ -953,9 +955,9 @@ impl Writer {
                     _ => value_id,
                 };
 
-                block
-                    .body
-                    .push(super::instructions::instruction_store(pointer_id, value_id,None));
+                block.body.push(super::instructions::instruction_store(
+                    pointer_id, value_id, None,
+                ));
             }
             crate::Statement::Empty => {}
             _ => unimplemented!("{:?}", statement),

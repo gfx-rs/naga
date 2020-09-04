@@ -39,7 +39,11 @@ pub(super) fn instruction_decorate(
     let mut instruction = Instruction::new(Op::Decorate);
     instruction.add_operand(target_id);
     instruction.add_operand(decoration as u32);
-    instruction.add_operands(Vec::from(operands));
+
+    for operand in operands {
+        instruction.add_operand(*operand)
+    }
+
     instruction
 }
 
@@ -72,22 +76,26 @@ pub(super) fn instruction_entry_point(
     execution_model: spirv::ExecutionModel,
     entry_point_id: Word,
     name: &str,
-    interface_ids: Vec<Word>,
+    interface_ids: &[Word],
 ) -> Instruction {
     let mut instruction = Instruction::new(Op::EntryPoint);
     instruction.add_operand(execution_model as u32);
     instruction.add_operand(entry_point_id);
     instruction.add_operands(helpers::string_to_words(name));
-    instruction.add_operands(interface_ids);
+
+    for interface_id in interface_ids {
+        instruction.add_operand(*interface_id);
+    }
+
     instruction
 }
 
 pub(super) fn instruction_execution_mode(
-    function_id: Word,
+    entry_point_id: Word,
     execution_mode: spirv::ExecutionMode,
 ) -> Instruction {
     let mut instruction = Instruction::new(Op::ExecutionMode);
-    instruction.add_operand(function_id);
+    instruction.add_operand(entry_point_id);
     instruction.add_operand(execution_mode as u32);
     instruction
 }
@@ -158,28 +166,28 @@ pub(super) fn instruction_type_image(
     sampled_type_id: Word,
     dim: spirv::Dim,
     arrayed: bool,
-    class: crate::ImageClass,
+    image_class: crate::ImageClass,
 ) -> Instruction {
     let mut instruction = Instruction::new(Op::TypeImage);
     instruction.set_result(id);
     instruction.add_operand(sampled_type_id);
     instruction.add_operand(dim as u32);
 
-    instruction.add_operand(match class {
+    instruction.add_operand(match image_class {
         crate::ImageClass::Depth => 1,
         _ => 0,
     });
-    instruction.add_operand(if arrayed { 1 } else { 0 });
-    instruction.add_operand(match class {
+    instruction.add_operand(arrayed as u32);
+    instruction.add_operand(match image_class {
         crate::ImageClass::Multisampled => 1,
         _ => 0,
     });
-    instruction.add_operand(match class {
+    instruction.add_operand(match image_class {
         crate::ImageClass::Sampled => 1,
         _ => 0,
     });
 
-    let (format, access) = match class {
+    let (format, access) = match image_class {
         crate::ImageClass::Storage(format, access) => {
             let spv_format = match format {
                 crate::StorageFormat::R8Unorm => spirv::ImageFormat::R8,
@@ -260,10 +268,14 @@ pub(super) fn instruction_type_runtime_array(id: Word, element_type_id: Word) ->
     instruction
 }
 
-pub(super) fn instruction_type_struct(id: Word, member_ids: Vec<Word>) -> Instruction {
+pub(super) fn instruction_type_struct(id: Word, member_ids: &[Word]) -> Instruction {
     let mut instruction = Instruction::new(Op::TypeStruct);
     instruction.set_result(id);
-    instruction.add_operands(member_ids);
+
+    for member_id in member_ids {
+        instruction.add_operand(*member_id)
+    }
+
     instruction
 }
 
@@ -282,12 +294,16 @@ pub(super) fn instruction_type_pointer(
 pub(super) fn instruction_type_function(
     id: Word,
     return_type_id: Word,
-    parameter_ids: Vec<Word>,
+    parameter_ids: &[Word],
 ) -> Instruction {
     let mut instruction = Instruction::new(Op::TypeFunction);
     instruction.set_result(id);
     instruction.add_operand(return_type_id);
-    instruction.add_operands(parameter_ids);
+
+    for parameter_id in parameter_ids {
+        instruction.add_operand(*parameter_id);
+    }
+
     instruction
 }
 
@@ -295,43 +311,45 @@ pub(super) fn instruction_type_function(
 // Constant-Creation Instructions
 //
 
-pub(super) fn instruction_constant_true(scalar_constant_id: Word, id: Word) -> Instruction {
+pub(super) fn instruction_constant_true(result_type_id: Word, id: Word) -> Instruction {
     let mut instruction = Instruction::new(Op::ConstantTrue);
-    instruction.set_type(scalar_constant_id);
+    instruction.set_type(result_type_id);
     instruction.set_result(id);
     instruction
 }
 
-pub(super) fn instruction_constant_false(scalar_constant_id: Word, id: Word) -> Instruction {
+pub(super) fn instruction_constant_false(result_type_id: Word, id: Word) -> Instruction {
     let mut instruction = Instruction::new(Op::ConstantFalse);
-    instruction.set_type(scalar_constant_id);
+    instruction.set_type(result_type_id);
     instruction.set_result(id);
     instruction
 }
 
-pub(super) fn instruction_constant(
-    scalar_constant_id: Word,
-    id: Word,
-    values: &[Word],
-) -> Instruction {
+pub(super) fn instruction_constant(result_type_id: Word, id: Word, values: &[Word]) -> Instruction {
     let mut instruction = Instruction::new(Op::Constant);
-    instruction.set_type(scalar_constant_id);
+    instruction.set_type(result_type_id);
     instruction.set_result(id);
+
     for value in values {
         instruction.add_operand(*value);
     }
+
     instruction
 }
 
 pub(super) fn instruction_constant_composite(
-    composite_type_id: Word,
+    result_type_id: Word,
     id: Word,
-    constituent_ids: Vec<Word>,
+    constituent_ids: &[Word],
 ) -> Instruction {
     let mut instruction = Instruction::new(Op::ConstantComposite);
-    instruction.set_type(composite_type_id);
+    instruction.set_type(result_type_id);
     instruction.set_result(id);
-    instruction.add_operands(constituent_ids);
+
+    for constituent_id in constituent_ids {
+        instruction.add_operand(*constituent_id);
+    }
+
     instruction
 }
 
@@ -341,13 +359,13 @@ pub(super) fn instruction_constant_composite(
 
 pub(super) fn instruction_variable(
     result_type_id: Word,
-    result_id: Word,
+    id: Word,
     storage_class: spirv::StorageClass,
     initializer_id: Option<Word>,
 ) -> Instruction {
     let mut instruction = Instruction::new(Op::Variable);
     instruction.set_type(result_type_id);
-    instruction.set_result(result_id);
+    instruction.set_result(id);
     instruction.add_operand(storage_class as u32);
 
     if let Some(initializer_id) = initializer_id {
@@ -358,13 +376,13 @@ pub(super) fn instruction_variable(
 }
 
 pub(super) fn instruction_load(
-    type_id: Word,
+    result_type_id: Word,
     id: Word,
     pointer_type_id: Word,
     memory_access: Option<spirv::MemoryAccess>,
 ) -> Instruction {
     let mut instruction = Instruction::new(Op::Load);
-    instruction.set_type(type_id);
+    instruction.set_type(result_type_id);
     instruction.set_result(id);
     instruction.add_operand(pointer_type_id);
 
@@ -428,13 +446,17 @@ pub(super) fn instruction_function_call(
     result_type_id: Word,
     id: Word,
     function_id: Word,
-    argument_ids: Vec<Word>,
+    argument_ids: &[Word],
 ) -> Instruction {
     let mut instruction = Instruction::new(Op::FunctionCall);
     instruction.set_type(result_type_id);
     instruction.set_result(id);
     instruction.add_operand(function_id);
-    instruction.add_operands(argument_ids);
+
+    for argument_id in argument_ids {
+        instruction.add_operand(*argument_id);
+    }
+
     instruction
 }
 
@@ -451,14 +473,18 @@ pub(super) fn instruction_function_call(
 //
 
 pub(super) fn instruction_composite_construct(
-    composite_type_id: Word,
+    result_type_id: Word,
     id: Word,
-    constituent_ids: Vec<Word>,
+    constituent_ids: &[Word],
 ) -> Instruction {
     let mut instruction = Instruction::new(Op::CompositeConstruct);
-    instruction.set_type(composite_type_id);
+    instruction.set_type(result_type_id);
     instruction.set_result(id);
-    instruction.add_operands(constituent_ids);
+
+    for constituent_id in constituent_ids {
+        instruction.add_operand(*constituent_id);
+    }
+
     instruction
 }
 
@@ -467,13 +493,13 @@ pub(super) fn instruction_composite_construct(
 //
 
 pub(super) fn instruction_vector_times_scalar(
-    float_type_id: Word,
+    result_type_id: Word,
     id: Word,
     vector_type_id: Word,
     scalar_type_id: Word,
 ) -> Instruction {
     let mut instruction = Instruction::new(Op::VectorTimesScalar);
-    instruction.set_type(float_type_id);
+    instruction.set_type(result_type_id);
     instruction.set_result(id);
     instruction.add_operand(vector_type_id);
     instruction.add_operand(scalar_type_id);
@@ -592,7 +618,7 @@ mod tests {
             op: Op::Name,
             wc: 3,
             type_id: false,
-            result_id: true,
+            result_id: false,
             operands: true,
         };
         validate_spec_requirements(requirements, &instruction);
