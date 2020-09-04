@@ -869,7 +869,7 @@ impl Writer {
                         });
                         block
                             .body
-                            .push(super::instructions::instruction_store(variable_id, id));
+                            .push(super::instructions::instruction_store(variable_id, id, None));
                         argument_ids.push(variable_id);
                     }
 
@@ -955,7 +955,7 @@ impl Writer {
 
                 block
                     .body
-                    .push(super::instructions::instruction_store(pointer_id, value_id));
+                    .push(super::instructions::instruction_store(pointer_id, value_id,None));
             }
             crate::Statement::Empty => {}
             _ => unimplemented!("{:?}", statement),
@@ -1129,10 +1129,8 @@ impl Writer {
 
 #[cfg(test)]
 mod tests {
-    use crate::back::spv::test_framework::*;
     use crate::back::spv::{Writer, WriterFlags};
     use crate::Header;
-    use spirv::*;
 
     #[test]
     fn test_writer_generate_id() {

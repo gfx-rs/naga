@@ -22,7 +22,7 @@ pub(super) fn instruction_source(
 
 pub(super) fn instruction_name(target_id: Word, name: &str) -> Instruction {
     let mut instruction = Instruction::new(Op::Name);
-    instruction.set_result(target_id);
+    instruction.add_operand(target_id);
     instruction.add_operands(helpers::string_to_words(name));
     instruction
 }
@@ -377,10 +377,21 @@ pub(super) fn instruction_load(
     instruction
 }
 
-pub(super) fn instruction_store(pointer_type_id: Word, object_id: Word) -> Instruction {
+pub(super) fn instruction_store(
+    pointer_type_id: Word,
+    object_id: Word,
+    memory_access: Option<spirv::MemoryAccess>,
+) -> Instruction {
     let mut instruction = Instruction::new(Op::Store);
-    instruction.set_type(pointer_type_id);
+    instruction.add_operand(pointer_type_id);
     instruction.add_operand(object_id);
+
+    instruction.add_operand(if let Some(memory_access) = memory_access {
+        memory_access.bits()
+    } else {
+        spirv::MemoryAccess::NONE.bits()
+    });
+
     instruction
 }
 
