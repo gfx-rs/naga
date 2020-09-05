@@ -5,6 +5,7 @@ use crate::{
     IntrinsicFunction, LocalVariable, MemberOrigin, Module, ScalarKind, ShaderStage, Statement,
     StorageAccess, StorageClass, StorageFormat, StructMember, Type, TypeInner, UnaryOperator,
 };
+use log::warn;
 use std::{
     borrow::Cow,
     fmt::{self, Error as FmtError, Write as FmtWrite},
@@ -61,6 +62,12 @@ pub struct Options {
     pub entry_point: (String, ShaderStage),
 }
 
+#[derive(Debug, Clone)]
+pub struct TextureMapping {
+    pub texture: Handle<GlobalVariable>,
+    pub sampler: Handle<GlobalVariable>,
+}
+
 const SUPPORTED_CORE_VERSIONS: &[u16] = &[450, 460];
 const SUPPORTED_ES_VERSIONS: &[u16] = &[300, 310];
 
@@ -68,16 +75,19 @@ bitflags::bitflags! {
     struct SupportedFeatures: u32 {
         const BUFFER_STORAGE = 1;
         const SHARED_STORAGE = 1 << 1;
-        const SEPARATE_IMAGE_SAMPLER = 1 << 2;
-        const DOUBLE_TYPE = 1 << 3;
-        const NON_FLOAT_MATRICES = 1 << 4;
-        const MULTISAMPLED_TEXTURES = 1 << 5;
-        const MULTISAMPLED_TEXTURE_ARRAYS = 1 << 6;
-        const NON_2D_TEXTURE_ARRAYS = 1 << 7;
+        const DOUBLE_TYPE = 1 << 2;
+        const NON_FLOAT_MATRICES = 1 << 3;
+        const MULTISAMPLED_TEXTURES = 1 << 4;
+        const MULTISAMPLED_TEXTURE_ARRAYS = 1 << 5;
+        const NON_2D_TEXTURE_ARRAYS = 1 << 6;
     }
 }
 
-pub fn write<'a>(module: &'a Module, out: &mut impl Write, options: Options) -> Result<(), Error> {
+pub fn write<'a>(
+    module: &'a Module,
+    out: &mut impl Write,
+    options: Options,
+) -> Result<FastHashMap<String, TextureMapping>, Error> {
     let (version, es) = match options.version {
         Version::Desktop(v) => (v, false),
         Version::Embedded(v) => (v, true),
@@ -145,7 +155,6 @@ pub fn write<'a>(module: &'a Module, out: &mut impl Write, options: Options) -> 
     let mut features = SupportedFeatures::empty();
 
     if !es && version > 440 {
-        features |= SupportedFeatures::SEPARATE_IMAGE_SAMPLER;
         features |= SupportedFeatures::DOUBLE_TYPE;
         features |= SupportedFeatures::NON_FLOAT_MATRICES;
         features |= SupportedFeatures::MULTISAMPLED_TEXTURE_ARRAYS;
@@ -214,11 +223,138 @@ pub fn write<'a>(module: &'a Module, out: &mut impl Write, options: Options) -> 
 
     writeln!(out)?;
 
+    let mut functions = FastHashMap::default();
+
+    for (handle, func) in module.functions.iter() {
+        // Discard all entry points
+        if entry_point.function != handle
+            && module
+                .entry_points
+                .iter()
+                .any(|entry| entry.function == handle)
+        {
+            continue;
+        }
+
+        let name = if entry_point.function != handle {
+            namer(func.name.as_ref())
+        } else {
+            String::from("main")
+        };
+
+        writeln!(
+            out,
+            "{} {}({});",
+            func.return_type
+                .map(|ty| write_type(ty, &module.types, &structs, None, features))
+                .transpose()?
+                .as_deref()
+                .unwrap_or("void"),
+            name,
+            func.parameter_types
+                .iter()
+                .map(|ty| write_type(*ty, &module.types, &structs, None, features))
+                .collect::<Result<Vec<_>, _>>()?
+                .join(","),
+        )?;
+
+        functions.insert(handle, name);
+    }
+
+    writeln!(out)?;
+
+    let texture_mappings = collect_texture_mapping(module, &functions)?;
+    let mut mappings_map = FastHashMap::default();
+
+    for ((handle, global), _) in module
+        .global_variables
+        .iter()
+        .zip(func.global_usage.iter())
+        .filter(|(_, usage)| !usage.is_empty())
+    {
+        if let TypeInner::Image {
+            kind,
+            dim,
+            arrayed,
+            class,
+        } = module.types[global.ty].inner
+        {
+            let mapping =
+                if let Some(map) = texture_mappings.iter().find(|map| map.texture == handle) {
+                    map
+                } else {
+                    warn!(
+                        "Couldn't find a mapping for {:?}, handle {:?}",
+                        global, handle
+                    );
+                    continue;
+                };
+
+            if let Some(ref binding) = global.binding {
+                write!(out, "layout(")?;
+
+                if !es {
+                    write!(out, "{}", Binding(binding))?;
+
+                    write!(out, ",")?;
+                }
+
+                if let TypeInner::Image {
+                    class: ImageClass::Storage(storage_format),
+                    ..
+                } = module.types[global.ty].inner
+                {
+                    write!(out, "{}) ", write_format_glsl(storage_format),)?;
+                } else {
+                    write!(out, ") ")?;
+                }
+
+                if global.storage_access == StorageAccess::LOAD {
+                    write!(out, "readonly ")?;
+                } else if global.storage_access == StorageAccess::STORE {
+                    write!(out, "writeonly ")?;
+                }
+            }
+
+            let name = if !es {
+                namer(global.name.as_ref())
+            } else {
+                global.name.clone().ok_or_else(|| {
+                    Error::Custom(String::from("Global names must be specified in es"))
+                })?
+            };
+
+            let comparison = if let TypeInner::Sampler { comparison } =
+                module.types[module.global_variables[mapping.sampler].ty].inner
+            {
+                comparison
+            } else {
+                unreachable!()
+            };
+
+            writeln!(
+                out,
+                "{}{} {};",
+                write_storage_class(global.class, features)?,
+                write_image_type(kind, dim, arrayed, class, comparison, features)?,
+                name
+            )?;
+
+            mappings_map.insert(name, mapping.clone());
+        }
+    }
+
     let mut globals_lookup = FastHashMap::default();
 
-    for ((handle, global), usage) in module.global_variables.iter().zip(func.global_usage.iter()) {
-        if usage.is_empty() {
-            continue;
+    for ((handle, global), _) in module
+        .global_variables
+        .iter()
+        .zip(func.global_usage.iter())
+        .filter(|(_, usage)| !usage.is_empty())
+    {
+        match module.types[global.ty].inner {
+            TypeInner::Image { .. } | TypeInner::Sampler { .. } => continue,
+            _ => {}
         }
 
         if let Some(crate::Binding::BuiltIn(built_in)) = global.binding {
@@ -317,46 +453,6 @@ pub fn write<'a>(module: &'a Module, out: &mut impl Write, options: Options) -> 
 
     writeln!(out)?;
 
-    let mut functions = FastHashMap::default();
-
-    for (handle, func) in module.functions.iter() {
-        // Discard all entry points
-        if entry_point.function != handle
-            && module
-                .entry_points
-                .iter()
-                .any(|entry| entry.function == handle)
-        {
-            continue;
-        }
-
-        let name = if entry_point.function != handle {
-            namer(func.name.as_ref())
-        } else {
-            String::from("main")
-        };
-
-        writeln!(
-            out,
-            "{} {}({});",
-            func.return_type
-                .map(|ty| write_type(ty, &module.types, &structs, None, features))
-                .transpose()?
-                .as_deref()
-                .unwrap_or("void"),
-            name,
-            func.parameter_types
-                .iter()
-                .map(|ty| write_type(*ty, &module.types, &structs, None, features))
-                .collect::<Result<Vec<_>, _>>()?
-                .join(","),
-        )?;
-
-        functions.insert(handle, name);
-    }
-
-    writeln!(out)?;
-
     for (handle, name) in functions.iter() {
         let func = &module.functions[*handle];
 
@@ -427,7 +523,7 @@ pub fn write<'a>(module: &'a Module, out: &mut impl Write, options: Options) -> 
         writeln!(out, "}}")?;
     }
 
-    Ok(())
+    Ok(mappings_map)
 }
 
 struct Binding<'a>(&'a crate::Binding);
@@ -1344,38 +1440,46 @@ fn write_type<'a>(
                 Cow::Borrowed(structs.get(&ty).unwrap())
             }
         }
-        TypeInner::Image {
-            kind,
-            dim,
-            arrayed,
-            class,
-        } => {
-            if arrayed
-                && dim != crate::ImageDimension::D2
-                && !features.contains(SupportedFeatures::NON_2D_TEXTURE_ARRAYS)
-            {
-                return Err(Error::Custom(String::from(
-                    "Arrayed non 2d images aren't supported",
-                )));
-            }
-
-            Cow::Owned(format!(
-                "{}{}{}{}",
-                map_scalar(kind, 4, features)?.prefix,
-                match class {
-                    ImageClass::Storage(_) => "image",
-                    _ => "texture",
-                },
-                ImageDimension(dim),
-                write_image_flags(arrayed, class, features)?
-            ))
-        }
-        TypeInner::Sampler { comparison } => Cow::Borrowed(if comparison {
-            "sampler"
-        } else {
-            "samplerShadow"
-        }),
+        _ => unreachable!(),
     })
+}
+
+fn write_image_type(
+    kind: ScalarKind,
+    dim: crate::ImageDimension,
+    arrayed: bool,
+    class: ImageClass,
+    comparison: bool,
+    features: SupportedFeatures,
+) -> Result<String, Error> {
+    if arrayed
+        && dim != crate::ImageDimension::D2
+        && !features.contains(SupportedFeatures::NON_2D_TEXTURE_ARRAYS)
+    {
+        return Err(Error::Custom(String::from(
+            "Arrayed non 2d images aren't supported",
+        )));
+    }
+
+    Ok(format!(
+        "{}{}{}{}{}",
+        match kind {
+            ScalarKind::Sint => "i",
+            ScalarKind::Uint => "u",
+            ScalarKind::Float => "",
+            ScalarKind::Bool =>
+                return Err(Error::Custom(String::from(
+                    "Cannot build image of booleans",
+                ))),
+        },
+        match class {
+            ImageClass::Storage(_) => "image",
+            _ => "texture",
+        },
+        ImageDimension(dim),
+        write_image_flags(arrayed, class, features)?,
+        if comparison { "Shadow" } else { "" }
+    ))
 }
 
 fn write_storage_class(
@@ -1592,4 +1696,182 @@ fn write_format_glsl(format: StorageFormat) -> &'static str {
         StorageFormat::Rgba32Sint => "rgba32i",
         StorageFormat::Rgba32Float => "rgba32f",
     }
+}
+
+fn collect_texture_mapping(
+    module: &Module,
+    functions: &FastHashMap<Handle<Function>, String>,
+) -> Result<Vec<TextureMapping>, Error> {
+    fn collect_texture_mapping_expr(
+        func: &Function,
+        expr: Handle<Expression>,
+        mappings: &mut Vec<TextureMapping>,
+    ) -> Result<(), Error> {
+        match func.expressions[expr] {
+            Expression::Access { base, index } => {
+                collect_texture_mapping_expr(func, base, mappings)?;
+                collect_texture_mapping_expr(func, index, mappings)?;
+            }
+            Expression::AccessIndex { base, .. } => {
+                collect_texture_mapping_expr(func, base, mappings)?
+            }
+            Expression::Compose { ref components, .. } => {
+                for comp in components {
+                    collect_texture_mapping_expr(func, *comp, mappings)?
+                }
+            }
+            Expression::Load { pointer } => collect_texture_mapping_expr(func, pointer, mappings)?,
+            Expression::ImageSample {
+                image,
+                sampler,
+                coordinate,
+                level,
+                depth_ref,
+            } => {
+                let tex_handle = match func.expressions[image] {
+                    Expression::GlobalVariable(global) => global,
+                    _ => unreachable!(),
+                };
+
+                let sampler_handle = match func.expressions[sampler] {
+                    Expression::GlobalVariable(global) => global,
+                    _ => unreachable!(),
+                };
+
+                collect_texture_mapping_expr(func, coordinate, mappings)?;
+                match level {
+                    crate::SampleLevel::Exact(expr) | crate::SampleLevel::Bias(expr) => {
+                        collect_texture_mapping_expr(func, expr, mappings)?
+                    }
+                    crate::SampleLevel::Auto => {}
+                }
+                if let Some(expr) = depth_ref {
+                    collect_texture_mapping_expr(func, expr, mappings)?;
+                }
+
+                let mapping = mappings.iter().find(|map| map.texture == tex_handle);
+
+                if mapping.map_or(false, |map| map.sampler != sampler_handle) {
+                    return Err(Error::Custom(String::from(
+                        "Cannot use texture with two different samplers",
+                    )));
+                }
+
+                if mapping.is_none() {
+                    mappings.push(TextureMapping {
+                        texture: tex_handle,
+                        sampler: sampler_handle,
+                    });
+                }
+            }
+            Expression::ImageLoad {
+                coordinate, index, ..
+            } => {
+                collect_texture_mapping_expr(func, coordinate, mappings)?;
+                collect_texture_mapping_expr(func, index, mappings)?;
+            }
+            Expression::Unary { expr, .. } => collect_texture_mapping_expr(func, expr, mappings)?,
+            Expression::Binary { left, right, .. } => {
+                collect_texture_mapping_expr(func, left, mappings)?;
+                collect_texture_mapping_expr(func, right, mappings)?;
+            }
+            Expression::Intrinsic { argument, .. } => {
+                collect_texture_mapping_expr(func, argument, mappings)?
+            }
+            Expression::Transpose(expr) => collect_texture_mapping_expr(func, expr, mappings)?,
+            Expression::DotProduct(left, right) => {
+                collect_texture_mapping_expr(func, left, mappings)?;
+                collect_texture_mapping_expr(func, right, mappings)?;
+            }
+            Expression::CrossProduct(left, right) => {
+                collect_texture_mapping_expr(func, left, mappings)?;
+                collect_texture_mapping_expr(func, right, mappings)?;
+            }
+            Expression::As(expr, _) => collect_texture_mapping_expr(func, expr, mappings)?,
+            Expression::Derivative { expr, .. } => {
+                collect_texture_mapping_expr(func, expr, mappings)?
+            }
+            Expression::Call { ref arguments, .. } => {
+                for arg in arguments {
+                    collect_texture_mapping_expr(func, *arg, mappings)?
+                }
+            }
+            _ => {}
+        }
+
+        Ok(())
+    }
+
+    fn collect_texture_mapping_sta(
+        func: &Function,
+        sta: &Statement,
+        mappings: &mut Vec<TextureMapping>,
+    ) -> Result<(), Error> {
+        match sta {
+            Statement::Block(block) => {
+                for sta in block {
+                    collect_texture_mapping_sta(func, sta, mappings)?;
+                }
+            }
+            Statement::If {
+                condition,
+                accept,
+                reject,
+            } => {
+                collect_texture_mapping_expr(func, *condition, mappings)?;
+
+                for sta in accept {
+                    collect_texture_mapping_sta(func, sta, mappings)?;
+                }
+                for sta in reject {
+                    collect_texture_mapping_sta(func, sta, mappings)?;
+                }
+            }
+            Statement::Switch {
+                selector,
+                cases,
+                default,
+            } => {
+                collect_texture_mapping_expr(func, *selector, mappings)?;
+
+                for sta in cases.values().flat_map(|c| &c.0) {
+                    collect_texture_mapping_sta(func, sta, mappings)?;
+                }
+                for sta in default {
+                    collect_texture_mapping_sta(func, sta, mappings)?;
+                }
+            }
+            Statement::Loop { body, continuing } => {
+                for sta in body {
+                    collect_texture_mapping_sta(func, sta, mappings)?;
+                }
+                for sta in continuing {
+                    collect_texture_mapping_sta(func, sta, mappings)?;
+                }
+            }
+            Statement::Return { value } => {
+                if let Some(handle) = value {
+                    collect_texture_mapping_expr(func, *handle, mappings)?;
+                }
+            }
+            Statement::Store { pointer, value } => {
+                collect_texture_mapping_expr(func, *pointer, mappings)?;
+                collect_texture_mapping_expr(func, *value, mappings)?;
+            }
+            _ => {}
+        }
+
+        Ok(())
+    }
+
+    let mut mappings = Vec::new();
+
+    for function in functions.keys() {
+        let func = &module.functions[*function];
+        for sta in func.body.iter() {
+            collect_texture_mapping_sta(func, sta, &mut mappings)?;
+        }
+    }
+
+    Ok(mappings)
 }
