@@ -552,18 +552,54 @@ mod tests {
     use spirv::*;
 
     #[test]
-    fn test_instruction_capability() {
-        let instruction = super::instruction_capability(Capability::Shader);
+    fn test_instruction_source() {
+        let version = 450;
+        let instruction = super::instruction_source(SourceLanguage::GLSL, version);
         let mut output = vec![];
 
         let requirements = SpecRequirements {
-            op: Op::Capability,
-            wc: 2,
+            op: Op::Source,
+            wc: 3,
             type_id: false,
             result_id: false,
             operands: true,
         };
+        validate_spec_requirements(requirements, &instruction);
 
+        instruction.to_words(&mut output);
+        validate_instruction(output.as_slice(), &instruction);
+    }
+
+    #[test]
+    fn test_instruction_name() {
+        let instruction = super::instruction_name(1, "Test");
+        let mut output = vec![];
+
+        let requirements = SpecRequirements {
+            op: Op::Name,
+            wc: 3,
+            type_id: false,
+            result_id: false,
+            operands: true,
+        };
+        validate_spec_requirements(requirements, &instruction);
+
+        instruction.to_words(&mut output);
+        validate_instruction(output.as_slice(), &instruction);
+    }
+
+    #[test]
+    fn test_instruction_decorate() {
+        let instruction = super::instruction_decorate(1, Decoration::Location, &[1]);
+        let mut output = vec![];
+
+        let requirements = SpecRequirements {
+            op: Op::Decorate,
+            wc: 3,
+            type_id: false,
+            result_id: false,
+            operands: true,
+        };
         validate_spec_requirements(requirements, &instruction);
 
         instruction.to_words(&mut output);
@@ -610,24 +646,6 @@ mod tests {
     }
 
     #[test]
-    fn test_instruction_name() {
-        let instruction = super::instruction_name(1, "Test");
-        let mut output = vec![];
-
-        let requirements = SpecRequirements {
-            op: Op::Name,
-            wc: 3,
-            type_id: false,
-            result_id: false,
-            operands: true,
-        };
-        validate_spec_requirements(requirements, &instruction);
-
-        instruction.to_words(&mut output);
-        validate_instruction(output.as_slice(), &instruction);
-    }
-
-    #[test]
     fn test_instruction_execution_mode() {
         let instruction = super::instruction_execution_mode(1, ExecutionMode::OriginUpperLeft);
         let mut output = vec![];
@@ -646,36 +664,18 @@ mod tests {
     }
 
     #[test]
-    fn test_instruction_source() {
-        let version = 450;
-        let instruction = super::instruction_source(SourceLanguage::GLSL, version);
+    fn test_instruction_capability() {
+        let instruction = super::instruction_capability(Capability::Shader);
         let mut output = vec![];
 
         let requirements = SpecRequirements {
-            op: Op::Source,
-            wc: 3,
+            op: Op::Capability,
+            wc: 2,
             type_id: false,
             result_id: false,
             operands: true,
         };
-        validate_spec_requirements(requirements, &instruction);
 
-        instruction.to_words(&mut output);
-        validate_instruction(output.as_slice(), &instruction);
-    }
-
-    #[test]
-    fn test_instruction_label() {
-        let instruction = super::instruction_label(1);
-        let mut output = vec![];
-
-        let requirements = SpecRequirements {
-            op: Op::Label,
-            wc: 2,
-            type_id: false,
-            result_id: true,
-            operands: false,
-        };
         validate_spec_requirements(requirements, &instruction);
 
         instruction.to_words(&mut output);
@@ -701,16 +701,16 @@ mod tests {
     }
 
     #[test]
-    fn test_instruction_decorate() {
-        let instruction = super::instruction_decorate(1, Decoration::Location, &[1]);
+    fn test_instruction_label() {
+        let instruction = super::instruction_label(1);
         let mut output = vec![];
 
         let requirements = SpecRequirements {
-            op: Op::Decorate,
-            wc: 3,
+            op: Op::Label,
+            wc: 2,
             type_id: false,
-            result_id: false,
-            operands: true,
+            result_id: true,
+            operands: false,
         };
         validate_spec_requirements(requirements, &instruction);
 
