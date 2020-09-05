@@ -265,6 +265,7 @@ pub fn write<'a>(
 
     let texture_mappings = collect_texture_mapping(module, &functions)?;
     let mut mappings_map = FastHashMap::default();
+    let mut globals_lookup = FastHashMap::default();
 
     for ((handle, global), _) in module
         .global_variables
@@ -272,41 +273,30 @@ pub fn write<'a>(
         .zip(func.global_usage.iter())
         .filter(|(_, usage)| !usage.is_empty())
     {
-        if let TypeInner::Image {
-            kind,
-            dim,
-            arrayed,
-            class,
-        } = module.types[global.ty].inner
-        {
-            let mapping =
-                if let Some(map) = texture_mappings.iter().find(|map| map.texture == handle) {
-                    map
-                } else {
-                    warn!(
-                        "Couldn't find a mapping for {:?}, handle {:?}",
-                        global, handle
-                    );
-                    continue;
-                };
-
-            if let Some(ref binding) = global.binding {
-                write!(out, "layout(")?;
-
-                if !es {
-                    write!(out, "{}", Binding(binding))?;
-
-                    write!(out, ",")?;
-                }
+        match module.types[global.ty].inner {
+            TypeInner::Image {
+                kind,
+                dim,
+                arrayed,
+                class,
+            } => {
+                let mapping =
+                    if let Some(map) = texture_mappings.iter().find(|map| map.texture == handle) {
+                        map
+                    } else {
+                        warn!(
+                            "Couldn't find a mapping for {:?}, handle {:?}",
+                            global, handle
+                        );
+                        continue;
+                    };
 
                 if let TypeInner::Image {
                     class: ImageClass::Storage(storage_format),
                     ..
                 } = module.types[global.ty].inner
                 {
-                    write!(out, "{}) ", write_format_glsl(storage_format),)?;
-                } else {
-                    write!(out, ") ")?;
+                    write!(out, "layout({}) ", write_format_glsl(storage_format))?;
                 }
 
                 if global.storage_access == StorageAccess::LOAD {
@@ -314,37 +304,41 @@ pub fn write<'a>(
                 } else if global.storage_access == StorageAccess::STORE {
                     write!(out, "writeonly ")?;
                 }
+
+                let name = namer(global.name.as_ref());
+
+                let comparison = if let TypeInner::Sampler { comparison } =
+                    module.types[module.global_variables[mapping.sampler].ty].inner
+                {
+                    comparison
+                } else {
+                    unreachable!()
+                };
+
+                writeln!(
+                    out,
+                    "uniform {} {};",
+                    write_image_type(kind, dim, arrayed, class, comparison, features)?,
+                    name
+                )?;
+
+                mappings_map.insert(name.clone(), mapping.clone());
+                globals_lookup.insert(handle, name);
             }
+            TypeInner::Sampler { .. } => {
+                let name = if !es {
+                    namer(global.name.as_ref())
+                } else {
+                    global.name.clone().ok_or_else(|| {
+                        Error::Custom(String::from("Global names must be specified in es"))
+                    })?
+                };
 
-            let name = if !es {
-                namer(global.name.as_ref())
-            } else {
-                global.name.clone().ok_or_else(|| {
-                    Error::Custom(String::from("Global names must be specified in es"))
-                })?
-            };
-
-            let comparison = if let TypeInner::Sampler { comparison } =
-                module.types[module.global_variables[mapping.sampler].ty].inner
-            {
-                comparison
-            } else {
-                unreachable!()
-            };
-
-            writeln!(
-                out,
-                "{}{} {};",
-                write_storage_class(global.class, features)?,
-                write_image_type(kind, dim, arrayed, class, comparison, features)?,
-                name
-            )?;
-
-            mappings_map.insert(name, mapping.clone());
+                globals_lookup.insert(handle, name);
+            }
+            _ => continue,
         }
     }
-
-    let mut globals_lookup = FastHashMap::default();
 
     for ((handle, global), _) in module
         .global_variables
@@ -388,29 +382,10 @@ pub fn write<'a>(
             })?
         };
 
-        let storage_format = match module.types[global.ty].inner {
-            TypeInner::Image {
-                class: ImageClass::Storage(format),
-                ..
-            } => Some(format),
-            _ => None,
-        };
-
-        if global.binding.is_some() {
-            write!(out, "layout(")?;
-
-            if let Some(ref binding) = global.binding {
-                if !es {
-                    write!(out, "{}", Binding(binding))?;
-                }
-            }
-
-            if storage_format.is_some() && global.binding.is_some() {
-                write!(out, ",")?;
-            }
-
-            if let Some(format) = storage_format {
-                write!(out, "{}", write_format_glsl(format))?;
+        if let Some(ref binding) = global.binding {
+            // Only vulkan glsl supports set/binding on the layout
+            if let crate::Binding::Location(location) = binding {
+                write!(out, "layout(location = {}) ", location)?;
             }
 
             write!(out, ") ")?;
@@ -524,19 +499,6 @@ pub fn write<'a>(
     }
 
     Ok(mappings_map)
-}
-
-struct Binding<'a>(&'a crate::Binding);
-impl<'a> fmt::Display for Binding<'a> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self.0 {
-            crate::Binding::BuiltIn(_) => write!(f, ""), // Ignore because they are variables with a predefined name
-            crate::Binding::Location(location) => write!(f, "location={}", location),
-            crate::Binding::Descriptor { set, binding } => {
-                write!(f, "set={},binding={}", set, binding)
-            }
-        }
-    }
 }
 
 struct StatementBuilder<'a> {
@@ -696,7 +658,7 @@ fn write_expression<'a, 'b>(
         Expression::Access { base, index } => {
             let (base_expr, ty) = write_expression(&builder.expressions[base], module, builder)?;
 
-            let inner = match *ty.borrow() {
+            let inner = match *get_base_ty(&module.types, ty.borrow()) {
                 TypeInner::Vector { kind, width, .. } => {
                     MaybeOwned::Owned(TypeInner::Scalar { kind, width })
                 }
@@ -726,7 +688,7 @@ fn write_expression<'a, 'b>(
         Expression::AccessIndex { base, index } => {
             let (base_expr, ty) = write_expression(&builder.expressions[base], module, builder)?;
 
-            match *ty.borrow() {
+            match *get_base_ty(&module.types, ty.borrow()) {
                 TypeInner::Vector { kind, width, .. } => (
                     Cow::Owned(format!("{}[{}]", base_expr, index)),
                     MaybeOwned::Owned(TypeInner::Scalar { kind, width }),
@@ -777,7 +739,7 @@ fn write_expression<'a, 'b>(
             module.borrow_type(module.constants[constant].ty),
         ),
         Expression::Compose { ty, ref components } => {
-            let constructor = match module.types[ty].inner {
+            let constructor = match *get_base_ty(&module.types, &module.types[ty].inner) {
                 TypeInner::Vector { size, kind, width } => format!(
                     "{}vec{}",
                     map_scalar(kind, width, builder.features)?.prefix,
@@ -850,26 +812,16 @@ fn write_expression<'a, 'b>(
         } => {
             let (image_expr, image_ty) =
                 write_expression(&builder.expressions[image], module, builder)?;
-            let (sampler_expr, sampler_ty) =
-                write_expression(&builder.expressions[sampler], module, builder)?;
+            let (_, sampler_ty) = write_expression(&builder.expressions[sampler], module, builder)?;
             let (coordinate_expr, coordinate_ty) =
                 write_expression(&builder.expressions[coordinate], module, builder)?;
 
-            let (kind, dim, arrayed, class) = match *image_ty.borrow() {
-                TypeInner::Image {
-                    kind,
-                    dim,
-                    arrayed,
-                    class,
-                } => (kind, dim, arrayed, class),
+            let kind = match *get_base_ty(&module.types, image_ty.borrow()) {
+                TypeInner::Image { kind, .. } => kind,
                 _ => return Err(Error::Custom(format!("Cannot sample {:?}", image_ty))),
             };
 
-            let ms = match class {
-                crate::ImageClass::Multisampled => true,
-                _ => false,
-            };
-            let shadow = match *sampler_ty.borrow() {
+            let shadow = match *get_base_ty(&module.types, sampler_ty.borrow()) {
                 TypeInner::Sampler { comparison } => comparison,
                 _ => {
                     return Err(Error::Custom(format!(
@@ -878,7 +830,7 @@ fn write_expression<'a, 'b>(
                     )))
                 }
             };
-            let size = match *coordinate_ty.borrow() {
+            let size = match *get_base_ty(&module.types, coordinate_ty.borrow()) {
                 TypeInner::Vector { size, .. } => size,
                 _ => {
                     return Err(Error::Custom(format!(
@@ -887,17 +839,6 @@ fn write_expression<'a, 'b>(
                     )))
                 }
             };
-
-            let sampler_constructor = format!(
-                "{}sampler{}{}{}{}({},{})",
-                map_scalar(kind, 4, builder.features)?.prefix,
-                ImageDimension(dim),
-                if ms { "MS" } else { "" },
-                if arrayed { "Array" } else { "" },
-                if shadow { "Shadow" } else { "" },
-                image_expr,
-                sampler_expr
-            );
 
             let coordinate = if let Some(depth_ref) = depth_ref {
                 Cow::Owned(format!(
@@ -912,24 +853,16 @@ fn write_expression<'a, 'b>(
 
             //TODO: handle MS
             let expr = match level {
-                crate::SampleLevel::Auto => {
-                    format!("texture({},{})", sampler_constructor, coordinate)
-                }
+                crate::SampleLevel::Auto => format!("texture({},{})", image_expr, coordinate),
                 crate::SampleLevel::Exact(expr) => {
                     let (level_expr, _) =
                         write_expression(&builder.expressions[expr], module, builder)?;
-                    format!(
-                        "textureLod({}, {}, {})",
-                        sampler_constructor, coordinate, level_expr
-                    )
+                    format!("textureLod({}, {}, {})", image_expr, coordinate, level_expr)
                 }
                 crate::SampleLevel::Bias(bias) => {
                     let (bias_expr, _) =
                         write_expression(&builder.expressions[bias], module, builder)?;
-                    format!(
-                        "texture({},{},{})",
-                        sampler_constructor, coordinate, bias_expr
-                    )
+                    format!("texture({},{},{})", image_expr, coordinate, bias_expr)
                 }
             };
 
@@ -952,7 +885,7 @@ fn write_expression<'a, 'b>(
             let (coordinate_expr, coordinate_ty) =
                 write_expression(&builder.expressions[coordinate], module, builder)?;
 
-            let (kind, dim, arrayed, class) = match *image_ty.borrow() {
+            let (kind, dim, arrayed, class) = match *get_base_ty(&module.types, image_ty.borrow()) {
                 TypeInner::Image {
                     kind,
                     dim,
@@ -962,7 +895,7 @@ fn write_expression<'a, 'b>(
                 _ => return Err(Error::Custom(format!("Cannot load {:?}", image_ty))),
             };
 
-            let size = match *coordinate_ty.borrow() {
+            let size = match *get_base_ty(&module.types, coordinate_ty.borrow()) {
                 TypeInner::Vector { size, .. } => size,
                 _ => {
                     return Err(Error::Custom(format!(
@@ -1019,7 +952,7 @@ fn write_expression<'a, 'b>(
                     "({} {})",
                     match op {
                         UnaryOperator::Negate => "-",
-                        UnaryOperator::Not => match ty.borrow() {
+                        UnaryOperator::Not => match *get_base_ty(&module.types, ty.borrow()) {
                             TypeInner::Scalar {
                                 kind: ScalarKind::Sint,
                                 ..
@@ -1086,7 +1019,10 @@ fn write_expression<'a, 'b>(
                 | BinaryOperator::ShiftLeftLogical
                 | BinaryOperator::ShiftRightLogical
                 | BinaryOperator::ShiftRightArithmetic => {
-                    match (left_ty.borrow(), right_ty.borrow()) {
+                    match (
+                        get_base_ty(&module.types, left_ty.borrow()),
+                        get_base_ty(&module.types, right_ty.borrow()),
+                    ) {
                         (TypeInner::Scalar { .. }, TypeInner::Scalar { .. }) => left_ty,
                         (TypeInner::Scalar { .. }, TypeInner::Vector { .. }) => right_ty,
                         (TypeInner::Scalar { .. }, TypeInner::Matrix { .. }) => right_ty,
@@ -1143,7 +1079,7 @@ fn write_expression<'a, 'b>(
             let (matrix_expr, matrix_ty) =
                 write_expression(&builder.expressions[matrix], module, builder)?;
 
-            let ty = match *matrix_ty.borrow() {
+            let ty = match *get_base_ty(&module.types, matrix_ty.borrow()) {
                 TypeInner::Matrix {
                     columns,
                     rows,
@@ -1170,7 +1106,7 @@ fn write_expression<'a, 'b>(
                 write_expression(&builder.expressions[left], module, builder)?;
             let (right_expr, _) = write_expression(&builder.expressions[right], module, builder)?;
 
-            let ty = match *left_ty.borrow() {
+            let ty = match *get_base_ty(&module.types, left_ty.borrow()) {
                 TypeInner::Vector { kind, width, .. } => {
                     MaybeOwned::Owned(TypeInner::Scalar { kind, width })
                 }
@@ -1201,6 +1137,7 @@ fn write_expression<'a, 'b>(
         } => {
             let (value_expr, value_ty) =
                 write_expression(&builder.expressions[expr], module, builder)?;
+
             let (source_kind, ty_expr, out_ty) = match *value_ty.borrow() {
                 TypeInner::Scalar { width, kind } => (
                     kind,
@@ -1217,6 +1154,7 @@ fn write_expression<'a, 'b>(
                 ),
                 _ => return Err(Error::Custom(format!("Cannot convert {}", value_expr))),
             };
+
             let op = if convert {
                 ty_expr
             } else {
@@ -1474,7 +1412,7 @@ fn write_image_type(
         },
         match class {
             ImageClass::Storage(_) => "image",
-            _ => "texture",
+            _ => "sampler",
         },
         ImageDimension(dim),
         write_image_flags(arrayed, class, features)?,
@@ -1487,7 +1425,7 @@ fn write_storage_class(
     features: SupportedFeatures,
 ) -> Result<&'static str, Error> {
     Ok(match class {
-        StorageClass::Constant => "const ",
+        StorageClass::Constant => "",
         StorageClass::Function => "",
         StorageClass::Input => "in ",
         StorageClass::Output => "out ",
@@ -1661,6 +1599,13 @@ fn builtin_to_glsl(builtin: BuiltIn) -> &'static str {
     }
 }
 
+fn get_base_ty<'a>(types: &'a Arena<Type>, ty: &'a TypeInner) -> &'a TypeInner {
+    match ty {
+        TypeInner::Pointer { base, .. } => get_base_ty(types, &types[*base].inner),
+        _ => ty,
+    }
+}
+
 fn write_format_glsl(format: StorageFormat) -> &'static str {
     match format {
         StorageFormat::R8Unorm => "r8",
@@ -1730,11 +1675,21 @@ fn collect_texture_mapping(
             } => {
                 let tex_handle = match func.expressions[image] {
                     Expression::GlobalVariable(global) => global,
+                    // Temp
+                    Expression::Load { pointer } => match func.expressions[pointer] {
+                        Expression::GlobalVariable(global) => global,
+                        _ => unreachable!(),
+                    },
                     _ => unreachable!(),
                 };
 
                 let sampler_handle = match func.expressions[sampler] {
                     Expression::GlobalVariable(global) => global,
+                    // Temp
+                    Expression::Load { pointer } => match func.expressions[pointer] {
+                        Expression::GlobalVariable(global) => global,
+                        _ => unreachable!(),
+                    },
                     _ => unreachable!(),
                 };
 
@@ -1787,7 +1742,7 @@ fn collect_texture_mapping(
                 collect_texture_mapping_expr(func, left, mappings)?;
                 collect_texture_mapping_expr(func, right, mappings)?;
             }
-            Expression::As(expr, _) => collect_texture_mapping_expr(func, expr, mappings)?,
+            Expression::As { expr, .. } => collect_texture_mapping_expr(func, expr, mappings)?,
             Expression::Derivative { expr, .. } => {
                 collect_texture_mapping_expr(func, expr, mappings)?
             }
