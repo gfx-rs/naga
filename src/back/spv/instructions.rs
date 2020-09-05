@@ -578,7 +578,7 @@ mod tests {
 
         let requirements = SpecRequirements {
             op: Op::ExtInstImport,
-            wc: 2,
+            wc: 3,
             type_id: false,
             result_id: true,
             operands: true,
