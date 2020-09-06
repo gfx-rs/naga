@@ -677,7 +677,7 @@ pomelo! {
     jump_statement ::= Return Semicolon { Statement::Return{ value: None } }
     jump_statement ::= Return expression(mut e) Semicolon {
         let ret = Statement::Return{ value: Some(e.expression) };
-        if e.statements.len() > 0 {
+        if !e.statements.is_empty() {
             e.statements.push(ret);
             Statement::Block(e.statements)
         } else {
