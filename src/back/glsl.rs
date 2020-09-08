@@ -65,7 +65,7 @@ pub struct Options {
 #[derive(Debug, Clone)]
 pub struct TextureMapping {
     pub texture: Handle<GlobalVariable>,
-    pub sampler: Handle<GlobalVariable>,
+    pub sampler: Option<Handle<GlobalVariable>>,
 }
 
 const SUPPORTED_CORE_VERSIONS: &[u16] = &[450, 460];
@@ -307,10 +307,14 @@ pub fn write<'a>(
 
                 let name = namer(global.name.as_ref());
 
-                let comparison = if let TypeInner::Sampler { comparison } =
-                    module.types[module.global_variables[mapping.sampler].ty].inner
-                {
-                    comparison
+                let comparison = if let Some(sampler) = mapping.sampler {
+                    if let TypeInner::Sampler { comparison } =
+                        module.types[module.global_variables[sampler].ty].inner
+                    {
+                        comparison
+                    } else {
+                        false
+                    }
                 } else {
                     unreachable!()
                 };
@@ -1706,7 +1710,7 @@ fn collect_texture_mapping(
 
                 let mapping = mappings.iter().find(|map| map.texture == tex_handle);
 
-                if mapping.map_or(false, |map| map.sampler != sampler_handle) {
+                if mapping.map_or(false, |map| map.sampler != Some(sampler_handle)) {
                     return Err(Error::Custom(String::from(
                         "Cannot use texture with two different samplers",
                     )));
@@ -1715,15 +1719,42 @@ fn collect_texture_mapping(
                 if mapping.is_none() {
                     mappings.push(TextureMapping {
                         texture: tex_handle,
-                        sampler: sampler_handle,
+                        sampler: Some(sampler_handle),
                     });
                 }
             }
             Expression::ImageLoad {
-                coordinate, index, ..
+                coordinate,
+                index,
+                image,
             } => {
                 collect_texture_mapping_expr(func, coordinate, mappings)?;
                 collect_texture_mapping_expr(func, index, mappings)?;
+
+                let tex_handle = match func.expressions[image] {
+                    Expression::GlobalVariable(global) => global,
+                    // Temp
+                    Expression::Load { pointer } => match func.expressions[pointer] {
+                        Expression::GlobalVariable(global) => global,
+                        _ => unreachable!(),
+                    },
+                    _ => unreachable!(),
+                };
+
+                let mapping = mappings.iter().find(|map| map.texture == tex_handle);
+
+                if mapping.map_or(false, |map| map.sampler != None) {
+                    return Err(Error::Custom(String::from(
+                        "Cannot use texture with two different samplers",
+                    )));
+                }
+
+                if mapping.is_none() {
+                    mappings.push(TextureMapping {
+                        texture: tex_handle,
+                        sampler: None,
+                    });
+                }
             }
             Expression::Unary { expr, .. } => collect_texture_mapping_expr(func, expr, mappings)?,
             Expression::Binary { left, right, .. } => {
