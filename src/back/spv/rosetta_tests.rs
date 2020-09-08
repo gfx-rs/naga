@@ -8,6 +8,7 @@ fn rosetta_test(file_name: &str) {
     let module: crate::Module = ron::de::from_str(&input).unwrap();
 
     let spv = super::Writer::new(&module.header, super::WriterFlags::NONE).write(&module);
+    assert!(spv.len() > 0, "spv.len() > 0");
 }
 
 #[test]
