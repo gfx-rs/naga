@@ -1,11 +1,19 @@
 use crate::arena::{Arena, Handle};
 
-struct Interface<'a> {
+pub struct Interface<'a, T> {
     expressions: &'a Arena<crate::Expression>,
-    uses: Vec<crate::GlobalUse>,
+    visitor: &'a mut T,
 }
 
-impl<'a> Interface<'a> {
+pub trait Visitor {
+    fn expr_visitor(&mut self, _: &crate::Expression) {}
+    fn sta_visitor(&mut self, _: &crate::Statement, _: &Arena<crate::Expression>) {}
+}
+
+impl<'a, T> Interface<'a, T>
+where
+    T: Visitor,
+{
     fn add_inputs(&mut self, handle: Handle<crate::Expression>) {
         use crate::Expression as E;
         match self.expressions[handle] {
@@ -22,11 +30,7 @@ impl<'a> Interface<'a> {
                     self.add_inputs(comp);
                 }
             }
-            E::FunctionParameter(_) => {}
-            E::GlobalVariable(handle) => {
-                self.uses[handle.index()] |= crate::GlobalUse::LOAD;
-            }
-            E::LocalVariable(_) => {}
+            E::FunctionParameter(_) | E::GlobalVariable(_) | E::LocalVariable(_) => {}
             E::Load { pointer } => {
                 self.add_inputs(pointer);
             }
@@ -92,9 +96,10 @@ impl<'a> Interface<'a> {
                 }
             }
         }
+        self.visitor.expr_visitor(&self.expressions[handle])
     }
 
-    fn collect(&mut self, block: &[crate::Statement]) {
+    pub fn collect(&mut self, block: &[crate::Statement]) {
         for statement in block {
             use crate::Statement as S;
             match *statement {
@@ -145,14 +150,42 @@ impl<'a> Interface<'a> {
                             crate::Expression::AccessIndex { base, .. } => {
                                 left = base;
                             }
-                            crate::Expression::GlobalVariable(handle) => {
-                                self.uses[handle.index()] |= crate::GlobalUse::STORE;
-                                break;
-                            }
                             _ => break,
                         }
                     }
                     self.add_inputs(value);
+                }
+            }
+            self.visitor.sta_visitor(statement, &self.expressions)
+        }
+    }
+}
+
+struct GlobalUseVisitor(Vec<crate::GlobalUse>);
+
+impl Visitor for GlobalUseVisitor {
+    fn expr_visitor(&mut self, expr: &crate::Expression) {
+        if let crate::Expression::GlobalVariable(handle) = expr {
+            self.0[handle.index()] |= crate::GlobalUse::LOAD;
+        }
+    }
+
+    fn sta_visitor(&mut self, sta: &crate::Statement, expressions: &Arena<crate::Expression>) {
+        if let crate::Statement::Store { pointer, .. } = sta {
+            let mut left = *pointer;
+            loop {
+                match expressions[left] {
+                    crate::Expression::Access { base, .. } => {
+                        left = base;
+                    }
+                    crate::Expression::AccessIndex { base, .. } => {
+                        left = base;
+                    }
+                    crate::Expression::GlobalVariable(handle) => {
+                        self.0[handle.index()] |= crate::GlobalUse::STORE;
+                        break;
+                    }
+                    _ => break,
                 }
             }
         }
@@ -165,11 +198,13 @@ impl crate::GlobalUse {
         body: &[crate::Statement],
         globals: &Arena<crate::GlobalVariable>,
     ) -> Vec<Self> {
+        let mut visitor = GlobalUseVisitor(vec![crate::GlobalUse::empty(); globals.len()]);
+
         let mut io = Interface {
             expressions,
-            uses: vec![crate::GlobalUse::empty(); globals.len()],
+            visitor: &mut visitor,
         };
         io.collect(body);
-        io.uses
+        visitor.0
     }
 }
