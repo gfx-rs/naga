@@ -8,7 +8,6 @@ pub struct Interface<'a, T> {
 pub trait Visitor {
     fn visitor_expr(&mut self, _: &crate::Expression) {}
     fn visitor_lhs_expr(&mut self, _: &crate::Expression) {}
-    fn visitor_stmt(&mut self, _: &crate::Statement, _: &Arena<crate::Expression>) {}
 }
 
 impl<'a, T> Interface<'a, T>
@@ -105,9 +104,6 @@ where
     pub fn traverse(&mut self, block: &[crate::Statement]) {
         for statement in block {
             use crate::Statement as S;
-
-            self.visitor.visitor_stmt(statement, &self.expressions);
-
             match *statement {
                 S::Empty | S::Break | S::Continue | S::Kill => (),
                 S::Block(ref b) => {
@@ -202,7 +198,10 @@ impl crate::GlobalUse {
 
 #[cfg(test)]
 mod tests {
-    use crate::{Arena, Expression, GlobalUse, GlobalVariable, Handle, Statement, StorageClass};
+    use crate::{
+        Arena, Expression, GlobalUse, GlobalVariable, Handle, Statement, StorageAccess,
+        StorageClass,
+    };
 
     #[test]
     fn global_use_scan() {
@@ -212,6 +211,7 @@ mod tests {
             binding: None,
             ty: Handle::new(std::num::NonZeroU32::new(1).unwrap()),
             interpolation: None,
+            storage_access: StorageAccess::empty(),
         };
         let mut test_globals = Arena::new();
 
