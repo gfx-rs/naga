@@ -6,8 +6,8 @@ pub struct Interface<'a, T> {
 }
 
 pub trait Visitor {
-    fn visitor_expr(&mut self, _: &crate::Expression) {}
-    fn visitor_lhs_expr(&mut self, _: &crate::Expression) {}
+    fn visit_expr(&mut self, _: &crate::Expression) {}
+    fn visit_lhs_expr(&mut self, _: &crate::Expression) {}
 }
 
 impl<'a, T> Interface<'a, T>
@@ -17,9 +17,11 @@ where
     fn traverse_expr(&mut self, handle: Handle<crate::Expression>) {
         use crate::Expression as E;
 
-        self.visitor.visitor_expr(&self.expressions[handle]);
+        let expr = &self.expressions[handle];
 
-        match self.expressions[handle] {
+        self.visitor.visit_expr(expr);
+
+        match *expr {
             E::Access { base, index } => {
                 self.traverse_expr(base);
                 self.traverse_expr(index);
@@ -155,7 +157,7 @@ where
                             _ => break,
                         }
                     }
-                    self.visitor.visitor_lhs_expr(&self.expressions[left]);
+                    self.visitor.visit_lhs_expr(&self.expressions[left]);
                     self.traverse_expr(value);
                 }
             }
@@ -166,13 +168,13 @@ where
 struct GlobalUseVisitor(Vec<crate::GlobalUse>);
 
 impl Visitor for GlobalUseVisitor {
-    fn visitor_expr(&mut self, expr: &crate::Expression) {
+    fn visit_expr(&mut self, expr: &crate::Expression) {
         if let crate::Expression::GlobalVariable(handle) = expr {
             self.0[handle.index()] |= crate::GlobalUse::LOAD;
         }
     }
 
-    fn visitor_lhs_expr(&mut self, expr: &crate::Expression) {
+    fn visit_lhs_expr(&mut self, expr: &crate::Expression) {
         if let crate::Expression::GlobalVariable(handle) = expr {
             self.0[handle.index()] |= crate::GlobalUse::STORE;
         }
