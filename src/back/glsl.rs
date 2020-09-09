@@ -1,5 +1,6 @@
 use super::{BorrowType, MaybeOwned};
 use crate::{
+    proc::{Interface, Visitor},
     Arena, ArraySize, BinaryOperator, BuiltIn, Constant, ConstantInner, DerivativeAxis, Expression,
     FastHashMap, Function, FunctionOrigin, GlobalVariable, Handle, ImageClass, Interpolation,
     IntrinsicFunction, LocalVariable, MemberOrigin, Module, ScalarKind, ShaderStage, Statement,
@@ -280,16 +281,15 @@ pub fn write<'a>(
                 arrayed,
                 class,
             } => {
-                let mapping =
-                    if let Some(map) = texture_mappings.iter().find(|map| map.texture == handle) {
-                        map
-                    } else {
-                        warn!(
-                            "Couldn't find a mapping for {:?}, handle {:?}",
-                            global, handle
-                        );
-                        continue;
-                    };
+                let mapping = if let Some(map) = texture_mappings.get_key_value(&handle) {
+                    map
+                } else {
+                    warn!(
+                        "Couldn't find a mapping for {:?}, handle {:?}",
+                        global, handle
+                    );
+                    continue;
+                };
 
                 if let TypeInner::Image {
                     class: ImageClass::Storage(storage_format),
@@ -307,9 +307,9 @@ pub fn write<'a>(
 
                 let name = namer(global.name.as_ref());
 
-                let comparison = if let Some(sampler) = mapping.sampler {
+                let comparison = if let Some(sampler) = mapping.1 {
                     if let TypeInner::Sampler { comparison } =
-                        module.types[module.global_variables[sampler].ty].inner
+                        module.types[module.global_variables[*sampler].ty].inner
                     {
                         comparison
                     } else {
@@ -326,7 +326,13 @@ pub fn write<'a>(
                     name
                 )?;
 
-                mappings_map.insert(name.clone(), mapping.clone());
+                mappings_map.insert(
+                    name.clone(),
+                    TextureMapping {
+                        texture: *mapping.0,
+                        sampler: *mapping.1,
+                    },
+                );
                 globals_lookup.insert(handle, name);
             }
             TypeInner::Sampler { .. } => {
@@ -1647,216 +1653,98 @@ fn write_format_glsl(format: StorageFormat) -> &'static str {
     }
 }
 
+struct TextureMappingVisitor<'a> {
+    expressions: &'a Arena<Expression>,
+    map: FastHashMap<Handle<GlobalVariable>, Option<Handle<GlobalVariable>>>,
+    error: Option<Error>,
+}
+
+impl<'a> Visitor for TextureMappingVisitor<'a> {
+    fn visit_expr(&mut self, expr: &crate::Expression) {
+        match expr {
+            Expression::ImageSample { image, sampler, .. } => {
+                let tex_handle = match self.expressions[*image] {
+                    Expression::GlobalVariable(global) => global,
+                    // Temp
+                    Expression::Load { pointer } => match self.expressions[pointer] {
+                        Expression::GlobalVariable(global) => global,
+                        _ => unreachable!(),
+                    },
+                    _ => unreachable!(),
+                };
+
+                let sampler_handle = match self.expressions[*sampler] {
+                    Expression::GlobalVariable(global) => global,
+                    // Temp
+                    Expression::Load { pointer } => match self.expressions[pointer] {
+                        Expression::GlobalVariable(global) => global,
+                        _ => unreachable!(),
+                    },
+                    _ => unreachable!(),
+                };
+
+                let mapping = self.map.get(&tex_handle);
+
+                if mapping.map_or(false, |sampler| *sampler != Some(sampler_handle)) {
+                    self.error = Some(Error::Custom(String::from(
+                        "Cannot use texture with two different samplers",
+                    )));
+                }
+
+                if mapping.is_none() {
+                    self.map.insert(tex_handle, Some(sampler_handle));
+                }
+            }
+            Expression::ImageLoad { image, .. } => {
+                let tex_handle = match self.expressions[*image] {
+                    Expression::GlobalVariable(global) => global,
+                    // Temp
+                    Expression::Load { pointer } => match self.expressions[pointer] {
+                        Expression::GlobalVariable(global) => global,
+                        _ => unreachable!(),
+                    },
+                    _ => unreachable!(),
+                };
+
+                let mapping = self.map.get(&tex_handle);
+
+                if mapping.map_or(false, |sampler| *sampler != None) {
+                    self.error = Some(Error::Custom(String::from(
+                        "Cannot use texture with two different samplers",
+                    )));
+                }
+
+                if mapping.is_none() {
+                    self.map.insert(tex_handle, None);
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
 fn collect_texture_mapping(
     module: &Module,
     functions: &FastHashMap<Handle<Function>, String>,
-) -> Result<Vec<TextureMapping>, Error> {
-    fn collect_texture_mapping_expr(
-        func: &Function,
-        expr: Handle<Expression>,
-        mappings: &mut Vec<TextureMapping>,
-    ) -> Result<(), Error> {
-        match func.expressions[expr] {
-            Expression::Access { base, index } => {
-                collect_texture_mapping_expr(func, base, mappings)?;
-                collect_texture_mapping_expr(func, index, mappings)?;
-            }
-            Expression::AccessIndex { base, .. } => {
-                collect_texture_mapping_expr(func, base, mappings)?
-            }
-            Expression::Compose { ref components, .. } => {
-                for comp in components {
-                    collect_texture_mapping_expr(func, *comp, mappings)?
-                }
-            }
-            Expression::Load { pointer } => collect_texture_mapping_expr(func, pointer, mappings)?,
-            Expression::ImageSample {
-                image,
-                sampler,
-                coordinate,
-                level,
-                depth_ref,
-            } => {
-                let tex_handle = match func.expressions[image] {
-                    Expression::GlobalVariable(global) => global,
-                    // Temp
-                    Expression::Load { pointer } => match func.expressions[pointer] {
-                        Expression::GlobalVariable(global) => global,
-                        _ => unreachable!(),
-                    },
-                    _ => unreachable!(),
-                };
-
-                let sampler_handle = match func.expressions[sampler] {
-                    Expression::GlobalVariable(global) => global,
-                    // Temp
-                    Expression::Load { pointer } => match func.expressions[pointer] {
-                        Expression::GlobalVariable(global) => global,
-                        _ => unreachable!(),
-                    },
-                    _ => unreachable!(),
-                };
-
-                collect_texture_mapping_expr(func, coordinate, mappings)?;
-                match level {
-                    crate::SampleLevel::Exact(expr) | crate::SampleLevel::Bias(expr) => {
-                        collect_texture_mapping_expr(func, expr, mappings)?
-                    }
-                    crate::SampleLevel::Auto => {}
-                }
-                if let Some(expr) = depth_ref {
-                    collect_texture_mapping_expr(func, expr, mappings)?;
-                }
-
-                let mapping = mappings.iter().find(|map| map.texture == tex_handle);
-
-                if mapping.map_or(false, |map| map.sampler != Some(sampler_handle)) {
-                    return Err(Error::Custom(String::from(
-                        "Cannot use texture with two different samplers",
-                    )));
-                }
-
-                if mapping.is_none() {
-                    mappings.push(TextureMapping {
-                        texture: tex_handle,
-                        sampler: Some(sampler_handle),
-                    });
-                }
-            }
-            Expression::ImageLoad {
-                coordinate,
-                index,
-                image,
-            } => {
-                collect_texture_mapping_expr(func, coordinate, mappings)?;
-                collect_texture_mapping_expr(func, index, mappings)?;
-
-                let tex_handle = match func.expressions[image] {
-                    Expression::GlobalVariable(global) => global,
-                    // Temp
-                    Expression::Load { pointer } => match func.expressions[pointer] {
-                        Expression::GlobalVariable(global) => global,
-                        _ => unreachable!(),
-                    },
-                    _ => unreachable!(),
-                };
-
-                let mapping = mappings.iter().find(|map| map.texture == tex_handle);
-
-                if mapping.map_or(false, |map| map.sampler != None) {
-                    return Err(Error::Custom(String::from(
-                        "Cannot use texture with two different samplers",
-                    )));
-                }
-
-                if mapping.is_none() {
-                    mappings.push(TextureMapping {
-                        texture: tex_handle,
-                        sampler: None,
-                    });
-                }
-            }
-            Expression::Unary { expr, .. } => collect_texture_mapping_expr(func, expr, mappings)?,
-            Expression::Binary { left, right, .. } => {
-                collect_texture_mapping_expr(func, left, mappings)?;
-                collect_texture_mapping_expr(func, right, mappings)?;
-            }
-            Expression::Intrinsic { argument, .. } => {
-                collect_texture_mapping_expr(func, argument, mappings)?
-            }
-            Expression::Transpose(expr) => collect_texture_mapping_expr(func, expr, mappings)?,
-            Expression::DotProduct(left, right) => {
-                collect_texture_mapping_expr(func, left, mappings)?;
-                collect_texture_mapping_expr(func, right, mappings)?;
-            }
-            Expression::CrossProduct(left, right) => {
-                collect_texture_mapping_expr(func, left, mappings)?;
-                collect_texture_mapping_expr(func, right, mappings)?;
-            }
-            Expression::As { expr, .. } => collect_texture_mapping_expr(func, expr, mappings)?,
-            Expression::Derivative { expr, .. } => {
-                collect_texture_mapping_expr(func, expr, mappings)?
-            }
-            Expression::Call { ref arguments, .. } => {
-                for arg in arguments {
-                    collect_texture_mapping_expr(func, *arg, mappings)?
-                }
-            }
-            _ => {}
-        }
-
-        Ok(())
-    }
-
-    fn collect_texture_mapping_sta(
-        func: &Function,
-        sta: &Statement,
-        mappings: &mut Vec<TextureMapping>,
-    ) -> Result<(), Error> {
-        match sta {
-            Statement::Block(block) => {
-                for sta in block {
-                    collect_texture_mapping_sta(func, sta, mappings)?;
-                }
-            }
-            Statement::If {
-                condition,
-                accept,
-                reject,
-            } => {
-                collect_texture_mapping_expr(func, *condition, mappings)?;
-
-                for sta in accept {
-                    collect_texture_mapping_sta(func, sta, mappings)?;
-                }
-                for sta in reject {
-                    collect_texture_mapping_sta(func, sta, mappings)?;
-                }
-            }
-            Statement::Switch {
-                selector,
-                cases,
-                default,
-            } => {
-                collect_texture_mapping_expr(func, *selector, mappings)?;
-
-                for sta in cases.values().flat_map(|c| &c.0) {
-                    collect_texture_mapping_sta(func, sta, mappings)?;
-                }
-                for sta in default {
-                    collect_texture_mapping_sta(func, sta, mappings)?;
-                }
-            }
-            Statement::Loop { body, continuing } => {
-                for sta in body {
-                    collect_texture_mapping_sta(func, sta, mappings)?;
-                }
-                for sta in continuing {
-                    collect_texture_mapping_sta(func, sta, mappings)?;
-                }
-            }
-            Statement::Return { value } => {
-                if let Some(handle) = value {
-                    collect_texture_mapping_expr(func, *handle, mappings)?;
-                }
-            }
-            Statement::Store { pointer, value } => {
-                collect_texture_mapping_expr(func, *pointer, mappings)?;
-                collect_texture_mapping_expr(func, *value, mappings)?;
-            }
-            _ => {}
-        }
-
-        Ok(())
-    }
-
-    let mut mappings = Vec::new();
+) -> Result<FastHashMap<Handle<GlobalVariable>, Option<Handle<GlobalVariable>>>, Error> {
+    let mut mappings = FastHashMap::default();
 
     for function in functions.keys() {
         let func = &module.functions[*function];
-        for sta in func.body.iter() {
-            collect_texture_mapping_sta(func, sta, &mut mappings)?;
-        }
+
+        let mut visitor = TextureMappingVisitor {
+            expressions: &func.expressions,
+            map: FastHashMap::default(),
+            error: None,
+        };
+
+        let mut interface = Interface {
+            expressions: &func.expressions,
+            visitor: &mut visitor,
+        };
+        interface.traverse(&func.body);
+
+        mappings.extend(visitor.map);
     }
 
     Ok(mappings)
