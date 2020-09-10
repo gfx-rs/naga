@@ -802,14 +802,7 @@ fn write_expression<'a, 'b>(
             module.borrow_type(builder.locals[handle].ty),
         ),
         Expression::Load { pointer } => {
-            let (expr, ty) = write_expression(&builder.expressions[pointer], module, builder)?;
-
-            let ty = match *ty.borrow() {
-                TypeInner::Pointer { base, .. } => base,
-                _ => panic!("{:#?}", ty.borrow()),
-            };
-
-            (expr, MaybeOwned::Borrowed(&module.types[ty].inner))
+            write_expression(&builder.expressions[pointer], module, builder)?
         }
         Expression::ImageSample {
             image,
@@ -1406,15 +1399,7 @@ fn write_image_type(
 
     Ok(format!(
         "{}{}{}{}{}",
-        match kind {
-            ScalarKind::Sint => "i",
-            ScalarKind::Uint => "u",
-            ScalarKind::Float => "",
-            ScalarKind::Bool =>
-                return Err(Error::Custom(String::from(
-                    "Cannot build image of booleans",
-                ))),
-        },
+        map_scalar(kind, 4, features)?.prefix,
         match class {
             ImageClass::Storage(_) => "image",
             _ => "sampler",
