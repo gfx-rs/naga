@@ -88,7 +88,6 @@ pub fn write<'a>(
     out: &mut impl Write,
     options: Options,
 ) -> Result<FastHashMap<String, TextureMapping>, Error> {
-    println!("{:#?}", module);
     let (version, es) = match options.version {
         Version::Desktop(v) => (v, false),
         Version::Embedded(v) => (v, true),
@@ -660,7 +659,7 @@ fn write_expression<'a, 'b>(
         Expression::Access { base, index } => {
             let (base_expr, ty) = write_expression(&builder.expressions[base], module, builder)?;
 
-            let inner = match *get_base_ty(&module.types, ty.borrow()) {
+            let inner = match *ty.borrow() {
                 TypeInner::Vector { kind, width, .. } => {
                     MaybeOwned::Owned(TypeInner::Scalar { kind, width })
                 }
@@ -690,7 +689,7 @@ fn write_expression<'a, 'b>(
         Expression::AccessIndex { base, index } => {
             let (base_expr, ty) = write_expression(&builder.expressions[base], module, builder)?;
 
-            match *get_base_ty(&module.types, ty.borrow()) {
+            match *ty.borrow() {
                 TypeInner::Vector { kind, width, .. } => (
                     Cow::Owned(format!("{}[{}]", base_expr, index)),
                     MaybeOwned::Owned(TypeInner::Scalar { kind, width }),
@@ -741,7 +740,7 @@ fn write_expression<'a, 'b>(
             module.borrow_type(module.constants[constant].ty),
         ),
         Expression::Compose { ty, ref components } => {
-            let constructor = match *get_base_ty(&module.types, &module.types[ty].inner) {
+            let constructor = match module.types[ty].inner {
                 TypeInner::Vector { size, kind, width } => format!(
                     "{}vec{}",
                     map_scalar(kind, width, builder.features)?.prefix,
@@ -803,7 +802,14 @@ fn write_expression<'a, 'b>(
             module.borrow_type(builder.locals[handle].ty),
         ),
         Expression::Load { pointer } => {
-            write_expression(&builder.expressions[pointer], module, builder)?
+            let (expr, ty) = write_expression(&builder.expressions[pointer], module, builder)?;
+
+            let ty = match *ty.borrow() {
+                TypeInner::Pointer { base, .. } => base,
+                _ => panic!("{:#?}", ty.borrow()),
+            };
+
+            (expr, MaybeOwned::Borrowed(&module.types[ty].inner))
         }
         Expression::ImageSample {
             image,
@@ -818,12 +824,12 @@ fn write_expression<'a, 'b>(
             let (coordinate_expr, coordinate_ty) =
                 write_expression(&builder.expressions[coordinate], module, builder)?;
 
-            let kind = match *get_base_ty(&module.types, image_ty.borrow()) {
+            let kind = match *image_ty.borrow() {
                 TypeInner::Image { kind, .. } => kind,
                 _ => return Err(Error::Custom(format!("Cannot sample {:?}", image_ty))),
             };
 
-            let shadow = match *get_base_ty(&module.types, sampler_ty.borrow()) {
+            let shadow = match *sampler_ty.borrow() {
                 TypeInner::Sampler { comparison } => comparison,
                 _ => {
                     return Err(Error::Custom(format!(
@@ -832,7 +838,7 @@ fn write_expression<'a, 'b>(
                     )))
                 }
             };
-            let size = match *get_base_ty(&module.types, coordinate_ty.borrow()) {
+            let size = match *coordinate_ty.borrow() {
                 TypeInner::Vector { size, .. } => size,
                 _ => {
                     return Err(Error::Custom(format!(
@@ -887,7 +893,7 @@ fn write_expression<'a, 'b>(
             let (coordinate_expr, coordinate_ty) =
                 write_expression(&builder.expressions[coordinate], module, builder)?;
 
-            let (kind, dim, arrayed, class) = match *get_base_ty(&module.types, image_ty.borrow()) {
+            let (kind, dim, arrayed, class) = match *image_ty.borrow() {
                 TypeInner::Image {
                     kind,
                     dim,
@@ -897,7 +903,7 @@ fn write_expression<'a, 'b>(
                 _ => return Err(Error::Custom(format!("Cannot load {:?}", image_ty))),
             };
 
-            let size = match *get_base_ty(&module.types, coordinate_ty.borrow()) {
+            let size = match *coordinate_ty.borrow() {
                 TypeInner::Vector { size, .. } => size,
                 _ => {
                     return Err(Error::Custom(format!(
@@ -954,7 +960,7 @@ fn write_expression<'a, 'b>(
                     "({} {})",
                     match op {
                         UnaryOperator::Negate => "-",
-                        UnaryOperator::Not => match *get_base_ty(&module.types, ty.borrow()) {
+                        UnaryOperator::Not => match *ty.borrow() {
                             TypeInner::Scalar {
                                 kind: ScalarKind::Sint,
                                 ..
@@ -1021,10 +1027,7 @@ fn write_expression<'a, 'b>(
                 | BinaryOperator::ShiftLeftLogical
                 | BinaryOperator::ShiftRightLogical
                 | BinaryOperator::ShiftRightArithmetic => {
-                    match (
-                        get_base_ty(&module.types, left_ty.borrow()),
-                        get_base_ty(&module.types, right_ty.borrow()),
-                    ) {
+                    match (left_ty.borrow(), right_ty.borrow()) {
                         (TypeInner::Scalar { .. }, TypeInner::Scalar { .. }) => left_ty,
                         (TypeInner::Scalar { .. }, TypeInner::Vector { .. }) => right_ty,
                         (TypeInner::Scalar { .. }, TypeInner::Matrix { .. }) => right_ty,
@@ -1081,7 +1084,7 @@ fn write_expression<'a, 'b>(
             let (matrix_expr, matrix_ty) =
                 write_expression(&builder.expressions[matrix], module, builder)?;
 
-            let ty = match *get_base_ty(&module.types, matrix_ty.borrow()) {
+            let ty = match *matrix_ty.borrow() {
                 TypeInner::Matrix {
                     columns,
                     rows,
@@ -1108,7 +1111,7 @@ fn write_expression<'a, 'b>(
                 write_expression(&builder.expressions[left], module, builder)?;
             let (right_expr, _) = write_expression(&builder.expressions[right], module, builder)?;
 
-            let ty = match *get_base_ty(&module.types, left_ty.borrow()) {
+            let ty = match *left_ty.borrow() {
                 TypeInner::Vector { kind, width, .. } => {
                     MaybeOwned::Owned(TypeInner::Scalar { kind, width })
                 }
@@ -1601,13 +1604,6 @@ fn builtin_to_glsl(builtin: BuiltIn) -> &'static str {
     }
 }
 
-fn get_base_ty<'a>(types: &'a Arena<Type>, ty: &'a TypeInner) -> &'a TypeInner {
-    match ty {
-        TypeInner::Pointer { base, .. } => get_base_ty(types, &types[*base].inner),
-        _ => ty,
-    }
-}
-
 fn write_format_glsl(format: StorageFormat) -> &'static str {
     match format {
         StorageFormat::R8Unorm => "r8",
@@ -1657,21 +1653,11 @@ impl<'a> Visitor for TextureMappingVisitor<'a> {
             Expression::ImageSample { image, sampler, .. } => {
                 let tex_handle = match self.expressions[*image] {
                     Expression::GlobalVariable(global) => global,
-                    // Temp
-                    Expression::Load { pointer } => match self.expressions[pointer] {
-                        Expression::GlobalVariable(global) => global,
-                        _ => unreachable!(),
-                    },
                     _ => unreachable!(),
                 };
 
                 let sampler_handle = match self.expressions[*sampler] {
                     Expression::GlobalVariable(global) => global,
-                    // Temp
-                    Expression::Load { pointer } => match self.expressions[pointer] {
-                        Expression::GlobalVariable(global) => global,
-                        _ => unreachable!(),
-                    },
                     _ => unreachable!(),
                 };
 
@@ -1686,11 +1672,6 @@ impl<'a> Visitor for TextureMappingVisitor<'a> {
             Expression::ImageLoad { image, .. } => {
                 let tex_handle = match self.expressions[*image] {
                     Expression::GlobalVariable(global) => global,
-                    // Temp
-                    Expression::Load { pointer } => match self.expressions[pointer] {
-                        Expression::GlobalVariable(global) => global,
-                        _ => unreachable!(),
-                    },
                     _ => unreachable!(),
                 };
 
