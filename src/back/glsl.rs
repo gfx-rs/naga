@@ -336,13 +336,7 @@ pub fn write<'a>(
                 globals_lookup.insert(handle, name);
             }
             TypeInner::Sampler { .. } => {
-                let name = if !es {
-                    namer(global.name.as_ref())
-                } else {
-                    global.name.clone().ok_or_else(|| {
-                        Error::Custom(String::from("Global names must be specified in es"))
-                    })?
-                };
+                let name = namer(global.name.as_ref());
 
                 globals_lookup.insert(handle, name);
             }
@@ -384,13 +378,10 @@ pub fn write<'a>(
             continue;
         }
 
-        let name = if !es {
-            namer(global.name.as_ref())
-        } else {
-            global.name.clone().ok_or_else(|| {
-                Error::Custom(String::from("Global names must be specified in es"))
-            })?
-        };
+        let name = global
+            .name
+            .clone()
+            .ok_or_else(|| Error::Custom(String::from("Global names must be specified in es")))?;
 
         if let Some(ref binding) = global.binding {
             // Only vulkan glsl supports set/binding on the layout
