@@ -45,13 +45,13 @@ fn main() {
             let input = fs::read_to_string(&args[1]).unwrap();
             naga::front::wgsl::parse_str(&input).unwrap()
         }
-        #[cfg(feature = "glsl")]
+        #[cfg(feature = "glsl-in")]
         "vert" => {
             let input = fs::read_to_string(&args[1]).unwrap();
             naga::front::glsl::parse_str(&input, "main".to_string(), naga::ShaderStage::Vertex)
                 .unwrap()
         }
-        #[cfg(feature = "glsl")]
+        #[cfg(feature = "glsl-in")]
         "frag" => {
             let input = fs::read_to_string(&args[1]).unwrap();
             naga::front::glsl::parse_str(
@@ -63,7 +63,7 @@ fn main() {
             )
             .unwrap()
         }
-        #[cfg(feature = "glsl")]
+        #[cfg(feature = "glsl-in")]
         "comp" => {
             let input = fs::read_to_string(&args[1]).unwrap();
             naga::front::glsl::parse_str(

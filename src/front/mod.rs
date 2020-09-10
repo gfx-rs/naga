@@ -1,6 +1,6 @@
 //! Parsers which load shaders into memory.
 
-#[cfg(feature = "glsl")]
+#[cfg(feature = "glsl-in")]
 pub mod glsl;
 #[cfg(feature = "spirv-in")]
 pub mod spv;
