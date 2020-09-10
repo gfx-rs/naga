@@ -6,7 +6,6 @@ use crate::{
     IntrinsicFunction, LocalVariable, MemberOrigin, Module, ScalarKind, ShaderStage, Statement,
     StorageAccess, StorageClass, StorageFormat, StructMember, Type, TypeInner, UnaryOperator,
 };
-use log::warn;
 use std::{
     borrow::Cow,
     fmt::{self, Error as FmtError, Write as FmtWrite},
@@ -89,6 +88,7 @@ pub fn write<'a>(
     out: &mut impl Write,
     options: Options,
 ) -> Result<FastHashMap<String, TextureMapping>, Error> {
+    println!("{:#?}", module);
     let (version, es) = match options.version {
         Version::Desktop(v) => (v, false),
         Version::Embedded(v) => (v, true),
@@ -284,9 +284,10 @@ pub fn write<'a>(
                 let mapping = if let Some(map) = texture_mappings.get_key_value(&handle) {
                     map
                 } else {
-                    warn!(
+                    log::warn!(
                         "Couldn't find a mapping for {:?}, handle {:?}",
-                        global, handle
+                        global,
+                        handle
                     );
                     continue;
                 };
@@ -1674,16 +1675,12 @@ impl<'a> Visitor for TextureMappingVisitor<'a> {
                     _ => unreachable!(),
                 };
 
-                let mapping = self.map.get(&tex_handle);
+                let sampler = self.map.entry(tex_handle).or_insert(Some(sampler_handle));
 
-                if mapping.map_or(false, |sampler| *sampler != Some(sampler_handle)) {
+                if *sampler != Some(sampler_handle) {
                     self.error = Some(Error::Custom(String::from(
                         "Cannot use texture with two different samplers",
                     )));
-                }
-
-                if mapping.is_none() {
-                    self.map.insert(tex_handle, Some(sampler_handle));
                 }
             }
             Expression::ImageLoad { image, .. } => {
@@ -1697,16 +1694,12 @@ impl<'a> Visitor for TextureMappingVisitor<'a> {
                     _ => unreachable!(),
                 };
 
-                let mapping = self.map.get(&tex_handle);
+                let sampler = self.map.entry(tex_handle).or_insert(None);
 
-                if mapping.map_or(false, |sampler| *sampler != None) {
+                if *sampler != None {
                     self.error = Some(Error::Custom(String::from(
                         "Cannot use texture with two different samplers",
                     )));
-                }
-
-                if mapping.is_none() {
-                    self.map.insert(tex_handle, None);
                 }
             }
             _ => {}
