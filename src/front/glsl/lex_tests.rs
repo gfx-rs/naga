@@ -158,3 +158,89 @@ fn glsl_lex_version() {
         "Identifier((TokenMetadata { line: 0, chars: 13..17 }, \"core\"))"
     );
 }
+
+#[test]
+fn glsl_lex_operators() {
+    let source = "+ - * | & % / += -= *= |= &= %= /= ++ -- || && ^^";
+    let lex = Lexer::new(source);
+    let tokens: Vec<Token> = lex.collect();
+    assert_eq!(tokens.len(), 19);
+
+    let mut iter = tokens.iter();
+    assert_eq!(
+        format!("{:?}", iter.next().unwrap()),
+        "Plus(TokenMetadata { line: 0, chars: 0..1 })"
+    );
+    assert_eq!(
+        format!("{:?}", iter.next().unwrap()),
+        "Dash(TokenMetadata { line: 0, chars: 2..3 })"
+    );
+    assert_eq!(
+        format!("{:?}", iter.next().unwrap()),
+        "Star(TokenMetadata { line: 0, chars: 4..5 })"
+    );
+    assert_eq!(
+        format!("{:?}", iter.next().unwrap()),
+        "VerticalBar(TokenMetadata { line: 0, chars: 6..7 })"
+    );
+    assert_eq!(
+        format!("{:?}", iter.next().unwrap()),
+        "Ampersand(TokenMetadata { line: 0, chars: 8..9 })"
+    );
+    assert_eq!(
+        format!("{:?}", iter.next().unwrap()),
+        "Percent(TokenMetadata { line: 0, chars: 10..11 })"
+    );
+    assert_eq!(
+        format!("{:?}", iter.next().unwrap()),
+        "Slash(TokenMetadata { line: 0, chars: 12..13 })"
+    );
+    assert_eq!(
+        format!("{:?}", iter.next().unwrap()),
+        "AddAssign(TokenMetadata { line: 0, chars: 14..16 })"
+    );
+    assert_eq!(
+        format!("{:?}", iter.next().unwrap()),
+        "SubAssign(TokenMetadata { line: 0, chars: 17..19 })"
+    );
+    assert_eq!(
+        format!("{:?}", iter.next().unwrap()),
+        "MulAssign(TokenMetadata { line: 0, chars: 20..22 })"
+    );
+    assert_eq!(
+        format!("{:?}", iter.next().unwrap()),
+        "OrAssign(TokenMetadata { line: 0, chars: 23..25 })"
+    );
+    assert_eq!(
+        format!("{:?}", iter.next().unwrap()),
+        "AndAssign(TokenMetadata { line: 0, chars: 26..28 })"
+    );
+    assert_eq!(
+        format!("{:?}", iter.next().unwrap()),
+        "ModAssign(TokenMetadata { line: 0, chars: 29..31 })"
+    );
+    assert_eq!(
+        format!("{:?}", iter.next().unwrap()),
+        "DivAssign(TokenMetadata { line: 0, chars: 32..34 })"
+    );
+    assert_eq!(
+        format!("{:?}", iter.next().unwrap()),
+        "IncOp(TokenMetadata { line: 0, chars: 35..37 })"
+    );
+    assert_eq!(
+        format!("{:?}", iter.next().unwrap()),
+        "DecOp(TokenMetadata { line: 0, chars: 38..40 })"
+    );
+    assert_eq!(
+        format!("{:?}", iter.next().unwrap()),
+        "OrOp(TokenMetadata { line: 0, chars: 41..43 })"
+    );
+    assert_eq!(
+        format!("{:?}", iter.next().unwrap()),
+        "AndOp(TokenMetadata { line: 0, chars: 44..46 })"
+    );
+    assert_eq!(
+        format!("{:?}", iter.next().unwrap()),
+        "XorOp(TokenMetadata { line: 0, chars: 47..49 })"
+    );
+}
