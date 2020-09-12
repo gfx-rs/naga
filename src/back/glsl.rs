@@ -1,9 +1,10 @@
 use crate::{
     proc::{Interface, ResolveContext, ResolveError, Typifier, Visitor},
-    Arena, ArraySize, BinaryOperator, BuiltIn, Constant, ConstantInner, DerivativeAxis, Expression,
-    FastHashMap, Function, FunctionOrigin, GlobalVariable, Handle, ImageClass, Interpolation,
-    IntrinsicFunction, LocalVariable, MemberOrigin, Module, ScalarKind, ShaderStage, Statement,
-    StorageAccess, StorageClass, StorageFormat, StructMember, Type, TypeInner, UnaryOperator,
+    Arena, ArraySize, BinaryOperator, BuiltIn, ConservativeDepth, Constant, ConstantInner,
+    DerivativeAxis, Expression, FastHashMap, Function, FunctionOrigin, GlobalVariable, Handle,
+    ImageClass, Interpolation, IntrinsicFunction, LocalVariable, MemberOrigin, Module, ScalarKind,
+    ShaderStage, Statement, StorageAccess, StorageClass, StorageFormat, StructMember, Type,
+    TypeInner, UnaryOperator,
 };
 use std::{
     borrow::Cow,
@@ -75,18 +76,183 @@ pub struct TextureMapping {
     pub sampler: Option<Handle<GlobalVariable>>,
 }
 
-const SUPPORTED_CORE_VERSIONS: &[u16] = &[450, 460];
+const SUPPORTED_CORE_VERSIONS: &[u16] = &[400, 410, 420, 430, 440, 450];
 const SUPPORTED_ES_VERSIONS: &[u16] = &[300, 310];
 
 bitflags::bitflags! {
-    struct SupportedFeatures: u32 {
+    struct Features: u32 {
         const BUFFER_STORAGE = 1;
-        const SHARED_STORAGE = 1 << 1;
+        const ARRAY_OF_ARRAYS = 1 << 1;
         const DOUBLE_TYPE = 1 << 2;
         const NON_FLOAT_MATRICES = 1 << 3;
         const MULTISAMPLED_TEXTURES = 1 << 4;
         const MULTISAMPLED_TEXTURE_ARRAYS = 1 << 5;
-        const NON_2D_TEXTURE_ARRAYS = 1 << 6;
+        const CUBE_TEXTURES_ARRAY = 1 << 6;
+        const COMPUTE_SHADER = 1 << 7;
+        const IMAGE_LOAD_STORE = 1 << 8;
+        const CONSERVATIVE_DEPTH = 1 << 9;
+        const TEXTURE_1D = 1 << 10;
+    }
+}
+
+struct FeaturesManager(Features);
+
+impl FeaturesManager {
+    pub fn new() -> Self {
+        Self(Features::empty())
+    }
+
+    pub fn request(&mut self, features: Features) {
+        self.0 |= features
+    }
+
+    #[allow(clippy::collapsible_if)]
+    pub fn write(&self, version: Version, out: &mut impl Write) -> Result<(), Error> {
+        let (v, es) = match version {
+            Version::Desktop(v) => (v, false),
+            Version::Embedded(v) => (v, true),
+        };
+
+        if self.0.contains(Features::COMPUTE_SHADER) {
+            if (es && v < 310) || (!es && v < 420) {
+                return Err(Error::Custom(format!(
+                    "Version {} doesn't support compute shaders",
+                    version
+                )));
+            }
+
+            if !es {
+                writeln!(out, "#extension GL_ARB_compute_shader : require")?;
+            }
+        }
+
+        if self.0.contains(Features::BUFFER_STORAGE) {
+            if (es && v < 300) || (!es && v < 400) {
+                return Err(Error::Custom(format!(
+                    "Version {} doesn't support buffer storage class",
+                    version
+                )));
+            }
+
+            if !es && v < 430 {
+                writeln!(out, "#extension GL_ARB_program_interface_query : require")?;
+            }
+
+            if !es {
+                writeln!(
+                    out,
+                    "#extension GL_ARB_shader_storage_buffer_object : require"
+                )?;
+            }
+        }
+
+        if self.0.contains(Features::DOUBLE_TYPE) {
+            if es {
+                return Err(Error::Custom(format!(
+                    "Version {} doesn't support doubles",
+                    version
+                )));
+            }
+        }
+
+        if self.0.contains(Features::NON_FLOAT_MATRICES) {
+            if es {
+                return Err(Error::Custom(format!(
+                    "Version {} doesn't support non float matrices",
+                    version
+                )));
+            }
+        }
+
+        if self.0.contains(Features::CUBE_TEXTURES_ARRAY) {
+            if es && v < 310 {
+                return Err(Error::Custom(format!(
+                    "Version {} doesn't support cube map array textures",
+                    version
+                )));
+            }
+
+            if es {
+                writeln!(out, "#extension GL_EXT_texture_cube_map_array : require")?;
+            }
+        }
+
+        if self.0.contains(Features::MULTISAMPLED_TEXTURES) {
+            if es && v < 300 {
+                return Err(Error::Custom(format!(
+                    "Version {} doesn't support multi sampled textures",
+                    version
+                )));
+            }
+        }
+
+        if self.0.contains(Features::MULTISAMPLED_TEXTURE_ARRAYS) {
+            if es && v < 310 {
+                return Err(Error::Custom(format!(
+                    "Version {} doesn't support multi sampled texture arrays",
+                    version
+                )));
+            }
+
+            writeln!(
+                out,
+                "#extension GL_OES_texture_storage_multisample_2d_array : require"
+            )?;
+        }
+
+        if self.0.contains(Features::ARRAY_OF_ARRAYS) {
+            if (es && v < 310) || (!es && v < 120) {
+                return Err(Error::Custom(format!(
+                    "Version {} doesn't arrays of arrays",
+                    version
+                )));
+            }
+
+            if !es && v < 430 {
+                writeln!(out, "#extension ARB_arrays_of_arrays : require")?;
+            }
+        }
+
+        if self.0.contains(Features::IMAGE_LOAD_STORE) {
+            if (es && v < 310) || (!es && v < 130) {
+                return Err(Error::Custom(format!(
+                    "Version {} doesn't support images load/stores",
+                    version
+                )));
+            }
+
+            if !es && v < 420 {
+                writeln!(out, "#extension GL_ARB_shader_image_load_store : require")?;
+            }
+        }
+
+        if self.0.contains(Features::CONSERVATIVE_DEPTH) {
+            if (es && v < 300) || (!es && v < 130) {
+                return Err(Error::Custom(format!(
+                    "Version {} doesn't support conservative depth",
+                    version
+                )));
+            }
+
+            if es {
+                writeln!(out, "#extension GL_EXT_conservative_depth : require")?;
+            }
+
+            if !es && v < 420 {
+                writeln!(out, "#extension GL_ARB_conservative_depth : require")?;
+            }
+        }
+
+        if self.0.contains(Features::TEXTURE_1D) {
+            if es {
+                return Err(Error::Custom(format!(
+                    "Version {} doesn't support 1d textures",
+                    version
+                )));
+            }
+        }
+
+        Ok(())
     }
 }
 
@@ -108,6 +274,8 @@ pub fn write<'a>(
             options.version
         )));
     }
+
+    let mut manager = FeaturesManager::new();
 
     writeln!(out, "#version {}\n", options.version)?;
 
@@ -146,32 +314,27 @@ pub fn write<'a>(
     let func = &entry_point.function;
     let stage = options.entry_point.0;
 
+    if let Some(depth_test) = entry_point.early_depth_test {
+        manager.request(Features::IMAGE_LOAD_STORE);
+        writeln!(out, "layout(early_fragment_tests) in;\n")?;
+
+        if let Some(conservative) = depth_test.conservative {
+            manager.request(Features::CONSERVATIVE_DEPTH);
+
+            writeln!(
+                out,
+                "layout (depth_{}) out float gl_FragDepth;\n",
+                match conservative {
+                    ConservativeDepth::GreaterEqual => "greater",
+                    ConservativeDepth::LessEqual => "less",
+                    ConservativeDepth::Unchanged => "unchanged",
+                }
+            )?;
+        }
+    }
+
     if let ShaderStage::Compute = stage {
-        if (es && version < 310) || (!es && version < 430) {
-            return Err(Error::Custom(format!(
-                "Version {} doesn't support compute shaders",
-                options.version
-            )));
-        }
-
-        if !es && version < 460 {
-            writeln!(out, "#extension ARB_compute_shader : require")?;
-        }
-    }
-
-    let mut features = SupportedFeatures::empty();
-
-    if !es && version > 440 {
-        features |= SupportedFeatures::DOUBLE_TYPE;
-        features |= SupportedFeatures::NON_FLOAT_MATRICES;
-        features |= SupportedFeatures::MULTISAMPLED_TEXTURE_ARRAYS;
-        features |= SupportedFeatures::NON_2D_TEXTURE_ARRAYS;
-    }
-
-    if !es || version > 300 {
-        features |= SupportedFeatures::BUFFER_STORAGE;
-        features |= SupportedFeatures::SHARED_STORAGE;
-        features |= SupportedFeatures::MULTISAMPLED_TEXTURES;
+        manager.request(Features::COMPUTE_SHADER)
     }
 
     let mut structs = FastHashMap::default();
@@ -221,7 +384,7 @@ pub fn write<'a>(
                     &structs,
                     out,
                     &mut built_structs,
-                    features,
+                    &mut manager,
                 )?;
             }
             _ => continue,
@@ -239,14 +402,14 @@ pub fn write<'a>(
             out,
             "{} {}({});",
             func.return_type
-                .map(|ty| write_type(ty, &module.types, &structs, None, features))
+                .map(|ty| write_type(ty, &module.types, &structs, None, &mut manager))
                 .transpose()?
                 .as_deref()
                 .unwrap_or("void"),
             name,
             func.parameter_types
                 .iter()
-                .map(|ty| write_type(*ty, &module.types, &structs, None, features))
+                .map(|ty| write_type(*ty, &module.types, &structs, None, &mut manager))
                 .collect::<Result<Vec<_>, _>>()?
                 .join(","),
         )?;
@@ -302,7 +465,7 @@ pub fn write<'a>(
                 writeln!(
                     out,
                     "uniform {} {};",
-                    write_image_type(dim, arrayed, class, features)?,
+                    write_image_type(dim, arrayed, class, &mut manager)?,
                     name
                 )?;
 
@@ -364,12 +527,10 @@ pub fn write<'a>(
             .ok_or_else(|| Error::Custom(String::from("Global names must be specified in es")))?;
 
         if let Some(ref binding) = global.binding {
-            // Only vulkan glsl supports set/binding on the layout
+            // Only glsl 460 / GL_KHR_vulkan_glsl supports set/binding on the layout
             if let crate::Binding::Location(location) = binding {
                 write!(out, "layout(location = {}) ", location)?;
             }
-
-            write!(out, ") ")?;
         }
 
         if global.storage_access == StorageAccess::LOAD {
@@ -399,8 +560,8 @@ pub fn write<'a>(
         writeln!(
             out,
             "{}{} {};",
-            write_storage_class(global.class, features)?,
-            write_type(global.ty, &module.types, &structs, block, features)?,
+            write_storage_class(global.class, &mut manager)?,
+            write_type(global.ty, &module.types, &structs, block, &mut manager)?,
             name
         )?;
 
@@ -435,7 +596,7 @@ pub fn write<'a>(
             out,
             "{} {}({}) {{",
             func.return_type
-                .map(|ty| write_type(ty, &module.types, &structs, None, features))
+                .map(|ty| write_type(ty, &module.types, &structs, None, &mut manager))
                 .transpose()?
                 .as_deref()
                 .unwrap_or("void"),
@@ -444,7 +605,7 @@ pub fn write<'a>(
                 .iter()
                 .zip(args.values())
                 .map::<Result<_, Error>, _>(|(ty, name)| {
-                    let ty = write_type(*ty, &module.types, &structs, None, features)?;
+                    let ty = write_type(*ty, &module.types, &structs, None, &mut manager)?;
 
                     Ok(format!("{} {}", ty, name))
                 })
@@ -467,7 +628,7 @@ pub fn write<'a>(
                     &module.types,
                     &structs,
                     None,
-                    features
+                    &mut manager
                 )?,
                 name
             )?;
@@ -475,23 +636,27 @@ pub fn write<'a>(
 
         writeln!(out)?;
 
-        let builder = StatementBuilder {
+        let mut builder = StatementBuilder {
             functions: &functions,
             globals: &globals_lookup,
             locals_lookup: &locals,
             structs: &structs,
             args: &args,
             expressions: &func.expressions,
-            features,
             typifier: &typifier,
+            manager: &mut manager,
         };
 
         for sta in func.body.iter() {
-            writeln!(out, "{}", write_statement(sta, module, &builder, 1)?)?;
+            writeln!(out, "{}", write_statement(sta, module, &mut builder, 1)?)?;
         }
 
         writeln!(out, "}}")?;
     }
+
+    writeln!(out)?;
+
+    manager.write(options.version, out)?;
 
     Ok(mappings_map)
 }
@@ -503,14 +668,14 @@ struct StatementBuilder<'a> {
     structs: &'a FastHashMap<Handle<Type>, String>,
     args: &'a FastHashMap<u32, String>,
     expressions: &'a Arena<Expression>,
-    features: SupportedFeatures,
     typifier: &'a Typifier,
+    pub manager: &'a mut FeaturesManager,
 }
 
 fn write_statement<'a, 'b>(
     sta: &Statement,
     module: &'a Module,
-    builder: &'b StatementBuilder<'a>,
+    builder: &'b mut StatementBuilder<'a>,
     indent: usize,
 ) -> Result<String, Error> {
     Ok(match sta {
@@ -647,7 +812,7 @@ fn write_statement<'a, 'b>(
 fn write_expression<'a, 'b>(
     expr: &Expression,
     module: &'a Module,
-    builder: &'b StatementBuilder<'a>,
+    builder: &'b mut StatementBuilder<'a>,
 ) -> Result<Cow<'a, str>, Error> {
     Ok(match *expr {
         Expression::Access { base, index } => {
@@ -688,13 +853,12 @@ fn write_expression<'a, 'b>(
             &module.constants[constant],
             module,
             builder,
-            builder.features,
         )?),
         Expression::Compose { ty, ref components } => {
             let constructor = match module.types[ty].inner {
                 TypeInner::Vector { size, kind, width } => format!(
                     "{}vec{}",
-                    map_scalar(kind, width, builder.features)?.prefix,
+                    map_scalar(kind, width, builder.manager)?.prefix,
                     size as u8,
                 ),
                 TypeInner::Matrix {
@@ -704,19 +868,19 @@ fn write_expression<'a, 'b>(
                     width,
                 } => format!(
                     "{}mat{}x{}",
-                    map_scalar(kind, width, builder.features)?.prefix,
+                    map_scalar(kind, width, builder.manager)?.prefix,
                     columns as u8,
                     rows as u8,
                 ),
                 TypeInner::Array { .. } => {
-                    write_type(ty, &module.types, builder.structs, None, builder.features)?
+                    write_type(ty, &module.types, builder.structs, None, builder.manager)?
                         .into_owned()
                 }
                 TypeInner::Struct { .. } => builder.structs.get(&ty).unwrap().clone(),
                 _ => {
                     return Err(Error::Custom(format!(
                         "Cannot compose type {}",
-                        write_type(ty, &module.types, builder.structs, None, builder.features)?
+                        write_type(ty, &module.types, builder.structs, None, builder.manager)?
                     )))
                 }
             };
@@ -818,7 +982,7 @@ fn write_expression<'a, 'b>(
                     //TODO: fix this
                     let sampler_constructor = format!(
                         "{}sampler{}{}{}({})",
-                        map_scalar(kind, 4, builder.features)?.prefix,
+                        map_scalar(kind, 4, builder.manager)?.prefix,
                         ImageDimension(dim),
                         if multi { "MS" } else { "" },
                         if arrayed { "Array" } else { "" },
@@ -934,13 +1098,13 @@ fn write_expression<'a, 'b>(
             let (source_kind, ty_expr) = match *builder.typifier.get(expr, &module.types) {
                 TypeInner::Scalar { width, kind } => (
                     kind,
-                    Cow::Borrowed(map_scalar(kind, width, builder.features)?.full),
+                    Cow::Borrowed(map_scalar(kind, width, builder.manager)?.full),
                 ),
                 TypeInner::Vector { width, kind, size } => (
                     kind,
                     Cow::Owned(format!(
                         "{}vec{}",
-                        map_scalar(kind, width, builder.features)?.prefix,
+                        map_scalar(kind, width, builder.manager)?.prefix,
                         size as u32,
                     )),
                 ),
@@ -1017,8 +1181,7 @@ fn write_expression<'a, 'b>(
 fn write_constant(
     constant: &Constant,
     module: &Module,
-    builder: &StatementBuilder<'_>,
-    features: SupportedFeatures,
+    builder: &mut StatementBuilder<'_>,
 ) -> Result<String, Error> {
     Ok(match constant.inner {
         ConstantInner::Sint(int) => int.to_string(),
@@ -1033,22 +1196,28 @@ fn write_constant(
                     Cow::Owned(format!("mat{}x{}", columns as u8, rows as u8,)),
                 TypeInner::Struct { .. } =>
                     Cow::<str>::Borrowed(builder.structs.get(&constant.ty).unwrap()),
-                TypeInner::Array { .. } =>
-                    write_type(constant.ty, &module.types, builder.structs, None, features)?,
+                TypeInner::Array { .. } => write_type(
+                    constant.ty,
+                    &module.types,
+                    builder.structs,
+                    None,
+                    builder.manager
+                )?,
                 _ =>
                     return Err(Error::Custom(format!(
                         "Cannot build constant of type {}",
-                        write_type(constant.ty, &module.types, builder.structs, None, features)?
+                        write_type(
+                            constant.ty,
+                            &module.types,
+                            builder.structs,
+                            None,
+                            builder.manager
+                        )?
                     ))),
             },
             components
                 .iter()
-                .map(|component| write_constant(
-                    &module.constants[*component],
-                    module,
-                    builder,
-                    features
-                ))
+                .map(|component| write_constant(&module.constants[*component], module, builder,))
                 .collect::<Result<Vec<_>, _>>()?
                 .join(","),
         ),
@@ -1063,7 +1232,7 @@ struct ScalarString<'a> {
 fn map_scalar(
     kind: ScalarKind,
     width: crate::Bytes,
-    features: SupportedFeatures,
+    manager: &mut FeaturesManager,
 ) -> Result<ScalarString<'static>, Error> {
     Ok(match kind {
         ScalarKind::Sint => ScalarString {
@@ -1079,10 +1248,14 @@ fn map_scalar(
                 prefix: "",
                 full: "float",
             },
-            8 if features.contains(SupportedFeatures::DOUBLE_TYPE) => ScalarString {
-                prefix: "d",
-                full: "double",
-            },
+            8 => {
+                manager.request(Features::DOUBLE_TYPE);
+
+                ScalarString {
+                    prefix: "d",
+                    full: "double",
+                }
+            }
             _ => {
                 return Err(Error::Custom(format!(
                     "Cannot build float of width {}",
@@ -1102,13 +1275,13 @@ fn write_type<'a>(
     types: &Arena<Type>,
     structs: &'a FastHashMap<Handle<Type>, String>,
     block: Option<String>,
-    features: SupportedFeatures,
+    manager: &mut FeaturesManager,
 ) -> Result<Cow<'a, str>, Error> {
     Ok(match types[ty].inner {
-        TypeInner::Scalar { kind, width } => Cow::Borrowed(map_scalar(kind, width, features)?.full),
+        TypeInner::Scalar { kind, width } => Cow::Borrowed(map_scalar(kind, width, manager)?.full),
         TypeInner::Vector { size, kind, width } => Cow::Owned(format!(
             "{}vec{}",
-            map_scalar(kind, width, features)?.prefix,
+            map_scalar(kind, width, manager)?.prefix,
             size as u8
         )),
         TypeInner::Matrix {
@@ -1116,27 +1289,30 @@ fn write_type<'a>(
             rows,
             kind,
             width,
-        } => Cow::Owned(format!(
-            "{}mat{}x{}",
-            if (width == 4 && kind == ScalarKind::Float)
-                || features.contains(SupportedFeatures::NON_FLOAT_MATRICES)
-            {
-                map_scalar(kind, width, features)?.prefix
-            } else {
-                return Err(Error::Custom(format!(
-                    "Cannot build matrix of base type {:?}",
-                    kind
-                )));
-            },
-            columns as u8,
-            rows as u8
-        )),
-        TypeInner::Pointer { base, .. } => write_type(base, types, structs, None, features)?,
-        TypeInner::Array { base, size, .. } => Cow::Owned(format!(
-            "{}[{}]",
-            write_type(base, types, structs, None, features)?,
-            write_array_size(size)?
-        )),
+        } => {
+            if width != 4 || kind == ScalarKind::Float {
+                manager.request(Features::NON_FLOAT_MATRICES);
+            }
+
+            Cow::Owned(format!(
+                "{}mat{}x{}",
+                map_scalar(kind, width, manager)?.prefix,
+                columns as u8,
+                rows as u8
+            ))
+        }
+        TypeInner::Pointer { base, .. } => write_type(base, types, structs, None, manager)?,
+        TypeInner::Array { base, size, .. } => {
+            if let TypeInner::Array { .. } = types[base].inner {
+                manager.request(Features::ARRAY_OF_ARRAYS)
+            }
+
+            Cow::Owned(format!(
+                "{}[{}]",
+                write_type(base, types, structs, None, manager)?,
+                write_array_size(size)?
+            ))
+        }
         TypeInner::Struct { ref members } => {
             if let Some(name) = block {
                 let mut out = String::new();
@@ -1146,7 +1322,7 @@ fn write_type<'a>(
                     writeln!(
                         &mut out,
                         "\t{} {};",
-                        write_type(member.ty, types, structs, None, features)?,
+                        write_type(member.ty, types, structs, None, manager)?,
                         member
                             .name
                             .clone()
@@ -1170,29 +1346,21 @@ fn write_image_type(
     dim: crate::ImageDimension,
     arrayed: bool,
     class: ImageClass,
-    features: SupportedFeatures,
+    manager: &mut FeaturesManager,
 ) -> Result<String, Error> {
-    if arrayed
-        && dim != crate::ImageDimension::D2
-        && !features.contains(SupportedFeatures::NON_2D_TEXTURE_ARRAYS)
-    {
-        return Err(Error::Custom(String::from(
-            "Arrayed non 2d images aren't supported",
-        )));
+    if arrayed && dim == crate::ImageDimension::Cube {
+        manager.request(Features::CUBE_TEXTURES_ARRAY)
+    } else if dim == crate::ImageDimension::D1 {
+        manager.request(Features::TEXTURE_1D)
     }
 
     let (base, kind, ms, comparison) = match class {
         ImageClass::Sampled { kind, multi: true } => {
-            if !features.contains(SupportedFeatures::MULTISAMPLED_TEXTURES) {
-                return Err(Error::Custom(String::from(
-                    "Multi sampled textures aren't supported",
-                )));
+            manager.request(Features::MULTISAMPLED_TEXTURES);
+            if arrayed {
+                manager.request(Features::MULTISAMPLED_TEXTURE_ARRAYS);
             }
-            if arrayed && !features.contains(SupportedFeatures::MULTISAMPLED_TEXTURE_ARRAYS) {
-                return Err(Error::Custom(String::from(
-                    "Multi sampled texture arrays aren't supported",
-                )));
-            }
+
             ("sampler", kind, "MS", "")
         }
         ImageClass::Sampled { kind, multi: false } => ("sampler", kind, "", ""),
@@ -1202,7 +1370,7 @@ fn write_image_type(
 
     Ok(format!(
         "{}{}{}{}{}{}",
-        map_scalar(kind, 4, features)?.prefix,
+        map_scalar(kind, 4, manager)?.prefix,
         base,
         ImageDimension(dim),
         ms,
@@ -1213,7 +1381,7 @@ fn write_image_type(
 
 fn write_storage_class(
     class: StorageClass,
-    features: SupportedFeatures,
+    manager: &mut FeaturesManager,
 ) -> Result<&'static str, Error> {
     Ok(match class {
         StorageClass::Constant => "",
@@ -1222,23 +1390,15 @@ fn write_storage_class(
         StorageClass::Output => "out ",
         StorageClass::Private => "",
         StorageClass::StorageBuffer => {
-            if features.contains(SupportedFeatures::BUFFER_STORAGE) {
-                "buffer "
-            } else {
-                return Err(Error::Custom(String::from(
-                    "buffer storage class isn't supported in glsl es",
-                )));
-            }
+            manager.request(Features::BUFFER_STORAGE);
+
+            "buffer "
         }
         StorageClass::Uniform => "uniform ",
         StorageClass::WorkGroup => {
-            if features.contains(SupportedFeatures::SHARED_STORAGE) {
-                "shared "
-            } else {
-                return Err(Error::Custom(String::from(
-                    "workgroup storage class isn't supported in glsl es",
-                )));
-            }
+            manager.request(Features::COMPUTE_SHADER);
+
+            "shared "
         }
     })
 }
@@ -1288,7 +1448,7 @@ fn write_struct(
     structs: &FastHashMap<Handle<Type>, String>,
     out: &mut impl Write,
     built_structs: &mut FastHashMap<Handle<Type>, ()>,
-    features: SupportedFeatures,
+    manager: &mut FeaturesManager,
 ) -> Result<(), Error> {
     if built_structs.get(&handle).is_some() {
         return Ok(());
@@ -1312,14 +1472,14 @@ fn write_struct(
                 structs,
                 out,
                 built_structs,
-                features,
+                manager,
             )?;
         }
 
         writeln!(
             &mut tmp,
             "\t{} {};",
-            write_type(member.ty, &module.types, &structs, None, features)?,
+            write_type(member.ty, &module.types, &structs, None, manager)?,
             member
                 .name
                 .clone()
