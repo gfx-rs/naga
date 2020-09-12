@@ -4,7 +4,7 @@ use pomelo::pomelo;
 pomelo! {
     //%verbose;
     %include {
-        use super::super::{error::ErrorKind, token::*, ast::*, variables::*};
+        use super::super::{error::ErrorKind, token::*, ast::*};
         use crate::{Arena, BinaryOperator, Binding, Block, Constant, ConstantInner, Expression,
             Function, GlobalVariable, Handle, LocalVariable, ScalarKind,
             Statement, StorageAccess, StorageClass, Type, TypeInner,
@@ -132,7 +132,7 @@ pomelo! {
 
     // expression
     variable_identifier ::= Identifier(v) {
-        match lookup_variable(extra, &v.1) {
+        match extra.lookup_variable(&v.1) {
             Some(expression) => {
                 ExpressionRule::from_expression(
                     expression
