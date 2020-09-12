@@ -76,7 +76,7 @@ pub struct TextureMapping {
     pub sampler: Option<Handle<GlobalVariable>>,
 }
 
-const SUPPORTED_CORE_VERSIONS: &[u16] = &[400, 410, 420, 430, 440, 450];
+const SUPPORTED_CORE_VERSIONS: &[u16] = &[330, 400, 410, 420, 430, 440, 450];
 const SUPPORTED_ES_VERSIONS: &[u16] = &[300, 310];
 
 bitflags::bitflags! {
@@ -147,11 +147,15 @@ impl FeaturesManager {
         }
 
         if self.0.contains(Features::DOUBLE_TYPE) {
-            if es {
+            if es || v < 150 {
                 return Err(Error::Custom(format!(
                     "Version {} doesn't support doubles",
                     version
                 )));
+            }
+
+            if v < 400 {
+                writeln!(out, "#extension GL_ARB_gpu_shader_fp64 : require")?;
             }
         }
 
@@ -165,7 +169,7 @@ impl FeaturesManager {
         }
 
         if self.0.contains(Features::CUBE_TEXTURES_ARRAY) {
-            if es && v < 310 {
+            if (es && v < 310) || (!es && v < 130) {
                 return Err(Error::Custom(format!(
                     "Version {} doesn't support cube map array textures",
                     version
@@ -174,6 +178,8 @@ impl FeaturesManager {
 
             if es {
                 writeln!(out, "#extension GL_EXT_texture_cube_map_array : require")?;
+            } else if v < 400 {
+                writeln!(out, "#extension GL_ARB_texture_cube_map_array : require")?;
             }
         }
 
