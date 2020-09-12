@@ -122,6 +122,7 @@ impl FeaturesManager {
             }
 
             if !es {
+                // https://www.khronos.org/registry/OpenGL/extensions/ARB/ARB_compute_shader.txt
                 writeln!(out, "#extension GL_ARB_compute_shader : require")?;
             }
         }
@@ -135,10 +136,12 @@ impl FeaturesManager {
             }
 
             if !es && v < 430 {
+                // https://www.khronos.org/registry/OpenGL/extensions/ARB/ARB_program_interface_query.txt
                 writeln!(out, "#extension GL_ARB_program_interface_query : require")?;
             }
 
             if !es {
+                // https://www.khronos.org/registry/OpenGL/extensions/ARB/ARB_shader_storage_buffer_object.txt
                 writeln!(
                     out,
                     "#extension GL_ARB_shader_storage_buffer_object : require"
@@ -155,6 +158,7 @@ impl FeaturesManager {
             }
 
             if v < 400 {
+                // https://www.khronos.org/registry/OpenGL/extensions/ARB/ARB_gpu_shader_fp64.txt
                 writeln!(out, "#extension GL_ARB_gpu_shader_fp64 : require")?;
             }
         }
@@ -177,8 +181,10 @@ impl FeaturesManager {
             }
 
             if es {
+                // https://www.khronos.org/registry/OpenGL/extensions/EXT/EXT_texture_cube_map_array.txt
                 writeln!(out, "#extension GL_EXT_texture_cube_map_array : require")?;
             } else if v < 400 {
+                // https://www.khronos.org/registry/OpenGL/extensions/ARB/ARB_texture_cube_map_array.txt
                 writeln!(out, "#extension GL_ARB_texture_cube_map_array : require")?;
             }
         }
@@ -200,10 +206,13 @@ impl FeaturesManager {
                 )));
             }
 
-            writeln!(
-                out,
-                "#extension GL_OES_texture_storage_multisample_2d_array : require"
-            )?;
+            if es {
+                // https://www.khronos.org/registry/OpenGL/extensions/OES/OES_texture_storage_multisample_2d_array.txt
+                writeln!(
+                    out,
+                    "#extension GL_OES_texture_storage_multisample_2d_array : require"
+                )?;
+            }
         }
 
         if self.0.contains(Features::ARRAY_OF_ARRAYS) {
@@ -215,6 +224,7 @@ impl FeaturesManager {
             }
 
             if !es && v < 430 {
+                // https://www.khronos.org/registry/OpenGL/extensions/ARB/ARB_arrays_of_arrays.txt
                 writeln!(out, "#extension ARB_arrays_of_arrays : require")?;
             }
         }
@@ -228,6 +238,7 @@ impl FeaturesManager {
             }
 
             if !es && v < 420 {
+                // https://www.khronos.org/registry/OpenGL/extensions/ARB/ARB_shader_image_load_store.txt
                 writeln!(out, "#extension GL_ARB_shader_image_load_store : require")?;
             }
         }
@@ -241,10 +252,12 @@ impl FeaturesManager {
             }
 
             if es {
+                // https://www.khronos.org/registry/OpenGL/extensions/EXT/EXT_conservative_depth.txt
                 writeln!(out, "#extension GL_EXT_conservative_depth : require")?;
             }
 
             if !es && v < 420 {
+                // https://www.khronos.org/registry/OpenGL/extensions/ARB/ARB_conservative_depth.txt
                 writeln!(out, "#extension GL_ARB_conservative_depth : require")?;
             }
         }
