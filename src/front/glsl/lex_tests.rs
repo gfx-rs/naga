@@ -1,5 +1,7 @@
 use super::lex::Lexer;
 use super::parser::Token;
+use super::parser::Token::*;
+use super::token::TokenMetadata;
 
 #[test]
 fn glsl_lex_simple() {
@@ -10,28 +12,49 @@ fn glsl_lex_simple() {
 
     let mut iter = tokens.iter();
     assert_eq!(
-        format!("{:?}", iter.next().unwrap()),
-        "Void(TokenMetadata { line: 0, chars: 0..4 })"
+        iter.next().unwrap(),
+        &Void(TokenMetadata {
+            line: 0,
+            chars: 0..4
+        })
     );
     assert_eq!(
-        format!("{:?}", iter.next().unwrap()),
-        "Identifier((TokenMetadata { line: 0, chars: 5..9 }, \"main\"))"
+        iter.next().unwrap(),
+        &Identifier((
+            TokenMetadata {
+                line: 0,
+                chars: 5..9
+            },
+            "main".into()
+        ))
     );
     assert_eq!(
-        format!("{:?}", iter.next().unwrap()),
-        "LeftParen(TokenMetadata { line: 0, chars: 9..10 })"
+        iter.next().unwrap(),
+        &LeftParen(TokenMetadata {
+            line: 0,
+            chars: 9..10
+        })
     );
     assert_eq!(
-        format!("{:?}", iter.next().unwrap()),
-        "RightParen(TokenMetadata { line: 0, chars: 10..11 })"
+        iter.next().unwrap(),
+        &RightParen(TokenMetadata {
+            line: 0,
+            chars: 10..11
+        })
     );
     assert_eq!(
-        format!("{:?}", iter.next().unwrap()),
-        "LeftBrace(TokenMetadata { line: 0, chars: 12..13 })"
+        iter.next().unwrap(),
+        &LeftBrace(TokenMetadata {
+            line: 0,
+            chars: 12..13
+        })
     );
     assert_eq!(
-        format!("{:?}", iter.next().unwrap()),
-        "RightBrace(TokenMetadata { line: 1, chars: 0..1 })"
+        iter.next().unwrap(),
+        &RightBrace(TokenMetadata {
+            line: 1,
+            chars: 0..1
+        })
     );
 }
 
@@ -44,20 +67,35 @@ fn glsl_lex_line_comment() {
 
     let mut iter = tokens.iter();
     assert_eq!(
-        format!("{:?}", iter.next().unwrap()),
-        "Void(TokenMetadata { line: 0, chars: 0..4 })"
+        iter.next().unwrap(),
+        &Void(TokenMetadata {
+            line: 0,
+            chars: 0..4
+        })
     );
     assert_eq!(
-        format!("{:?}", iter.next().unwrap()),
-        "Identifier((TokenMetadata { line: 0, chars: 5..9 }, \"main\"))"
+        iter.next().unwrap(),
+        &Identifier((
+            TokenMetadata {
+                line: 0,
+                chars: 5..9
+            },
+            "main".into()
+        ))
     );
     assert_eq!(
-        format!("{:?}", iter.next().unwrap()),
-        "LeftBrace(TokenMetadata { line: 2, chars: 0..1 })"
+        iter.next().unwrap(),
+        &LeftBrace(TokenMetadata {
+            line: 2,
+            chars: 0..1
+        })
     );
     assert_eq!(
-        format!("{:?}", iter.next().unwrap()),
-        "RightBrace(TokenMetadata { line: 2, chars: 1..2 })"
+        iter.next().unwrap(),
+        &RightBrace(TokenMetadata {
+            line: 2,
+            chars: 1..2
+        })
     );
 }
 
@@ -70,20 +108,35 @@ fn glsl_lex_multi_line_comment() {
 
     let mut iter = tokens.iter();
     assert_eq!(
-        format!("{:?}", iter.next().unwrap()),
-        "Void(TokenMetadata { line: 0, chars: 0..4 })"
+        iter.next().unwrap(),
+        &Void(TokenMetadata {
+            line: 0,
+            chars: 0..4
+        })
     );
     assert_eq!(
-        format!("{:?}", iter.next().unwrap()),
-        "Identifier((TokenMetadata { line: 0, chars: 5..9 }, \"main\"))"
+        iter.next().unwrap(),
+        &Identifier((
+            TokenMetadata {
+                line: 0,
+                chars: 5..9
+            },
+            "main".into()
+        ))
     );
     assert_eq!(
-        format!("{:?}", iter.next().unwrap()),
-        "LeftBrace(TokenMetadata { line: 2, chars: 4..5 })"
+        iter.next().unwrap(),
+        &LeftBrace(TokenMetadata {
+            line: 2,
+            chars: 4..5
+        })
     );
     assert_eq!(
-        format!("{:?}", iter.next().unwrap()),
-        "RightBrace(TokenMetadata { line: 2, chars: 5..6 })"
+        iter.next().unwrap(),
+        &RightBrace(TokenMetadata {
+            line: 2,
+            chars: 5..6
+        })
     );
 }
 
@@ -96,44 +149,104 @@ fn glsl_lex_identifier() {
 
     let mut iter = tokens.iter();
     assert_eq!(
-        format!("{:?}", iter.next().unwrap()),
-        "Identifier((TokenMetadata { line: 0, chars: 0..8 }, \"id123_OK\"))"
+        iter.next().unwrap(),
+        &Identifier((
+            TokenMetadata {
+                line: 0,
+                chars: 0..8
+            },
+            "id123_OK".into()
+        ))
     );
     assert_eq!(
-        format!("{:?}", iter.next().unwrap()),
-        "IntConstant((TokenMetadata { line: 0, chars: 9..11 }, 92))"
+        iter.next().unwrap(),
+        &IntConstant((
+            TokenMetadata {
+                line: 0,
+                chars: 9..11
+            },
+            92
+        ))
     );
     assert_eq!(
-        format!("{:?}", iter.next().unwrap()),
-        "Identifier((TokenMetadata { line: 0, chars: 11..13 }, \"No\"))"
+        iter.next().unwrap(),
+        &Identifier((
+            TokenMetadata {
+                line: 0,
+                chars: 11..13
+            },
+            "No".into()
+        ))
     );
     assert_eq!(
-        format!("{:?}", iter.next().unwrap()),
-        "Unknown((TokenMetadata { line: 0, chars: 14..15 }, \'æ\'))"
+        iter.next().unwrap(),
+        &Unknown((
+            TokenMetadata {
+                line: 0,
+                chars: 14..15
+            },
+            'æ'
+        ))
     );
     assert_eq!(
-        format!("{:?}", iter.next().unwrap()),
-        "Identifier((TokenMetadata { line: 0, chars: 15..17 }, \"No\"))"
+        iter.next().unwrap(),
+        &Identifier((
+            TokenMetadata {
+                line: 0,
+                chars: 15..17
+            },
+            "No".into()
+        ))
     );
     assert_eq!(
-        format!("{:?}", iter.next().unwrap()),
-        "Unknown((TokenMetadata { line: 0, chars: 17..18 }, \'ø\'))"
+        iter.next().unwrap(),
+        &Unknown((
+            TokenMetadata {
+                line: 0,
+                chars: 17..18
+            },
+            'ø'
+        ))
     );
     assert_eq!(
-        format!("{:?}", iter.next().unwrap()),
-        "Identifier((TokenMetadata { line: 0, chars: 19..21 }, \"No\"))"
+        iter.next().unwrap(),
+        &Identifier((
+            TokenMetadata {
+                line: 0,
+                chars: 19..21
+            },
+            "No".into()
+        ))
     );
     assert_eq!(
-        format!("{:?}", iter.next().unwrap()),
-        "Unknown((TokenMetadata { line: 0, chars: 21..22 }, \'¾\'))"
+        iter.next().unwrap(),
+        &Unknown((
+            TokenMetadata {
+                line: 0,
+                chars: 21..22
+            },
+            '¾'
+        ))
     );
     assert_eq!(
-        format!("{:?}", iter.next().unwrap()),
-        "Identifier((TokenMetadata { line: 0, chars: 23..25 }, \"No\"))"
+        iter.next().unwrap(),
+        &Identifier((
+            TokenMetadata {
+                line: 0,
+                chars: 23..25
+            },
+            "No".into()
+        ))
     );
     assert_eq!(
-        format!("{:?}", iter.next().unwrap()),
-        "Unknown((TokenMetadata { line: 0, chars: 25..26 }, \'好\'))"
+        iter.next().unwrap(),
+        &Unknown((
+            TokenMetadata {
+                line: 0,
+                chars: 25..26
+            },
+            '好'
+        ))
     );
 }
 
@@ -146,16 +259,31 @@ fn glsl_lex_version() {
 
     let mut iter = tokens.iter();
     assert_eq!(
-        format!("{:?}", iter.next().unwrap()),
-        "Version(TokenMetadata { line: 0, chars: 0..8 })"
+        iter.next().unwrap(),
+        &Version(TokenMetadata {
+            line: 0,
+            chars: 0..8
+        })
     );
     assert_eq!(
-        format!("{:?}", iter.next().unwrap()),
-        "IntConstant((TokenMetadata { line: 0, chars: 9..12 }, 890))"
+        iter.next().unwrap(),
+        &IntConstant((
+            TokenMetadata {
+                line: 0,
+                chars: 9..12
+            },
+            890
+        ))
     );
     assert_eq!(
-        format!("{:?}", iter.next().unwrap()),
-        "Identifier((TokenMetadata { line: 0, chars: 13..17 }, \"core\"))"
+        iter.next().unwrap(),
+        &Identifier((
+            TokenMetadata {
+                line: 0,
+                chars: 13..17
+            },
+            "core".into()
+        ))
     );
 }
 
@@ -168,79 +296,136 @@ fn glsl_lex_operators() {
 
     let mut iter = tokens.iter();
     assert_eq!(
-        format!("{:?}", iter.next().unwrap()),
-        "Plus(TokenMetadata { line: 0, chars: 0..1 })"
+        iter.next().unwrap(),
+        &Plus(TokenMetadata {
+            line: 0,
+            chars: 0..1
+        })
     );
     assert_eq!(
-        format!("{:?}", iter.next().unwrap()),
-        "Dash(TokenMetadata { line: 0, chars: 2..3 })"
+        iter.next().unwrap(),
+        &Dash(TokenMetadata {
+            line: 0,
+            chars: 2..3
+        })
     );
     assert_eq!(
-        format!("{:?}", iter.next().unwrap()),
-        "Star(TokenMetadata { line: 0, chars: 4..5 })"
+        iter.next().unwrap(),
+        &Star(TokenMetadata {
+            line: 0,
+            chars: 4..5
+        })
     );
     assert_eq!(
-        format!("{:?}", iter.next().unwrap()),
-        "VerticalBar(TokenMetadata { line: 0, chars: 6..7 })"
+        iter.next().unwrap(),
+        &VerticalBar(TokenMetadata {
+            line: 0,
+            chars: 6..7
+        })
     );
     assert_eq!(
-        format!("{:?}", iter.next().unwrap()),
-        "Ampersand(TokenMetadata { line: 0, chars: 8..9 })"
+        iter.next().unwrap(),
+        &Ampersand(TokenMetadata {
+            line: 0,
+            chars: 8..9
+        })
     );
     assert_eq!(
-        format!("{:?}", iter.next().unwrap()),
-        "Percent(TokenMetadata { line: 0, chars: 10..11 })"
+        iter.next().unwrap(),
+        &Percent(TokenMetadata {
+            line: 0,
+            chars: 10..11
+        })
     );
     assert_eq!(
-        format!("{:?}", iter.next().unwrap()),
-        "Slash(TokenMetadata { line: 0, chars: 12..13 })"
+        iter.next().unwrap(),
+        &Slash(TokenMetadata {
+            line: 0,
+            chars: 12..13
+        })
     );
     assert_eq!(
-        format!("{:?}", iter.next().unwrap()),
-        "AddAssign(TokenMetadata { line: 0, chars: 14..16 })"
+        iter.next().unwrap(),
+        &AddAssign(TokenMetadata {
+            line: 0,
+            chars: 14..16
+        })
     );
     assert_eq!(
-        format!("{:?}", iter.next().unwrap()),
-        "SubAssign(TokenMetadata { line: 0, chars: 17..19 })"
+        iter.next().unwrap(),
+        &SubAssign(TokenMetadata {
+            line: 0,
+            chars: 17..19
+        })
     );
     assert_eq!(
-        format!("{:?}", iter.next().unwrap()),
-        "MulAssign(TokenMetadata { line: 0, chars: 20..22 })"
+        iter.next().unwrap(),
+        &MulAssign(TokenMetadata {
+            line: 0,
+            chars: 20..22
+        })
     );
     assert_eq!(
-        format!("{:?}", iter.next().unwrap()),
-        "OrAssign(TokenMetadata { line: 0, chars: 23..25 })"
+        iter.next().unwrap(),
+        &OrAssign(TokenMetadata {
+            line: 0,
+            chars: 23..25
+        })
     );
     assert_eq!(
-        format!("{:?}", iter.next().unwrap()),
-        "AndAssign(TokenMetadata { line: 0, chars: 26..28 })"
+        iter.next().unwrap(),
+        &AndAssign(TokenMetadata {
+            line: 0,
+            chars: 26..28
+        })
     );
     assert_eq!(
-        format!("{:?}", iter.next().unwrap()),
-        "ModAssign(TokenMetadata { line: 0, chars: 29..31 })"
+        iter.next().unwrap(),
+        &ModAssign(TokenMetadata {
+            line: 0,
+            chars: 29..31
+        })
     );
     assert_eq!(
-        format!("{:?}", iter.next().unwrap()),
-        "DivAssign(TokenMetadata { line: 0, chars: 32..34 })"
+        iter.next().unwrap(),
+        &DivAssign(TokenMetadata {
+            line: 0,
+            chars: 32..34
+        })
     );
     assert_eq!(
-        format!("{:?}", iter.next().unwrap()),
-        "IncOp(TokenMetadata { line: 0, chars: 35..37 })"
+        iter.next().unwrap(),
+        &IncOp(TokenMetadata {
+            line: 0,
+            chars: 35..37
+        })
     );
     assert_eq!(
-        format!("{:?}", iter.next().unwrap()),
-        "DecOp(TokenMetadata { line: 0, chars: 38..40 })"
+        iter.next().unwrap(),
+        &DecOp(TokenMetadata {
+            line: 0,
+            chars: 38..40
+        })
     );
     assert_eq!(
-        format!("{:?}", iter.next().unwrap()),
-        "OrOp(TokenMetadata { line: 0, chars: 41..43 })"
+        iter.next().unwrap(),
+        &OrOp(TokenMetadata {
+            line: 0,
+            chars: 41..43
+        })
     );
     assert_eq!(
-        format!("{:?}", iter.next().unwrap()),
-        "AndOp(TokenMetadata { line: 0, chars: 44..46 })"
+        iter.next().unwrap(),
+        &AndOp(TokenMetadata {
+            line: 0,
+            chars: 44..46
+        })
     );
     assert_eq!(
-        format!("{:?}", iter.next().unwrap()),
-        "XorOp(TokenMetadata { line: 0, chars: 47..49 })"
+        iter.next().unwrap(),
+        &XorOp(TokenMetadata {
+            line: 0,
+            chars: 47..49
+        })
     );
 }
