@@ -132,7 +132,8 @@ pomelo! {
 
     // expression
     variable_identifier ::= Identifier(v) {
-        match extra.lookup_variable(&v.1) {
+        let var = extra.lookup_variable(&v.1)?;
+        match var {
             Some(expression) => {
                 ExpressionRule::from_expression(
                     expression
