@@ -293,30 +293,6 @@ pub fn write<'a>(
         writeln!(out, "precision highp float;\n")?;
     }
 
-    let mut counter = 0;
-    let mut names = FastHashMap::default();
-
-    let mut namer = |name: Option<&'a String>| {
-        if let Some(name) = name {
-            if !is_valid_ident(name) || names.get(name.as_str()).is_some() {
-                counter += 1;
-                while names.get(format!("_{}", counter).as_str()).is_some() {
-                    counter += 1;
-                }
-                format!("_{}", counter)
-            } else {
-                names.insert(name.as_str(), ());
-                name.clone()
-            }
-        } else {
-            counter += 1;
-            while names.get(format!("_{}", counter).as_str()).is_some() {
-                counter += 1;
-            }
-            format!("_{}", counter)
-        }
-    };
-
     let entry_point = module
         .entry_points
         .get(&options.entry_point)
@@ -354,7 +330,11 @@ pub fn write<'a>(
     for (handle, ty) in module.types.iter() {
         match ty.inner {
             TypeInner::Struct { .. } => {
-                let name = namer(ty.name.as_ref());
+                let name = ty
+                    .name
+                    .clone()
+                    .filter(|ident| is_valid_ident(ident))
+                    .unwrap_or_else(|| format!("struct_{}", handle.index()));
 
                 structs.insert(handle, name);
             }
@@ -368,10 +348,7 @@ pub fn write<'a>(
         }
 
         let block = match global.class {
-            StorageClass::Input
-            | StorageClass::Output
-            | StorageClass::StorageBuffer
-            | StorageClass::Uniform => true,
+            StorageClass::StorageBuffer | StorageClass::Uniform => true,
             _ => false,
         };
 
@@ -406,7 +383,11 @@ pub fn write<'a>(
     let mut functions = FastHashMap::default();
 
     for (handle, func) in module.functions.iter() {
-        let name = namer(func.name.as_ref());
+        let name = func
+            .name
+            .clone()
+            .filter(|ident| is_valid_ident(ident))
+            .unwrap_or_else(|| format!("function_{}", handle.index()));
 
         writeln!(
             out,
@@ -474,7 +455,21 @@ pub fn write<'a>(
                     write!(out, "writeonly ")?;
                 }
 
-                let name = namer(global.name.as_ref());
+                let name = if let Some(ref binding) = global.binding {
+                    match binding {
+                        crate::Binding::Location(location) => format!("location_{}", location),
+                        crate::Binding::Resource { group, binding } => {
+                            format!("set_{}_binding_{}", group, binding)
+                        }
+                        crate::Binding::BuiltIn(_) => unreachable!(),
+                    }
+                } else {
+                    global
+                        .name
+                        .clone()
+                        .filter(|ident| is_valid_ident(ident))
+                        .unwrap_or_else(|| format!("global_{}", handle.index()))
+                };
 
                 writeln!(
                     out,
@@ -493,7 +488,11 @@ pub fn write<'a>(
                 globals_lookup.insert(handle, name);
             }
             TypeInner::Sampler { .. } => {
-                let name = namer(global.name.as_ref());
+                let name = global
+                    .name
+                    .clone()
+                    .filter(|ident| is_valid_ident(ident))
+                    .unwrap_or_else(|| format!("global_{}", handle.index()));
 
                 globals_lookup.insert(handle, name);
             }
@@ -535,11 +534,39 @@ pub fn write<'a>(
             continue;
         }
 
-        let name = global
-            .name
-            .clone()
-            .filter(|ident| is_valid_ident(ident))
-            .ok_or_else(|| Error::Custom(String::from("Global names must be specified")))?;
+        let name = if let Some(ref binding) = global.binding {
+            let prefix = match global.class {
+                StorageClass::Constant => "const",
+                StorageClass::Function => "fn",
+                StorageClass::Input => "in",
+                StorageClass::Output => "out",
+                StorageClass::Private => "priv",
+                StorageClass::StorageBuffer => "buffer",
+                StorageClass::Uniform => "uniform",
+                StorageClass::WorkGroup => "wg",
+            };
+
+            match binding {
+                crate::Binding::Location(location) => format!("{}_location_{}", prefix, location),
+                crate::Binding::Resource { group, binding } => {
+                    format!("{}_set_{}_binding_{}", prefix, group, binding)
+                }
+                crate::Binding::BuiltIn(_) => unreachable!(),
+            }
+        } else {
+            global
+                .name
+                .clone()
+                .filter(|ident| is_valid_ident(ident))
+                .unwrap_or_else(|| format!("global_{}", handle.index()))
+        };
+
+        if let TypeInner::Struct { .. } = module.types[global.ty].inner {
+            if built_structs.get(&global.ty).is_none() {
+                globals_lookup.insert(handle, name);
+                continue;
+            }
+        }
 
         if global.storage_access == StorageAccess::LOAD {
             write!(out, "readonly ")?;
@@ -558,10 +585,9 @@ pub fn write<'a>(
         }
 
         let block = match global.class {
-            StorageClass::Input
-            | StorageClass::Output
-            | StorageClass::StorageBuffer
-            | StorageClass::Uniform => Some(namer(None)),
+            StorageClass::StorageBuffer | StorageClass::Uniform => {
+                Some(format!("global_block_{}", handle.index()))
+            }
             _ => None,
         };
 
@@ -579,8 +605,7 @@ pub fn write<'a>(
     writeln!(out)?;
     let mut typifier = Typifier::new();
 
-    for (handle, name) in functions.iter() {
-        let func = &module.functions[*handle];
+    let mut write_function = |func: &Function, name: &str| -> Result<(), Error> {
         typifier.resolve_all(
             &func.expressions,
             &module.types,
@@ -597,7 +622,7 @@ pub fn write<'a>(
             .parameter_types
             .iter()
             .enumerate()
-            .map(|(pos, _ty)| (pos as u32, namer(None)))
+            .map(|(pos, _)| (pos as u32, format!("arg_{}", pos)))
             .collect();
 
         writeln!(
@@ -624,7 +649,16 @@ pub fn write<'a>(
         let locals: FastHashMap<_, _> = func
             .local_variables
             .iter()
-            .map(|(handle, local)| (handle, namer(local.name.as_ref())))
+            .map(|(handle, local)| {
+                (
+                    handle,
+                    local
+                        .name
+                        .clone()
+                        .filter(|ident| is_valid_ident(ident))
+                        .unwrap_or_else(|| format!("local_{}", handle.index())),
+                )
+            })
             .collect();
 
         for (handle, name) in locals.iter() {
@@ -660,7 +694,16 @@ pub fn write<'a>(
         }
 
         writeln!(out, "}}")?;
+
+        Ok(())
+    };
+
+    for (handle, name) in functions.iter() {
+        let func = &module.functions[*handle];
+        write_function(func, name)?;
     }
+
+    write_function(func, "main")?;
 
     writeln!(out)?;
 
@@ -1152,33 +1195,68 @@ fn write_expression<'a, 'b>(
             ))
         }
         Expression::Call {
-            ref origin,
+            origin: FunctionOrigin::Local(ref function),
             ref arguments,
-        } => {
-            match *origin {
-                FunctionOrigin::Local(_) => {}
-                FunctionOrigin::External(_) => {
-                    write_expression(&builder.expressions[arguments[0]], module, builder)?;
-                }
-            };
+        } => Cow::Owned(format!(
+            "{}({})",
+            builder.functions.get(function).unwrap(),
+            arguments
+                .iter()
+                .map::<Result<_, Error>, _>(|arg| write_expression(
+                    &builder.expressions[*arg],
+                    module,
+                    builder
+                ))
+                .collect::<Result<Vec<_>, _>>()?
+                .join(","),
+        )),
+        Expression::Call {
+            origin: crate::FunctionOrigin::External(ref name),
+            ref arguments,
+        } => match name.as_str() {
+            "cos" | "normalize" | "sin" => {
+                let expr = write_expression(&builder.expressions[arguments[0]], module, builder)?;
 
-            Cow::Owned(format!(
-                "{}({})",
-                match *origin {
-                    FunctionOrigin::External(ref name) => name,
-                    FunctionOrigin::Local(handle) => builder.functions.get(&handle).unwrap(),
-                },
-                arguments
-                    .iter()
-                    .map(|arg| Ok(write_expression(
-                        &builder.expressions[*arg],
-                        module,
-                        builder
-                    )?))
-                    .collect::<Result<Vec<_>, Error>>()?
-                    .join(","),
-            ))
-        }
+                Cow::Owned(format!("{}({})", name, expr))
+            }
+            "fclamp" => {
+                let val = write_expression(&builder.expressions[arguments[0]], module, builder)?;
+                let min = write_expression(&builder.expressions[arguments[1]], module, builder)?;
+                let max = write_expression(&builder.expressions[arguments[2]], module, builder)?;
+
+                Cow::Owned(format!("clamp({}, {}, {})", val, min, max))
+            }
+            "atan2" => {
+                let x = write_expression(&builder.expressions[arguments[0]], module, builder)?;
+                let y = write_expression(&builder.expressions[arguments[1]], module, builder)?;
+
+                Cow::Owned(format!("atan({}, {})", y, x))
+            }
+            "distance" => {
+                let p0 = write_expression(&builder.expressions[arguments[0]], module, builder)?;
+                let p1 = write_expression(&builder.expressions[arguments[1]], module, builder)?;
+
+                Cow::Owned(format!("distance({}, {})", p0, p1))
+            }
+            "length" => {
+                let x = write_expression(&builder.expressions[arguments[0]], module, builder)?;
+
+                Cow::Owned(format!("length({})", x))
+            }
+            "mix" => {
+                let x = write_expression(&builder.expressions[arguments[0]], module, builder)?;
+                let y = write_expression(&builder.expressions[arguments[0]], module, builder)?;
+                let a = write_expression(&builder.expressions[arguments[0]], module, builder)?;
+
+                Cow::Owned(format!("mix({}, {}, {})", x, y, a))
+            }
+            other => {
+                return Err(Error::Custom(format!(
+                    "Unsupported function call {}",
+                    other
+                )))
+            }
+        },
         Expression::ArrayLength(expr) => {
             let base = write_expression(&builder.expressions[expr], module, builder)?;
             Cow::Owned(format!("uint({}.length())", base))
@@ -1461,14 +1539,15 @@ fn write_struct(
     out: &mut impl Write,
     built_structs: &mut FastHashMap<Handle<Type>, ()>,
     manager: &mut FeaturesManager,
-) -> Result<(), Error> {
+) -> Result<bool, Error> {
     if built_structs.get(&handle).is_some() {
-        return Ok(());
+        return Ok(true);
     }
 
     let mut tmp = String::new();
 
     let name = structs.get(&handle).unwrap();
+    let mut fields = 0;
 
     writeln!(&mut tmp, "struct {} {{", name)?;
     for (idx, member) in members.iter().enumerate() {
@@ -1477,7 +1556,7 @@ fn write_struct(
         }
 
         if let TypeInner::Struct { ref members } = module.types[member.ty].inner {
-            write_struct(
+            if !write_struct(
                 member.ty,
                 members,
                 module,
@@ -1485,7 +1564,9 @@ fn write_struct(
                 out,
                 built_structs,
                 manager,
-            )?;
+            )? {
+                continue;
+            }
         }
 
         writeln!(
@@ -1498,14 +1579,17 @@ fn write_struct(
                 .filter(|s| is_valid_ident(s))
                 .unwrap_or_else(|| format!("_{}", idx))
         )?;
+
+        fields += 1;
     }
     writeln!(&mut tmp, "}};")?;
 
-    built_structs.insert(handle, ());
+    if fields != 0 {
+        built_structs.insert(handle, ());
+        writeln!(out, "{}", tmp)?;
+    }
 
-    writeln!(out, "{}", tmp)?;
-
-    Ok(())
+    Ok(fields != 0)
 }
 
 fn is_valid_ident(ident: &str) -> bool {
