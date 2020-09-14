@@ -135,11 +135,6 @@ impl FeaturesManager {
                 )));
             }
 
-            if !es && v < 430 {
-                // https://www.khronos.org/registry/OpenGL/extensions/ARB/ARB_program_interface_query.txt
-                writeln!(out, "#extension GL_ARB_program_interface_query : require")?;
-            }
-
             if !es {
                 // https://www.khronos.org/registry/OpenGL/extensions/ARB/ARB_shader_storage_buffer_object.txt
                 writeln!(
@@ -543,14 +538,8 @@ pub fn write<'a>(
         let name = global
             .name
             .clone()
-            .ok_or_else(|| Error::Custom(String::from("Global names must be specified in es")))?;
-
-        if let Some(ref binding) = global.binding {
-            // Only glsl 460 / GL_KHR_vulkan_glsl supports set/binding on the layout
-            if let crate::Binding::Location(location) = binding {
-                write!(out, "layout(location = {}) ", location)?;
-            }
-        }
+            .filter(|ident| is_valid_ident(ident))
+            .ok_or_else(|| Error::Custom(String::from("Global names must be specified")))?;
 
         if global.storage_access == StorageAccess::LOAD {
             write!(out, "readonly ")?;
