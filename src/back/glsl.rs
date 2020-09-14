@@ -84,7 +84,7 @@ bitflags::bitflags! {
         const BUFFER_STORAGE = 1;
         const ARRAY_OF_ARRAYS = 1 << 1;
         const DOUBLE_TYPE = 1 << 2;
-        const NON_FLOAT_MATRICES = 1 << 3;
+        const FULL_IMAGE_FORMATS = 1 << 3;
         const MULTISAMPLED_TEXTURES = 1 << 4;
         const MULTISAMPLED_TEXTURE_ARRAYS = 1 << 5;
         const CUBE_TEXTURES_ARRAY = 1 << 6;
@@ -128,7 +128,7 @@ impl FeaturesManager {
         }
 
         if self.0.contains(Features::BUFFER_STORAGE) {
-            if (es && v < 300) || (!es && v < 400) {
+            if (es && v < 310) || (!es && v < 400) {
                 return Err(Error::Custom(format!(
                     "Version {} doesn't support buffer storage class",
                     version
@@ -160,15 +160,6 @@ impl FeaturesManager {
             if v < 400 {
                 // https://www.khronos.org/registry/OpenGL/extensions/ARB/ARB_gpu_shader_fp64.txt
                 writeln!(out, "#extension GL_ARB_gpu_shader_fp64 : require")?;
-            }
-        }
-
-        if self.0.contains(Features::NON_FLOAT_MATRICES) {
-            if es {
-                return Err(Error::Custom(format!(
-                    "Version {} doesn't support non float matrices",
-                    version
-                )));
             }
         }
 
@@ -241,6 +232,11 @@ impl FeaturesManager {
                 // https://www.khronos.org/registry/OpenGL/extensions/ARB/ARB_shader_image_load_store.txt
                 writeln!(out, "#extension GL_ARB_shader_image_load_store : require")?;
             }
+        }
+
+        if self.0.contains(Features::FULL_IMAGE_FORMATS) && es {
+            // https://www.khronos.org/registry/OpenGL/extensions/NV/NV_image_formats.txt
+            writeln!(out, "#extension GL_NV_image_formats : require")?;
         }
 
         if self.0.contains(Features::CONSERVATIVE_DEPTH) {
@@ -470,7 +466,11 @@ pub fn write<'a>(
                     ..
                 } = module.types[global.ty].inner
                 {
-                    write!(out, "layout({}) ", write_format_glsl(storage_format))?;
+                    write!(
+                        out,
+                        "layout({}) ",
+                        write_format_glsl(storage_format, &mut manager)
+                    )?;
                 }
 
                 if global.storage_access == StorageAccess::LOAD {
@@ -1309,8 +1309,12 @@ fn write_type<'a>(
             kind,
             width,
         } => {
-            if width != 4 || kind == ScalarKind::Float {
-                manager.request(Features::NON_FLOAT_MATRICES);
+            if kind != ScalarKind::Float {
+                return Err(Error::Custom(String::from(
+                    "Non float matrices aren't allowed",
+                )));
+            } else if width == 8 {
+                manager.request(Features::DOUBLE_TYPE);
             }
 
             Cow::Owned(format!(
@@ -1542,34 +1546,91 @@ fn builtin_to_glsl(builtin: BuiltIn) -> &'static str {
     }
 }
 
-fn write_format_glsl(format: StorageFormat) -> &'static str {
+fn write_format_glsl(format: StorageFormat, manager: &mut FeaturesManager) -> &'static str {
     match format {
-        StorageFormat::R8Unorm => "r8",
-        StorageFormat::R8Snorm => "r8_snorm",
-        StorageFormat::R8Uint => "r8ui",
-        StorageFormat::R8Sint => "r8i",
-        StorageFormat::R16Uint => "r16ui",
-        StorageFormat::R16Sint => "r16i",
-        StorageFormat::R16Float => "r16f",
-        StorageFormat::Rg8Unorm => "rg8",
-        StorageFormat::Rg8Snorm => "rg8_snorm",
-        StorageFormat::Rg8Uint => "rg8ui",
-        StorageFormat::Rg8Sint => "rg8i",
+        StorageFormat::R8Unorm => {
+            manager.request(Features::FULL_IMAGE_FORMATS);
+            "r8"
+        }
+        StorageFormat::R8Snorm => {
+            manager.request(Features::FULL_IMAGE_FORMATS);
+            "r8_snorm"
+        }
+        StorageFormat::R8Uint => {
+            manager.request(Features::FULL_IMAGE_FORMATS);
+            "r8ui"
+        }
+        StorageFormat::R8Sint => {
+            manager.request(Features::FULL_IMAGE_FORMATS);
+            "r8i"
+        }
+        StorageFormat::R16Uint => {
+            manager.request(Features::FULL_IMAGE_FORMATS);
+            "r16ui"
+        }
+        StorageFormat::R16Sint => {
+            manager.request(Features::FULL_IMAGE_FORMATS);
+            "r16i"
+        }
+        StorageFormat::R16Float => {
+            manager.request(Features::FULL_IMAGE_FORMATS);
+            "r16f"
+        }
+        StorageFormat::Rg8Unorm => {
+            manager.request(Features::FULL_IMAGE_FORMATS);
+            "rg8"
+        }
+        StorageFormat::Rg8Snorm => {
+            manager.request(Features::FULL_IMAGE_FORMATS);
+            "rg8_snorm"
+        }
+        StorageFormat::Rg8Uint => {
+            manager.request(Features::FULL_IMAGE_FORMATS);
+            "rg8ui"
+        }
+        StorageFormat::Rg8Sint => {
+            manager.request(Features::FULL_IMAGE_FORMATS);
+            "rg8i"
+        }
         StorageFormat::R32Uint => "r32ui",
         StorageFormat::R32Sint => "r32i",
         StorageFormat::R32Float => "r32f",
-        StorageFormat::Rg16Uint => "rg16ui",
-        StorageFormat::Rg16Sint => "rg16i",
-        StorageFormat::Rg16Float => "rg16f",
+        StorageFormat::Rg16Uint => {
+            manager.request(Features::FULL_IMAGE_FORMATS);
+            "rg16ui"
+        }
+        StorageFormat::Rg16Sint => {
+            manager.request(Features::FULL_IMAGE_FORMATS);
+            "rg16i"
+        }
+        StorageFormat::Rg16Float => {
+            manager.request(Features::FULL_IMAGE_FORMATS);
+            "rg16f"
+        }
         StorageFormat::Rgba8Unorm => "rgba8ui",
         StorageFormat::Rgba8Snorm => "rgba8_snorm",
         StorageFormat::Rgba8Uint => "rgba8ui",
         StorageFormat::Rgba8Sint => "rgba8i",
-        StorageFormat::Rgb10a2Unorm => "rgb10_a2ui",
-        StorageFormat::Rg11b10Float => "r11f_g11f_b10f",
-        StorageFormat::Rg32Uint => "rg32ui",
-        StorageFormat::Rg32Sint => "rg32i",
-        StorageFormat::Rg32Float => "rg32f",
+        StorageFormat::Rgb10a2Unorm => {
+            manager.request(Features::FULL_IMAGE_FORMATS);
+            "rgb10_a2ui"
+        }
+        StorageFormat::Rg11b10Float => {
+            manager.request(Features::FULL_IMAGE_FORMATS);
+            "r11f_g11f_b10f"
+        }
+        StorageFormat::Rg32Uint => {
+            manager.request(Features::FULL_IMAGE_FORMATS);
+            "rg32ui"
+        }
+        StorageFormat::Rg32Sint => {
+            manager.request(Features::FULL_IMAGE_FORMATS);
+            "rg32i"
+        }
+        StorageFormat::Rg32Float => {
+            manager.request(Features::FULL_IMAGE_FORMATS);
+            "rg32f"
+        }
         StorageFormat::Rgba16Uint => "rgba16ui",
         StorageFormat::Rgba16Sint => "rgba16i",
         StorageFormat::Rgba16Float => "rgba16f",
