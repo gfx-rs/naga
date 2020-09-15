@@ -8,6 +8,7 @@ use crate::{
 };
 use std::{
     borrow::Cow,
+    cmp::Ordering,
     fmt::{self, Error as FmtError, Write as FmtWrite},
     io::{Error as IoError, Write},
 };
@@ -53,6 +54,25 @@ impl fmt::Display for Error {
 pub enum Version {
     Desktop(u16),
     Embedded(u16),
+}
+
+impl Version {
+    fn is_es(&self) -> bool {
+        match self {
+            Version::Desktop(_) => false,
+            Version::Embedded(_) => true,
+        }
+    }
+}
+
+impl PartialOrd for Version {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        match (*self, *other) {
+            (Version::Desktop(x), Version::Desktop(y)) => Some(x.cmp(&y)),
+            (Version::Embedded(x), Version::Embedded(y)) => Some(x.cmp(&y)),
+            _ => None,
+        }
+    }
 }
 
 impl fmt::Display for Version {
@@ -108,34 +128,29 @@ impl FeaturesManager {
 
     #[allow(clippy::collapsible_if)]
     pub fn write(&self, version: Version, out: &mut impl Write) -> Result<(), Error> {
-        let (v, es) = match version {
-            Version::Desktop(v) => (v, false),
-            Version::Embedded(v) => (v, true),
-        };
-
         if self.0.contains(Features::COMPUTE_SHADER) {
-            if (es && v < 310) || (!es && v < 420) {
+            if version < Version::Embedded(310) || version < Version::Desktop(420) {
                 return Err(Error::Custom(format!(
                     "Version {} doesn't support compute shaders",
                     version
                 )));
             }
 
-            if !es {
+            if !version.is_es() {
                 // https://www.khronos.org/registry/OpenGL/extensions/ARB/ARB_compute_shader.txt
                 writeln!(out, "#extension GL_ARB_compute_shader : require")?;
             }
         }
 
         if self.0.contains(Features::BUFFER_STORAGE) {
-            if (es && v < 310) || (!es && v < 400) {
+            if version < Version::Embedded(310) || version < Version::Desktop(400) {
                 return Err(Error::Custom(format!(
                     "Version {} doesn't support buffer storage class",
                     version
                 )));
             }
 
-            if !es {
+            if let Version::Desktop(_) = version {
                 // https://www.khronos.org/registry/OpenGL/extensions/ARB/ARB_shader_storage_buffer_object.txt
                 writeln!(
                     out,
@@ -145,38 +160,38 @@ impl FeaturesManager {
         }
 
         if self.0.contains(Features::DOUBLE_TYPE) {
-            if es || v < 150 {
+            if version.is_es() || version < Version::Desktop(150) {
                 return Err(Error::Custom(format!(
                     "Version {} doesn't support doubles",
                     version
                 )));
             }
 
-            if v < 400 {
+            if version < Version::Desktop(400) {
                 // https://www.khronos.org/registry/OpenGL/extensions/ARB/ARB_gpu_shader_fp64.txt
                 writeln!(out, "#extension GL_ARB_gpu_shader_fp64 : require")?;
             }
         }
 
         if self.0.contains(Features::CUBE_TEXTURES_ARRAY) {
-            if (es && v < 310) || (!es && v < 130) {
+            if version < Version::Embedded(310) || version < Version::Desktop(130) {
                 return Err(Error::Custom(format!(
                     "Version {} doesn't support cube map array textures",
                     version
                 )));
             }
 
-            if es {
+            if version.is_es() {
                 // https://www.khronos.org/registry/OpenGL/extensions/EXT/EXT_texture_cube_map_array.txt
                 writeln!(out, "#extension GL_EXT_texture_cube_map_array : require")?;
-            } else if v < 400 {
+            } else if version < Version::Desktop(400) {
                 // https://www.khronos.org/registry/OpenGL/extensions/ARB/ARB_texture_cube_map_array.txt
                 writeln!(out, "#extension GL_ARB_texture_cube_map_array : require")?;
             }
         }
 
         if self.0.contains(Features::MULTISAMPLED_TEXTURES) {
-            if es && v < 300 {
+            if version < Version::Embedded(300) {
                 return Err(Error::Custom(format!(
                     "Version {} doesn't support multi sampled textures",
                     version
@@ -185,14 +200,14 @@ impl FeaturesManager {
         }
 
         if self.0.contains(Features::MULTISAMPLED_TEXTURE_ARRAYS) {
-            if es && v < 310 {
+            if version < Version::Embedded(310) {
                 return Err(Error::Custom(format!(
                     "Version {} doesn't support multi sampled texture arrays",
                     version
                 )));
             }
 
-            if es {
+            if version.is_es() {
                 // https://www.khronos.org/registry/OpenGL/extensions/OES/OES_texture_storage_multisample_2d_array.txt
                 writeln!(
                     out,
@@ -202,59 +217,59 @@ impl FeaturesManager {
         }
 
         if self.0.contains(Features::ARRAY_OF_ARRAYS) {
-            if (es && v < 310) || (!es && v < 120) {
+            if version < Version::Embedded(310) || version < Version::Desktop(120) {
                 return Err(Error::Custom(format!(
                     "Version {} doesn't arrays of arrays",
                     version
                 )));
             }
 
-            if !es && v < 430 {
+            if version < Version::Desktop(430) {
                 // https://www.khronos.org/registry/OpenGL/extensions/ARB/ARB_arrays_of_arrays.txt
                 writeln!(out, "#extension ARB_arrays_of_arrays : require")?;
             }
         }
 
         if self.0.contains(Features::IMAGE_LOAD_STORE) {
-            if (es && v < 310) || (!es && v < 130) {
+            if version < Version::Embedded(310) || version < Version::Desktop(130) {
                 return Err(Error::Custom(format!(
                     "Version {} doesn't support images load/stores",
                     version
                 )));
             }
 
-            if !es && v < 420 {
+            if self.0.contains(Features::FULL_IMAGE_FORMATS) && version.is_es() {
+                // https://www.khronos.org/registry/OpenGL/extensions/NV/NV_image_formats.txt
+                writeln!(out, "#extension GL_NV_image_formats : require")?;
+            }
+
+            if version < Version::Desktop(420) {
                 // https://www.khronos.org/registry/OpenGL/extensions/ARB/ARB_shader_image_load_store.txt
                 writeln!(out, "#extension GL_ARB_shader_image_load_store : require")?;
             }
         }
 
-        if self.0.contains(Features::FULL_IMAGE_FORMATS) && es {
-            // https://www.khronos.org/registry/OpenGL/extensions/NV/NV_image_formats.txt
-            writeln!(out, "#extension GL_NV_image_formats : require")?;
-        }
-
         if self.0.contains(Features::CONSERVATIVE_DEPTH) {
-            if (es && v < 300) || (!es && v < 130) {
+            if version < Version::Embedded(300) || version < Version::Desktop(130) {
                 return Err(Error::Custom(format!(
                     "Version {} doesn't support conservative depth",
                     version
                 )));
             }
 
-            if es {
+            if version.is_es() {
                 // https://www.khronos.org/registry/OpenGL/extensions/EXT/EXT_conservative_depth.txt
                 writeln!(out, "#extension GL_EXT_conservative_depth : require")?;
             }
 
-            if !es && v < 420 {
+            if version < Version::Desktop(420) {
                 // https://www.khronos.org/registry/OpenGL/extensions/ARB/ARB_conservative_depth.txt
                 writeln!(out, "#extension GL_ARB_conservative_depth : require")?;
             }
         }
 
         if self.0.contains(Features::TEXTURE_1D) {
-            if es {
+            if version.is_es() {
                 return Err(Error::Custom(format!(
                     "Version {} doesn't support 1d textures",
                     version
