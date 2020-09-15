@@ -301,6 +301,7 @@ pub fn write<'a>(
     }
 
     let mut manager = FeaturesManager::new();
+    let mut buf = Vec::new();
 
     writeln!(out, "#version {}\n", options.version)?;
 
@@ -317,13 +318,13 @@ pub fn write<'a>(
 
     if let Some(depth_test) = entry_point.early_depth_test {
         manager.request(Features::IMAGE_LOAD_STORE);
-        writeln!(out, "layout(early_fragment_tests) in;\n")?;
+        writeln!(&mut buf, "layout(early_fragment_tests) in;\n")?;
 
         if let Some(conservative) = depth_test.conservative {
             manager.request(Features::CONSERVATIVE_DEPTH);
 
             writeln!(
-                out,
+                &mut buf,
                 "layout (depth_{}) out float gl_FragDepth;\n",
                 match conservative {
                     ConservativeDepth::GreaterEqual => "greater",
@@ -384,7 +385,7 @@ pub fn write<'a>(
                     members,
                     module,
                     &structs,
-                    out,
+                    &mut buf,
                     &mut built_structs,
                     &mut manager,
                 )?;
@@ -393,7 +394,7 @@ pub fn write<'a>(
         }
     }
 
-    writeln!(out)?;
+    writeln!(&mut buf)?;
 
     let mut functions = FastHashMap::default();
 
@@ -405,7 +406,7 @@ pub fn write<'a>(
             .unwrap_or_else(|| format!("function_{}", handle.index()));
 
         writeln!(
-            out,
+            &mut buf,
             "{} {}({});",
             func.return_type
                 .map(|ty| write_type(ty, &module.types, &structs, None, &mut manager))
@@ -423,7 +424,7 @@ pub fn write<'a>(
         functions.insert(handle, name);
     }
 
-    writeln!(out)?;
+    writeln!(&mut buf)?;
 
     let texture_mappings = collect_texture_mapping(module, &functions)?;
     let mut mappings_map = FastHashMap::default();
@@ -458,16 +459,16 @@ pub fn write<'a>(
                 } = module.types[global.ty].inner
                 {
                     write!(
-                        out,
+                        &mut buf,
                         "layout({}) ",
                         write_format_glsl(storage_format, &mut manager)
                     )?;
                 }
 
                 if global.storage_access == StorageAccess::LOAD {
-                    write!(out, "readonly ")?;
+                    write!(&mut buf, "readonly ")?;
                 } else if global.storage_access == StorageAccess::STORE {
-                    write!(out, "writeonly ")?;
+                    write!(&mut buf, "writeonly ")?;
                 }
 
                 let name = if let Some(ref binding) = global.binding {
@@ -487,7 +488,7 @@ pub fn write<'a>(
                 };
 
                 writeln!(
-                    out,
+                    &mut buf,
                     "uniform {} {};",
                     write_image_type(dim, arrayed, class, &mut manager)?,
                     name
@@ -584,16 +585,16 @@ pub fn write<'a>(
         }
 
         if global.storage_access == StorageAccess::LOAD {
-            write!(out, "readonly ")?;
+            write!(&mut buf, "readonly ")?;
         } else if global.storage_access == StorageAccess::STORE {
-            write!(out, "writeonly ")?;
+            write!(&mut buf, "writeonly ")?;
         }
 
         if let Some(interpolation) = global.interpolation {
             match (stage, global.class) {
                 (ShaderStage::Fragment, StorageClass::Input)
                 | (ShaderStage::Vertex, StorageClass::Output) => {
-                    write!(out, "{} ", write_interpolation(interpolation)?)?;
+                    write!(&mut buf, "{} ", write_interpolation(interpolation)?)?;
                 }
                 _ => {}
             };
@@ -607,7 +608,7 @@ pub fn write<'a>(
         };
 
         writeln!(
-            out,
+            &mut buf,
             "{}{} {};",
             write_storage_class(global.class, &mut manager)?,
             write_type(global.ty, &module.types, &structs, block, &mut manager)?,
@@ -617,7 +618,7 @@ pub fn write<'a>(
         globals_lookup.insert(handle, name);
     }
 
-    writeln!(out)?;
+    writeln!(&mut buf)?;
     let mut typifier = Typifier::new();
 
     let mut write_function = |func: &Function, name: &str| -> Result<(), Error> {
@@ -641,7 +642,7 @@ pub fn write<'a>(
             .collect();
 
         writeln!(
-            out,
+            &mut buf,
             "{} {}({}) {{",
             func.return_type
                 .map(|ty| write_type(ty, &module.types, &structs, None, &mut manager))
@@ -678,7 +679,7 @@ pub fn write<'a>(
 
         for (handle, name) in locals.iter() {
             writeln!(
-                out,
+                &mut buf,
                 "\t{} {};",
                 write_type(
                     func.local_variables[*handle].ty,
@@ -691,7 +692,7 @@ pub fn write<'a>(
             )?;
         }
 
-        writeln!(out)?;
+        writeln!(&mut buf)?;
 
         let mut builder = StatementBuilder {
             functions: &functions,
@@ -705,7 +706,11 @@ pub fn write<'a>(
         };
 
         for sta in func.body.iter() {
-            writeln!(out, "{}", write_statement(sta, module, &mut builder, 1)?)?;
+            writeln!(
+                &mut buf,
+                "{}",
+                write_statement(sta, module, &mut builder, 1)?
+            )?;
         }
 
         writeln!(out, "}}")?;
@@ -723,6 +728,7 @@ pub fn write<'a>(
     writeln!(out)?;
 
     manager.write(options.version, out)?;
+    out.write_all(&buf)?;
 
     Ok(mappings_map)
 }
