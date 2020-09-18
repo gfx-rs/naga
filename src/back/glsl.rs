@@ -426,7 +426,12 @@ pub fn write<'a>(
 
     writeln!(&mut buf)?;
 
-    let texture_mappings = collect_texture_mapping(module, &functions)?;
+    let texture_mappings = collect_texture_mapping(
+        functions
+            .keys()
+            .map(|handle| &module.functions[*handle])
+            .chain(std::iter::once(func)),
+    )?;
     let mut mappings_map = FastHashMap::default();
     let mut globals_lookup = FastHashMap::default();
 
@@ -713,7 +718,7 @@ pub fn write<'a>(
             )?;
         }
 
-        writeln!(out, "}}")?;
+        writeln!(&mut buf, "}}")?;
 
         Ok(())
     };
@@ -1781,15 +1786,12 @@ impl<'a> Visitor for TextureMappingVisitor<'a> {
     }
 }
 
-fn collect_texture_mapping(
-    module: &Module,
-    functions: &FastHashMap<Handle<Function>, String>,
+fn collect_texture_mapping<'a>(
+    functions: impl Iterator<Item = &'a Function>,
 ) -> Result<FastHashMap<Handle<GlobalVariable>, Option<Handle<GlobalVariable>>>, Error> {
     let mut mappings = FastHashMap::default();
 
-    for function in functions.keys() {
-        let func = &module.functions[*function];
-
+    for func in functions {
         let mut interface = Interface {
             expressions: &func.expressions,
             visitor: TextureMappingVisitor {
@@ -1799,6 +1801,10 @@ fn collect_texture_mapping(
             },
         };
         interface.traverse(&func.body);
+
+        if let Some(error) = interface.visitor.error {
+            return Err(error);
+        }
     }
 
     Ok(mappings)
