@@ -1,60 +1,8 @@
 use super::{lex::Lexer, parser::Token::*, token::TokenMetadata};
 
 #[test]
-fn glsl_lex_simple() {
-    let source = "void main() {\n}";
-    let mut lex = Lexer::new(source);
-
-    assert_eq!(
-        lex.next().unwrap(),
-        Void(TokenMetadata {
-            line: 0,
-            chars: 0..4
-        })
-    );
-    assert_eq!(
-        lex.next().unwrap(),
-        Identifier((
-            TokenMetadata {
-                line: 0,
-                chars: 5..9
-            },
-            "main".into()
-        ))
-    );
-    assert_eq!(
-        lex.next().unwrap(),
-        LeftParen(TokenMetadata {
-            line: 0,
-            chars: 9..10
-        })
-    );
-    assert_eq!(
-        lex.next().unwrap(),
-        RightParen(TokenMetadata {
-            line: 0,
-            chars: 10..11
-        })
-    );
-    assert_eq!(
-        lex.next().unwrap(),
-        LeftBrace(TokenMetadata {
-            line: 0,
-            chars: 12..13
-        })
-    );
-    assert_eq!(
-        lex.next().unwrap(),
-        RightBrace(TokenMetadata {
-            line: 1,
-            chars: 0..1
-        })
-    );
-    assert_eq!(lex.next(), None);
-}
-
-#[test]
-fn glsl_lex_line_comment() {
+fn comments() {
+    // line comments
     let source = "void main // myfunction\n//()\n{}";
     let mut lex = Lexer::new(source);
     assert_eq!(
@@ -89,10 +37,8 @@ fn glsl_lex_line_comment() {
         })
     );
     assert_eq!(lex.next(), None);
-}
 
-#[test]
-fn glsl_lex_multi_line_comment() {
+    // multi line comment
     let source = "void main /* comment [] {}\n/**\n{}*/{}";
     let mut lex = Lexer::new(source);
 
@@ -131,7 +77,7 @@ fn glsl_lex_multi_line_comment() {
 }
 
 #[test]
-fn glsl_lex_identifier() {
+fn identifier() {
     let source = "id123_OK 92No æNoø No¾ No好";
     let mut lex = Lexer::new(source);
 
@@ -239,7 +185,7 @@ fn glsl_lex_identifier() {
 }
 
 #[test]
-fn glsl_lex_version() {
+fn version() {
     let source = "#version 890 core";
     let mut lex = Lexer::new(source);
 
@@ -274,7 +220,7 @@ fn glsl_lex_version() {
 }
 
 #[test]
-fn glsl_lex_operators() {
+fn operators() {
     let source = "+ - * | & % / += -= *= |= &= %= /= ++ -- || && ^^";
     let mut lex = Lexer::new(source);
 
