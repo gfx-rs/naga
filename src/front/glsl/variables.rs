@@ -7,6 +7,41 @@ use super::ast::*;
 use super::error::ErrorKind;
 
 impl Program {
+    fn lookup_global_struct_member(&mut self, name: &str) -> Option<Handle<Expression>> {
+        let global_struct_member = self
+            .module
+            .global_variables
+            .iter()
+            // find globals without name
+            .filter(|(_, var)| var.name.is_none())
+            // find those of struct type and map to their members
+            .filter_map(|(h, var)| {
+                let ty = &self.module.types[var.ty];
+                if let TypeInner::Struct { members } = &ty.inner {
+                    Some((h, members))
+                } else {
+                    None
+                }
+            })
+            // find member matching name
+            .find_map(|(h, members)| {
+                members
+                    .iter()
+                    .position(|m| m.name == Some(name.into()))
+                    .map(|idx| (h, idx))
+            });
+        global_struct_member.map(|(h, idx)| {
+            let base = self
+                .context
+                .expressions
+                .append(Expression::GlobalVariable(h));
+            self.context.expressions.append(Expression::AccessIndex {
+                base,
+                index: idx as u32,
+            })
+        })
+    }
+
     pub fn lookup_variable(&mut self, name: &str) -> Result<Option<Handle<Expression>>, ErrorKind> {
         let mut expression: Option<Handle<Expression>> = None;
         match name {
@@ -92,6 +127,8 @@ impl Program {
             Ok(Some(local_var))
         } else if let Some(global_var) = self.context.lookup_global_var_exps.get(name) {
             Ok(Some(*global_var))
+        } else if let Some(global_member) = self.lookup_global_struct_member(name) {
+            Ok(Some(global_member))
         } else {
             Ok(None)
         }
