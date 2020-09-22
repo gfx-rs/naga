@@ -794,6 +794,25 @@ pomelo! {
                     Expression::GlobalVariable(var_handle)
                 );
                 extra.context.lookup_global_var_exps.insert(name.clone(), exp);
+            } else {
+                let ty = &extra.module.types[var.ty];
+                // anonymous structs
+                if let TypeInner::Struct { members } = &ty.inner {
+                    let base = extra.context.expressions.append(
+                        Expression::GlobalVariable(var_handle)
+                    );
+                    for (idx, member) in members.iter().enumerate() {
+                        if let Some(name) = member.name.as_ref() {
+                            let exp = extra.context.expressions.append(
+                                Expression::AccessIndex{
+                                    base,
+                                    index: idx as u32,
+                                }
+                            );
+                            extra.context.lookup_global_var_exps.insert(name.clone(), exp);
+                        }
+                    }
+                }
             }
         }
         f
