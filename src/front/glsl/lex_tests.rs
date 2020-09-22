@@ -1,10 +1,9 @@
 use super::{lex::Lexer, parser::Token::*, token::TokenMetadata};
 
 #[test]
-fn comments() {
+fn tokens() {
     // line comments
-    let source = "void main // myfunction\n//()\n{}";
-    let mut lex = Lexer::new(source);
+    let mut lex = Lexer::new("void main // myfunction\n//()\n{}");
     assert_eq!(
         lex.next().unwrap(),
         Void(TokenMetadata {
@@ -39,9 +38,7 @@ fn comments() {
     assert_eq!(lex.next(), None);
 
     // multi line comment
-    let source = "void main /* comment [] {}\n/**\n{}*/{}";
-    let mut lex = Lexer::new(source);
-
+    let mut lex = Lexer::new("void main /* comment [] {}\n/**\n{}*/{}");
     assert_eq!(
         lex.next().unwrap(),
         Void(TokenMetadata {
@@ -74,13 +71,9 @@ fn comments() {
         })
     );
     assert_eq!(lex.next(), None);
-}
 
-#[test]
-fn identifier() {
-    let source = "id123_OK 92No æNoø No¾ No好";
-    let mut lex = Lexer::new(source);
-
+    // identifiers
+    let mut lex = Lexer::new("id123_OK 92No æNoø No¾ No好");
     assert_eq!(
         lex.next().unwrap(),
         Identifier((
@@ -182,13 +175,9 @@ fn identifier() {
         ))
     );
     assert_eq!(lex.next(), None);
-}
 
-#[test]
-fn version() {
-    let source = "#version 890 core";
-    let mut lex = Lexer::new(source);
-
+    // version
+    let mut lex = Lexer::new("#version 890 core");
     assert_eq!(
         lex.next().unwrap(),
         Version(TokenMetadata {
@@ -217,13 +206,9 @@ fn version() {
         ))
     );
     assert_eq!(lex.next(), None);
-}
 
-#[test]
-fn operators() {
-    let source = "+ - * | & % / += -= *= |= &= %= /= ++ -- || && ^^";
-    let mut lex = Lexer::new(source);
-
+    // operators
+    let mut lex = Lexer::new("+ - * | & % / += -= *= |= &= %= /= ++ -- || && ^^");
     assert_eq!(
         lex.next().unwrap(),
         Plus(TokenMetadata {
