@@ -103,7 +103,7 @@ impl Program {
         expression: Handle<Expression>,
         name: &str,
         meta: TokenMetadata,
-    ) -> Result<Option<Handle<Expression>>, ErrorKind> {
+    ) -> Result<Handle<Expression>, ErrorKind> {
         let type_inner = self.resolve_type(expression)?;
         match type_inner {
             TypeInner::Struct { members } => {
@@ -111,12 +111,10 @@ impl Program {
                     .iter()
                     .position(|m| m.name == Some(name.into()))
                     .ok_or_else(|| ErrorKind::UnknownField(meta, name.into()))?;
-                Ok(Some(self.context.expressions.append(
-                    Expression::AccessIndex {
-                        base: expression,
-                        index: index as u32,
-                    },
-                )))
+                Ok(self.context.expressions.append(Expression::AccessIndex {
+                    base: expression,
+                    index: index as u32,
+                }))
             }
             // swizzles (xyzw, rgba, stpq)
             &TypeInner::Vector { size, kind, width } => {
@@ -142,7 +140,7 @@ impl Program {
                     .or_else(|| check_swizzle_components("stpq"));
 
                 if let Some(v) = indices {
-                    let mut components: Vec<Handle<Expression>> = v
+                    let components: Vec<Handle<Expression>> = v
                         .iter()
                         .map(|idx| {
                             self.context.expressions.append(Expression::AccessIndex {
@@ -153,9 +151,9 @@ impl Program {
                         .collect();
                     if components.len() == 1 {
                         // only single element swizzle, like pos.y, just return that component
-                        Ok(components.pop())
+                        Ok(components[0])
                     } else {
-                        Ok(Some(self.context.expressions.append(Expression::Compose {
+                        Ok(self.context.expressions.append(Expression::Compose {
                             ty: self.module.types.fetch_or_append(Type {
                                 name: None,
                                 inner: TypeInner::Vector {
@@ -174,13 +172,13 @@ impl Program {
                                 },
                             }),
                             components,
-                        })))
+                        }))
                     }
                 } else {
-                    Ok(None)
+                    Err(ErrorKind::SemanticError("Invalid swizzle for vector"))
                 }
             }
-            _ => Ok(None),
+            _ => Err(ErrorKind::SemanticError("Can't lookup field on this type")),
         }
     }
 }

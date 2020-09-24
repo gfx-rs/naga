@@ -219,8 +219,8 @@ pomelo! {
     postfix_expression ::= function_call;
     postfix_expression ::= postfix_expression(e) Dot Identifier(i) /* FieldSelection in spec */ {
         //TODO: how will this work as l-value?
-        let exp = extra.field_selection(e.expression, &*i.1, i.0)?;
-        ExpressionRule::from_expression(exp.ok_or(ErrorKind::SemanticError("Can't lookup field on this type"))?)
+        let expression = extra.field_selection(e.expression, &*i.1, i.0)?;
+        ExpressionRule { expression, statements: e.statements }
     }
     postfix_expression ::= postfix_expression(pe) IncOp {
         //TODO
