@@ -104,8 +104,7 @@ impl Program {
         name: &str,
         meta: TokenMetadata,
     ) -> Result<Handle<Expression>, ErrorKind> {
-        let type_inner = self.resolve_type(expression)?;
-        match type_inner {
+        match self.resolve_type(expression)? {
             TypeInner::Struct { members } => {
                 let index = members
                     .iter()
