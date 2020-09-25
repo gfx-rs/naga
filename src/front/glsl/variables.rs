@@ -104,8 +104,8 @@ impl Program {
         name: &str,
         meta: TokenMetadata,
     ) -> Result<Handle<Expression>, ErrorKind> {
-        match self.resolve_type(expression)? {
-            TypeInner::Struct { members } => {
+        match *self.resolve_type(expression)? {
+            TypeInner::Struct { ref members } => {
                 let index = members
                     .iter()
                     .position(|m| m.name == Some(name.into()))
@@ -116,7 +116,7 @@ impl Program {
                 }))
             }
             // swizzles (xyzw, rgba, stpq)
-            &TypeInner::Vector { size, kind, width } => {
+            TypeInner::Vector { size, kind, width } => {
                 let check_swizzle_components = |comps: &str| {
                     name.chars()
                         .map(|c| {
