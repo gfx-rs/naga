@@ -258,12 +258,12 @@ impl<'a> Lexer<'a> {
                 //     (Token::Preprocessor, input, start, start + 1)
                 // }
                 } else {
-                    Some(Token::Unknown((meta, '#'.into())))
+                    Some(Token::Unknown((meta, '#'.to_string())))
                 }
             }
             '~' => Some(Token::Tilde(meta)),
             '?' => Some(Token::Question(meta)),
-            ch => Some(Token::Unknown((meta, ch.into()))),
+            ch => Some(Token::Unknown((meta, ch.to_string()))),
         };
         if let Some(token) = token {
             let skip_bytes = input
