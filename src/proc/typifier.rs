@@ -51,8 +51,14 @@ pub enum ResolveError {
     FunctionReturnsVoid,
     #[error("Type is not found in the given immutable arena")]
     TypeNotFound,
-    #[error("{msg}")]
-    Other { msg: String },
+    #[error("Incompatible operand: {op} {operand}")]
+    IncompatibleOperand { op: String, operand: String },
+    #[error("Incompatible operands: {left} {op} {right}")]
+    IncompatibleOperands {
+        op: String,
+        left: String,
+        right: String,
+    },
 }
 
 pub struct ResolveContext<'a> {
@@ -109,8 +115,9 @@ impl Typifier {
                     width,
                 }),
                 ref other => {
-                    return Err(ResolveError::Other {
-                        msg: format!("Can't access into {:?}", other),
+                    return Err(ResolveError::IncompatibleOperand {
+                        op: "access".to_string(),
+                        operand: format!("{:?}", other),
                     })
                 }
             },
@@ -143,8 +150,9 @@ impl Typifier {
                     Resolution::Handle(member.ty)
                 }
                 ref other => {
-                    return Err(ResolveError::Other {
-                        msg: format!("Can't access into {:?}", other),
+                    return Err(ResolveError::IncompatibleOperand {
+                        op: "access index".to_string(),
+                        operand: format!("{:?}", other),
                     })
                 }
             },
@@ -204,11 +212,10 @@ impl Typifier {
                                 width,
                             }),
                             _ => {
-                                return Err(ResolveError::Other {
-                                    msg: format!(
-                                        "Incompatible arguments {:?} x {:?}",
-                                        ty_left, ty_right
-                                    ),
+                                return Err(ResolveError::IncompatibleOperands {
+                                    op: "x".to_string(),
+                                    left: format!("{:?}", ty_left),
+                                    right: format!("{:?}", ty_right),
                                 })
                             }
                         }
@@ -243,8 +250,9 @@ impl Typifier {
                     width,
                 }),
                 ref other => {
-                    return Err(ResolveError::Other {
-                        msg: format!("incompatible transpose of {:?}", other),
+                    return Err(ResolveError::IncompatibleOperand {
+                        op: "transpose".to_string(),
+                        operand: format!("{:?}", other),
                     })
                 }
             },
@@ -255,8 +263,9 @@ impl Typifier {
                     width,
                 } => Resolution::Value(crate::TypeInner::Scalar { kind, width }),
                 ref other => {
-                    return Err(ResolveError::Other {
-                        msg: format!("incompatible dot of {:?}", other),
+                    return Err(ResolveError::IncompatibleOperand {
+                        op: "dot product".to_string(),
+                        operand: format!("{:?}", other),
                     })
                 }
             },
@@ -275,8 +284,9 @@ impl Typifier {
                     width,
                 } => Resolution::Value(crate::TypeInner::Vector { kind, size, width }),
                 ref other => {
-                    return Err(ResolveError::Other {
-                        msg: format!("incompatible as of {:?}", other),
+                    return Err(ResolveError::IncompatibleOperand {
+                        op: "as".to_string(),
+                        operand: format!("{:?}", other),
                     })
                 }
             },
@@ -291,8 +301,9 @@ impl Typifier {
                         Resolution::Value(crate::TypeInner::Scalar { kind, width })
                     }
                     ref other => {
-                        return Err(ResolveError::Other {
-                            msg: format!("Unexpected argument {:?} on {}", other, name),
+                        return Err(ResolveError::IncompatibleOperand {
+                            op: name.clone(),
+                            operand: format!("{:?}", other),
                         })
                     }
                 },
@@ -301,8 +312,9 @@ impl Typifier {
                         Resolution::Value(crate::TypeInner::Scalar { kind, width })
                     }
                     ref other => {
-                        return Err(ResolveError::Other {
-                            msg: format!("Unexpected argument {:?} on {}", other, name),
+                        return Err(ResolveError::IncompatibleOperand {
+                            op: name.clone(),
+                            operand: format!("{:?}", other),
                         })
                     }
                 },
