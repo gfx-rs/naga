@@ -53,9 +53,9 @@ pub enum ResolveError {
     TypeNotFound,
     #[error("Incompatible operand: {op} {operand}")]
     IncompatibleOperand { op: String, operand: String },
-    #[error("Incompatible operands: {left} {op:?} {right}")]
+    #[error("Incompatible operands: {left} {op} {right}")]
     IncompatibleOperands {
-        op: crate::Expression,
+        op: String,
         left: String,
         right: String,
     },
@@ -213,7 +213,7 @@ impl Typifier {
                             }),
                             _ => {
                                 return Err(ResolveError::IncompatibleOperands {
-                                    op: expr.clone(),
+                                    op: "x".to_string(),
                                     left: format!("{:?}", ty_left),
                                     right: format!("{:?}", ty_right),
                                 })
