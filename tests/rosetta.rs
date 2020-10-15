@@ -41,17 +41,17 @@ fn test_rosetta(dir_name: &str) {
         {
             if let Ok(input) = fs::read_to_string(dir_path.join("x.vert")) {
                 let module =
-                    glsl::parse_str(&input, "main", naga::ShaderStage::Vertex, vec![]).unwrap();
+                    glsl::parse_str(&input, "main", naga::ShaderStage::Vertex, None).unwrap();
                 check("vert", &module, &expected);
             }
             if let Ok(input) = fs::read_to_string(dir_path.join("x.frag")) {
                 let module =
-                    glsl::parse_str(&input, "main", naga::ShaderStage::Fragment, vec![]).unwrap();
+                    glsl::parse_str(&input, "main", naga::ShaderStage::Fragment, None).unwrap();
                 check("frag", &module, &expected);
             }
             if let Ok(input) = fs::read_to_string(dir_path.join("x.comp")) {
                 let module =
-                    glsl::parse_str(&input, "main", naga::ShaderStage::Compute, vec![]).unwrap();
+                    glsl::parse_str(&input, "main", naga::ShaderStage::Compute, None).unwrap();
                 check("comp", &module, &expected);
             }
         }

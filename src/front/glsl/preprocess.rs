@@ -8,12 +8,20 @@ pub enum Error {
     UnmatchedElse,
     #[error("unmatched endif")]
     UnmatchedEndif,
+    #[error("missing macro name")]
+    MissingMacro,
+}
+
+#[derive(Clone, Debug)]
+pub struct IfState {
+    true_branch: bool,
+    else_seen: bool,
 }
 
 #[derive(Clone, Debug)]
 pub struct LinePreProcessor {
     pub defines: FastHashMap<String, String>,
-    if_stack: Vec<(bool, bool)>,
+    if_stack: Vec<IfState>,
     inside_comment: bool,
     in_preprocess: bool,
 }
@@ -36,7 +44,7 @@ impl LinePreProcessor {
     }
 
     pub fn process_line(&mut self, line: &str) -> Result<Option<String>, Error> {
-        let mut skip = !self.if_stack.last().unwrap_or(&(true, false)).0;
+        let mut skip = !self.if_stack.last().map(|i| i.true_branch).unwrap_or(true);
         let mut inside_comment = self.inside_comment;
         let mut in_preprocess = inside_comment && self.in_preprocess;
         // single-line comment
@@ -82,48 +90,47 @@ impl LinePreProcessor {
                         skip = false;
                     }
                     "define" => {
-                        if let Some(rest) = iter.next() {
-                            let pos = rest
-                                .find(|c: char| !c.is_ascii_alphanumeric() && c != '_' && c != '(')
-                                .unwrap_or_else(|| rest.len());
-                            let (key, mut value) = rest.split_at(pos);
-                            value = value.trim();
-                            self.defines.insert(key.into(), self.subst_defines(value));
-                        }
+                        let rest = iter.next().ok_or(Error::MissingMacro)?;
+                        let pos = rest
+                            .find(|c: char| !c.is_ascii_alphanumeric() && c != '_' && c != '(')
+                            .unwrap_or_else(|| rest.len());
+                        let (key, mut value) = rest.split_at(pos);
+                        value = value.trim();
+                        self.defines.insert(key.into(), self.subst_defines(value));
                     }
                     "undef" => {
-                        if let Some(rest) = iter.next() {
-                            let key = rest.trim();
-                            self.defines.remove(key);
-                        }
+                        let rest = iter.next().ok_or(Error::MissingMacro)?;
+                        let key = rest.trim();
+                        self.defines.remove(key);
                     }
                     "ifdef" => {
-                        if let Some(rest) = iter.next() {
-                            let key = rest.trim();
-                            self.if_stack.push((self.defines.contains_key(key), false));
-                        }
+                        let rest = iter.next().ok_or(Error::MissingMacro)?;
+                        let key = rest.trim();
+                        self.if_stack.push(IfState {
+                            true_branch: self.defines.contains_key(key),
+                            else_seen: false,
+                        });
                     }
                     "ifndef" => {
-                        if let Some(rest) = iter.next() {
-                            let key = rest.trim();
-                            self.if_stack.push((!self.defines.contains_key(key), false));
-                        }
+                        let rest = iter.next().ok_or(Error::MissingMacro)?;
+                        let key = rest.trim();
+                        self.if_stack.push(IfState {
+                            true_branch: !self.defines.contains_key(key),
+                            else_seen: false,
+                        });
                     }
                     "else" => {
-                        if let Some(if_state) = self.if_stack.last_mut() {
-                            if !if_state.1 {
-                                // this is first else
-                                if_state.0 = !if_state.0;
-                                if_state.1 = true;
-                            } else {
-                                return Err(Error::UnmatchedElse);
-                            }
+                        let if_state = self.if_stack.last_mut().ok_or(Error::UnmatchedElse)?;
+                        if !if_state.else_seen {
+                            // this is first else
+                            if_state.true_branch = !if_state.true_branch;
+                            if_state.else_seen = true;
+                        } else {
+                            return Err(Error::UnmatchedElse);
                         }
                     }
                     "endif" => {
-                        if self.if_stack.pop().is_none() {
-                            return Err(Error::UnmatchedEndif);
-                        }
+                        self.if_stack.pop().ok_or(Error::UnmatchedEndif)?;
                     }
                     _ => {}
                 }

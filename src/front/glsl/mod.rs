@@ -1,4 +1,4 @@
-use crate::{Module, ShaderStage};
+use crate::{FastHashMap, Module, ShaderStage};
 
 mod lex;
 #[cfg(test)]
@@ -25,13 +25,13 @@ pub fn parse_str(
     source: &str,
     entry: &str,
     stage: ShaderStage,
-    defines: Vec<(String, String)>,
+    defines: Option<FastHashMap<String, String>>,
 ) -> Result<Module, ParseError> {
     let mut program = Program::new(stage, entry);
 
     let mut lex = Lexer::new(source);
-    for (k, v) in defines {
-        lex.pp.defines.insert(k, v);
+    if let Some(defines) = defines {
+        lex.pp.defines = defines;
     }
 
     let mut parser = parser::Parser::new(&mut program);
