@@ -25,14 +25,12 @@ pub fn parse_str(
     source: &str,
     entry: &str,
     stage: ShaderStage,
-    defines: Option<FastHashMap<String, String>>,
+    defines: FastHashMap<String, String>,
 ) -> Result<Module, ParseError> {
     let mut program = Program::new(stage, entry);
 
     let mut lex = Lexer::new(source);
-    if let Some(defines) = defines {
-        lex.pp.defines = defines;
-    }
+    lex.pp.defines = defines;
 
     let mut parser = parser::Parser::new(&mut program);
 
