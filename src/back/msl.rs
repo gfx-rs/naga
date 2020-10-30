@@ -19,9 +19,11 @@ use crate::{
     proc::{ResolveContext, ResolveError, Typifier},
     FastHashMap,
 };
-use std::fmt::{Display, Error as FmtError, Formatter};
-use std::io::{Error as IoError, Write};
-use std::string::FromUtf8Error;
+use std::{
+    fmt::{Display, Error as FmtError, Formatter},
+    io::{Error as IoError, Write},
+    string::FromUtf8Error,
+};
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct BindTarget {
