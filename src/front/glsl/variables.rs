@@ -91,7 +91,7 @@ impl Program {
                 expr = self.context.expressions.append(Expression::As {
                     expr,
                     kind: ScalarKind::Sint,
-                    convert: false,
+                    convert: true,
                 });
                 self.context
                     .lookup_global_var_exps
@@ -129,13 +129,20 @@ impl Program {
                         storage_access: StorageAccess::empty(),
                     });
                 self.lookup_global_variables.insert(name.into(), h);
-                let exp = self
+                let mut expr = self
                     .context
                     .expressions
                     .append(Expression::GlobalVariable(h));
-                self.context.lookup_global_var_exps.insert(name.into(), exp);
+                expr = self.context.expressions.append(Expression::As {
+                    expr,
+                    kind: ScalarKind::Sint,
+                    convert: true,
+                });
+                self.context
+                    .lookup_global_var_exps
+                    .insert(name.into(), expr);
 
-                expression = Some(exp);
+                expression = Some(expr);
             }
             _ => {}
         }
