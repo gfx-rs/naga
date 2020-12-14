@@ -19,6 +19,9 @@ impl Program {
                         return Err(ErrorKind::VariableNotAvailable(name.into()));
                     }
                 };
+                if let Some(global_var) = self.context.lookup_global_var_exps.get(name) {
+                    return Ok(Some(*global_var));
+                }
                 let h = self
                     .module
                     .global_variables
@@ -59,6 +62,9 @@ impl Program {
                         return Err(ErrorKind::VariableNotAvailable(name.into()));
                     }
                 };
+                if let Some(global_var) = self.context.lookup_global_var_exps.get(name) {
+                    return Ok(Some(*global_var));
+                }
                 let h = self
                     .module
                     .global_variables
@@ -78,13 +84,20 @@ impl Program {
                         storage_access: StorageAccess::empty(),
                     });
                 self.lookup_global_variables.insert(name.into(), h);
-                let exp = self
+                let mut expr = self
                     .context
                     .expressions
                     .append(Expression::GlobalVariable(h));
-                self.context.lookup_global_var_exps.insert(name.into(), exp);
+                expr = self.context.expressions.append(Expression::As {
+                    expr,
+                    kind: ScalarKind::Sint,
+                    convert: false,
+                });
+                self.context
+                    .lookup_global_var_exps
+                    .insert(name.into(), expr);
 
-                expression = Some(exp);
+                expression = Some(expr);
             }
             "gl_InstanceIndex" => {
                 #[cfg(feature = "glsl-validate")]
@@ -94,6 +107,9 @@ impl Program {
                         return Err(ErrorKind::VariableNotAvailable(name.into()));
                     }
                 };
+                if let Some(global_var) = self.context.lookup_global_var_exps.get(name) {
+                    return Ok(Some(*global_var));
+                }
                 let h = self
                     .module
                     .global_variables
