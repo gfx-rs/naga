@@ -24,29 +24,26 @@ impl Program {
                         return Err(ErrorKind::VariableNotAvailable(name.into()));
                     }
                 };
-                let h = self
-                    .module
-                    .global_variables
-                    .append(GlobalVariable {
-                        name: Some(name.into()),
-                        class: if self.shader_stage == ShaderStage::Vertex {
-                            StorageClass::Output
-                        } else {
-                            StorageClass::Input
+                let h = self.module.global_variables.append(GlobalVariable {
+                    name: Some(name.into()),
+                    class: if self.shader_stage == ShaderStage::Vertex {
+                        StorageClass::Output
+                    } else {
+                        StorageClass::Input
+                    },
+                    binding: Some(Binding::BuiltIn(BuiltIn::Position)),
+                    ty: self.module.types.fetch_or_append(Type {
+                        name: None,
+                        inner: TypeInner::Vector {
+                            size: VectorSize::Quad,
+                            kind: ScalarKind::Float,
+                            width: 4,
                         },
-                        binding: Some(Binding::BuiltIn(BuiltIn::Position)),
-                        ty: self.module.types.fetch_or_append(Type {
-                            name: None,
-                            inner: TypeInner::Vector {
-                                size: VectorSize::Quad,
-                                kind: ScalarKind::Float,
-                                width: 4,
-                            },
-                        }),
-                        init: None,
-                        interpolation: None,
-                        storage_access: StorageAccess::empty(),
-                    });
+                    }),
+                    init: None,
+                    interpolation: None,
+                    storage_access: StorageAccess::empty(),
+                });
                 self.lookup_global_variables.insert(name.into(), h);
                 let exp = self
                     .context
@@ -64,24 +61,21 @@ impl Program {
                         return Err(ErrorKind::VariableNotAvailable(name.into()));
                     }
                 };
-                let h = self
-                    .module
-                    .global_variables
-                    .append(GlobalVariable {
-                        name: Some(name.into()),
-                        class: StorageClass::Input,
-                        binding: Some(Binding::BuiltIn(BuiltIn::VertexIndex)),
-                        ty: self.module.types.fetch_or_append(Type {
-                            name: None,
-                            inner: TypeInner::Scalar {
-                                kind: ScalarKind::Uint,
-                                width: 4,
-                            },
-                        }),
-                        init: None,
-                        interpolation: None,
-                        storage_access: StorageAccess::empty(),
-                    });
+                let h = self.module.global_variables.append(GlobalVariable {
+                    name: Some(name.into()),
+                    class: StorageClass::Input,
+                    binding: Some(Binding::BuiltIn(BuiltIn::VertexIndex)),
+                    ty: self.module.types.fetch_or_append(Type {
+                        name: None,
+                        inner: TypeInner::Scalar {
+                            kind: ScalarKind::Uint,
+                            width: 4,
+                        },
+                    }),
+                    init: None,
+                    interpolation: None,
+                    storage_access: StorageAccess::empty(),
+                });
                 self.lookup_global_variables.insert(name.into(), h);
                 let mut expr = self
                     .context
@@ -106,24 +100,21 @@ impl Program {
                         return Err(ErrorKind::VariableNotAvailable(name.into()));
                     }
                 };
-                let h = self
-                    .module
-                    .global_variables
-                    .append(GlobalVariable {
-                        name: Some(name.into()),
-                        class: StorageClass::Input,
-                        binding: Some(Binding::BuiltIn(BuiltIn::InstanceIndex)),
-                        ty: self.module.types.fetch_or_append(Type {
-                            name: None,
-                            inner: TypeInner::Scalar {
-                                kind: ScalarKind::Uint,
-                                width: 4,
-                            },
-                        }),
-                        init: None,
-                        interpolation: None,
-                        storage_access: StorageAccess::empty(),
-                    });
+                let h = self.module.global_variables.append(GlobalVariable {
+                    name: Some(name.into()),
+                    class: StorageClass::Input,
+                    binding: Some(Binding::BuiltIn(BuiltIn::InstanceIndex)),
+                    ty: self.module.types.fetch_or_append(Type {
+                        name: None,
+                        inner: TypeInner::Scalar {
+                            kind: ScalarKind::Uint,
+                            width: 4,
+                        },
+                    }),
+                    init: None,
+                    interpolation: None,
+                    storage_access: StorageAccess::empty(),
+                });
                 self.lookup_global_variables.insert(name.into(), h);
                 let mut expr = self
                     .context
@@ -140,7 +131,7 @@ impl Program {
 
                 Ok(Some(expr))
             }
-            _ => Ok(None)
+            _ => Ok(None),
         }
     }
 
