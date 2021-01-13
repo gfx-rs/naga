@@ -100,12 +100,7 @@ impl Program {
                                 arg2: None,
                             }),
                             sampler: None,
-                            statements: fc
-                                .args
-                                .into_iter()
-                                .map(|a| a.statements)
-                                .flatten()
-                                .collect(),
+                            statements: fc.args.into_iter().flat_map(|a| a.statements).collect(),
                         })
                     }
                     func_name => {
@@ -119,12 +114,7 @@ impl Program {
                                 arguments: fc.args.iter().map(|a| a.expression).collect(),
                             }),
                             sampler: None,
-                            statements: fc
-                                .args
-                                .into_iter()
-                                .map(|a| a.statements)
-                                .flatten()
-                                .collect(),
+                            statements: fc.args.into_iter().flat_map(|a| a.statements).collect(),
                         })
                     }
                 }
