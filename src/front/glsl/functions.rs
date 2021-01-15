@@ -10,9 +10,9 @@ impl Program {
         match fc.kind {
             FunctionCallKind::TypeConstructor(ty) => {
                 let h = if fc.args.len() == 1 {
-                    let kind = self.module.types[ty].inner.scalar_kind().ok_or_else(||
-                        ErrorKind::SemanticError("Can only cast to scalar or vector".into()),
-                    )?;
+                    let kind = self.module.types[ty].inner.scalar_kind().ok_or_else(|| {
+                        ErrorKind::SemanticError("Can only cast to scalar or vector".into())
+                    })?;
                     self.context.expressions.append(Expression::As {
                         kind,
                         expr: fc.args[0].expression,
@@ -78,7 +78,7 @@ impl Program {
                                     .collect(),
                             })
                         } else {
-                            Err(ErrorKind::SemanticError("Bad call to textur".into()))
+                            Err(ErrorKind::SemanticError("Bad call to texture".into()))
                         }
                     }
                     "ceil" | "round" | "floor" | "fract" | "trunc" => {
@@ -104,11 +104,11 @@ impl Program {
                         })
                     }
                     func_name => {
-                        let function = *self.lookup_function.get(func_name).ok_or_else(||
+                        let function = *self.lookup_function.get(func_name).ok_or_else(|| {
                             ErrorKind::SemanticError(
                                 format!("Unknown function: {}", func_name).into(),
-                            ),
-                        )?;
+                            )
+                        })?;
                         Ok(ExpressionRule {
                             expression: self.context.expressions.append(Expression::Call {
                                 function,
