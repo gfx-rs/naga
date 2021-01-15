@@ -104,10 +104,11 @@ impl Program {
                         })
                     }
                     func_name => {
-                        let function = *self
-                            .lookup_function
-                            .get(func_name)
-                            .ok_or(ErrorKind::SemanticError(format!("Unknown function: {}", func_name).into()))?;
+                        let function = *self.lookup_function.get(func_name).ok_or(
+                            ErrorKind::SemanticError(
+                                format!("Unknown function: {}", func_name).into(),
+                            ),
+                        )?;
                         Ok(ExpressionRule {
                             expression: self.context.expressions.append(Expression::Call {
                                 function,

@@ -1,6 +1,6 @@
 use super::parser::Token;
 use super::token::TokenMetadata;
-use std::{fmt, io, borrow::Cow};
+use std::{borrow::Cow, fmt, io};
 
 #[derive(Debug)]
 pub enum ErrorKind {
