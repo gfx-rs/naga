@@ -104,7 +104,7 @@ impl Program {
                         })
                     }
                     func_name => {
-                        let function = *self.lookup_function.get(func_name).ok_or_else(||
+                        let function = *self.lookup_function.get(func_name).ok_or_else(|| {
                             ErrorKind::SemanticError(
                                 format!("Unknown function: {}", func_name).into(),
                             ),
