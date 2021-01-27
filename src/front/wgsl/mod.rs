@@ -39,17 +39,10 @@ pub enum Token<'a> {
     End,
 }
 
-impl<'a> Token<'a> {
-    fn unexpected<T, E: std::fmt::Debug>(self, expected: E) -> Result<T, Error<'a>> {
-        log::error!("Unmet expectation for {:?}", expected);
-        Err(Error::Unexpected(self))
-    }
-}
-
 #[derive(Clone, Debug, Error)]
 pub enum Error<'a> {
-    #[error("unexpected token: {0:?}")]
-    Unexpected(Token<'a>),
+    #[error("unexpected token {0:?}, expected {1}")]
+    Unexpected(Token<'a>, &'a str),
     #[error("unable to parse `{0}` as integer: {1}")]
     BadInteger(&'a str, std::num::ParseIntError),
     #[error("unable to parse `{1}` as float: {1}")]
@@ -698,7 +691,12 @@ impl Parser {
                                 match lexer.next() {
                                     Token::Paren(')') => break,
                                     Token::Separator(',') => (),
-                                    other => return other.unexpected("argument list separator"),
+                                    other => {
+                                        return Err(Error::Unexpected(
+                                            other,
+                                            "argument list separator",
+                                        ))
+                                    }
                                 }
                             }
                         }
@@ -847,7 +845,7 @@ impl Parser {
                     crate::Expression::Compose { ty, components }
                 }
             }
-            other => return other.unexpected("primary expression"),
+            other => return Err(Error::Unexpected(other, "primary expression")),
         };
         self.scopes.pop();
         Ok(ctx.expressions.append(expression))
@@ -1180,7 +1178,7 @@ impl Parser {
                             lexer.expect(Token::Paren(')'))?;
                             ready = false;
                         }
-                        other => return other.unexpected("decoration separator"),
+                        other => return Err(Error::Unexpected(other, "decoration separator")),
                     }
                 }
                 self.scopes.pop();
@@ -1188,7 +1186,7 @@ impl Parser {
             let name = match lexer.next() {
                 Token::Word(word) => word,
                 Token::Paren('}') => return Ok(members),
-                other => return other.unexpected("field name"),
+                other => return Err(Error::Unexpected(other, "field name")),
             };
             lexer.expect(Token::Separator(':'))?;
             let (ty, _access) = self.parse_type_decl(lexer, None, type_arena, const_arena)?;
@@ -1344,7 +1342,7 @@ impl Parser {
                         crate::ArraySize::Constant(const_handle)
                     }
                     Token::Paren('>') => crate::ArraySize::Dynamic,
-                    other => return other.unexpected("generic separator"),
+                    other => return Err(Error::Unexpected(other, "generic separator")),
                 };
 
                 crate::TypeInner::Array {
@@ -1523,7 +1521,7 @@ impl Parser {
                         lexer.expect(Token::Paren(')'))?;
                     }
                     Token::DoubleParen(']') => break,
-                    other => return other.unexpected("type decoration"),
+                    other => return Err(Error::Unexpected(other, "type decoration")),
                 }
             }
             self.scopes.pop();
@@ -1555,7 +1553,7 @@ impl Parser {
         let word = match lexer.next() {
             Token::Separator(';') => return Ok(None),
             Token::Word(word) => word,
-            other => return other.unexpected("statement"),
+            other => return Err(Error::Unexpected(other, "statement")),
         };
 
         self.scopes.push(Scope::Statement);
@@ -1664,7 +1662,9 @@ impl Parser {
                                         });
                                     }
                                     Token::Separator(':') => break value,
-                                    other => return other.unexpected("case separator"),
+                                    other => {
+                                        return Err(Error::Unexpected(other, "case separator"))
+                                    }
                                 }
                             };
 
@@ -1695,7 +1695,7 @@ impl Parser {
                             default = self.parse_block(lexer, context.reborrow())?;
                         }
                         Token::Paren('}') => break,
-                        other => return other.unexpected("switch item"),
+                        other => return Err(Error::Unexpected(other, "switch item")),
                     }
                 }
 
@@ -1909,7 +1909,12 @@ impl Parser {
                             match lexer.next() {
                                 Token::Paren(')') => break,
                                 Token::Separator(',') if i != 2 => (),
-                                other => return other.unexpected("workgroup size separator"),
+                                other => {
+                                    return Err(Error::Unexpected(
+                                        other,
+                                        "workgroup size separator",
+                                    ))
+                                }
                             }
                         }
                         for size in workgroup_size.iter_mut() {
@@ -1925,7 +1930,7 @@ impl Parser {
                         break;
                     }
                     Token::Separator(',') => {}
-                    other => return other.unexpected("decoration separator"),
+                    other => return Err(Error::Unexpected(other, "decoration separator")),
                 }
             }
             if let (Some(group), Some(index)) = (bind_group, bind_index) {
@@ -2044,7 +2049,7 @@ impl Parser {
                 }
             }
             Token::End => return Ok(false),
-            other => return other.unexpected("global item"),
+            other => return Err(Error::Unexpected(other, "global item")),
         }
 
         match binding {
