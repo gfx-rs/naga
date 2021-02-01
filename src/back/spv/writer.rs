@@ -1713,8 +1713,6 @@ impl Writer {
                             .scalar_kind()
                         {
                             Some(crate::ScalarKind::Float) => spirv::GLOp::FMix,
-                            Some(crate::ScalarKind::Sint) => spirv::GLOp::IMix,
-                            Some(crate::ScalarKind::Uint) => spirv::GLOp::IMix,
                             other => unimplemented!("Unexpected mix({:?})", other),
                         };
                         MathOp::Triple(op)
