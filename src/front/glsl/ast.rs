@@ -245,3 +245,9 @@ pub enum StorageQualifier {
     StorageClass(StorageClass),
     Const,
 }
+
+#[derive(Debug, Clone)]
+pub enum StructLayout {
+    Binding(Binding),
+    PushConstant,
+}
