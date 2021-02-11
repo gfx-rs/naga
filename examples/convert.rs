@@ -106,8 +106,7 @@ fn main() {
             let input = fs::read_to_string(&args[1]).unwrap();
             naga::front::glsl::parse_str(
                 &input,
-                "main",
-                naga::ShaderStage::Vertex,
+                vec![("main".to_string(), naga::ShaderStage::Vertex)],
                 Default::default(),
             )
             .unwrap_pretty()
@@ -117,8 +116,7 @@ fn main() {
             let input = fs::read_to_string(&args[1]).unwrap();
             naga::front::glsl::parse_str(
                 &input,
-                "main",
-                naga::ShaderStage::Fragment,
+                vec![("main".to_string(), naga::ShaderStage::Fragment)],
                 Default::default(),
             )
             .unwrap_pretty()
@@ -128,8 +126,7 @@ fn main() {
             let input = fs::read_to_string(&args[1]).unwrap();
             naga::front::glsl::parse_str(
                 &input,
-                "main",
-                naga::ShaderStage::Compute,
+                vec![("main".to_string(), naga::ShaderStage::Compute)],
                 Default::default(),
             )
             .unwrap_pretty()
