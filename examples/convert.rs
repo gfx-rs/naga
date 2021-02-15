@@ -252,7 +252,7 @@ fn main() {
                 .open(&args[2])
                 .unwrap();
 
-            let mut writer = glsl::Writer::new(file, &module, &options).unwrap_pretty();
+            let mut writer = glsl::Writer::new(file, &module, &options, &analysis).unwrap_pretty();
 
             writer
                 .write()

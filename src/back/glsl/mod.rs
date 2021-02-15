@@ -45,6 +45,7 @@ pub use features::Features;
 
 use crate::{
     proc::{
+        analyzer::{Analysis, FunctionInfo},
         CallGraph, CallGraphBuilder, Interface, NameKey, Namer, ResolveContext, ResolveError,
         Typifier, Visitor,
     },
@@ -171,6 +172,8 @@ struct FunctionCtx<'a, 'b> {
     expressions: &'a Arena<Expression>,
     /// A typifier that has already resolved all expressions in the function being written
     typifier: &'b Typifier,
+    /// Information about the current function being processed
+    info: &'b FunctionInfo,
 }
 
 impl<'a, 'b> FunctionCtx<'a, 'b> {
@@ -193,6 +196,20 @@ impl<'a, 'b> FunctionCtx<'a, 'b> {
             FunctionType::Function(handle) => &names[&NameKey::FunctionArgument(handle, arg)],
             FunctionType::EntryPoint(_) => unreachable!(),
         }
+    }
+
+    /// Helper function that returns wether the instruction should be baked or not
+    fn should_bake_expression(&self, expr: Handle<Expression>) -> bool {
+        let min_ref_count = match self.expressions[expr] {
+            Expression::Constant(_)
+            | Expression::FunctionArgument(_)
+            | Expression::GlobalVariable(_)
+            | Expression::LocalVariable(_)
+            | Expression::Load { .. } => !0,
+            _ => 2,
+        };
+
+        self.info[expr].ref_count > min_ref_count
     }
 }
 
@@ -262,6 +279,8 @@ pub struct Writer<'a, W> {
     out: W,
     /// User defined configuration to be used
     options: &'a Options,
+    /// Analysis of the module
+    analysis: &'a Analysis,
 
     // Internal State
     /// Features manager used to store all the needed features and write them
@@ -286,7 +305,12 @@ impl<'a, W: Write> Writer<'a, W> {
     /// - If the version specified isn't supported (or invalid)
     /// - If the entry point couldn't be found on the module
     /// - If the version specified doesn't support some used features
-    pub fn new(out: W, module: &'a Module, options: &'a Options) -> Result<Self, Error> {
+    pub fn new(
+        out: W,
+        module: &'a Module,
+        options: &'a Options,
+        analysis: &'a Analysis,
+    ) -> Result<Self, Error> {
         // Check if the requested version is supported
         if !options.version.is_supported() {
             log::error!("Version {}", options.version);
@@ -318,6 +342,7 @@ impl<'a, W: Write> Writer<'a, W> {
             module,
             out,
             options,
+            analysis,
 
             features: FeaturesManager::new(),
             names,
@@ -483,6 +508,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 FunctionType::Function(handle),
                 &self.module.functions[handle],
                 name,
+                &self.analysis[handle],
             )?;
 
             writeln!(self.out)?;
@@ -492,6 +518,8 @@ impl<'a, W: Write> Writer<'a, W> {
             FunctionType::EntryPoint(self.entry_point_idx),
             &self.entry_point.function,
             "main",
+            self.analysis
+                .get_entry_point(self.options.entry_point.0, &self.options.entry_point.1),
         )?;
 
         // Collect all of the texture mappings and return them to the user
@@ -514,8 +542,9 @@ impl<'a, W: Write> Writer<'a, W> {
     /// - If type is either a image or sampler
     /// - If it's an Array with a [`ArraySize::Constant`](crate::ArraySize::Constant) with a
     /// constant that isn't [`Uint`](crate::ConstantInner::Uint)
-    fn write_type(&mut self, ty: Handle<Type>) -> BackendResult {
-        match self.module.types[ty].inner {
+    /// - If the type is a struct and the `handle` is None
+    fn write_type(&mut self, ty: &TypeInner, handle: Option<Handle<Type>>) -> BackendResult {
+        match *ty {
             // Scalars are simple we just get the full name from `glsl_scalar`
             TypeInner::Scalar { kind, width } => {
                 write!(self.out, "{}", glsl_scalar(kind, width)?.full)?
@@ -544,10 +573,12 @@ impl<'a, W: Write> Writer<'a, W> {
                 rows as u8
             )?,
             // glsl has no pointer types so just write types as normal and loads are skipped
-            TypeInner::Pointer { base, .. } => self.write_type(base)?,
+            TypeInner::Pointer { base, .. } => {
+                self.write_type(&self.module.types[base].inner, Some(base))?
+            }
             // Arrays are written as `base[size]`
             TypeInner::Array { base, size, .. } => {
-                self.write_type(base)?;
+                self.write_type(&self.module.types[base].inner, Some(base))?;
 
                 write!(self.out, "[")?;
 
@@ -575,8 +606,9 @@ impl<'a, W: Write> Writer<'a, W> {
             // unique between blocks and structs so we add `_block_ID` where `ID` is a `IdGenerator`
             // generated number so it's unique and `members` are the same as in a struct
             TypeInner::Struct { block, ref members } => {
+                let handle = handle.unwrap();
                 // Get the struct name
-                let name = &self.names[&NameKey::Type(ty)];
+                let name = &self.names[&NameKey::Type(handle)];
 
                 if block {
                     // Write the block name, it's just the struct name appended with `_block_ID`
@@ -587,14 +619,14 @@ impl<'a, W: Write> Writer<'a, W> {
                         // Add a tab for indentation (readability only)
                         write!(self.out, "{}", INDENT)?;
                         // Write the member type
-                        self.write_type(member.ty)?;
+                        self.write_type(&self.module.types[member.ty].inner, Some(member.ty))?;
 
                         // Finish the member with the name, a semicolon and a newline
                         // The leading space is important
                         writeln!(
                             self.out,
                             " {};",
-                            &self.names[&NameKey::StructMember(ty, idx as u32)]
+                            &self.names[&NameKey::StructMember(handle, idx as u32)]
                         )?;
                     }
 
@@ -704,7 +736,7 @@ impl<'a, W: Write> Writer<'a, W> {
 
         // Write the type
         // `write_type` adds no leading or trailing spaces
-        self.write_type(global.ty)?;
+        self.write_type(&self.module.types[global.ty].inner, Some(global.ty))?;
 
         // Finally write the global name and end the global with a `;` and a newline
         // Leading space is important
@@ -752,6 +784,7 @@ impl<'a, W: Write> Writer<'a, W> {
         ty: FunctionType,
         func: &Function,
         name: N,
+        info: &FunctionInfo,
     ) -> BackendResult {
         // Create a new typifier and resolve all types for the current function
         let mut typifier = Typifier::new();
@@ -772,6 +805,7 @@ impl<'a, W: Write> Writer<'a, W> {
             func: ty,
             expressions: &func.expressions,
             typifier: &typifier,
+            info,
         };
 
         // Write the function header
@@ -788,7 +822,7 @@ impl<'a, W: Write> Writer<'a, W> {
         // This is the only place where `void` is a valid type
         // (though it's more a keyword than a type)
         if let Some(ty) = func.return_type {
-            self.write_type(ty)?;
+            self.write_type(&self.module.types[ty].inner, Some(ty))?;
         } else {
             write!(self.out, "void")?;
         }
@@ -803,7 +837,7 @@ impl<'a, W: Write> Writer<'a, W> {
         self.write_slice(&func.arguments, |this, i, arg| {
             // Write the argument type
             // `write_type` adds no trailing spaces
-            this.write_type(arg.ty)?;
+            this.write_type(&this.module.types[arg.ty].inner, Some(arg.ty))?;
 
             // Write the argument name
             // The leading space is important
@@ -823,7 +857,7 @@ impl<'a, W: Write> Writer<'a, W> {
             // Write indentation (only for readability) and the type
             // `write_type` adds no trailing space
             write!(self.out, "{}", INDENT)?;
-            self.write_type(local.ty)?;
+            self.write_type(&self.module.types[local.ty].inner, Some(local.ty))?;
 
             // Write the local name
             // The leading space is important
@@ -839,6 +873,31 @@ impl<'a, W: Write> Writer<'a, W> {
                 // `write_constant` adds no trailing or leading space/newline
                 self.write_constant(&self.module.constants[init])?;
             }
+
+            // Finish the local with `;` and add a newline (only for readability)
+            writeln!(self.out, ";")?
+        }
+
+        // Bake expressions, this prevents exponential explosions
+        for expr in func
+            .expressions
+            .iter()
+            .map(|d| d.0)
+            .filter(|expr| ctx.should_bake_expression(*expr))
+        {
+            // Write indentation (only for readability)
+            write!(self.out, "{}", INDENT)?;
+
+            let ty = ctx.typifier.get(expr, &self.module.types);
+            let ty_handle = ctx.typifier.get_handle(expr).ok();
+            // write the type
+            self.write_type(ty, ty_handle)?;
+
+            // Write an expression name and an equal sign
+            // The leading and trailing spaces are important
+            write!(self.out, " _naga_expression_{} = ", expr.index())?;
+
+            self.write_expr(expr, &ctx, false)?;
 
             // Finish the local with `;` and add a newline (only for readability)
             writeln!(self.out, ";")?
@@ -912,7 +971,7 @@ impl<'a, W: Write> Writer<'a, W> {
             // Composite constant are created using the same syntax as compose
             // `type(components)` where `components` is a comma separated list of constants
             ConstantInner::Composite { ty, ref components } => {
-                self.write_type(ty)?;
+                self.write_type(&self.module.types[ty].inner, Some(ty))?;
                 write!(self.out, "(")?;
 
                 // Write the comma separated constants
@@ -948,7 +1007,7 @@ impl<'a, W: Write> Writer<'a, W> {
 
             // Write the member type
             // Adds no trailing space
-            self.write_type(member.ty)?;
+            self.write_type(&self.module.types[member.ty].inner, Some(member.ty))?;
 
             // Write the member name and put a semicolon
             // The leading space is important
@@ -1005,7 +1064,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 ref reject,
             } => {
                 write!(self.out, "if(")?;
-                self.write_expr(condition, ctx)?;
+                self.write_expr(condition, ctx, true)?;
                 writeln!(self.out, ") {{")?;
 
                 for sta in accept {
@@ -1049,7 +1108,7 @@ impl<'a, W: Write> Writer<'a, W> {
             } => {
                 // Start the switch
                 write!(self.out, "switch(")?;
-                self.write_expr(selector, ctx)?;
+                self.write_expr(selector, ctx, true)?;
                 writeln!(self.out, ") {{")?;
 
                 // Write all cases
@@ -1114,7 +1173,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 // Write the expression to be returned if needed
                 if let Some(expr) = value {
                     write!(self.out, " ")?;
-                    self.write_expr(expr, ctx)?;
+                    self.write_expr(expr, ctx, true)?;
                 }
                 writeln!(self.out, ";")?;
             }
@@ -1124,9 +1183,9 @@ impl<'a, W: Write> Writer<'a, W> {
             Statement::Kill => writeln!(self.out, "discard;")?,
             // Stores in glsl are just variable assignments written as `pointer = value;`
             Statement::Store { pointer, value } => {
-                self.write_expr(pointer, ctx)?;
+                self.write_expr(pointer, ctx, true)?;
                 write!(self.out, " = ")?;
-                self.write_expr(value, ctx)?;
+                self.write_expr(value, ctx, true)?;
                 writeln!(self.out, ";")?
             }
             // Stores a value into an image.
@@ -1143,11 +1202,11 @@ impl<'a, W: Write> Writer<'a, W> {
                 };
 
                 write!(self.out, "imageStore(")?;
-                self.write_expr(image, ctx)?;
+                self.write_expr(image, ctx, true)?;
                 write!(self.out, ", ")?;
                 self.write_texture_coordinates(coordinate, array_index, dim, ctx)?;
                 write!(self.out, ", ")?;
-                self.write_expr(value, ctx)?;
+                self.write_expr(value, ctx, true)?;
                 writeln!(self.out, ");")?;
             }
             // A `Call` is written `name(arguments)` where `arguments` is a comma separated expressions list
@@ -1156,7 +1215,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 ref arguments,
             } => {
                 write!(self.out, "{}(", &self.names[&NameKey::Function(function)])?;
-                self.write_slice(arguments, |this, _, arg| this.write_expr(*arg, ctx))?;
+                self.write_slice(arguments, |this, _, arg| this.write_expr(*arg, ctx, true))?;
                 writeln!(self.out, ");")?
             }
         }
@@ -1168,20 +1227,30 @@ impl<'a, W: Write> Writer<'a, W> {
     ///
     /// # Notes
     /// Doesn't add any newlines or leading/trailing spaces
-    fn write_expr(&mut self, expr: Handle<Expression>, ctx: &FunctionCtx<'_, '_>) -> BackendResult {
+    fn write_expr(
+        &mut self,
+        expr: Handle<Expression>,
+        ctx: &FunctionCtx<'_, '_>,
+        bake: bool,
+    ) -> BackendResult {
+        if bake && ctx.should_bake_expression(expr) {
+            write!(self.out, "_naga_expression_{}", expr.index())?;
+            return Ok(());
+        }
+
         match ctx.expressions[expr] {
             // `Access` is applied to arrays, vectors and matrices and is written as indexing
             Expression::Access { base, index } => {
-                self.write_expr(base, ctx)?;
+                self.write_expr(base, ctx, true)?;
                 write!(self.out, "[")?;
-                self.write_expr(index, ctx)?;
+                self.write_expr(index, ctx, true)?;
                 write!(self.out, "]")?
             }
             // `AccessIndex` is the same as `Access` except that the index is a constant and it can
             // be applied to structs, in this case we need to find the name of the field at that
             // index and write `base.field_name`
             Expression::AccessIndex { base, index } => {
-                self.write_expr(base, ctx)?;
+                self.write_expr(base, ctx, true)?;
 
                 match *ctx.typifier.get(base, &self.module.types) {
                     TypeInner::Vector { .. }
@@ -1208,10 +1277,10 @@ impl<'a, W: Write> Writer<'a, W> {
             // `Compose` is pretty simple we just write `type(components)` where `components` is a
             // comma separated list of expressions
             Expression::Compose { ty, ref components } => {
-                self.write_type(ty)?;
+                self.write_type(&self.module.types[ty].inner, Some(ty))?;
 
                 write!(self.out, "(")?;
-                self.write_slice(components, |this, _, arg| this.write_expr(*arg, ctx))?;
+                self.write_slice(components, |this, _, arg| this.write_expr(*arg, ctx, true))?;
                 write!(self.out, ")")?
             }
             // Function arguments are written as the argument name
@@ -1229,7 +1298,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 write!(self.out, "{}", self.names[&ctx.name_key(handle)])?
             }
             // glsl has no pointers so there's no load operation, just write the pointer expression
-            Expression::Load { pointer } => self.write_expr(pointer, ctx)?,
+            Expression::Load { pointer } => self.write_expr(pointer, ctx, true)?,
             // `ImageSample` is a bit complicated compared to the rest of the IR.
             //
             // First there are three variations depending wether the sample level is explicitly set,
@@ -1259,7 +1328,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 write!(self.out, "{}(", fun_name)?;
 
                 // Write the image that will be used
-                self.write_expr(image, ctx)?;
+                self.write_expr(image, ctx, true)?;
                 // The space here isn't required but it helps with readability
                 write!(self.out, ", ")?;
 
@@ -1280,14 +1349,14 @@ impl<'a, W: Write> Writer<'a, W> {
 
                 // Compose a new texture coordinates vector
                 write!(self.out, "vec{}(", coord_dim)?;
-                self.write_expr(coordinate, ctx)?;
+                self.write_expr(coordinate, ctx, true)?;
                 if let Some(expr) = array_index {
                     write!(self.out, ", ")?;
-                    self.write_expr(expr, ctx)?;
+                    self.write_expr(expr, ctx, true)?;
                 }
                 if let Some(expr) = depth_ref {
                     write!(self.out, ", ")?;
-                    self.write_expr(expr, ctx)?;
+                    self.write_expr(expr, ctx, true)?;
                 }
                 write!(self.out, ")")?;
 
@@ -1299,13 +1368,13 @@ impl<'a, W: Write> Writer<'a, W> {
                     // Exact and bias require another argument
                     crate::SampleLevel::Exact(expr) | crate::SampleLevel::Bias(expr) => {
                         write!(self.out, ", ")?;
-                        self.write_expr(expr, ctx)?;
+                        self.write_expr(expr, ctx, true)?;
                     }
                     crate::SampleLevel::Gradient { x, y } => {
                         write!(self.out, ", ")?;
-                        self.write_expr(x, ctx)?;
+                        self.write_expr(x, ctx, true)?;
                         write!(self.out, ", ")?;
-                        self.write_expr(y, ctx)?;
+                        self.write_expr(y, ctx, true)?;
                     }
                 }
 
@@ -1344,13 +1413,13 @@ impl<'a, W: Write> Writer<'a, W> {
                 };
 
                 write!(self.out, "{}(", fun_name)?;
-                self.write_expr(image, ctx)?;
+                self.write_expr(image, ctx, true)?;
                 write!(self.out, ", ")?;
                 self.write_texture_coordinates(coordinate, array_index, dim, ctx)?;
 
                 if let Some(index_expr) = index {
                     write!(self.out, ", ")?;
-                    self.write_expr(index_expr, ctx)?;
+                    self.write_expr(index_expr, ctx, true)?;
                 }
                 write!(self.out, ")")?;
             }
@@ -1379,24 +1448,24 @@ impl<'a, W: Write> Writer<'a, W> {
                         match class {
                             ImageClass::Sampled { .. } | ImageClass::Depth => {
                                 write!(self.out, "textureSize(")?;
-                                self.write_expr(image, ctx)?;
+                                self.write_expr(image, ctx, true)?;
                                 write!(self.out, ",")?;
                                 if let Some(expr) = level {
-                                    self.write_expr(expr, ctx)?;
+                                    self.write_expr(expr, ctx, true)?;
                                 } else {
                                     write!(self.out, "0",)?;
                                 }
                             }
                             ImageClass::Storage(_) => {
                                 write!(self.out, "imageSize(")?;
-                                self.write_expr(image, ctx)?;
+                                self.write_expr(image, ctx, true)?;
                             }
                         }
                         write!(self.out, ").{}", &"xyz"[..components])?;
                     }
                     crate::ImageQuery::NumLevels => {
                         write!(self.out, "textureQueryLevels(",)?;
-                        self.write_expr(image, ctx)?;
+                        self.write_expr(image, ctx, true)?;
                         write!(self.out, ")",)?;
                     }
                     crate::ImageQuery::NumLayers => {
@@ -1406,7 +1475,7 @@ impl<'a, W: Write> Writer<'a, W> {
                             ImageClass::Storage(_) => "imageSize",
                         };
                         write!(self.out, "{}(", fun_name)?;
-                        self.write_expr(image, ctx)?;
+                        self.write_expr(image, ctx, true)?;
                         write!(self.out, ",0).{}", selector[components])?;
                     }
                     crate::ImageQuery::NumSamples => {
@@ -1416,7 +1485,7 @@ impl<'a, W: Write> Writer<'a, W> {
                             ImageClass::Storage(_) => "imageSamples",
                         };
                         write!(self.out, "{}(", fun_name)?;
-                        self.write_expr(image, ctx)?;
+                        self.write_expr(image, ctx, true)?;
                         write!(self.out, ")",)?;
                     }
                 }
@@ -1456,7 +1525,7 @@ impl<'a, W: Write> Writer<'a, W> {
                     }
                 )?;
 
-                self.write_expr(expr, ctx)?;
+                self.write_expr(expr, ctx, true)?;
 
                 write!(self.out, ")")?
             }
@@ -1485,7 +1554,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 };
 
                 write!(self.out, "{}(", function.unwrap_or(""))?;
-                self.write_expr(left, ctx)?;
+                self.write_expr(left, ctx, true)?;
 
                 if function.is_some() {
                     write!(self.out, ",")?
@@ -1516,7 +1585,7 @@ impl<'a, W: Write> Writer<'a, W> {
                     )?;
                 }
 
-                self.write_expr(right, ctx)?;
+                self.write_expr(right, ctx, true)?;
 
                 write!(self.out, ")")?
             }
@@ -1528,11 +1597,11 @@ impl<'a, W: Write> Writer<'a, W> {
                 reject,
             } => {
                 write!(self.out, "(")?;
-                self.write_expr(condition, ctx)?;
+                self.write_expr(condition, ctx, true)?;
                 write!(self.out, " ? ")?;
-                self.write_expr(accept, ctx)?;
+                self.write_expr(accept, ctx, true)?;
                 write!(self.out, " : ")?;
-                self.write_expr(reject, ctx)?;
+                self.write_expr(reject, ctx, true)?;
                 write!(self.out, ")")?
             }
             // `Derivative` is a function call to a glsl provided function
@@ -1546,7 +1615,7 @@ impl<'a, W: Write> Writer<'a, W> {
                         DerivativeAxis::Width => "fwidth",
                     }
                 )?;
-                self.write_expr(expr, ctx)?;
+                self.write_expr(expr, ctx, true)?;
                 write!(self.out, ")")?
             }
             // `Relational` is a normal function call to some glsl provided functions
@@ -1563,7 +1632,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 };
                 write!(self.out, "{}(", fun_name)?;
 
-                self.write_expr(argument, ctx)?;
+                self.write_expr(argument, ctx, true)?;
 
                 write!(self.out, ")")?
             }
@@ -1633,14 +1702,14 @@ impl<'a, W: Write> Writer<'a, W> {
                 };
 
                 write!(self.out, "{}(", fun_name)?;
-                self.write_expr(arg, ctx)?;
+                self.write_expr(arg, ctx, true)?;
                 if let Some(arg) = arg1 {
                     write!(self.out, ", ")?;
-                    self.write_expr(arg, ctx)?;
+                    self.write_expr(arg, ctx, true)?;
                 }
                 if let Some(arg) = arg2 {
                     write!(self.out, ", ")?;
-                    self.write_expr(arg, ctx)?;
+                    self.write_expr(arg, ctx, true)?;
                 }
                 write!(self.out, ")")?
             }
@@ -1692,7 +1761,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 }
 
                 write!(self.out, "(")?;
-                self.write_expr(expr, ctx)?;
+                self.write_expr(expr, ctx, true)?;
                 write!(self.out, ")")?
             }
             // A `Call` is written `name(arguments)` where `arguments` is a comma separated expressions list
@@ -1701,13 +1770,13 @@ impl<'a, W: Write> Writer<'a, W> {
                 ref arguments,
             } => {
                 write!(self.out, "{}(", &self.names[&NameKey::Function(function)])?;
-                self.write_slice(arguments, |this, _, arg| this.write_expr(*arg, ctx))?;
+                self.write_slice(arguments, |this, _, arg| this.write_expr(*arg, ctx, true))?;
                 write!(self.out, ")")?
             }
             // `ArrayLength` is written as `expr.length()` and we convert it to a uint
             Expression::ArrayLength(expr) => {
                 write!(self.out, "uint(")?;
-                self.write_expr(expr, ctx)?;
+                self.write_expr(expr, ctx, true)?;
                 write!(self.out, ".length())")?
             }
         }
@@ -1731,13 +1800,13 @@ impl<'a, W: Write> Writer<'a, W> {
                     crate::ImageDimension::Cube => "ivec4",
                 };
                 write!(self.out, "{}(", tex_coord_type)?;
-                self.write_expr(coordinate, ctx)?;
+                self.write_expr(coordinate, ctx, true)?;
                 write!(self.out, ", ")?;
-                self.write_expr(layer_expr, ctx)?;
+                self.write_expr(layer_expr, ctx, true)?;
                 write!(self.out, ")")?;
             }
             None => {
-                self.write_expr(coordinate, ctx)?;
+                self.write_expr(coordinate, ctx, true)?;
             }
         }
         Ok(())
