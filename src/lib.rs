@@ -21,6 +21,7 @@
 
 mod arena;
 pub mod back;
+mod debug;
 pub mod front;
 pub mod proc;
 
@@ -823,7 +824,7 @@ pub struct FunctionArgument {
 }
 
 /// A function defined in the module.
-#[derive(Debug, Default)]
+#[derive(Default)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 pub struct Function {
@@ -869,7 +870,7 @@ pub struct EntryPoint {
 /// Alternatively, you can load an existing shader using one of the [available front ends][front].
 ///
 /// When finished, you can export modules using one of the [available back ends][back].
-#[derive(Debug, Default)]
+#[derive(Default, Debug)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 pub struct Module {
