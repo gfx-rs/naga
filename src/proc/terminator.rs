@@ -5,7 +5,7 @@
 /// to the end, because it may be either redundant or invalid,
 /// e.g. when the user already has returns in if/else branches.
 pub fn ensure_block_returns(block: &mut crate::Block) {
-    match block.last_mut() {
+    match block.statements.last_mut() {
         Some(&mut crate::Statement::Block(ref mut b)) => {
             ensure_block_returns(b);
         }
@@ -37,6 +37,8 @@ pub fn ensure_block_returns(block: &mut crate::Block) {
         | Some(&mut crate::Statement::Store { .. })
         | Some(&mut crate::Statement::ImageStore { .. })
         | Some(&mut crate::Statement::Call { .. })
-        | None => block.push(crate::Statement::Return { value: None }),
+        | None => block
+            .statements
+            .push(crate::Statement::Return { value: None }),
     }
 }

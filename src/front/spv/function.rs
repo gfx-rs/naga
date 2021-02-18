@@ -70,7 +70,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                 },
                 local_variables: Arena::new(),
                 expressions: self.make_expression_storage(),
-                body: Vec::new(),
+                body: crate::Block::default(),
             }
         };
 

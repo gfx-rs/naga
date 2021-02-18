@@ -590,7 +590,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         const_arena: &Arena<crate::Constant>,
         global_arena: &Arena<crate::GlobalVariable>,
     ) -> Result<ControlFlowNode, Error> {
-        let mut block = Vec::new();
+        let mut block = crate::Block::default();
         let mut phis = Vec::new();
         let mut merge = None;
         let terminator = loop {
@@ -984,7 +984,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     }
                     let base_expr = self.lookup_expression.lookup(pointer_id)?;
                     let value_expr = self.lookup_expression.lookup(value_id)?;
-                    block.push(crate::Statement::Store {
+                    block.statements.push(crate::Statement::Store {
                         pointer: base_expr.handle,
                         value: value_expr.handle,
                     });
@@ -1108,7 +1108,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     let extra = inst.expect_at_least(4)?;
                     let stmt =
                         self.parse_image_write(extra, type_arena, global_arena, expressions)?;
-                    block.push(stmt);
+                    block.statements.push(stmt);
                 }
                 Op::ImageFetch | Op::ImageRead => {
                     let extra = inst.expect_at_least(5)?;
@@ -1269,7 +1269,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     self.deferred_function_calls.insert(function, func_id);
 
                     if self.lookup_void_type == Some(result_type_id) {
-                        block.push(crate::Statement::Call {
+                        block.statements.push(crate::Statement::Call {
                             function,
                             arguments,
                         });
@@ -1557,12 +1557,9 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         }
     }
 
-    fn patch_function_call_statements(
-        &self,
-        statements: &mut [crate::Statement],
-    ) -> Result<(), Error> {
+    fn patch_function_call_statements(&self, block: &mut crate::Block) -> Result<(), Error> {
         use crate::Statement as S;
-        for statement in statements.iter_mut() {
+        for statement in block.statements.iter_mut() {
             match *statement {
                 S::Block(ref mut block) => {
                     self.patch_function_call_statements(block)?;

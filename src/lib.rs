@@ -731,8 +731,19 @@ pub enum Expression {
     ArrayLength(Handle<Expression>),
 }
 
-/// A code block is just a vector of statements.
-pub type Block = Vec<Statement>;
+/// A code block: linear sequence of steps without any control flow.
+#[derive(Clone, Debug, Default)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+pub struct Block {
+    /// Owned expressions that are introduced into the scope by this block.
+    /// These are visible to all blocks dominated by this block.
+    /// If any of the expressions in the list are dependent, their dependencies
+    /// should resolve in the order of this list.
+    pub expressions: Vec<Handle<Expression>>,
+    /// List of statements to execute in the block.
+    pub statements: Vec<Statement>,
+}
 
 /// A case for a switch statement.
 // Clone is used only for error reporting and is not intended for end users

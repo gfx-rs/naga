@@ -375,13 +375,13 @@ impl FunctionInfo {
     /// have `ControlFlags::REQUIRE_UNIFORM` flag, but the current flow is non-uniform.
     fn process_block(
         &mut self,
-        statements: &[crate::Statement],
+        block: &crate::Block,
         other_functions: &[FunctionInfo],
         mut is_uniform: bool,
     ) -> Result<ControlFlags, AnalysisError> {
         use crate::Statement as S;
         let mut block_flags = ControlFlags::empty();
-        for statement in statements {
+        for statement in block.statements.iter() {
             let flags = match *statement {
                 S::Break | S::Continue => ControlFlags::empty(),
                 S::Kill => ControlFlags::MAY_EXIT,
@@ -619,52 +619,66 @@ fn uniform_control_flow() {
     assert_eq!(info[access_expr].ref_count, 0);
     assert_eq!(info[non_uniform_global], GlobalUse::empty());
     assert_eq!(info[uniform_global], GlobalUse::QUERY);
+    let mut block = crate::Block {
+        expressions: Vec::new(),
+        statements: vec![S::Kill],
+    };
 
-    let stmt_if_uniform = S::If {
+    // If condition on a uniform expression.
+    block.statements[0] = S::If {
         condition: uniform_global_expr,
-        accept: Vec::new(),
-        reject: vec![S::Store {
-            pointer: constant_expr,
-            value: derivative_expr,
-        }],
+        accept: crate::Block::default(),
+        reject: crate::Block {
+            expressions: Vec::new(),
+            statements: vec![S::Store {
+                pointer: constant_expr,
+                value: derivative_expr,
+            }],
+        },
     };
     assert_eq!(
-        info.process_block(&[stmt_if_uniform], &[], true),
+        info.process_block(&block, &[], true),
         Ok(ControlFlags::REQUIRE_UNIFORM),
     );
     assert_eq!(info[constant_expr].ref_count, 2);
     assert_eq!(info[uniform_global], GlobalUse::READ | GlobalUse::QUERY);
 
-    let stmt_if_non_uniform = S::If {
+    // If condition on a non-uniform expression.
+    block.statements[0] = S::If {
         condition: non_uniform_global_expr,
-        accept: vec![S::Store {
-            pointer: constant_expr,
-            value: derivative_expr,
-        }],
-        reject: Vec::new(),
+        accept: crate::Block {
+            expressions: Vec::new(),
+            statements: vec![S::Store {
+                pointer: constant_expr,
+                value: derivative_expr,
+            }],
+        },
+        reject: crate::Block::default(),
     };
     assert_eq!(
-        info.process_block(&[stmt_if_non_uniform], &[], true),
+        info.process_block(&block, &[], true),
         Err(AnalysisError::NonUniformControlFlow),
     );
     assert_eq!(info[derivative_expr].ref_count, 2);
     assert_eq!(info[non_uniform_global], GlobalUse::READ);
 
-    let stmt_return_non_uniform = S::Return {
+    // Just return that results in `MAY_EXIT` state.
+    block.statements[0] = S::Return {
         value: Some(non_uniform_global_expr),
     };
     assert_eq!(
-        info.process_block(&[stmt_return_non_uniform], &[], false),
+        info.process_block(&block, &[], false),
         Ok(ControlFlags::NON_UNIFORM_RESULT | ControlFlags::MAY_EXIT),
     );
     assert_eq!(info[non_uniform_global_expr].ref_count, 3);
 
-    let stmt_assign = S::Store {
+    // Assignment to a global via an access index.
+    block.statements[0] = S::Store {
         pointer: access_expr,
         value: query_expr,
     };
     assert_eq!(
-        info.process_block(&[stmt_assign], &[], false),
+        info.process_block(&block, &[], false),
         Ok(ControlFlags::NON_UNIFORM_RESULT),
     );
     assert_eq!(info[non_uniform_global], GlobalUse::READ | GlobalUse::WRITE);

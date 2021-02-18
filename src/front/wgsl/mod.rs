@@ -1616,8 +1616,11 @@ impl Parser {
                     statements.extend(s);
                 }
                 self.scopes.pop();
-                let block = crate::Statement::Block(statements);
-                return Ok(Some(block));
+                let stmt = crate::Statement::Block(crate::Block {
+                    expressions: Vec::new(),
+                    statements,
+                });
+                return Ok(Some(stmt));
             }
             Token::Word(word) => word,
             other => return Err(Error::Unexpected(other, "statement")),
@@ -1706,16 +1709,19 @@ impl Parser {
                 let mut reject = if lexer.skip(Token::Word("else")) {
                     self.parse_block(lexer, context.reborrow(), false)?
                 } else {
-                    Vec::new()
+                    crate::Block::default()
                 };
                 // reverse-fold the else-if blocks
                 //Note: we may consider uplifting this to the IR
                 for (other_cond, other_block) in elsif_stack.drain(..).rev() {
-                    reject = vec![crate::Statement::If {
-                        condition: other_cond,
-                        accept: other_block,
-                        reject,
-                    }];
+                    reject = crate::Block {
+                        expressions: Vec::new(),
+                        statements: vec![crate::Statement::If {
+                            condition: other_cond,
+                            accept: other_block,
+                            reject,
+                        }],
+                    };
                 }
 
                 Some(crate::Statement::If {
@@ -1730,7 +1736,7 @@ impl Parser {
                 lexer.expect(Token::Paren(')'))?;
                 lexer.expect(Token::Paren('{'))?;
                 let mut cases = Vec::new();
-                let mut default = Vec::new();
+                let mut default = crate::Block::default();
 
                 loop {
                     // cases + default
@@ -1743,7 +1749,7 @@ impl Parser {
                                     Token::Separator(',') => {
                                         cases.push(crate::SwitchCase {
                                             value,
-                                            body: Vec::new(),
+                                            body: crate::Block::default(),
                                             fall_through: true,
                                         });
                                     }
@@ -1754,7 +1760,7 @@ impl Parser {
                                 }
                             };
 
-                            let mut body = Vec::new();
+                            let mut statements = Vec::new();
                             lexer.expect(Token::Paren('{'))?;
                             let fall_through = loop {
                                 // default statements
@@ -1767,12 +1773,15 @@ impl Parser {
                                     break false;
                                 }
                                 let s = self.parse_statement(lexer, context.reborrow(), false)?;
-                                body.extend(s);
+                                statements.extend(s);
                             };
 
                             cases.push(crate::SwitchCase {
                                 value,
-                                body,
+                                body: crate::Block {
+                                    expressions: Vec::new(),
+                                    statements,
+                                },
                                 fall_through,
                             });
                         }
@@ -1792,8 +1801,8 @@ impl Parser {
                 })
             }
             "loop" => {
-                let mut body = Vec::new();
-                let mut continuing = Vec::new();
+                let mut statements = Vec::new();
+                let mut continuing = crate::Block::default();
                 lexer.expect(Token::Paren('{'))?;
 
                 loop {
@@ -1806,13 +1815,17 @@ impl Parser {
                         break;
                     }
                     let s = self.parse_statement(lexer, context.reborrow(), false)?;
-                    body.extend(s);
+                    statements.extend(s);
                 }
+                let body = crate::Block {
+                    expressions: Vec::new(),
+                    statements,
+                };
 
                 Some(crate::Statement::Loop { body, continuing })
             }
             "for" => {
-                let mut block = Vec::new();
+                let mut block = crate::Block::default();
 
                 lexer.expect(Token::Paren('('))?;
                 let initialization = if lexer.skip(Token::Separator(';')) {
@@ -1872,24 +1885,27 @@ impl Parser {
                 lexer.expect(Token::Paren(')'))?;
                 lexer.expect(Token::Paren('{'))?;
 
-                block.extend(initialization);
+                block.statements.extend(initialization);
+                let mut body = crate::Block::default();
 
-                let mut body = Vec::new();
                 if let Some(condition) = condition {
-                    body.push(crate::Statement::If {
+                    body.statements.push(crate::Statement::If {
                         condition,
-                        accept: Vec::new(),
-                        reject: [crate::Statement::Break].to_vec(),
+                        accept: crate::Block::default(),
+                        reject: crate::Statement::Break.into_block(),
                     });
                 }
                 while !lexer.skip(Token::Paren('}')) {
                     let s = self.parse_statement(lexer, context.reborrow(), false)?;
-                    body.extend(s);
+                    body.statements.extend(s);
                 }
 
-                block.push(crate::Statement::Loop {
+                block.statements.push(crate::Statement::Loop {
                     body,
-                    continuing: continuing.into_iter().collect(),
+                    continuing: crate::Block {
+                        expressions: Vec::new(),
+                        statements: continuing.into_iter().collect(),
+                    },
                 });
 
                 Some(crate::Statement::Block(block))
@@ -1955,7 +1971,7 @@ impl Parser {
         lexer: &mut Lexer<'a>,
         mut context: StatementContext<'a, '_, '_>,
         is_uniform_control_flow: bool,
-    ) -> Result<Vec<crate::Statement>, Error<'a>> {
+    ) -> Result<crate::Block, Error<'a>> {
         self.scopes.push(Scope::Block);
         lexer.expect(Token::Paren('{'))?;
         let mut statements = Vec::new();
@@ -1964,7 +1980,10 @@ impl Parser {
             statements.extend(s);
         }
         self.scopes.pop();
-        Ok(statements)
+        Ok(crate::Block {
+            expressions: Vec::new(),
+            statements,
+        })
     }
 
     fn parse_function_decl<'a>(
@@ -2016,7 +2035,7 @@ impl Parser {
             return_type,
             local_variables: Arena::new(),
             expressions,
-            body: Vec::new(),
+            body: crate::Block::default(),
         };
 
         // read body

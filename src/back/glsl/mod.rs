@@ -832,7 +832,7 @@ impl<'a, W: Write> Writer<'a, W> {
         }
 
         // Write the function body (statement list)
-        for sta in func.body.iter() {
+        for sta in func.body.statements.iter() {
             // Write a statement, the indentation should always be 1 when writing the function body
             // `write_stmt` adds a newline
             self.write_stmt(sta, &ctx, 1)?;
@@ -972,7 +972,7 @@ impl<'a, W: Write> Writer<'a, W> {
             // closely to the IR
             Statement::Block(ref block) => {
                 writeln!(self.out, "{{")?;
-                for sta in block.iter() {
+                for sta in block.statements.iter() {
                     // Increase the indentation to help with readability
                     self.write_stmt(sta, ctx, indent + 1)?
                 }
@@ -995,17 +995,17 @@ impl<'a, W: Write> Writer<'a, W> {
                 self.write_expr(condition, ctx)?;
                 writeln!(self.out, ") {{")?;
 
-                for sta in accept {
+                for sta in accept.statements.iter() {
                     // Increase indentation to help with readability
                     self.write_stmt(sta, ctx, indent + 1)?;
                 }
 
                 // If there are no statements in the reject block we skip writing it
                 // This is only for readability
-                if !reject.is_empty() {
+                if !reject.statements.is_empty() {
                     writeln!(self.out, "{}}} else {{", INDENT.repeat(indent))?;
 
-                    for sta in reject {
+                    for sta in reject.statements.iter() {
                         // Increase indentation to help with readability
                         self.write_stmt(sta, ctx, indent + 1)?;
                     }
@@ -1048,7 +1048,7 @@ impl<'a, W: Write> Writer<'a, W> {
                         case.value
                     )?;
 
-                    for sta in case.body.iter() {
+                    for sta in case.body.statements.iter() {
                         self.write_stmt(sta, ctx, indent + 2)?;
                     }
 
@@ -1060,10 +1060,10 @@ impl<'a, W: Write> Writer<'a, W> {
 
                 // Only write the default block if the block isn't empty
                 // Writing default without a block is valid but it's more readable this way
-                if !default.is_empty() {
+                if !default.statements.is_empty() {
                     writeln!(self.out, "{}default:", INDENT.repeat(indent + 1))?;
 
-                    for sta in default {
+                    for sta in default.statements.iter() {
                         self.write_stmt(sta, ctx, indent + 2)?;
                     }
                 }
@@ -1084,7 +1084,7 @@ impl<'a, W: Write> Writer<'a, W> {
             } => {
                 writeln!(self.out, "while(true) {{")?;
 
-                for sta in body.iter().chain(continuing.iter()) {
+                for sta in body.statements.iter().chain(continuing.statements.iter()) {
                     self.write_stmt(sta, ctx, indent + 1)?;
                 }
 

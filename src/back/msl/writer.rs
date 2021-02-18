@@ -768,16 +768,16 @@ impl<W: Write> Writer<W> {
     fn put_block(
         &mut self,
         level: Level,
-        statements: &[crate::Statement],
+        block: &crate::Block,
         context: &StatementContext,
     ) -> Result<(), Error> {
-        for statement in statements {
+        for statement in block.statements.iter() {
             log::trace!("statement[{}] {:?}", level.0, statement);
             match *statement {
-                crate::Statement::Block(ref block) => {
-                    if !block.is_empty() {
+                crate::Statement::Block(ref inner) => {
+                    if !block.statements.is_empty() {
                         writeln!(self.out, "{}{{", level)?;
-                        self.put_block(level.next(), block, context)?;
+                        self.put_block(level.next(), inner, context)?;
                         writeln!(self.out, "{}}}", level)?;
                     }
                 }
@@ -791,7 +791,7 @@ impl<W: Write> Writer<W> {
                     self.put_expression(condition, &context.expression)?;
                     writeln!(self.out, ") {{")?;
                     self.put_block(level.next(), accept, context)?;
-                    if !reject.is_empty() {
+                    if !reject.statements.is_empty() {
                         writeln!(self.out, "{}}} else {{", level)?;
                         self.put_block(level.next(), reject, context)?;
                     }
@@ -824,7 +824,7 @@ impl<W: Write> Writer<W> {
                     ref body,
                     ref continuing,
                 } => {
-                    if !continuing.is_empty() {
+                    if !continuing.statements.is_empty() {
                         let gate_name = self.namer.call("loop_init");
                         writeln!(self.out, "{}bool {} = true;", level, gate_name)?;
                         writeln!(self.out, "{}while(true) {{", level)?;

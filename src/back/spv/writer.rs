@@ -1825,7 +1825,7 @@ impl Writer {
     fn write_block(
         &mut self,
         label_id: Word,
-        statements: &[crate::Statement],
+        ir_block: &crate::Block,
         ir_module: &crate::Module,
         ir_function: &crate::Function,
         function: &mut Function,
@@ -1834,19 +1834,19 @@ impl Writer {
     ) -> Result<(), Error> {
         let mut block = Block::new(label_id);
 
-        for statement in statements {
+        for statement in ir_block.statements.iter() {
             if block.termination.is_some() {
                 unimplemented!("No statements are expected after block termination");
             }
             match *statement {
-                crate::Statement::Block(ref block_statements) => {
+                crate::Statement::Block(ref inner) => {
                     let scope_id = self.generate_id();
                     function.consume(block, Instruction::branch(scope_id));
 
                     let merge_id = self.generate_id();
                     self.write_block(
                         scope_id,
-                        block_statements,
+                        inner,
                         ir_module,
                         ir_function,
                         function,

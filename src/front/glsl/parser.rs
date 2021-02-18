@@ -794,7 +794,10 @@ pomelo! {
         };
         match statements.len() {
             1 => statements.remove(0),
-            _ => Statement::Block(statements),
+            _ => Statement::Block(Block {
+                expressions: Vec::new(),
+                statements,
+            }),
         }
     }
 
@@ -814,21 +817,21 @@ pomelo! {
     selection_statement ::= If LeftParen expression(e) RightParen statement(s1) Else statement(s2) {
         Statement::If {
             condition: e.expression,
-            accept: vec![s1],
-            reject: vec![s2],
+            accept: s1.into_block(),
+            reject: s2.into_block(),
         }
     }
 
     selection_statement ::= If LeftParen expression(e) RightParen statement(s) [Else] {
         Statement::If {
             condition: e.expression,
-            accept: vec![s],
-            reject: vec![],
+            accept: s.into_block(),
+            reject: Block::default(),
         }
     }
 
     selection_statement ::= Switch LeftParen expression(e) RightParen LeftBrace switch_statement_list(ls) RightBrace {
-        let mut default = Vec::new();
+        let mut default = Block::default();
         let mut cases = Vec::new();
         for (v, body, fall_through) in ls {
             if let Some(value) = v {
@@ -838,7 +841,7 @@ pomelo! {
                     fall_through,
                 });
             } else {
-                default.extend_from_slice(&body);
+                default.extend(body);
             }
         }
         Statement::Switch {
@@ -856,14 +859,14 @@ pomelo! {
         ssl
     }
     switch_statement ::= Case IntConstant(v) Colon statement_list(sl) {
-        let fall_through = match sl.last() {
+        let fall_through = match sl.statements.last() {
             Some(&Statement::Break) => false,
             _ => true,
         };
         (Some(v.1 as i32), sl, fall_through)
     }
     switch_statement ::= Default Colon statement_list(sl) {
-        let fall_through = match sl.last() {
+        let fall_through = match sl.statements.last() {
             Some(&Statement::Break) => true,
             _ => false,
         };
@@ -871,58 +874,63 @@ pomelo! {
     }
 
     iteration_statement ::= While LeftParen expression(e) RightParen compound_statement_no_new_scope(sl) {
-        let mut body = Vec::with_capacity(sl.len() + 1);
-        body.push(
+        let mut body = Block::default();
+        body.statements.reserve(sl.statements.len() + 1);
+        body.statements.push(
             Statement::If {
                 condition: e.expression,
-                accept: vec![Statement::Break],
-                reject: vec![],
+                accept: Statement::Break.into_block(),
+                reject: Block::default(),
             }
         );
-        body.extend_from_slice(&sl);
+        body.extend(sl);
         Statement::Loop {
             body,
-            continuing: vec![],
+            continuing: Block::default(),
         }
     }
 
     iteration_statement ::= Do compound_statement(sl) While LeftParen expression(e) RightParen  {
         let mut body = sl;
-        body.push(
+        body.statements.push(
             Statement::If {
                 condition: e.expression,
-                accept: vec![Statement::Break],
-                reject: vec![],
+                accept: Statement::Break.into_block(),
+                reject: Block::default(),
             }
         );
         Statement::Loop {
             body,
-            continuing: vec![],
+            continuing: Block::default(),
         }
     }
 
     iteration_statement ::= For LeftParen for_init_statement(s_init) for_rest_statement((cond_e, loop_e)) RightParen compound_statement_no_new_scope(sl) {
-        let mut body = Vec::with_capacity(sl.len() + 2);
+        let mut body = Block::default();
+        body.statements.reserve(sl.statements.len() + 2);
         if let Some(cond_e) = cond_e {
-            body.push(
+            body.statements.push(
                 Statement::If {
                     condition: cond_e.expression,
-                    accept: vec![Statement::Break],
-                    reject: vec![],
+                    accept: Statement::Break.into_block(),
+                    reject: Block::default(),
                 }
             );
         }
-        body.extend_from_slice(&sl);
+        body.extend(sl);
         if let Some(loop_e) = loop_e {
-            body.extend_from_slice(&loop_e.statements);
+            body.statements.extend(loop_e.statements);
         }
-        Statement::Block(vec![
-            s_init,
-            Statement::Loop {
-                body,
-                continuing: vec![],
-            }
-        ])
+        Statement::Block(Block {
+            expressions: Vec::new(),
+            statements: vec![
+                s_init,
+                Statement::Loop {
+                    body,
+                    continuing: Block::default(),
+                }
+            ],
+        })
     }
 
     for_init_statement ::= expression_statement;
@@ -942,7 +950,7 @@ pomelo! {
     }
 
     compound_statement ::= LeftBrace RightBrace {
-        vec![]
+        Block::default()
     }
     compound_statement ::= left_brace_scope statement_list(sl) RightBrace {
         extra.context.remove_current_scope();
@@ -956,7 +964,7 @@ pomelo! {
 
 
     compound_statement_no_new_scope ::= LeftBrace RightBrace {
-        vec![]
+        Block::default()
     }
     compound_statement_no_new_scope ::= LeftBrace statement_list(sl) RightBrace {
         sl
@@ -965,19 +973,22 @@ pomelo! {
     statement_list ::= statement(s) {
         //TODO: catch this earlier and don't populate the statements
         match s {
-            Statement::Block(ref block) if block.is_empty() => vec![],
-            _ => vec![s],
+            Statement::Block(ref block) if block.statements.is_empty() => Block::default(),
+            _ => s.into_block(),
         }
     }
-    statement_list ::= statement_list(mut ss) statement(s) { ss.push(s); ss }
+    statement_list ::= statement_list(mut ss) statement(s) { ss.statements.push(s); ss }
 
     expression_statement ::= Semicolon  {
-        Statement::Block(Vec::new())
+        Statement::Block(Block::default())
     }
     expression_statement ::= expression(mut e) Semicolon {
         match e.statements.len() {
             1 => e.statements.remove(0),
-            _ => Statement::Block(e.statements),
+            _ => Statement::Block(Block {
+                expressions: Vec::new(),
+                statements: e.statements,
+            }),
         }
     }
 
@@ -1006,7 +1017,7 @@ pomelo! {
             return_type: t.1,
             local_variables: Arena::<LocalVariable>::new(),
             expressions: Arena::<Expression>::new(),
-            body: vec![],
+            body: Block::default(),
         }
     }
     function_header_with_parameters ::= function_header(h) parameter_declaration(p) {
@@ -1046,7 +1057,10 @@ pomelo! {
         let ret = Statement::Return{ value: Some(e.expression) };
         if !e.statements.is_empty() {
             e.statements.push(ret);
-            Statement::Block(e.statements)
+            Statement::Block(Block {
+                expressions: Vec::new(),
+                statements: e.statements,
+            })
         } else {
             ret
         }

@@ -205,7 +205,7 @@ impl FlowGraph {
                     let variable = &lookup_expression[&variable_id];
                     let parent_node = &mut self.flow[self.block_to_node[&parent_id]];
 
-                    parent_node.block.push(crate::Statement::Store {
+                    parent_node.block.statements.push(crate::Statement::Store {
                         pointer: phi_var.handle,
                         value: variable.handle,
                     });
@@ -226,7 +226,7 @@ impl FlowGraph {
         stop_node_index: Option<BlockNodeIndex>,
     ) -> Result<crate::Block, Error> {
         if stop_node_index == Some(node_index) {
-            return Ok(vec![]);
+            return Ok(crate::Block::default());
         }
 
         let node = &self.flow[node_index];
@@ -245,14 +245,14 @@ impl FlowGraph {
                     let mut result = node.block.clone();
 
                     if false_node_index != merge_node_index {
-                        result.push(crate::Statement::If {
+                        result.statements.push(crate::Statement::If {
                             condition,
                             accept: self.naga_traverse(true_node_index, Some(merge_node_index))?,
                             reject: self.naga_traverse(false_node_index, Some(merge_node_index))?,
                         });
                         result.extend(self.naga_traverse(merge_node_index, stop_node_index)?);
                     } else {
-                        result.push(crate::Statement::If {
+                        result.statements.push(crate::Statement::If {
                             condition,
                             accept: self.naga_traverse(
                                 self.block_to_node[&true_id],
@@ -296,7 +296,7 @@ impl FlowGraph {
                         });
                     }
 
-                    result.push(crate::Statement::Switch {
+                    result.statements.push(crate::Statement::Switch {
                         selector,
                         cases,
                         default: self
@@ -327,7 +327,7 @@ impl FlowGraph {
                         condition,
                         true_id,
                         false_id,
-                    } => body.push(crate::Statement::If {
+                    } => body.statements.push(crate::Statement::If {
                         condition,
                         accept: self
                             .naga_traverse(self.block_to_node[&true_id], Some(merge_node_index))?,
@@ -340,7 +340,7 @@ impl FlowGraph {
                     _ => return Err(Error::InvalidTerminator),
                 };
 
-                let mut result = vec![crate::Statement::Loop { body, continuing }];
+                let mut result = crate::Statement::Loop { body, continuing }.into_block();
                 result.extend(self.naga_traverse(merge_node_index, stop_node_index)?);
 
                 Ok(result)
@@ -362,23 +362,23 @@ impl FlowGraph {
                             self.flow[self.flow.find_edge(node_index, false_node_id).unwrap()];
 
                         if true_edge == ControlFlowEdgeType::LoopBreak {
-                            result.push(crate::Statement::If {
+                            result.statements.push(crate::Statement::If {
                                 condition,
-                                accept: vec![crate::Statement::Break],
+                                accept: crate::Statement::Break.into_block(),
                                 reject: self.naga_traverse(false_node_id, stop_node_index)?,
                             });
                         } else if false_edge == ControlFlowEdgeType::LoopBreak {
-                            result.push(crate::Statement::If {
+                            result.statements.push(crate::Statement::If {
                                 condition,
                                 accept: self.naga_traverse(true_node_id, stop_node_index)?,
-                                reject: vec![crate::Statement::Break],
+                                reject: crate::Statement::Break.into_block(),
                             });
                         } else {
                             return Err(Error::InvalidEdgeClassification);
                         }
                     }
                     Terminator::Branch { .. } => {
-                        result.push(crate::Statement::Break);
+                        result.statements.push(crate::Statement::Break);
                     }
                     _ => return Err(Error::InvalidTerminator),
                 };
@@ -394,13 +394,13 @@ impl FlowGraph {
 
                 let mut result = node.block.clone();
                 result.extend(back_block);
-                result.push(crate::Statement::Continue);
+                result.statements.push(crate::Statement::Continue);
                 Ok(result)
             }
             Some(ControlFlowNodeType::Back) => Ok(node.block.clone()),
             Some(ControlFlowNodeType::Kill) => {
                 let mut result = node.block.clone();
-                result.push(crate::Statement::Kill);
+                result.statements.push(crate::Statement::Kill);
                 Ok(result)
             }
             Some(ControlFlowNodeType::Return) => {
@@ -409,7 +409,7 @@ impl FlowGraph {
                     _ => return Err(Error::InvalidTerminator),
                 };
                 let mut result = node.block.clone();
-                result.push(crate::Statement::Return { value });
+                result.statements.push(crate::Statement::Return { value });
                 Ok(result)
             }
             Some(ControlFlowNodeType::Merge) | None => match node.terminator {

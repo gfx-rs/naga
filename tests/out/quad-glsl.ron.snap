@@ -162,15 +162,18 @@ expression: output
                         ],
                     ),
                 ],
-                body: [
-                    Store(
-                        pointer: 6,
-                        value: 12,
-                    ),
-                    Return(
-                        value: None,
-                    ),
-                ],
+                body: (
+                    expressions: [],
+                    statements: [
+                        Store(
+                            pointer: 6,
+                            value: 12,
+                        ),
+                        Return(
+                            value: None,
+                        ),
+                    ],
+                ),
             ),
         ),
         (Vertex, "vert_main"): (
@@ -205,19 +208,22 @@ expression: output
                         ],
                     ),
                 ],
-                body: [
-                    Store(
-                        pointer: 5,
-                        value: 4,
-                    ),
-                    Store(
-                        pointer: 7,
-                        value: 11,
-                    ),
-                    Return(
-                        value: None,
-                    ),
-                ],
+                body: (
+                    expressions: [],
+                    statements: [
+                        Store(
+                            pointer: 5,
+                            value: 4,
+                        ),
+                        Store(
+                            pointer: 7,
+                            value: 11,
+                        ),
+                        Return(
+                            value: None,
+                        ),
+                    ],
+                ),
             ),
         ),
     },

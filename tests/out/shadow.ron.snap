@@ -778,20 +778,29 @@ expression: output
                     depth_ref: Some(65),
                 ),
             ],
-            body: [
-                If(
-                    condition: 46,
-                    accept: [
-                        Return(
-                            value: Some(30),
+            body: (
+                expressions: [],
+                statements: [
+                    If(
+                        condition: 46,
+                        accept: (
+                            expressions: [],
+                            statements: [
+                                Return(
+                                    value: Some(30),
+                                ),
+                            ],
                         ),
-                    ],
-                    reject: [],
-                ),
-                Return(
-                    value: Some(71),
-                ),
-            ],
+                        reject: (
+                            expressions: [],
+                            statements: [],
+                        ),
+                    ),
+                    Return(
+                        value: Some(71),
+                    ),
+                ],
+            ),
         ),
     ],
     entry_points: {
@@ -1091,41 +1100,56 @@ expression: output
                         ],
                     ),
                 ],
-                body: [
-                    Loop(
-                        body: [
-                            If(
-                                condition: 48,
-                                accept: [
-                                    Break,
+                body: (
+                    expressions: [],
+                    statements: [
+                        Loop(
+                            body: (
+                                expressions: [],
+                                statements: [
+                                    If(
+                                        condition: 48,
+                                        accept: (
+                                            expressions: [],
+                                            statements: [
+                                                Break,
+                                            ],
+                                        ),
+                                        reject: (
+                                            expressions: [],
+                                            statements: [],
+                                        ),
+                                    ),
+                                    Store(
+                                        pointer: 43,
+                                        value: 91,
+                                    ),
+                                    Store(
+                                        pointer: 44,
+                                        value: 92,
+                                    ),
+                                    Continue,
                                 ],
-                                reject: [],
                             ),
-                            Store(
-                                pointer: 43,
-                                value: 91,
+                            continuing: (
+                                expressions: [],
+                                statements: [
+                                    Store(
+                                        pointer: 44,
+                                        value: 92,
+                                    ),
+                                ],
                             ),
-                            Store(
-                                pointer: 44,
-                                value: 92,
-                            ),
-                            Continue,
-                        ],
-                        continuing: [
-                            Store(
-                                pointer: 44,
-                                value: 92,
-                            ),
-                        ],
-                    ),
-                    Store(
-                        pointer: 7,
-                        value: 93,
-                    ),
-                    Return(
-                        value: None,
-                    ),
-                ],
+                        ),
+                        Store(
+                            pointer: 7,
+                            value: 93,
+                        ),
+                        Return(
+                            value: None,
+                        ),
+                    ],
+                ),
             ),
         ),
     },

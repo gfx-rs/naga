@@ -174,46 +174,67 @@ expression: output
                     right: 19,
                 ),
             ],
-            body: [
-                Store(
-                    pointer: 4,
-                    value: 3,
-                ),
-                Loop(
-                    body: [
-                        If(
-                            condition: 8,
-                            accept: [
-                                Break,
-                            ],
-                            reject: [],
-                        ),
-                        If(
-                            condition: 12,
-                            accept: [
+            body: (
+                expressions: [],
+                statements: [
+                    Store(
+                        pointer: 4,
+                        value: 3,
+                    ),
+                    Loop(
+                        body: (
+                            expressions: [],
+                            statements: [
+                                If(
+                                    condition: 8,
+                                    accept: (
+                                        expressions: [],
+                                        statements: [
+                                            Break,
+                                        ],
+                                    ),
+                                    reject: (
+                                        expressions: [],
+                                        statements: [],
+                                    ),
+                                ),
+                                If(
+                                    condition: 12,
+                                    accept: (
+                                        expressions: [],
+                                        statements: [
+                                            Store(
+                                                pointer: 4,
+                                                value: 14,
+                                            ),
+                                        ],
+                                    ),
+                                    reject: (
+                                        expressions: [],
+                                        statements: [
+                                            Store(
+                                                pointer: 4,
+                                                value: 18,
+                                            ),
+                                        ],
+                                    ),
+                                ),
                                 Store(
-                                    pointer: 4,
-                                    value: 14,
+                                    pointer: 6,
+                                    value: 20,
                                 ),
                             ],
-                            reject: [
-                                Store(
-                                    pointer: 4,
-                                    value: 18,
-                                ),
-                            ],
                         ),
-                        Store(
-                            pointer: 6,
-                            value: 20,
+                        continuing: (
+                            expressions: [],
+                            statements: [],
                         ),
-                    ],
-                    continuing: [],
-                ),
-                Return(
-                    value: Some(6),
-                ),
-            ],
+                    ),
+                    Return(
+                        value: Some(6),
+                    ),
+                ],
+            ),
         ),
     ],
     entry_points: {
@@ -259,15 +280,18 @@ expression: output
                         ],
                     ),
                 ],
-                body: [
-                    Store(
-                        pointer: 5,
-                        value: 9,
-                    ),
-                    Return(
-                        value: None,
-                    ),
-                ],
+                body: (
+                    expressions: [],
+                    statements: [
+                        Store(
+                            pointer: 5,
+                            value: 9,
+                        ),
+                        Return(
+                            value: None,
+                        ),
+                    ],
+                ),
             ),
         ),
     },

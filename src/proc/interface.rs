@@ -148,8 +148,8 @@ impl<'a, T: Visitor> Interface<'a, T> {
         }
     }
 
-    pub fn traverse(&mut self, block: &[crate::Statement]) {
-        for statement in block {
+    pub fn traverse(&mut self, block: &crate::Block) {
+        for statement in block.statements.iter() {
             use crate::Statement as S;
             match *statement {
                 S::Break | S::Continue | S::Kill => (),
