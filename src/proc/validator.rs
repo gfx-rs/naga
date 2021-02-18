@@ -89,6 +89,14 @@ pub enum FunctionError {
     },
     #[error("Argument '{name}' at index {index} has a type that can't be passed into functions.")]
     InvalidArgumentType { index: usize, name: String },
+    #[error("Expression handle {0:?} does not exist")]
+    InvalidExpressionHandle(Handle<crate::Expression>),
+    #[error("Expression {0:?} dependencies have not been introduced in the prior blocks")]
+    ExpressionDependenciesNotInScope(crate::Expression),
+    #[error("Expression {0:?} can't be re-introduced by a block: it's already in scope")]
+    ExpressionAlreadyInScope(crate::Expression),
+    #[error("Expression {0:?} can't be used by a statement: it's not introduced by any of the prior blocks")]
+    ExpressionNotInScope(crate::Expression),
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
@@ -251,6 +259,23 @@ impl crate::GlobalVariable {
             }
         }
         Ok(())
+    }
+}
+
+impl Arena<crate::Expression> {
+    fn check(
+        &self,
+        handle: Handle<crate::Expression>,
+        valid_set: &BitSet,
+    ) -> Result<&crate::Expression, FunctionError> {
+        if handle.index() >= self.len() {
+            return Err(FunctionError::InvalidExpressionHandle(handle));
+        }
+        let expression = &self[handle];
+        if !valid_set.contains(handle.index()) {
+            return Err(FunctionError::ExpressionNotInScope(expression.clone()));
+        }
+        Ok(expression)
     }
 }
 
@@ -526,6 +551,216 @@ impl Validator {
         Ok(())
     }
 
+    fn validate_expression(
+        &self,
+        expression: &crate::Expression,
+        valid_set: &BitSet,
+    ) -> Result<(), FunctionError> {
+        use crate::Expression as E;
+        let dependencies_ok = match *expression {
+            E::Access { base, index } => {
+                valid_set.contains(base.index()) && valid_set.contains(index.index())
+            }
+            E::AccessIndex { base, index: _ } => valid_set.contains(base.index()),
+            E::Constant(_) => true,
+            E::Compose {
+                ty: _,
+                ref components,
+            } => components.iter().all(|c| valid_set.contains(c.index())),
+            E::FunctionArgument(_) | E::GlobalVariable(_) | E::LocalVariable(_) => true,
+            E::Load { pointer } => valid_set.contains(pointer.index()),
+            E::ImageSample {
+                image,
+                sampler,
+                coordinate,
+                array_index,
+                offset,
+                level,
+                depth_ref,
+            } => {
+                let has_level = match level {
+                    crate::SampleLevel::Zero | crate::SampleLevel::Auto => true,
+                    crate::SampleLevel::Exact(expr) | crate::SampleLevel::Bias(expr) => {
+                        valid_set.contains(expr.index())
+                    }
+                    crate::SampleLevel::Gradient { x, y } => {
+                        valid_set.contains(x.index()) && valid_set.contains(y.index())
+                    }
+                };
+                valid_set.contains(image.index())
+                    && valid_set.contains(sampler.index())
+                    && valid_set.contains(coordinate.index())
+                    && array_index.map_or(true, |expr| valid_set.contains(expr.index()))
+                    && offset.map_or(true, |expr| valid_set.contains(expr.index()))
+                    && depth_ref.map_or(true, |expr| valid_set.contains(expr.index()))
+                    && has_level
+            }
+            E::ImageLoad {
+                image,
+                coordinate,
+                array_index,
+                index,
+            } => {
+                valid_set.contains(image.index())
+                    && valid_set.contains(coordinate.index())
+                    && array_index.map_or(true, |expr| valid_set.contains(expr.index()))
+                    && index.map_or(true, |expr| valid_set.contains(expr.index()))
+            }
+            E::ImageQuery { image, query } => {
+                let has_query = match query {
+                    crate::ImageQuery::Size { level: Some(expr) } => {
+                        valid_set.contains(expr.index())
+                    }
+                    _ => true,
+                };
+                valid_set.contains(image.index()) && has_query
+            }
+            E::Unary { op: _, expr } => valid_set.contains(expr.index()),
+            E::Binary { op: _, left, right } => {
+                valid_set.contains(left.index()) && valid_set.contains(right.index())
+            }
+            E::Select {
+                condition,
+                accept,
+                reject,
+            } => {
+                valid_set.contains(condition.index())
+                    && valid_set.contains(accept.index())
+                    && valid_set.contains(reject.index())
+            }
+            E::Derivative { axis: _, expr } => valid_set.contains(expr.index()),
+            E::Relational { fun: _, argument } => valid_set.contains(argument.index()),
+            E::Math {
+                fun: _,
+                arg,
+                arg1,
+                arg2,
+            } => {
+                valid_set.contains(arg.index())
+                    && arg1.map_or(true, |expr| valid_set.contains(expr.index()))
+                    && arg2.map_or(true, |expr| valid_set.contains(expr.index()))
+            }
+            E::As {
+                expr,
+                kind: _,
+                convert: _,
+            } => valid_set.contains(expr.index()),
+            E::Call {
+                function: _,
+                ref arguments,
+            } => arguments
+                .iter()
+                .all(|expr| valid_set.contains(expr.index())),
+            E::ArrayLength(expr) => valid_set.contains(expr.index()),
+        };
+        if dependencies_ok {
+            Ok(())
+        } else {
+            Err(FunctionError::ExpressionDependenciesNotInScope(
+                expression.clone(),
+            ))
+        }
+    }
+
+    fn validate_block(
+        &self,
+        block: &crate::Block,
+        fun: &crate::Function,
+        valid_set: &mut BitSet,
+    ) -> Result<(), FunctionError> {
+        // register expressions in scope
+        for &expr_handle in block.expressions.iter() {
+            if expr_handle.index() >= fun.expressions.len() {
+                return Err(FunctionError::InvalidExpressionHandle(expr_handle));
+            }
+            let expression = &fun.expressions[expr_handle];
+            self.validate_expression(expression, valid_set)?;
+            if !valid_set.insert(expr_handle.index()) {
+                return Err(FunctionError::ExpressionAlreadyInScope(expression.clone()));
+            }
+        }
+
+        // validate the statements
+        for statement in block.statements.iter() {
+            use crate::Statement as S;
+            match *statement {
+                S::Block(ref inner) => self.validate_block(inner, fun, valid_set)?,
+                S::If {
+                    condition,
+                    ref accept,
+                    ref reject,
+                } => {
+                    fun.expressions.check(condition, valid_set)?;
+                    self.validate_block(accept, fun, valid_set)?;
+                    self.validate_block(reject, fun, valid_set)?;
+                }
+                S::Switch {
+                    selector,
+                    ref cases,
+                    ref default,
+                } => {
+                    fun.expressions.check(selector, valid_set)?;
+                    for case in cases {
+                        self.validate_block(&case.body, fun, valid_set)?;
+                    }
+                    self.validate_block(default, fun, valid_set)?;
+                }
+                S::Loop {
+                    ref body,
+                    ref continuing,
+                } => {
+                    self.validate_block(body, fun, valid_set)?;
+                    // Continuing block has access to all the statements of the body.
+                    for &expr_handle in body.expressions.iter() {
+                        valid_set.insert(expr_handle.index());
+                    }
+                    self.validate_block(continuing, fun, valid_set)?;
+                    for &expr_handle in body.expressions.iter() {
+                        valid_set.remove(expr_handle.index());
+                    }
+                }
+                S::Break | S::Continue => {}
+                S::Return { value } => {
+                    if let Some(expr) = value {
+                        fun.expressions.check(expr, valid_set)?;
+                    }
+                }
+                S::Kill => {}
+                S::Store { pointer, value } => {
+                    fun.expressions.check(pointer, valid_set)?;
+                    fun.expressions.check(value, valid_set)?;
+                }
+                S::ImageStore {
+                    image,
+                    coordinate,
+                    array_index,
+                    value,
+                } => {
+                    fun.expressions.check(image, valid_set)?;
+                    fun.expressions.check(coordinate, valid_set)?;
+                    if let Some(expr) = array_index {
+                        fun.expressions.check(expr, valid_set)?;
+                    }
+                    fun.expressions.check(value, valid_set)?;
+                }
+                S::Call {
+                    function: _,
+                    ref arguments,
+                } => {
+                    for &arg in arguments {
+                        fun.expressions.check(arg, valid_set)?;
+                    }
+                }
+            }
+        }
+
+        // unregister expressions from scope
+        for &expr_handle in block.expressions.iter().rev() {
+            valid_set.remove(expr_handle.index());
+        }
+        Ok(())
+    }
+
     fn validate_function(
         &mut self,
         fun: &crate::Function,
@@ -563,7 +798,8 @@ impl Validator {
             }
         }
 
-        Ok(())
+        let mut mask = BitSet::with_capacity(fun.expressions.len());
+        self.validate_block(&fun.body, fun, &mut mask)
     }
 
     fn validate_entry_point(
