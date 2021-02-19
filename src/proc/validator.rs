@@ -81,7 +81,7 @@ pub enum FunctionError {
     Resolve(#[from] ResolveError),
     #[error("There are instructions after `return`/`break`/`continue`")]
     InvalidControlFlowExitTail,
-    #[error("Local variable {handle:?} '{name}' is invalid: {error:?}")]
+    #[error("Local variable {handle:?} '{name}' is invalid: {error}")]
     LocalVariable {
         handle: Handle<crate::LocalVariable>,
         name: String,
@@ -125,27 +125,27 @@ pub enum EntryPointError {
 
 #[derive(Clone, Debug, thiserror::Error)]
 pub enum ValidationError {
-    #[error("Type {handle:?} '{name}' is invalid: {error:?}")]
+    #[error("Type {handle:?} '{name}' is invalid: {error}")]
     Type {
         handle: Handle<crate::Type>,
         name: String,
         error: TypeError,
     },
-    #[error("Constant {handle:?} '{name}' is invalid: {error:?}")]
+    #[error("Constant {handle:?} '{name}' is invalid: {error}")]
     Constant {
         handle: Handle<crate::Constant>,
         name: String,
         error: ConstantError,
     },
-    #[error("Global variable {handle:?} '{name}' is invalid: {error:?}")]
+    #[error("Global variable {handle:?} '{name}' is invalid: {error}")]
     GlobalVariable {
         handle: Handle<crate::GlobalVariable>,
         name: String,
         error: GlobalVariableError,
     },
-    #[error("Function {0:?} is invalid: {1:?}")]
+    #[error("Function {0:?} is invalid: {1}")]
     Function(Handle<crate::Function>, FunctionError),
-    #[error("Entry point {name} at {stage:?} is invalid: {error:?}")]
+    #[error("Entry point {name} at {stage:?} is invalid: {error}")]
     EntryPoint {
         stage: crate::ShaderStage,
         name: String,

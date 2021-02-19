@@ -175,7 +175,14 @@ expression: output
                 ),
             ],
             body: (
-                expressions: [],
+                expressions: [
+                    1,
+                    2,
+                    3,
+                    4,
+                    5,
+                    6,
+                ],
                 statements: [
                     Store(
                         pointer: 4,
@@ -183,7 +190,16 @@ expression: output
                     ),
                     Loop(
                         body: (
-                            expressions: [],
+                            expressions: [
+                                7,
+                                8,
+                                9,
+                                10,
+                                11,
+                                12,
+                                19,
+                                20,
+                            ],
                             statements: [
                                 If(
                                     condition: 8,
@@ -201,7 +217,10 @@ expression: output
                                 If(
                                     condition: 12,
                                     accept: (
-                                        expressions: [],
+                                        expressions: [
+                                            13,
+                                            14,
+                                        ],
                                         statements: [
                                             Store(
                                                 pointer: 4,
@@ -210,7 +229,12 @@ expression: output
                                         ],
                                     ),
                                     reject: (
-                                        expressions: [],
+                                        expressions: [
+                                            15,
+                                            16,
+                                            17,
+                                            18,
+                                        ],
                                         statements: [
                                             Store(
                                                 pointer: 4,
@@ -281,7 +305,17 @@ expression: output
                     ),
                 ],
                 body: (
-                    expressions: [],
+                    expressions: [
+                        1,
+                        2,
+                        3,
+                        4,
+                        5,
+                        6,
+                        7,
+                        8,
+                        9,
+                    ],
                     statements: [
                         Store(
                             pointer: 5,
