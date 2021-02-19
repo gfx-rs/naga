@@ -50,12 +50,12 @@ vertex vs_mainOutput vs_main(
     type4 tmp1_;
     type4 tmp2_;
     type unprojected;
+    type _expr24 = metal::float4(((static_cast<float>(tmp1_) * const_4f) - const_1f), ((static_cast<float>(tmp2_) * const_4f) - const_1f), const_0f, const_1f);
     tmp1_ = (static_cast<int>(in_vertex_index) / const_2i);
     tmp2_ = (static_cast<int>(in_vertex_index) & const_1i);
-    type expr24 = metal::float4(((static_cast<float>(tmp1_) * const_4f) - const_1f), ((static_cast<float>(tmp2_) * const_4f) - const_1f), const_0f, const_1f);
-    unprojected = (r_data.proj_inv * expr24);
+    unprojected = (r_data.proj_inv * _expr24);
     output.out_uv = (metal::transpose(metal::float3x3(metal::float3(r_data.view[0].x, r_data.view[0].y, r_data.view[0].z), metal::float3(r_data.view[1].x, r_data.view[1].y, r_data.view[1].z), metal::float3(r_data.view[2].x, r_data.view[2].y, r_data.view[2].z))) * metal::float3(unprojected.x, unprojected.y, unprojected.z));
-    output.out_position = expr24;
+    output.out_position = _expr24;
     return output;
 }
 
@@ -73,7 +73,8 @@ fragment fs_mainOutput fs_main(
     type8 r_sampler [[sampler(1)]]
 ) {
     fs_mainOutput output;
-    output.out_color = r_texture.sample(r_sampler, input.in_uv);
+    metal::float4 _expr8 = r_texture.sample(r_sampler, input.in_uv);
+    output.out_color = _expr8;
     return output;
 }
 

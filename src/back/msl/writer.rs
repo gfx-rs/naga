@@ -3,7 +3,7 @@ use crate::{
     arena::Handle,
     proc::{
         analyzer::{Analysis, FunctionInfo, GlobalUse},
-        EntryPointIndex, Interface, NameKey, Namer, ResolveContext, Typifier, Visitor,
+        EntryPointIndex, NameKey, Namer, ResolveContext, Typifier,
     },
     FastHashMap,
 };
@@ -11,11 +11,13 @@ use bit_set::BitSet;
 use std::{
     fmt::{Display, Error as FmtError, Formatter},
     io::Write,
-    iter, mem,
+    iter,
 };
 
 const NAMESPACE: &str = "metal";
 const INDENT: &str = "    ";
+//TODO: figure out the naming scheme that wouldn't collide with user names.
+const BAKED_EXPRESSION: &str = "_expr";
 
 #[derive(Clone)]
 struct Level(usize);
@@ -70,10 +72,8 @@ pub struct Writer<W> {
     out: W,
     names: FastHashMap<NameKey, String>,
     named_expressions: BitSet,
-    visit_mask: BitSet,
     typifier: Typifier,
     namer: Namer,
-    temp_bake_handles: Vec<Handle<crate::Expression>>,
 }
 
 fn scalar_kind_string(kind: crate::ScalarKind) -> &'static str {
@@ -121,39 +121,6 @@ impl crate::StorageClass {
     }
 }
 
-struct BakeExpressionVisitor<'a> {
-    named_expressions: &'a mut BitSet,
-    bake_handles: &'a mut Vec<Handle<crate::Expression>>,
-    fun_info: &'a FunctionInfo,
-    exclude: Option<Handle<crate::Expression>>,
-}
-impl Visitor for BakeExpressionVisitor<'_> {
-    fn visit_expr(&mut self, handle: Handle<crate::Expression>, expr: &crate::Expression) {
-        use crate::Expression as E;
-        // filter out the expressions that don't need to bake
-        let min_ref_count = match *expr {
-            // The following expressions can be inlined nicely.
-            E::AccessIndex { .. }
-            | E::Constant(_)
-            | E::FunctionArgument(_)
-            | E::GlobalVariable(_)
-            | E::LocalVariable(_) => !0,
-            // Image sampling and function calling are nice to isolate
-            // into separate statements even when done only once.
-            E::ImageSample { .. } | E::ImageLoad { .. } | E::Call { .. } => 1,
-            // Bake only expressions referenced more than once.
-            _ => 2,
-        };
-
-        let modifier = if self.exclude == Some(handle) { 1 } else { 0 };
-        if self.fun_info[handle].ref_count - modifier >= min_ref_count
-            && self.named_expressions.insert(handle.index())
-        {
-            self.bake_handles.push(handle);
-        }
-    }
-}
-
 enum FunctionOrigin {
     Handle(Handle<crate::Function>),
     EntryPoint(EntryPointIndex),
@@ -179,10 +146,8 @@ impl<W: Write> Writer<W> {
             out,
             names: FastHashMap::default(),
             named_expressions: BitSet::new(),
-            visit_mask: BitSet::new(),
             typifier: Typifier::new(),
             namer: Namer::default(),
-            temp_bake_handles: Vec::new(),
         }
     }
 
@@ -263,7 +228,7 @@ impl<W: Write> Writer<W> {
         context: &ExpressionContext,
     ) -> Result<(), Error> {
         if self.named_expressions.contains(expr_handle.index()) {
-            write!(self.out, "expr{}", expr_handle.index())?;
+            write!(self.out, "{}{}", BAKED_EXPRESSION, expr_handle.index())?;
             return Ok(());
         }
 
@@ -698,36 +663,37 @@ impl<W: Write> Writer<W> {
         Ok(())
     }
 
-    // Write down any required intermediate results
-    fn prepare_expression(
+    fn put_block(
         &mut self,
         level: Level,
-        root_handle: Handle<crate::Expression>,
+        block: &crate::Block,
         context: &StatementContext,
-        exclude_root: bool,
     ) -> Result<(), Error> {
-        // set up the search
-        self.visit_mask.clear();
-        let mut interface = Interface {
-            expressions: &context.expression.function.expressions,
-            local_variables: &context.expression.function.local_variables,
-            visitor: BakeExpressionVisitor {
-                named_expressions: &mut self.named_expressions,
-                bake_handles: &mut self.temp_bake_handles,
-                fun_info: context.fun_info,
-                exclude: if exclude_root {
-                    Some(root_handle)
-                } else {
-                    None
-                },
-            },
-            mask: &mut self.visit_mask,
-        };
-        // populate the bake handles
-        interface.traverse_expr(root_handle);
-        // bake
-        let mut temp_bake_handles = mem::replace(&mut self.temp_bake_handles, Vec::new());
-        for handle in temp_bake_handles.drain(..).rev() {
+        // bake the expressions first
+        for &handle in block.expressions.iter() {
+            use crate::Expression as E;
+
+            // filter out the expressions that don't need to bake
+            let min_ref_count = match context.expression.function.expressions[handle] {
+                // The following expressions can be inlined nicely.
+                E::AccessIndex { .. }
+                | E::Constant(_)
+                | E::FunctionArgument(_)
+                | E::GlobalVariable(_)
+                | E::LocalVariable(_) => !0,
+                // Image sampling and function calling are nice to isolate
+                // into separate statements even when done only once.
+                E::ImageSample { .. } | E::ImageLoad { .. } | E::Call { .. } => 1,
+                // Bake only expressions referenced more than once.
+                _ => 2,
+            };
+
+            if context.fun_info[handle].ref_count < min_ref_count
+                || self.named_expressions.contains(handle.index())
+            {
+                continue;
+            }
+
             write!(self.out, "{}", level)?;
             match self.typifier.get_handle(handle) {
                 Ok(ty_handle) => {
@@ -752,25 +718,14 @@ impl<W: Write> Writer<W> {
                 }
             }
 
-            //TODO: figure out the naming scheme that wouldn't collide with user names.
-            write!(self.out, " expr{} = ", handle.index())?;
-            // Make sure to temporarily unblock the expression before writing it down.
-            self.named_expressions.remove(handle.index());
+            write!(self.out, " {}{} = ", BAKED_EXPRESSION, handle.index())?;
             self.put_expression(handle, &context.expression)?;
-            self.named_expressions.insert(handle.index());
             writeln!(self.out, ";")?;
+            // has to be done after the expression is serialized
+            self.named_expressions.insert(handle.index());
         }
 
-        self.temp_bake_handles = temp_bake_handles;
-        Ok(())
-    }
-
-    fn put_block(
-        &mut self,
-        level: Level,
-        block: &crate::Block,
-        context: &StatementContext,
-    ) -> Result<(), Error> {
+        // then put the statements
         for statement in block.statements.iter() {
             log::trace!("statement[{}] {:?}", level.0, statement);
             match *statement {
@@ -786,7 +741,6 @@ impl<W: Write> Writer<W> {
                     ref accept,
                     ref reject,
                 } => {
-                    self.prepare_expression(level.clone(), condition, context, false)?;
                     write!(self.out, "{}if (", level)?;
                     self.put_expression(condition, &context.expression)?;
                     writeln!(self.out, ") {{")?;
@@ -802,7 +756,6 @@ impl<W: Write> Writer<W> {
                     ref cases,
                     ref default,
                 } => {
-                    self.prepare_expression(level.clone(), selector, context, false)?;
                     write!(self.out, "{}switch(", level)?;
                     self.put_expression(selector, &context.expression)?;
                     writeln!(self.out, ") {{")?;
@@ -848,7 +801,6 @@ impl<W: Write> Writer<W> {
                 crate::Statement::Return {
                     value: Some(expr_handle),
                 } => {
-                    self.prepare_expression(level.clone(), expr_handle, context, true)?;
                     write!(self.out, "{}return ", level)?;
                     self.put_expression(expr_handle, &context.expression)?;
                     writeln!(self.out, ";")?;
@@ -865,7 +817,6 @@ impl<W: Write> Writer<W> {
                     writeln!(self.out, "{}discard_fragment();", level)?;
                 }
                 crate::Statement::Store { pointer, value } => {
-                    self.prepare_expression(level.clone(), value, context, true)?;
                     write!(self.out, "{}", level)?;
                     self.put_expression(pointer, &context.expression)?;
                     write!(self.out, " = ")?;
@@ -893,9 +844,6 @@ impl<W: Write> Writer<W> {
                     function,
                     ref arguments,
                 } => {
-                    for &arg in arguments {
-                        self.prepare_expression(level.clone(), arg, context, false)?;
-                    }
                     self.put_local_call(function, arguments, &context.expression)?;
                     writeln!(self.out, ";")?;
                 }

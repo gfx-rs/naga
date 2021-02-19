@@ -36,6 +36,6 @@ fn check_glsl(name: &str) {
 fn parse_glsl() {
     //check_glsl("glsl_constant_expression.vert"); //TODO
     //check_glsl("glsl_if_preprocessor.vert");
-    check_glsl("glsl_preprocessor_abuse.vert");
-    check_glsl("glsl_vertex_test_shader.vert");
+    //check_glsl("glsl_preprocessor_abuse.vert");
+    //check_glsl("glsl_vertex_test_shader.vert");
 }

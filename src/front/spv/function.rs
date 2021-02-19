@@ -136,7 +136,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                 }
                 Instruction { op, .. } => return Err(Error::InvalidParameter(op)),
             }
-        }        
+        }
 
         // Read body
         let mut flow_graph = FlowGraph::new();
@@ -178,9 +178,12 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
         fun.body = flow_graph.to_naga()?;
 
         // mark the initial expressions as owned by the root block
-        fun.body
-            .expressions
-            .extend(fun.expressions.iter().take(init_expression_count).map(|(handle, _)| handle));
+        fun.body.expressions.extend(
+            fun.expressions
+                .iter()
+                .take(init_expression_count)
+                .map(|(handle, _)| handle),
+        );
         fun.body.expressions.rotate_right(init_expression_count);
 
         // done

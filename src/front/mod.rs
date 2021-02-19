@@ -27,11 +27,13 @@ impl super::Statement {
     }
 }
 
+#[allow(dead_code)]
 struct ExpressionArena<'a> {
     arena: &'a mut Arena<crate::Expression>,
     handles: &'a mut Vec<Handle<crate::Expression>>,
 }
 
+#[allow(dead_code)]
 impl ExpressionArena<'_> {
     fn reborrow(&mut self) -> ExpressionArena<'_> {
         ExpressionArena {

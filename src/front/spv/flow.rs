@@ -341,7 +341,9 @@ impl FlowGraph {
                 };
 
                 // filter out the expressions introduced by the body
-                continuing.expressions.retain(|handle| !body.expressions.contains(handle));
+                continuing
+                    .expressions
+                    .retain(|handle| !body.expressions.contains(handle));
 
                 let mut result = crate::Statement::Loop { body, continuing }.into_block();
                 result.extend(self.naga_traverse(merge_node_index, stop_node_index)?);
