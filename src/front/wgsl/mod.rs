@@ -113,26 +113,6 @@ impl<'a> StringValueLookup<'a> for FastHashMap<&'a str, Handle<crate::Expression
     }
 }
 
-struct ExpressionArena<'a> {
-    arena: &'a mut Arena<crate::Expression>,
-    handles: &'a mut Vec<Handle<crate::Expression>>,
-}
-
-impl ExpressionArena<'_> {
-    fn reborrow(&mut self) -> ExpressionArena<'_> {
-        ExpressionArena {
-            arena: self.arena,
-            handles: self.handles,
-        }
-    }
-
-    fn add(&mut self, expr: crate::Expression) -> Handle<crate::Expression> {
-        let handle = self.arena.append(expr);
-        self.handles.push(handle);
-        handle
-    }
-}
-
 struct StatementContext<'input, 'temp, 'out> {
     lookup_ident: &'temp mut FastHashMap<&'input str, Handle<crate::Expression>>,
     typifier: &'temp mut Typifier,
@@ -167,7 +147,7 @@ impl<'a> StatementContext<'a, '_, '_> {
         ExpressionContext {
             lookup_ident: self.lookup_ident,
             typifier: self.typifier,
-            expressions: ExpressionArena {
+            expressions: super::ExpressionArena {
                 arena: self.expressions,
                 handles,
             },
@@ -189,7 +169,7 @@ struct SamplingContext {
 struct ExpressionContext<'input, 'temp, 'out> {
     lookup_ident: &'temp FastHashMap<&'input str, Handle<crate::Expression>>,
     typifier: &'temp mut Typifier,
-    expressions: ExpressionArena<'out>,
+    expressions: super::ExpressionArena<'out>,
     types: &'out mut Arena<crate::Type>,
     constants: &'out mut Arena<crate::Constant>,
     global_vars: &'out Arena<crate::GlobalVariable>,
@@ -288,7 +268,7 @@ impl Composition {
         base: Handle<crate::Expression>,
         base_size: crate::VectorSize,
         name: &'a str,
-        mut expressions: ExpressionArena,
+        mut expressions: super::ExpressionArena,
     ) -> Result<Self, Error<'a>> {
         Ok(if name.len() > 1 {
             let mut components = Vec::with_capacity(name.len());

@@ -311,7 +311,7 @@ impl FlowGraph {
             },
             Some(ControlFlowNodeType::Loop) => {
                 let merge_node_index = self.block_to_node[&node.merge.unwrap().merge_block_id];
-                let continuing: crate::Block = {
+                let mut continuing: crate::Block = {
                     let continue_edge = self
                         .flow
                         .edges_directed(node_index, Direction::Outgoing)
@@ -339,6 +339,9 @@ impl FlowGraph {
                     ),
                     _ => return Err(Error::InvalidTerminator),
                 };
+
+                // filter out the expressions introduced by the body
+                continuing.expressions.retain(|handle| !body.expressions.contains(handle));
 
                 let mut result = crate::Statement::Loop { body, continuing }.into_block();
                 result.extend(self.naga_traverse(merge_node_index, stop_node_index)?);

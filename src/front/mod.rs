@@ -7,6 +7,8 @@ pub mod spv;
 #[cfg(feature = "wgsl-in")]
 pub mod wgsl;
 
+use crate::arena::{Arena, Handle};
+
 impl super::Block {
     pub fn extend(&mut self, mut other: super::Block) {
         //TODO: this isn't very nice, really. I wish we didn't need to do this.
@@ -22,5 +24,25 @@ impl super::Statement {
             expressions: Vec::new(),
             statements: vec![self],
         }
+    }
+}
+
+struct ExpressionArena<'a> {
+    arena: &'a mut Arena<crate::Expression>,
+    handles: &'a mut Vec<Handle<crate::Expression>>,
+}
+
+impl ExpressionArena<'_> {
+    fn reborrow(&mut self) -> ExpressionArena<'_> {
+        ExpressionArena {
+            arena: self.arena,
+            handles: self.handles,
+        }
+    }
+
+    fn add(&mut self, expr: crate::Expression) -> Handle<crate::Expression> {
+        let handle = self.arena.append(expr);
+        self.handles.push(handle);
+        handle
     }
 }

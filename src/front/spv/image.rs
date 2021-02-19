@@ -1,6 +1,6 @@
 use crate::arena::{Arena, Handle};
 
-use super::{Error, LookupExpression, LookupHelper as _};
+use super::{super::ExpressionArena, Error, LookupExpression, LookupHelper as _};
 
 #[derive(Clone, Debug)]
 pub(super) struct LookupSampledImage {
@@ -18,6 +18,18 @@ bitflags::bitflags! {
     }
 }
 
+impl ExpressionArena<'_> {
+    fn get_global_var(
+        &self,
+        expr: Handle<crate::Expression>,
+    ) -> Result<Handle<crate::GlobalVariable>, Error> {
+        match self.arena[expr] {
+            crate::Expression::GlobalVariable(handle) => Ok(handle),
+            ref other => Err(Error::InvalidGlobalVar(other.clone())),
+        }
+    }
+}
+
 /// Return the texture coordinates separated from the array layer,
 /// and/or divided by the projection term.
 ///
@@ -29,7 +41,7 @@ fn extract_image_coordinates(
     base: Handle<crate::Expression>,
     coordinate_ty: Handle<crate::Type>,
     type_arena: &Arena<crate::Type>,
-    expressions: &mut Arena<crate::Expression>,
+    mut expressions: ExpressionArena,
 ) -> (Handle<crate::Expression>, Option<Handle<crate::Expression>>) {
     let (given_size, kind) = match type_arena[coordinate_ty].inner {
         crate::TypeInner::Scalar { kind, .. } => (None, kind),
@@ -61,21 +73,21 @@ fn extract_image_coordinates(
     } else if image_arrayed {
         // extra coordinate for the array index
         let extracted = match required_size {
-            None => expressions.append(crate::Expression::AccessIndex { base, index: 0 }),
+            None => expressions.add(crate::Expression::AccessIndex { base, index: 0 }),
             Some(size) => {
                 let mut components = Vec::with_capacity(size as usize);
                 for index in 0..size as u32 {
-                    let comp = expressions.append(crate::Expression::AccessIndex { base, index });
+                    let comp = expressions.add(crate::Expression::AccessIndex { base, index });
                     components.push(comp);
                 }
-                expressions.append(crate::Expression::Compose {
+                expressions.add(crate::Expression::Compose {
                     ty: required_ty.unwrap(),
                     components,
                 })
             }
         };
-        let array_index_f32 = expressions.append(extra_expr);
-        let array_index = expressions.append(crate::Expression::As {
+        let array_index_f32 = expressions.add(extra_expr);
+        let array_index = expressions.add(crate::Expression::As {
             kind: crate::ScalarKind::Uint,
             expr: array_index_f32,
             convert: true,
@@ -83,11 +95,11 @@ fn extract_image_coordinates(
         (extracted, Some(array_index))
     } else {
         // extra coordinate for the projection W
-        let projection = expressions.append(extra_expr);
+        let projection = expressions.add(extra_expr);
         let divided = match required_size {
             None => {
-                let temp = expressions.append(crate::Expression::AccessIndex { base, index: 0 });
-                expressions.append(crate::Expression::Binary {
+                let temp = expressions.add(crate::Expression::AccessIndex { base, index: 0 });
+                expressions.add(crate::Expression::Binary {
                     op: crate::BinaryOperator::Divide,
                     left: temp,
                     right: projection,
@@ -96,15 +108,15 @@ fn extract_image_coordinates(
             Some(size) => {
                 let mut components = Vec::with_capacity(size as usize);
                 for index in 0..size as u32 {
-                    let temp = expressions.append(crate::Expression::AccessIndex { base, index });
-                    let comp = expressions.append(crate::Expression::Binary {
+                    let temp = expressions.add(crate::Expression::AccessIndex { base, index });
+                    let comp = expressions.add(crate::Expression::Binary {
                         op: crate::BinaryOperator::Divide,
                         left: temp,
                         right: projection,
                     });
                     components.push(comp);
                 }
-                expressions.append(crate::Expression::Compose {
+                expressions.add(crate::Expression::Compose {
                     ty: required_ty.unwrap(),
                     components,
                 })
@@ -187,7 +199,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
         words_left: u16,
         type_arena: &Arena<crate::Type>,
         global_arena: &Arena<crate::GlobalVariable>,
-        expressions: &mut Arena<crate::Expression>,
+        expressions: ExpressionArena,
     ) -> Result<crate::Statement, Error> {
         let image_id = self.next()?;
         let coordinate_id = self.next()?;
@@ -203,7 +215,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
         }
 
         let image_lexp = self.lookup_expression.lookup(image_id)?;
-        let image_var_handle = expressions[image_lexp.handle].as_global_var()?;
+        let image_var_handle = expressions.get_global_var(image_lexp.handle)?;
         let image_var = &global_arena[image_var_handle];
 
         let coord_lexp = self.lookup_expression.lookup(coordinate_id)?;
@@ -239,7 +251,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
         mut words_left: u16,
         type_arena: &Arena<crate::Type>,
         global_arena: &Arena<crate::GlobalVariable>,
-        expressions: &mut Arena<crate::Expression>,
+        mut expressions: ExpressionArena,
     ) -> Result<(), Error> {
         let result_type_id = self.next()?;
         let result_id = self.next()?;
@@ -274,7 +286,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
         }
 
         let image_lexp = self.lookup_expression.lookup(image_id)?;
-        let image_var_handle = expressions[image_lexp.handle].as_global_var()?;
+        let image_var_handle = expressions.get_global_var(image_lexp.handle)?;
         let image_var = &global_arena[image_var_handle];
 
         let coord_lexp = self.lookup_expression.lookup(coordinate_id)?;
@@ -290,7 +302,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                 coord_lexp.handle,
                 coord_type_handle,
                 type_arena,
-                expressions,
+                expressions.reborrow(),
             ),
             _ => return Err(Error::InvalidImage(image_var.ty)),
         };
@@ -304,7 +316,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
         self.lookup_expression.insert(
             result_id,
             LookupExpression {
-                handle: expressions.append(expr),
+                handle: expressions.add(expr),
                 type_id: result_type_id,
             },
         );
@@ -316,7 +328,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
         mut words_left: u16,
         type_arena: &Arena<crate::Type>,
         global_arena: &Arena<crate::GlobalVariable>,
-        expressions: &mut Arena<crate::Expression>,
+        mut expressions: ExpressionArena,
     ) -> Result<(), Error> {
         let result_type_id = self.next()?;
         let result_id = self.next()?;
@@ -354,8 +366,8 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
         let coord_lexp = self.lookup_expression.lookup(coordinate_id)?;
         let coord_type_handle = self.lookup_type.lookup(coord_lexp.type_id)?.handle;
 
-        let image_var_handle = expressions[si_lexp.image].as_global_var()?;
-        let sampler_var_handle = expressions[si_lexp.sampler].as_global_var()?;
+        let image_var_handle = expressions.get_global_var(si_lexp.image)?;
+        let sampler_var_handle = expressions.get_global_var(si_lexp.sampler)?;
         log::debug!(
             "\t\t\tImage {:?} sampled with {:?}",
             image_var_handle,
@@ -378,7 +390,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                 coord_lexp.handle,
                 coord_type_handle,
                 type_arena,
-                expressions,
+                expressions.reborrow(),
             ),
             _ => return Err(Error::InvalidImage(image_var.ty)),
         };
@@ -395,7 +407,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
         self.lookup_expression.insert(
             result_id,
             LookupExpression {
-                handle: expressions.append(expr),
+                handle: expressions.add(expr),
                 type_id: result_type_id,
             },
         );
@@ -407,7 +419,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
         mut words_left: u16,
         type_arena: &Arena<crate::Type>,
         global_arena: &Arena<crate::GlobalVariable>,
-        expressions: &mut Arena<crate::Expression>,
+        mut expressions: ExpressionArena,
     ) -> Result<(), Error> {
         let result_type_id = self.next()?;
         let result_id = self.next()?;
@@ -445,8 +457,8 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
         let si_lexp = self.lookup_sampled_image.lookup(sampled_image_id)?;
         let coord_lexp = self.lookup_expression.lookup(coordinate_id)?;
         let coord_type_handle = self.lookup_type.lookup(coord_lexp.type_id)?.handle;
-        let image_var_handle = expressions[si_lexp.image].as_global_var()?;
-        let sampler_var_handle = expressions[si_lexp.sampler].as_global_var()?;
+        let image_var_handle = expressions.get_global_var(si_lexp.image)?;
+        let sampler_var_handle = expressions.get_global_var(si_lexp.sampler)?;
         log::debug!(
             "\t\t\tImage {:?} sampled with comparison {:?}",
             image_var_handle,
@@ -479,7 +491,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                 coord_lexp.handle,
                 coord_type_handle,
                 type_arena,
-                expressions,
+                expressions.reborrow(),
             ),
             _ => return Err(Error::InvalidImage(image_var.ty)),
         };
@@ -496,7 +508,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
         self.lookup_expression.insert(
             result_id,
             LookupExpression {
-                handle: expressions.append(expr),
+                handle: expressions.add(expr),
                 type_id: result_type_id,
             },
         );
@@ -506,7 +518,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
     pub(super) fn parse_image_query_size(
         &mut self,
         at_level: bool,
-        expressions: &mut Arena<crate::Expression>,
+        mut expressions: ExpressionArena,
     ) -> Result<(), Error> {
         let result_type_id = self.next()?;
         let result_id = self.next()?;
@@ -529,7 +541,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
         self.lookup_expression.insert(
             result_id,
             LookupExpression {
-                handle: expressions.append(expr),
+                handle: expressions.add(expr),
                 type_id: result_type_id,
             },
         );
@@ -539,7 +551,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
     pub(super) fn parse_image_query_other(
         &mut self,
         query: crate::ImageQuery,
-        expressions: &mut Arena<crate::Expression>,
+        mut expressions: ExpressionArena,
     ) -> Result<(), Error> {
         let result_type_id = self.next()?;
         let result_id = self.next()?;
@@ -554,7 +566,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
         self.lookup_expression.insert(
             result_id,
             LookupExpression {
-                handle: expressions.append(expr),
+                handle: expressions.add(expr),
                 type_id: result_type_id,
             },
         );

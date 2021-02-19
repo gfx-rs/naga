@@ -76,6 +76,18 @@ pub enum LocalVariableError {
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
+pub enum ExpressionError {
+    #[error("handle is invalid")]
+    InvalidHandle,
+    #[error("dependencies of {0:?} have not been introduced in the prior blocks")]
+    DependenciesNotInScope(crate::Expression),
+    #[error("can't be re-introduced by a block - already in scope")]
+    AlreadyInScope,
+    #[error("can't be used by a statement - it's not introduced by any of the prior blocks")]
+    NotInScope,
+}
+
+#[derive(Clone, Debug, thiserror::Error)]
 pub enum FunctionError {
     #[error(transparent)]
     Resolve(#[from] ResolveError),
@@ -89,14 +101,11 @@ pub enum FunctionError {
     },
     #[error("Argument '{name}' at index {index} has a type that can't be passed into functions.")]
     InvalidArgumentType { index: usize, name: String },
-    #[error("Expression handle {0:?} does not exist")]
-    InvalidExpressionHandle(Handle<crate::Expression>),
-    #[error("Expression {0:?} dependencies have not been introduced in the prior blocks")]
-    ExpressionDependenciesNotInScope(crate::Expression),
-    #[error("Expression {0:?} can't be re-introduced by a block: it's already in scope")]
-    ExpressionAlreadyInScope(crate::Expression),
-    #[error("Expression {0:?} can't be used by a statement: it's not introduced by any of the prior blocks")]
-    ExpressionNotInScope(crate::Expression),
+    #[error("Expression {handle:?} error: {error}")]
+    Expression {
+        handle: Handle<crate::Expression>,
+        error: ExpressionError,
+    },
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
@@ -269,11 +278,17 @@ impl Arena<crate::Expression> {
         valid_set: &BitSet,
     ) -> Result<&crate::Expression, FunctionError> {
         if handle.index() >= self.len() {
-            return Err(FunctionError::InvalidExpressionHandle(handle));
+            return Err(FunctionError::Expression {
+                handle,
+                error: ExpressionError::InvalidHandle,
+            });
         }
         let expression = &self[handle];
         if !valid_set.contains(handle.index()) {
-            return Err(FunctionError::ExpressionNotInScope(expression.clone()));
+            return Err(FunctionError::Expression {
+                handle,
+                error: ExpressionError::NotInScope,
+            });
         }
         Ok(expression)
     }
@@ -555,7 +570,7 @@ impl Validator {
         &self,
         expression: &crate::Expression,
         valid_set: &BitSet,
-    ) -> Result<(), FunctionError> {
+    ) -> Result<(), ExpressionError> {
         use crate::Expression as E;
         let dependencies_ok = match *expression {
             E::Access { base, index } => {
@@ -656,9 +671,7 @@ impl Validator {
         if dependencies_ok {
             Ok(())
         } else {
-            Err(FunctionError::ExpressionDependenciesNotInScope(
-                expression.clone(),
-            ))
+            Err(ExpressionError::DependenciesNotInScope(expression.clone()))
         }
     }
 
@@ -669,14 +682,20 @@ impl Validator {
         valid_set: &mut BitSet,
     ) -> Result<(), FunctionError> {
         // register expressions in scope
-        for &expr_handle in block.expressions.iter() {
-            if expr_handle.index() >= fun.expressions.len() {
-                return Err(FunctionError::InvalidExpressionHandle(expr_handle));
+        for &handle in block.expressions.iter() {
+            if handle.index() >= fun.expressions.len() {
+                return Err(FunctionError::Expression {
+                    handle,
+                    error: ExpressionError::InvalidHandle,
+                });
             }
-            let expression = &fun.expressions[expr_handle];
-            self.validate_expression(expression, valid_set)?;
-            if !valid_set.insert(expr_handle.index()) {
-                return Err(FunctionError::ExpressionAlreadyInScope(expression.clone()));
+            self.validate_expression(&fun.expressions[handle], valid_set)
+                .map_err(|error| FunctionError::Expression { handle, error })?;
+            if !valid_set.insert(handle.index()) {
+                return Err(FunctionError::Expression {
+                    handle,
+                    error: ExpressionError::AlreadyInScope,
+                });
             }
         }
 

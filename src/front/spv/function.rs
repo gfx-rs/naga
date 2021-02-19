@@ -49,6 +49,38 @@ pub enum Terminator {
 }
 
 impl<I: Iterator<Item = u32>> super::Parser<I> {
+    fn make_expression_storage(&mut self) -> Arena<crate::Expression> {
+        let mut expressions = Arena::new();
+        #[allow(clippy::panic)]
+        {
+            assert!(self.lookup_expression.is_empty());
+        }
+        // register global variables
+        for (&id, var) in self.lookup_variable.iter() {
+            let handle = expressions.append(crate::Expression::GlobalVariable(var.handle));
+            self.lookup_expression.insert(
+                id,
+                LookupExpression {
+                    type_id: var.type_id,
+                    handle,
+                },
+            );
+        }
+        // register constants
+        for (&id, con) in self.lookup_constant.iter() {
+            let handle = expressions.append(crate::Expression::Constant(con.handle));
+            self.lookup_expression.insert(
+                id,
+                LookupExpression {
+                    type_id: con.type_id,
+                    handle,
+                },
+            );
+        }
+        // done
+        expressions
+    }
+
     pub fn parse_function(&mut self, module: &mut crate::Module) -> Result<(), Error> {
         let result_type_id = self.next()?;
         let fun_id = self.next()?;
@@ -104,10 +136,11 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                 }
                 Instruction { op, .. } => return Err(Error::InvalidParameter(op)),
             }
-        }
+        }        
 
         // Read body
         let mut flow_graph = FlowGraph::new();
+        let init_expression_count = fun.expressions.len();
 
         // Scan the blocks and add them as nodes
         loop {
@@ -143,6 +176,12 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
         flow_graph.classify();
         flow_graph.remove_phi_instructions(&self.lookup_expression);
         fun.body = flow_graph.to_naga()?;
+
+        // mark the initial expressions as owned by the root block
+        fun.body
+            .expressions
+            .extend(fun.expressions.iter().take(init_expression_count).map(|(handle, _)| handle));
+        fun.body.expressions.rotate_right(init_expression_count);
 
         // done
         self.patch_function_calls(&mut fun)?;
