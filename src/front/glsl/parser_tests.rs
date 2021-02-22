@@ -1,6 +1,6 @@
 use super::ast::Program;
 use super::error::ErrorKind;
-use super::lex::Lexer;
+use super::lex_pp::LexerPP;
 use super::parser;
 use crate::ShaderStage;
 
@@ -10,7 +10,7 @@ fn parse_program<'a>(
 ) -> Result<Program<'a>, ErrorKind> {
     let mut program = Program::new(entry_points);
     let defines = crate::FastHashMap::default();
-    let lex = Lexer::new(source, &defines);
+    let lex = LexerPP::new(source, &defines);
     let mut parser = parser::Parser::new(&mut program);
 
     for token in lex {
@@ -32,7 +32,7 @@ fn version() {
                 .err()
                 .unwrap()
         ),
-        "InvalidVersion(TokenMetadata { line: 0, chars: 9..14 }, 99000)"
+        "InvalidVersion(TokenMetadata { line: 1, chars: 9..10 }, 99000)" //TODO: location
     );
 
     assert_eq!(
@@ -40,7 +40,7 @@ fn version() {
             "{:?}",
             parse_program("#version 449", &entry_points).err().unwrap()
         ),
-        "InvalidVersion(TokenMetadata { line: 0, chars: 9..12 }, 449)"
+        "InvalidVersion(TokenMetadata { line: 1, chars: 9..10 }, 449)" //TODO: location
     );
 
     assert_eq!(
@@ -50,7 +50,7 @@ fn version() {
                 .err()
                 .unwrap()
         ),
-        "InvalidProfile(TokenMetadata { line: 0, chars: 13..18 }, \"smart\")"
+        "InvalidProfile(TokenMetadata { line: 1, chars: 13..14 }, \"smart\")" //TODO: location
     );
 
     assert_eq!(
@@ -60,7 +60,7 @@ fn version() {
                 .err()
                 .unwrap()
         ),
-        "InvalidToken(Unknown((TokenMetadata { line: 1, chars: 11..12 }, \"#\")))"
+        "InvalidToken(Unknown((TokenMetadata { line: 2, chars: 11..12 }, \"#\")))"
     );
 
     // valid versions

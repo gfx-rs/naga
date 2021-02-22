@@ -98,12 +98,58 @@ impl<'a> LexerPP<'a> {
                     Token::IntConstant((meta, integer.value as i64)) //TODO: unsigned etc
                 }
                 TokenValue::Punct(punct) => match punct {
-                    Punct::LeftParen => Token::LeftParen(meta),
-                    Punct::RightParen => Token::RightParen(meta),
+                    // Compound assignments
+                    Punct::AddAssign => Token::AddAssign(meta),
+                    Punct::SubAssign => Token::SubAssign(meta),
+                    Punct::MulAssign => Token::MulAssign(meta),
+                    Punct::DivAssign => Token::DivAssign(meta),
+                    Punct::ModAssign => Token::ModAssign(meta),
+                    Punct::LeftShiftAssign => Token::LeftAssign(meta),
+                    Punct::RightShiftAssign => Token::RightAssign(meta),
+                    Punct::AndAssign => Token::AndAssign(meta),
+                    Punct::XorAssign => Token::XorAssign(meta),
+                    Punct::OrAssign => Token::OrAssign(meta),
+
+                    // Two character punctuation
+                    Punct::Increment => Token::IncOp(meta),
+                    Punct::Decrement => Token::DecOp(meta),
+                    Punct::LogicalAnd => Token::AndOp(meta),
+                    Punct::LogicalOr => Token::OrOp(meta),
+                    Punct::LogicalXor => Token::XorOp(meta),
+                    Punct::LessEqual => Token::LeOp(meta),
+                    Punct::GreaterEqual => Token::GeOp(meta),
+                    Punct::EqualEqual => Token::EqOp(meta),
+                    Punct::NotEqual => Token::NeOp(meta),
+                    Punct::LeftShift => Token::LeftOp(meta),
+                    Punct::RightShift => Token::RightOp(meta),
+
+                    // Parenthesis or similar
                     Punct::LeftBrace => Token::LeftBrace(meta),
                     Punct::RightBrace => Token::RightBrace(meta),
+                    Punct::LeftParen => Token::LeftParen(meta),
+                    Punct::RightParen => Token::RightParen(meta),
+                    Punct::LeftBracket => Token::LeftBracket(meta),
+                    Punct::RightBracket => Token::RightBracket(meta),
 
-                    _ => Token::Unknown((meta, format!("{:?}", pp_token.value))),
+                    // Other one character punctuation
+                    Punct::LeftAngle => Token::LeftAngle(meta),
+                    Punct::RightAngle => Token::RightAngle(meta),
+                    Punct::Semicolon => Token::Semicolon(meta),
+                    Punct::Comma => Token::Comma(meta),
+                    Punct::Colon => Token::Colon(meta),
+                    Punct::Dot => Token::Dot(meta),
+                    Punct::Equal => Token::Equal(meta),
+                    Punct::Bang => Token::Bang(meta),
+                    Punct::Minus => Token::Dash(meta),
+                    Punct::Tilde => Token::Tilde(meta),
+                    Punct::Plus => Token::Plus(meta),
+                    Punct::Star => Token::Star(meta),
+                    Punct::Slash => Token::Slash(meta),
+                    Punct::Percent => Token::Percent(meta),
+                    Punct::Pipe => Token::VerticalBar(meta),
+                    Punct::Caret => Token::Caret(meta),
+                    Punct::Ampersand => Token::Ampersand(meta),
+                    Punct::Question => Token::Question(meta),
                 },
                 TokenValue::Version(version) => {
                     for t in version.tokens {

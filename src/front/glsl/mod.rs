@@ -1,14 +1,14 @@
 use crate::{FastHashMap, Module, ShaderStage};
 
-mod lex;
-#[cfg(test)]
-mod lex_tests;
+// mod lex;
+// #[cfg(test)]
+// mod lex_tests;
 
 mod lex_pp;
 
-mod preprocess;
-#[cfg(test)]
-mod preprocess_tests;
+// mod preprocess;
+// #[cfg(test)]
+// mod preprocess_tests;
 
 mod ast;
 use ast::Program;
