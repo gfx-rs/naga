@@ -30,19 +30,26 @@ impl<'a> LexerPP<'a> {
             line: 0,
             chars: 0..0,
         };
-        let pp_token = self.pp_buf.pop_front().or_else(|| {
+        let buf_token = self.pp_buf.pop_front();
+        let pp_token = if let Some(t) = buf_token {
+            Some(t)
+        } else {
             let t = self.pp.next();
             if let Some(t) = t {
-                if let Ok(t) = t {
-                    Some(t)
-                } else {
-                    //TODO: handle error
-                    None
+                match t {
+                    Ok(t) => Some(t),
+                    Err((err, loc)) => {
+                        meta.line = loc.line as usize;
+                        meta.chars.start = loc.pos as usize;
+                        //TODO: proper location end
+                        meta.chars.end = loc.pos as usize + 1;
+                        return Some(Token::Unknown((meta, format!("{:?}", err))));
+                    }
                 }
             } else {
                 None
             }
-        });
+        };
 
         pp_token.map(|pp_token| {
             meta.line = pp_token.location.line as usize;
@@ -245,5 +252,6 @@ mod tests {
                 chars: 14..15 //TODO
             })
         );
+        assert_eq!(lex.next(), None);
     }
 }
