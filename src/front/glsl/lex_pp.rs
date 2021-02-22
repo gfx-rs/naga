@@ -18,11 +18,10 @@ impl<'a> LexerPP<'a> {
         for (define, value) in defines {
             pp.add_define(define, value).unwrap(); //TODO: handle error
         }
-        let lexer = LexerPP {
+        LexerPP {
             pp,
             pp_buf: Default::default(),
-        };
-        lexer
+        }
     }
 
     pub fn next(&mut self) -> Option<Token> {
@@ -92,13 +91,10 @@ impl<'a> LexerPP<'a> {
                         "void" => Token::Void(meta),
                         "const" => Token::Const(meta),
 
-                        word => {
-                            let token = match parse_type(word) {
-                                Some(t) => Token::TypeName((meta, t)),
-                                None => Token::Identifier((meta, String::from(word))),
-                            };
-                            token
-                        }
+                        word => match parse_type(word) {
+                            Some(t) => Token::TypeName((meta, t)),
+                            None => Token::Identifier((meta, String::from(word))),
+                        },
                     }
                 }
                 TokenValue::Integer(integer) => {
