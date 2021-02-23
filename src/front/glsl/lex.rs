@@ -8,7 +8,7 @@ use std::collections::VecDeque;
 
 pub struct Lexer<'a> {
     pp: Preprocessor<'a>,
-    pp_buf: VecDeque<PPToken>,
+    tokens: VecDeque<PPToken>,
 }
 
 impl<'a> Lexer<'a> {
@@ -19,16 +19,19 @@ impl<'a> Lexer<'a> {
         }
         Lexer {
             pp,
-            pp_buf: Default::default(),
+            tokens: Default::default(),
         }
     }
+}
 
-    pub fn next(&mut self) -> Option<Token> {
+impl<'a> Iterator for Lexer<'a> {
+    type Item = Token;
+    fn next(&mut self) -> Option<Self::Item> {
         let mut meta = TokenMetadata {
             line: 0,
             chars: 0..0,
         };
-        let pp_token = match self.pp_buf.pop_front() {
+        let pp_token = match self.tokens.pop_front() {
             Some(t) => t,
             None => match self.pp.next()? {
                 Ok(t) => t,
@@ -145,19 +148,12 @@ impl<'a> Lexer<'a> {
             },
             TokenValue::Version(version) => {
                 for t in version.tokens {
-                    self.pp_buf.push_back(t);
+                    self.tokens.push_back(t);
                 }
                 Token::Version(meta)
             }
             _ => Token::Unknown((meta, format!("{:?}", pp_token.value))),
         })
-    }
-}
-
-impl<'a> Iterator for Lexer<'a> {
-    type Item = Token;
-    fn next(&mut self) -> Option<Self::Item> {
-        self.next()
     }
 }
 
