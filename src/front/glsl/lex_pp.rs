@@ -56,6 +56,7 @@ impl<'a> LexerPP<'a> {
             //TODO: proper location end
             meta.chars.end = pp_token.location.pos as usize + 1;
             match pp_token.value {
+                TokenValue::Float(float) => Token::FloatConstant((meta, float.value)),
                 TokenValue::Ident(ident) => {
                     match ident.as_str() {
                         "layout" => Token::Layout(meta),
@@ -97,9 +98,8 @@ impl<'a> LexerPP<'a> {
                         },
                     }
                 }
-                TokenValue::Integer(integer) => {
-                    Token::IntConstant((meta, integer.value as i64)) //TODO: unsigned etc
-                }
+                //TODO: unsigned etc
+                TokenValue::Integer(integer) => Token::IntConstant((meta, integer.value as i64)),
                 TokenValue::Punct(punct) => match punct {
                     // Compound assignments
                     Punct::AddAssign => Token::AddAssign(meta),
