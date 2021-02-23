@@ -29,139 +29,128 @@ impl<'a> LexerPP<'a> {
             line: 0,
             chars: 0..0,
         };
-        let buf_token = self.pp_buf.pop_front();
-        let pp_token = if let Some(t) = buf_token {
-            Some(t)
-        } else {
-            let t = self.pp.next();
-            if let Some(t) = t {
-                match t {
-                    Ok(t) => Some(t),
-                    Err((err, loc)) => {
-                        meta.line = loc.line as usize;
-                        meta.chars.start = loc.pos as usize;
-                        //TODO: proper location end
-                        meta.chars.end = loc.pos as usize + 1;
-                        return Some(Token::Unknown((meta, format!("{:?}", err))));
-                    }
+        let pp_token = match self.pp_buf.pop_front() {
+            Some(t) => t,
+            None => match self.pp.next()? {
+                Ok(t) => t,
+                Err((err, loc)) => {
+                    meta.line = loc.line as usize;
+                    meta.chars.start = loc.pos as usize;
+                    //TODO: proper location end
+                    meta.chars.end = loc.pos as usize + 1;
+                    return Some(Token::Unknown((meta, format!("{:?}", err))));
                 }
-            } else {
-                None
-            }
+            },
         };
 
-        pp_token.map(|pp_token| {
-            meta.line = pp_token.location.line as usize;
-            meta.chars.start = pp_token.location.pos as usize;
-            //TODO: proper location end
-            meta.chars.end = pp_token.location.pos as usize + 1;
-            match pp_token.value {
-                TokenValue::Float(float) => Token::FloatConstant((meta, float.value)),
-                TokenValue::Ident(ident) => {
-                    match ident.as_str() {
-                        "layout" => Token::Layout(meta),
-                        "in" => Token::In(meta),
-                        "out" => Token::Out(meta),
-                        "uniform" => Token::Uniform(meta),
-                        "flat" => Token::Interpolation((meta, crate::Interpolation::Flat)),
-                        "noperspective" => {
-                            Token::Interpolation((meta, crate::Interpolation::Linear))
-                        }
-                        "smooth" => Token::Interpolation((meta, crate::Interpolation::Perspective)),
-                        "centroid" => Token::Interpolation((meta, crate::Interpolation::Centroid)),
-                        "sample" => Token::Interpolation((meta, crate::Interpolation::Sample)),
-                        // values
-                        "true" => Token::BoolConstant((meta, true)),
-                        "false" => Token::BoolConstant((meta, false)),
-                        // jump statements
-                        "continue" => Token::Continue(meta),
-                        "break" => Token::Break(meta),
-                        "return" => Token::Return(meta),
-                        "discard" => Token::Discard(meta),
-                        // selection statements
-                        "if" => Token::If(meta),
-                        "else" => Token::Else(meta),
-                        "switch" => Token::Switch(meta),
-                        "case" => Token::Case(meta),
-                        "default" => Token::Default(meta),
-                        // iteration statements
-                        "while" => Token::While(meta),
-                        "do" => Token::Do(meta),
-                        "for" => Token::For(meta),
-                        // types
-                        "void" => Token::Void(meta),
-                        "const" => Token::Const(meta),
+        meta.line = pp_token.location.line as usize;
+        meta.chars.start = pp_token.location.pos as usize;
+        //TODO: proper location end
+        meta.chars.end = pp_token.location.pos as usize + 1;
+        Some(match pp_token.value {
+            TokenValue::Float(float) => Token::FloatConstant((meta, float.value)),
+            TokenValue::Ident(ident) => {
+                match ident.as_str() {
+                    "layout" => Token::Layout(meta),
+                    "in" => Token::In(meta),
+                    "out" => Token::Out(meta),
+                    "uniform" => Token::Uniform(meta),
+                    "flat" => Token::Interpolation((meta, crate::Interpolation::Flat)),
+                    "noperspective" => Token::Interpolation((meta, crate::Interpolation::Linear)),
+                    "smooth" => Token::Interpolation((meta, crate::Interpolation::Perspective)),
+                    "centroid" => Token::Interpolation((meta, crate::Interpolation::Centroid)),
+                    "sample" => Token::Interpolation((meta, crate::Interpolation::Sample)),
+                    // values
+                    "true" => Token::BoolConstant((meta, true)),
+                    "false" => Token::BoolConstant((meta, false)),
+                    // jump statements
+                    "continue" => Token::Continue(meta),
+                    "break" => Token::Break(meta),
+                    "return" => Token::Return(meta),
+                    "discard" => Token::Discard(meta),
+                    // selection statements
+                    "if" => Token::If(meta),
+                    "else" => Token::Else(meta),
+                    "switch" => Token::Switch(meta),
+                    "case" => Token::Case(meta),
+                    "default" => Token::Default(meta),
+                    // iteration statements
+                    "while" => Token::While(meta),
+                    "do" => Token::Do(meta),
+                    "for" => Token::For(meta),
+                    // types
+                    "void" => Token::Void(meta),
+                    "const" => Token::Const(meta),
 
-                        word => match parse_type(word) {
-                            Some(t) => Token::TypeName((meta, t)),
-                            None => Token::Identifier((meta, String::from(word))),
-                        },
-                    }
+                    word => match parse_type(word) {
+                        Some(t) => Token::TypeName((meta, t)),
+                        None => Token::Identifier((meta, String::from(word))),
+                    },
                 }
-                //TODO: unsigned etc
-                TokenValue::Integer(integer) => Token::IntConstant((meta, integer.value as i64)),
-                TokenValue::Punct(punct) => match punct {
-                    // Compound assignments
-                    Punct::AddAssign => Token::AddAssign(meta),
-                    Punct::SubAssign => Token::SubAssign(meta),
-                    Punct::MulAssign => Token::MulAssign(meta),
-                    Punct::DivAssign => Token::DivAssign(meta),
-                    Punct::ModAssign => Token::ModAssign(meta),
-                    Punct::LeftShiftAssign => Token::LeftAssign(meta),
-                    Punct::RightShiftAssign => Token::RightAssign(meta),
-                    Punct::AndAssign => Token::AndAssign(meta),
-                    Punct::XorAssign => Token::XorAssign(meta),
-                    Punct::OrAssign => Token::OrAssign(meta),
-
-                    // Two character punctuation
-                    Punct::Increment => Token::IncOp(meta),
-                    Punct::Decrement => Token::DecOp(meta),
-                    Punct::LogicalAnd => Token::AndOp(meta),
-                    Punct::LogicalOr => Token::OrOp(meta),
-                    Punct::LogicalXor => Token::XorOp(meta),
-                    Punct::LessEqual => Token::LeOp(meta),
-                    Punct::GreaterEqual => Token::GeOp(meta),
-                    Punct::EqualEqual => Token::EqOp(meta),
-                    Punct::NotEqual => Token::NeOp(meta),
-                    Punct::LeftShift => Token::LeftOp(meta),
-                    Punct::RightShift => Token::RightOp(meta),
-
-                    // Parenthesis or similar
-                    Punct::LeftBrace => Token::LeftBrace(meta),
-                    Punct::RightBrace => Token::RightBrace(meta),
-                    Punct::LeftParen => Token::LeftParen(meta),
-                    Punct::RightParen => Token::RightParen(meta),
-                    Punct::LeftBracket => Token::LeftBracket(meta),
-                    Punct::RightBracket => Token::RightBracket(meta),
-
-                    // Other one character punctuation
-                    Punct::LeftAngle => Token::LeftAngle(meta),
-                    Punct::RightAngle => Token::RightAngle(meta),
-                    Punct::Semicolon => Token::Semicolon(meta),
-                    Punct::Comma => Token::Comma(meta),
-                    Punct::Colon => Token::Colon(meta),
-                    Punct::Dot => Token::Dot(meta),
-                    Punct::Equal => Token::Equal(meta),
-                    Punct::Bang => Token::Bang(meta),
-                    Punct::Minus => Token::Dash(meta),
-                    Punct::Tilde => Token::Tilde(meta),
-                    Punct::Plus => Token::Plus(meta),
-                    Punct::Star => Token::Star(meta),
-                    Punct::Slash => Token::Slash(meta),
-                    Punct::Percent => Token::Percent(meta),
-                    Punct::Pipe => Token::VerticalBar(meta),
-                    Punct::Caret => Token::Caret(meta),
-                    Punct::Ampersand => Token::Ampersand(meta),
-                    Punct::Question => Token::Question(meta),
-                },
-                TokenValue::Version(version) => {
-                    for t in version.tokens {
-                        self.pp_buf.push_back(t);
-                    }
-                    Token::Version(meta)
-                }
-                _ => Token::Unknown((meta, format!("{:?}", pp_token.value))),
             }
+            //TODO: unsigned etc
+            TokenValue::Integer(integer) => Token::IntConstant((meta, integer.value as i64)),
+            TokenValue::Punct(punct) => match punct {
+                // Compound assignments
+                Punct::AddAssign => Token::AddAssign(meta),
+                Punct::SubAssign => Token::SubAssign(meta),
+                Punct::MulAssign => Token::MulAssign(meta),
+                Punct::DivAssign => Token::DivAssign(meta),
+                Punct::ModAssign => Token::ModAssign(meta),
+                Punct::LeftShiftAssign => Token::LeftAssign(meta),
+                Punct::RightShiftAssign => Token::RightAssign(meta),
+                Punct::AndAssign => Token::AndAssign(meta),
+                Punct::XorAssign => Token::XorAssign(meta),
+                Punct::OrAssign => Token::OrAssign(meta),
+
+                // Two character punctuation
+                Punct::Increment => Token::IncOp(meta),
+                Punct::Decrement => Token::DecOp(meta),
+                Punct::LogicalAnd => Token::AndOp(meta),
+                Punct::LogicalOr => Token::OrOp(meta),
+                Punct::LogicalXor => Token::XorOp(meta),
+                Punct::LessEqual => Token::LeOp(meta),
+                Punct::GreaterEqual => Token::GeOp(meta),
+                Punct::EqualEqual => Token::EqOp(meta),
+                Punct::NotEqual => Token::NeOp(meta),
+                Punct::LeftShift => Token::LeftOp(meta),
+                Punct::RightShift => Token::RightOp(meta),
+
+                // Parenthesis or similar
+                Punct::LeftBrace => Token::LeftBrace(meta),
+                Punct::RightBrace => Token::RightBrace(meta),
+                Punct::LeftParen => Token::LeftParen(meta),
+                Punct::RightParen => Token::RightParen(meta),
+                Punct::LeftBracket => Token::LeftBracket(meta),
+                Punct::RightBracket => Token::RightBracket(meta),
+
+                // Other one character punctuation
+                Punct::LeftAngle => Token::LeftAngle(meta),
+                Punct::RightAngle => Token::RightAngle(meta),
+                Punct::Semicolon => Token::Semicolon(meta),
+                Punct::Comma => Token::Comma(meta),
+                Punct::Colon => Token::Colon(meta),
+                Punct::Dot => Token::Dot(meta),
+                Punct::Equal => Token::Equal(meta),
+                Punct::Bang => Token::Bang(meta),
+                Punct::Minus => Token::Dash(meta),
+                Punct::Tilde => Token::Tilde(meta),
+                Punct::Plus => Token::Plus(meta),
+                Punct::Star => Token::Star(meta),
+                Punct::Slash => Token::Slash(meta),
+                Punct::Percent => Token::Percent(meta),
+                Punct::Pipe => Token::VerticalBar(meta),
+                Punct::Caret => Token::Caret(meta),
+                Punct::Ampersand => Token::Ampersand(meta),
+                Punct::Question => Token::Question(meta),
+            },
+            TokenValue::Version(version) => {
+                for t in version.tokens {
+                    self.pp_buf.push_back(t);
+                }
+                Token::Version(meta)
+            }
+            _ => Token::Unknown((meta, format!("{:?}", pp_token.value))),
         })
     }
 }
