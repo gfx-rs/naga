@@ -20,7 +20,7 @@ pomelo = { version = "0.1.4", optional = true }
 thiserror = "1.0.21"
 serde = { version = "1.0", features = ["derive"], optional = true }
 petgraph = { version ="0.5", optional = true }
-pp-rs = { git = "https://github.com/Kangz/glslpp-rs", branch = "main", optional = true }
+pp-rs = { git = "https://github.com/Kangz/glslpp-rs", rev = "4f2f72a", optional = true }
 
 [features]
 default = []
