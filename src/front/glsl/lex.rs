@@ -6,19 +6,18 @@ use pp_rs::{
 };
 use std::collections::VecDeque;
 
-//#[derive(Clone, Debug)]
-pub struct LexerPP<'a> {
+pub struct Lexer<'a> {
     pp: Preprocessor<'a>,
     pp_buf: VecDeque<PPToken>,
 }
 
-impl<'a> LexerPP<'a> {
+impl<'a> Lexer<'a> {
     pub fn new(input: &'a str, defines: &'a FastHashMap<String, String>) -> Self {
         let mut pp = Preprocessor::new(input);
         for (define, value) in defines {
             pp.add_define(define, value).unwrap(); //TODO: handle error
         }
-        LexerPP {
+        Lexer {
             pp,
             pp_buf: Default::default(),
         }
@@ -155,7 +154,7 @@ impl<'a> LexerPP<'a> {
     }
 }
 
-impl<'a> Iterator for LexerPP<'a> {
+impl<'a> Iterator for Lexer<'a> {
     type Item = Token;
     fn next(&mut self) -> Option<Self::Item> {
         self.next()
@@ -166,7 +165,7 @@ impl<'a> Iterator for LexerPP<'a> {
 mod tests {
     use super::{
         super::{parser::Token::*, token::TokenMetadata},
-        LexerPP,
+        Lexer,
     };
 
     #[test]
@@ -174,7 +173,7 @@ mod tests {
         let defines = crate::FastHashMap::default();
 
         // line comments
-        let mut lex = LexerPP::new("#version 450\nvoid main () {}", &defines);
+        let mut lex = Lexer::new("#version 450\nvoid main () {}", &defines);
         assert_eq!(
             lex.next().unwrap(),
             Version(TokenMetadata {

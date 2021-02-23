@@ -1,6 +1,6 @@
 use super::ast::Program;
 use super::error::ErrorKind;
-use super::lex_pp::LexerPP;
+use super::lex::Lexer;
 use super::parser;
 use crate::ShaderStage;
 
@@ -10,7 +10,7 @@ fn parse_program<'a>(
 ) -> Result<Program<'a>, ErrorKind> {
     let mut program = Program::new(entry_points);
     let defines = crate::FastHashMap::default();
-    let lex = LexerPP::new(source, &defines);
+    let lex = Lexer::new(source, &defines);
     let mut parser = parser::Parser::new(&mut program);
 
     for token in lex {
