@@ -40,7 +40,7 @@ impl<'a> Iterator for Lexer<'a> {
                     meta.chars.start = loc.pos as usize;
                     //TODO: proper location end
                     meta.chars.end = loc.pos as usize + 1;
-                    return Some(Token::Unknown((meta, format!("{:?}", err))));
+                    return Some(Token::Unknown((meta, err)));
                 }
             },
         };
@@ -50,6 +50,12 @@ impl<'a> Iterator for Lexer<'a> {
         //TODO: proper location end
         meta.chars.end = pp_token.location.pos as usize + 1;
         Some(match pp_token.value {
+            TokenValue::Extension(extension) => {
+                for t in extension.tokens {
+                    self.tokens.push_back(t);
+                }
+                Token::Extension((meta, ()))
+            }
             TokenValue::Float(float) => Token::FloatConstant((meta, float.value)),
             TokenValue::Ident(ident) => {
                 match ident.as_str() {
@@ -146,13 +152,18 @@ impl<'a> Iterator for Lexer<'a> {
                 Punct::Ampersand => Token::Ampersand(meta),
                 Punct::Question => Token::Question(meta),
             },
+            TokenValue::Pragma(pragma) => {
+                for t in pragma.tokens {
+                    self.tokens.push_back(t);
+                }
+                Token::Pragma((meta, ()))
+            }
             TokenValue::Version(version) => {
                 for t in version.tokens {
                     self.tokens.push_back(t);
                 }
                 Token::Version(meta)
             }
-            _ => Token::Unknown((meta, format!("{:?}", pp_token.value))),
         })
     }
 }

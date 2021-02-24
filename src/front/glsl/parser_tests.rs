@@ -60,7 +60,7 @@ fn version() {
                 .err()
                 .unwrap()
         ),
-        "InvalidToken(Unknown((TokenMetadata { line: 2, chars: 11..12 }, \"UnexpectedHash\")))"
+        "InvalidToken(Unknown((TokenMetadata { line: 2, chars: 11..12 }, UnexpectedHash)))"
     );
 
     // valid versions
