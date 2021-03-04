@@ -10,10 +10,17 @@ use super::token::TokenMetadata;
 impl Program<'_> {
     pub fn lookup_variable(&mut self, name: &str) -> Result<Option<Handle<Expression>>, ErrorKind> {
         if let Some(local_var) = self.context.lookup_local_var(name) {
-            return Ok(Some(local_var));
+            let load = self
+                .context
+                .expressions
+                .append(Expression::Load { pointer: local_var });
+            return Ok(Some(load));
         }
         if let Some(global_var) = self.context.lookup_global_var_exps.get(name) {
-            return Ok(Some(*global_var));
+            let load = self.context.expressions.append(Expression::Load {
+                pointer: *global_var,
+            });
+            return Ok(Some(load));
         }
         if let Some(constant) = self.context.lookup_constant_exps.get(name) {
             return Ok(Some(*constant));
