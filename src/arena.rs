@@ -188,6 +188,10 @@ impl<T> Arena<T> {
 
     /// Adds a new value to the arena, returning a typed handle.
     pub fn append(&mut self, value: T) -> Handle<T> {
+        debug_assert!(self.data.len() <= u32::MAX as usize);
+        if self.data.len() as u32 == u32::MAX {
+            panic!("Failed to append to Arena. Handle overflows");
+        }
         let position = self.data.len() + 1;
         let index = unsafe { Index::new_unchecked(position as u32) };
         self.data.push(value);
