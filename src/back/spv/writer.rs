@@ -65,11 +65,27 @@ struct EntryPointContext {
     results: Vec<ResultMember>,
 }
 
+/// An index used in an access chain can be a constant or a scalar with integer type
+#[derive(Debug)]
+enum Index {
+    Constant(u32),
+    Computed(Handle<crate::Expression>),
+}
+
+/// An access chain into a [crate::Expression::Composite]
+struct AccessChain {
+    root: Handle<crate::Expression>,
+    chain: Vec<Index>,
+}
+
 #[derive(Default)]
 struct Function {
     signature: Option<Instruction>,
     parameters: Vec<Instruction>,
     variables: crate::FastHashMap<Handle<crate::LocalVariable>, LocalVariable>,
+    allocated_composites: crate::FastHashMap<Handle<crate::Expression>, Word>,
+    accesses_used: crate::FastHashMap<Handle<crate::Expression>, AccessChain>,
+    // global_const_arrays: crate::FastHashMap<Handle<crate::Constant>, Word>,
     blocks: Vec<Block>,
     entry_point_context: Option<EntryPointContext>,
 }
@@ -279,6 +295,239 @@ pub struct Writer {
     temp_list: Vec<Word>,
 }
 
+/// Identify all Access and AccessIndex expressions used in syntax
+/// tree rooted at some [crate::Expression].
+fn accesses_used_in_expression(
+    expressions: &Arena<crate::Expression>,
+    accesses: &mut crate::FastHashSet<Handle<crate::Expression>>,
+    root: Handle<crate::Expression>,
+) {
+    let mut queue: Vec<(Handle<crate::Expression>, bool)> = vec![(root, true)];
+    while let Some((e, not_base)) = queue.pop() {
+        match &expressions[e] {
+            crate::Expression::Access { base, index } => {
+                if not_base {
+                    accesses.insert(e);
+                }
+                queue.push((*base, false));
+                queue.push((*index, true));
+            }
+
+            crate::Expression::AccessIndex { base, .. } => {
+                if not_base {
+                    accesses.insert(e);
+                }
+                queue.push((*base, false));
+            }
+            crate::Expression::Constant(_) => {}
+            crate::Expression::Compose { components, .. } => {
+                components.iter().for_each(|e| queue.push((*e, true)))
+            }
+            crate::Expression::FunctionArgument(_) => {}
+            crate::Expression::GlobalVariable(_) => {}
+            crate::Expression::LocalVariable(_) => {}
+            crate::Expression::Load { pointer } => queue.push((*pointer, true)),
+            crate::Expression::ImageSample {
+                image,
+                sampler,
+                coordinate,
+                array_index,
+                depth_ref,
+                ..
+            } => {
+                queue.push((*image, true));
+                queue.push((*sampler, true));
+                queue.push((*coordinate, true));
+                array_index.iter().for_each(|e| queue.push((*e, true)));
+                depth_ref.iter().for_each(|e| queue.push((*e, true)));
+            }
+            crate::Expression::ImageLoad {
+                image,
+                coordinate,
+                array_index,
+                index,
+            } => {
+                queue.push((*image, true));
+                queue.push((*coordinate, true));
+                array_index.iter().for_each(|e| queue.push((*e, true)));
+                index.iter().for_each(|e| queue.push((*e, true)));
+            }
+            crate::Expression::ImageQuery { image, .. } => queue.push((*image, true)),
+            crate::Expression::Unary { expr, .. } => queue.push((*expr, true)),
+            crate::Expression::Binary { left, right, .. } => {
+                queue.push((*left, true));
+                queue.push((*right, true));
+            }
+            crate::Expression::Select {
+                condition,
+                accept,
+                reject,
+            } => {
+                queue.push((*condition, true));
+                queue.push((*accept, true));
+                queue.push((*reject, true));
+            }
+            crate::Expression::Derivative { expr, .. } => queue.push((*expr, true)),
+            crate::Expression::Relational { argument, .. } => queue.push((*argument, true)),
+            crate::Expression::Math {
+                arg, arg1, arg2, ..
+            } => {
+                queue.push((*arg, true));
+                arg1.iter().for_each(|e| queue.push((*e, true)));
+                arg2.iter().for_each(|e| queue.push((*e, true)));
+            }
+            crate::Expression::As { expr, .. } => queue.push((*expr, true)),
+            crate::Expression::Call(_) => {}
+            crate::Expression::ArrayLength(_) => {}
+            crate::Expression::Splat { .. } => {}
+        }
+    }
+}
+
+/// Identify all Access and AccessIndex expressions used in a sequence of [crate::Statement]s
+fn accesses_used_in_block(
+    expressions: &Arena<crate::Expression>,
+    body: &Vec<crate::Statement>,
+) -> crate::FastHashSet<Handle<crate::Expression>> {
+    let mut queue: Vec<&crate::Statement> = vec![];
+    let mut accesses = crate::FastHashSet::default();
+    let mut add_array = |e| {
+        if !accesses.contains(&e) {
+            accesses_used_in_expression(expressions, &mut accesses, e);
+        }
+    };
+    for s in body.iter() {
+        queue.push(s);
+    }
+    while let Some(s) = queue.pop() {
+        match s {
+            crate::Statement::Emit(_) => {}
+            crate::Statement::Block(block) => {
+                for s in block.iter() {
+                    queue.push(s);
+                }
+            }
+            crate::Statement::If {
+                condition,
+                accept,
+                reject,
+            } => {
+                add_array(*condition);
+                for s in accept.iter() {
+                    queue.push(s);
+                }
+                for s in reject.iter() {
+                    queue.push(s);
+                }
+            }
+            crate::Statement::Switch {
+                selector,
+                cases,
+                default,
+            } => {
+                add_array(*selector);
+                for c in cases.iter() {
+                    for s in c.body.iter() {
+                        queue.push(s);
+                    }
+                }
+                for s in default.iter() {
+                    queue.push(s);
+                }
+            }
+            crate::Statement::Loop { body, continuing } => {
+                for s in body.iter() {
+                    queue.push(s);
+                }
+                for s in continuing.iter() {
+                    queue.push(s);
+                }
+            }
+            crate::Statement::Break => {}
+            crate::Statement::Continue => {}
+            crate::Statement::Return { value } => value.iter().for_each(|e| add_array(*e)),
+            crate::Statement::Kill => {}
+            crate::Statement::Store { value, .. } => {
+                add_array(*value);
+            }
+            crate::Statement::ImageStore {
+                image,
+                coordinate,
+                array_index,
+                value,
+            } => {
+                add_array(*image);
+                add_array(*coordinate);
+                array_index.iter().for_each(|e| add_array(*e));
+                add_array(*value);
+            }
+            crate::Statement::Call {
+                arguments, result, ..
+            } => {
+                arguments.iter().for_each(|e| add_array(*e));
+                result.iter().for_each(|e| add_array(*e));
+            }
+        }
+    }
+    accesses
+}
+
+/// Extract an array type, if any, referenced by the given expression
+/// and the index chain to that type.
+fn get_referenced_array(
+    ir_module: &crate::Module,
+    ir_function: &crate::Function,
+    mut expr_handle: Handle<crate::Expression>,
+) -> Result<Option<(Handle<crate::Expression>, Handle<crate::Type>, Vec<Index>)>, Error> {
+    let mut indices = vec![];
+    let res = loop {
+        expr_handle = match ir_function.expressions[expr_handle] {
+            crate::Expression::Compose { ty, ref components } => match ir_module.types[ty].inner {
+                crate::TypeInner::Array { .. } => break Some((expr_handle, ty)),
+                crate::TypeInner::Struct { .. } => match indices.last() {
+                    Some(Index::Constant(i)) => components[*i as usize],
+                    _ => break Some((expr_handle, ty)),
+                },
+                _ => break None,
+            },
+            crate::Expression::Constant(h) => match ir_module.constants[h].inner {
+                crate::ConstantInner::Composite { ty, .. } => break Some((expr_handle, ty)),
+                _ => break None,
+            },
+            crate::Expression::FunctionArgument(index) => {
+                let ty = ir_function.arguments[index as usize].ty;
+                if let crate::TypeInner::Array { .. } = ir_module.types[ty].inner {
+                    break Some((expr_handle, ty));
+                } else {
+                    break None;
+                }
+            }
+            crate::Expression::AccessIndex { base, index } => {
+                indices.push(Index::Constant(index));
+                base
+            }
+            crate::Expression::Access { base, index } => {
+                indices.push(Index::Computed(index));
+                base
+            }
+            crate::Expression::Load { pointer } => {
+                let mut res = None;
+                if let crate::Expression::Compose { ty, .. } = ir_function.expressions[pointer] {
+                    if let crate::TypeInner::Array { .. } = ir_module.types[ty].inner {
+                        res = Some((expr_handle, ty));
+                    }
+                }
+                break res;
+            }
+            _ => break None,
+        }
+    };
+    Ok(res.map(|(expr, ty)| {
+        indices.reverse();
+        (expr, ty, indices)
+    }))
+}
+
 impl Writer {
     pub fn new(options: &Options) -> Result<Self, Error> {
         let (major, minor) = options.lang_version;
@@ -399,6 +648,26 @@ impl Writer {
         Ok(id)
     }
 
+    /// Generate an instruction to allocate storage to be associated
+    /// with an expression of some type. Returns the `id` of the
+    /// pointer and the allocation instruction.
+    fn associate_storage(
+        &mut self,
+        types: &Arena<crate::Type>,
+        ty: Handle<crate::Type>,
+        name: &Option<String>,
+        init: Option<Word>,
+    ) -> Result<(Word, Instruction), Error> {
+        let id = self.id_gen.next();
+        let pointer_type_id = self.get_pointer_id(types, ty, spirv::StorageClass::Function)?;
+        if let Some(ref name) = name {
+            self.debugs.push(Instruction::name(id, name));
+        }
+        let instruction =
+            Instruction::variable(pointer_type_id, id, spirv::StorageClass::Function, init);
+        Ok((id, instruction))
+    }
+
     fn write_function(
         &mut self,
         ir_function: &crate::Function,
@@ -439,6 +708,44 @@ impl Writer {
             argument_ids: Vec::new(),
             results: Vec::new(),
         };
+
+        // Array usage requires local storage. Add an `OpVariable` for
+        // every array-typed expression if it used as something other
+        // than an intermediate value of an access chain.
+
+        // Identify all the Access and AccessIndex expressions whose results are used
+        let accesses_used = accesses_used_in_block(&ir_function.expressions, &ir_function.body);
+
+        // Map each of those accesses to a root composite
+        for handle in accesses_used {
+            if let Some((root, ty, chain)) = get_referenced_array(ir_module, ir_function, handle)? {
+                match function.allocated_composites.entry(root) {
+                    Entry::Occupied(_) => {}
+                    Entry::Vacant(entry) => {
+                        log::debug!(
+                            "Associating storage with {:?}",
+                            ir_function.expressions[root]
+                        );
+                        let name = if self.flags.contains(WriterFlags::DEBUG) {
+                            match ir_function.expressions[root] {
+                                crate::Expression::Constant(h) => &ir_module.constants[h].name,
+                                _ => &None,
+                            }
+                        } else {
+                            &None
+                        };
+                        let (id, instruction) =
+                            self.associate_storage(&ir_module.types, ty, name, None)?;
+                        prelude.body.push(instruction);
+                        entry.insert(id);
+                    }
+                }
+
+                function
+                    .accesses_used
+                    .insert(handle, AccessChain { root, chain });
+            }
+        }
 
         let mut parameter_type_ids = Vec::with_capacity(ir_function.arguments.len());
         for argument in ir_function.arguments.iter() {
@@ -1330,10 +1637,78 @@ impl Writer {
                             ));
                             id
                         }
-                        //TODO: support `crate::TypeInner::Array { .. }` ?
-                        ref other => {
-                            log::error!("Unable to access {:?}", other);
-                            return Err(Error::FeatureNotImplemented("access for type"));
+                        crate::TypeInner::Array {
+                            base: array_base, ..
+                        } if function.accesses_used.contains_key(&expr_handle) => {
+                            if let Some(AccessChain { root, chain }) =
+                                function.accesses_used.get(&expr_handle)
+                            {
+                                if let Some(&var_id) = function.allocated_composites.get(&root) {
+                                    let ptr_id = self.id_gen.next();
+                                    let ptr_type_id = self.get_pointer_id(
+                                        &ir_module.types,
+                                        array_base,
+                                        spirv::StorageClass::Function,
+                                    )?;
+                                    let mut resolved_indices = Vec::with_capacity(chain.len());
+                                    for i in chain {
+                                        match *i {
+                                            Index::Constant(i) => {
+                                                // TODO: cache this
+                                                let index_id = self.id_gen.next();
+                                                self.write_constant_scalar(
+                                                    index_id,
+                                                    &crate::ScalarValue::Uint(i as u64),
+                                                    4,
+                                                    None,
+                                                    &ir_module.types,
+                                                )?;
+                                                resolved_indices.push(index_id)
+                                            }
+                                            Index::Computed(i) => {
+                                                resolved_indices.push(self.cached[i])
+                                            }
+                                        }
+                                    }
+
+                                    block.body.push(Instruction::access_chain(
+                                        ptr_type_id,
+                                        ptr_id,
+                                        var_id,
+                                        &resolved_indices,
+                                    ));
+                                    let id = self.id_gen.next();
+                                    block.body.push(Instruction::load(
+                                        result_type_id,
+                                        id,
+                                        ptr_id,
+                                        None,
+                                    ));
+                                    id
+                                } else {
+                                    log::error!(
+                                        "No allocated array for {:?} {:?} at root {:?}",
+                                        expr_handle,
+                                        ir_function.expressions[expr_handle],
+                                        root
+                                    );
+                                    return Err(Error::FeatureNotImplemented(
+                                        "Failed to synthesize allocation for a constant",
+                                    ));
+                                }
+                            } else {
+                                log::error!("No access chain despite guard");
+                                return Err(Error::FeatureNotImplemented(
+                                    "Access chain resolution failed",
+                                ));
+                            }
+                        }
+                        _ => {
+                            // An Access that is never used other than
+                            // as an intermediate value in another
+                            // access chain.
+                            // NOTE: This ID is never used, but we must return something
+                            self.id_gen.next()
                         }
                     }
                 }
@@ -1361,6 +1736,9 @@ impl Writer {
                                 base_id,
                                 &[index],
                             ));
+                            if let Some(var_id) = function.allocated_composites.get(&expr_handle) {
+                                block.body.push(Instruction::store(*var_id, id, None));
+                            }
                             id
                         }
                         ref other => {
@@ -1371,7 +1749,16 @@ impl Writer {
                 }
             }
             crate::Expression::GlobalVariable(handle) => self.global_variables[handle.index()].id,
-            crate::Expression::Constant(handle) => self.constant_ids[handle.index()],
+            crate::Expression::Constant(handle) => {
+                // If this is a const array, store it into the allocated variable
+                let composite_id = self.constant_ids[handle.index()];
+                if let Some(&var_id) = function.allocated_composites.get(&expr_handle) {
+                    block
+                        .body
+                        .push(Instruction::store(var_id, composite_id, None));
+                }
+                composite_id
+            }
             crate::Expression::Splat { size, value } => {
                 let value_id = self.cached[value];
                 self.temp_list.clear();
@@ -1385,6 +1772,7 @@ impl Writer {
                 ));
                 id
             }
+
             crate::Expression::Compose {
                 ty: _,
                 ref components,
@@ -1400,6 +1788,11 @@ impl Writer {
                     id,
                     &self.temp_list,
                 ));
+                // If the composite is an array, emit a store to write
+                // it into an allocated variable
+                if let Some(&var_id) = function.allocated_composites.get(&expr_handle) {
+                    block.body.push(Instruction::store(var_id, id, None));
+                }
                 id
             }
             crate::Expression::Unary { op, expr } => {
@@ -1692,6 +2085,7 @@ impl Writer {
             }
             crate::Expression::LocalVariable(variable) => function.variables[&variable].id,
             crate::Expression::Load { pointer } => {
+                log::debug!("Write expression pointer for Load");
                 let (pointer_id, _) = self.write_expression_pointer(
                     ir_module,
                     ir_function,
@@ -1705,12 +2099,25 @@ impl Writer {
                 block
                     .body
                     .push(Instruction::load(result_type_id, id, pointer_id, None));
+
+                if let Some(&var_id) = function.allocated_composites.get(&expr_handle) {
+                    block
+                        .body
+                        .push(Instruction::store(var_id, pointer_id, None));
+                }
+
                 id
             }
-            crate::Expression::FunctionArgument(index) => match function.entry_point_context {
-                Some(ref context) => context.argument_ids[index as usize],
-                None => function.parameters[index as usize].result_id.unwrap(),
-            },
+            crate::Expression::FunctionArgument(index) => {
+                let arg_id = match function.entry_point_context {
+                    Some(ref context) => context.argument_ids[index as usize],
+                    None => function.parameters[index as usize].result_id.unwrap(),
+                };
+                if let Some(&var_id) = function.allocated_composites.get(&expr_handle) {
+                    block.body.push(Instruction::store(var_id, arg_id, None));
+                }
+                arg_id
+            }
             crate::Expression::Call(_function) => self.lookup_function_call[&expr_handle],
             crate::Expression::As {
                 expr,
@@ -2021,6 +2428,10 @@ impl Writer {
         block: &mut Block,
         function: &mut Function,
     ) -> Result<(Word, spirv::StorageClass), Error> {
+        log::debug!(
+            "write_expression_pointer starting at {:?}",
+            ir_function.expressions[expr_handle]
+        );
         let result_lookup_ty = match fun_info[expr_handle].ty {
             TypeResolution::Handle(ty_handle) => LookupType::Handle(ty_handle),
             TypeResolution::Value(ref inner) => {
@@ -2031,6 +2442,7 @@ impl Writer {
 
         self.temp_list.clear();
         let (root_id, class) = loop {
+            log::debug!("  digging to {:?}", ir_function.expressions[expr_handle]);
             expr_handle = match ir_function.expressions[expr_handle] {
                 crate::Expression::Access { base, index } => {
                     let index_id = self.cached[index];
@@ -2415,6 +2827,7 @@ impl Writer {
                     block.termination = Some(Instruction::kill());
                 }
                 crate::Statement::Store { pointer, value } => {
+                    log::debug!("Write expression pointer for Store");
                     let (pointer_id, _) = self.write_expression_pointer(
                         ir_module,
                         ir_function,
