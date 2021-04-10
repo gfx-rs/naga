@@ -887,6 +887,15 @@ impl<W: Write> Writer<W> {
             } => {
                 use crate::MathFunction as Mf;
 
+                let ignore = fun == Mf::Length
+                    && match &context.info[arg].ty {
+                        TypeResolution::Handle(handle) => {
+                            let ty = &context.module.types[*handle];
+                            matches!(ty.inner, crate::TypeInner::Scalar { .. })
+                        }
+                        TypeResolution::Value(ty) => matches!(ty, crate::TypeInner::Scalar { .. }),
+                    };
+
                 let fun_name = match fun {
                     // comparison
                     Mf::Abs => "abs",
@@ -944,8 +953,12 @@ impl<W: Write> Writer<W> {
                     Mf::ReverseBits => "reverse_bits",
                 };
 
-                write!(self.out, "{}::{}", NAMESPACE, fun_name)?;
-                self.put_call_parameters(iter::once(arg).chain(arg1).chain(arg2), context)?;
+                if ignore {
+                    self.put_expression(arg, context, is_scoped)?;
+                } else {
+                    write!(self.out, "{}::{}", NAMESPACE, fun_name)?;
+                    self.put_call_parameters(iter::once(arg).chain(arg1).chain(arg2), context)?;
+                }
             }
             crate::Expression::As {
                 expr,
