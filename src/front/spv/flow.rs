@@ -322,15 +322,12 @@ impl FlowGraph {
             },
             Some(ControlFlowNodeType::Loop) => {
                 let merge_node_index = self.block_to_node[&node.merge.unwrap().merge_block_id];
-                let continuing: crate::Block = {
-                    let continue_edge = self
-                        .flow
-                        .edges_directed(node_index, Direction::Outgoing)
-                        .find(|&ty| *ty.weight() == ControlFlowEdgeType::ForwardContinue)
-                        .unwrap();
-
-                    self.flow[continue_edge.target()].block.clone()
-                };
+                let continue_node_index = self
+                    .flow
+                    .edges_directed(node_index, Direction::Outgoing)
+                    .find(|&ty| *ty.weight() == ControlFlowEdgeType::ForwardContinue)
+                    .unwrap()
+                    .target();
 
                 let mut body = node.block.clone();
                 match node.terminator {
@@ -347,22 +344,26 @@ impl FlowGraph {
                             accept: if true_node_index == merge_node_index {
                                 vec![crate::Statement::Break]
                             } else {
-                                self.naga_traverse(true_node_index, Some(merge_node_index))?
+                                self.naga_traverse(true_node_index, Some(continue_node_index))?
                             },
                             reject: if false_node_index == merge_node_index {
                                 vec![crate::Statement::Break]
                             } else {
-                                self.naga_traverse(false_node_index, Some(merge_node_index))?
+                                self.naga_traverse(false_node_index, Some(continue_node_index))?
                             },
                         });
                     }
-                    Terminator::Branch { target_id } => body.extend(
-                        self.naga_traverse(self.block_to_node[&target_id], Some(merge_node_index))?,
-                    ),
+                    Terminator::Branch { target_id } => body.extend(self.naga_traverse(
+                        self.block_to_node[&target_id],
+                        Some(continue_node_index),
+                    )?),
                     _ => return Err(Error::InvalidTerminator),
                 };
 
-                let mut result = vec![crate::Statement::Loop { body, continuing }];
+                let mut result = vec![crate::Statement::Loop {
+                    body,
+                    continuing: self.flow[continue_node_index].block.clone(),
+                }];
                 result.extend(self.naga_traverse(merge_node_index, stop_node_index)?);
 
                 Ok(result)
