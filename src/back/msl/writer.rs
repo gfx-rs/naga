@@ -668,7 +668,17 @@ impl<W: Write> Writer<W> {
                 write!(self.out, "{}", name)?;
             }
             crate::Expression::Load { pointer } => {
-                //write!(self.out, "*")?;
+                let should_dereference = match context.info[pointer].ty {
+                    TypeResolution::Handle(handle) => {
+                        let ty = &context.module.types[handle];
+                        matches!(ty.inner, crate::TypeInner::Pointer { .. })
+                    }
+                    TypeResolution::Value(_) => false,
+                };
+
+                if should_dereference {
+                    write!(self.out, "*")?;
+                }
                 self.put_expression(pointer, context, is_scoped)?;
             }
             crate::Expression::ImageSample {
