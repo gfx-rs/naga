@@ -1284,11 +1284,25 @@ impl<W: Write> Writer<W> {
                     }
                     let fun_name = &self.names[&NameKey::Function(function)];
                     write!(self.out, "{}(", fun_name)?;
+
+                    let function_arguments =
+                        &context.expression.module.functions[function].arguments;
+
                     // first, write down the actual arguments
-                    for (i, &handle) in arguments.iter().enumerate() {
+                    for (i, (&handle, argument)) in
+                        arguments.iter().zip(function_arguments).enumerate()
+                    {
                         if i != 0 {
                             write!(self.out, ", ")?;
                         }
+
+                        let ty = &context.expression.module.types[argument.ty];
+
+                        // If the function expects a pointer as an argument, take a reference.
+                        if matches!(ty.inner, crate::TypeInner::Pointer { .. }) {
+                            write!(self.out, "&")?;
+                        }
+
                         self.put_expression(handle, &context.expression, true)?;
                     }
                     // follow-up with any global resources used
