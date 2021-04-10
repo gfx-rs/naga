@@ -554,7 +554,21 @@ impl<W: Write> Writer<W> {
         log::trace!("expression {:?} = {:?}", expr_handle, expression);
         match *expression {
             crate::Expression::Access { base, index } => {
+                let should_dereference = match context.info[base].ty {
+                    TypeResolution::Handle(handle) => {
+                        let ty = &context.module.types[handle];
+                        matches!(ty.inner, crate::TypeInner::Pointer { .. })
+                    }
+                    _ => false,
+                };
+
+                if should_dereference {
+                    write!(self.out, "(*")?;
+                }
                 self.put_expression(base, context, false)?;
+                if should_dereference {
+                    write!(self.out, ")")?;
+                }
                 write!(self.out, "[")?;
                 self.put_expression(index, context, true)?;
                 write!(self.out, "]")?;
@@ -1246,7 +1260,18 @@ impl<W: Write> Writer<W> {
                             writeln!(self.out, "[_i];")?;
                         }
                         None => {
+                            let should_dereference = match pointer_info.ty {
+                                TypeResolution::Handle(handle) => {
+                                    let ty = &context.expression.module.types[handle];
+                                    matches!(ty.inner, crate::TypeInner::Pointer { .. })
+                                }
+                                TypeResolution::Value(_) => false,
+                            };
+
                             write!(self.out, "{}", level)?;
+                            if should_dereference {
+                                write!(self.out, "*")?;
+                            }
                             self.put_expression(pointer, &context.expression, true)?;
                             write!(self.out, " = ")?;
                             self.put_expression(value, &context.expression, true)?;
