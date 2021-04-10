@@ -383,21 +383,19 @@ impl FlowGraph {
                         let false_edge =
                             self.flow[self.flow.find_edge(node_index, false_node_id).unwrap()];
 
-                        if true_edge == ControlFlowEdgeType::LoopBreak {
-                            result.push(crate::Statement::If {
-                                condition,
-                                accept: vec![crate::Statement::Break],
-                                reject: self.naga_traverse(false_node_id, stop_node_index)?,
-                            });
-                        } else if false_edge == ControlFlowEdgeType::LoopBreak {
-                            result.push(crate::Statement::If {
-                                condition,
-                                accept: self.naga_traverse(true_node_id, stop_node_index)?,
-                                reject: vec![crate::Statement::Break],
-                            });
-                        } else {
-                            return Err(Error::InvalidEdgeClassification);
-                        }
+                        result.push(crate::Statement::If {
+                            condition,
+                            accept: if true_edge == ControlFlowEdgeType::LoopBreak {
+                                vec![crate::Statement::Break]
+                            } else {
+                                self.naga_traverse(true_node_id, stop_node_index)?
+                            },
+                            reject: if false_edge == ControlFlowEdgeType::LoopBreak {
+                                vec![crate::Statement::Break]
+                            } else {
+                                self.naga_traverse(false_node_id, stop_node_index)?
+                            },
+                        });
                     }
                     Terminator::Branch { .. } => {
                         result.push(crate::Statement::Break);
