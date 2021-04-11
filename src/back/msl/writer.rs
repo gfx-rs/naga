@@ -91,7 +91,7 @@ impl<'a> Display for TypeContext<'a> {
                     Some(name) => name,
                     None => return Ok(()),
                 };
-                write!(out, "{} {}*", class_name, sub)
+                write!(out, "{} {}&", class_name, sub)
             }
             crate::TypeInner::ValuePointer {
                 size: None,
@@ -103,7 +103,7 @@ impl<'a> Display for TypeContext<'a> {
                     Some(name) => name,
                     None => return Ok(()),
                 };
-                write!(out, "{} {}*", class_name, scalar_kind_string(kind),)
+                write!(out, "{} {}&", class_name, scalar_kind_string(kind),)
             }
             crate::TypeInner::ValuePointer {
                 size: Some(size),
@@ -117,7 +117,7 @@ impl<'a> Display for TypeContext<'a> {
                 };
                 write!(
                     out,
-                    "{} {}::{}{}*",
+                    "{} {}::{}{}&",
                     class_name,
                     NAMESPACE,
                     scalar_kind_string(kind),
@@ -1284,25 +1284,11 @@ impl<W: Write> Writer<W> {
                     }
                     let fun_name = &self.names[&NameKey::Function(function)];
                     write!(self.out, "{}(", fun_name)?;
-
-                    let function_arguments =
-                        &context.expression.module.functions[function].arguments;
-
                     // first, write down the actual arguments
-                    for (i, (&handle, argument)) in
-                        arguments.iter().zip(function_arguments).enumerate()
-                    {
+                    for (i, &handle) in arguments.iter().enumerate() {
                         if i != 0 {
                             write!(self.out, ", ")?;
                         }
-
-                        let ty = &context.expression.module.types[argument.ty];
-
-                        // If the function expects a pointer as an argument, take a reference.
-                        if matches!(ty.inner, crate::TypeInner::Pointer { .. }) {
-                            write!(self.out, "&")?;
-                        }
-
                         self.put_expression(handle, &context.expression, true)?;
                     }
                     // follow-up with any global resources used
