@@ -887,12 +887,9 @@ impl<W: Write> Writer<W> {
             } => {
                 use crate::MathFunction as Mf;
 
-                let scalar_argument = match &context.info[arg].ty {
-                    TypeResolution::Handle(handle) => {
-                        let ty = &context.module.types[*handle];
-                        matches!(ty.inner, crate::TypeInner::Scalar { .. })
-                    }
-                    TypeResolution::Value(ty) => matches!(ty, crate::TypeInner::Scalar { .. }),
+                let scalar_argument = match context.resolve_type(arg) {
+                    crate::TypeInner::Scalar { .. } => true,
+                    _ => false,
                 };
 
                 let fun_name = match fun {
@@ -955,9 +952,9 @@ impl<W: Write> Writer<W> {
 
                 if fun == Mf::Distance && scalar_argument {
                     write!(self.out, "{}::abs(", NAMESPACE)?;
-                    self.put_expression(arg, context, true)?;
+                    self.put_expression(arg, context, false)?;
                     write!(self.out, " - ")?;
-                    self.put_expression(arg1.unwrap(), context, true)?;
+                    self.put_expression(arg1.unwrap(), context, false)?;
                     write!(self.out, ")")?;
                 } else {
                     write!(self.out, "{}::{}", NAMESPACE, fun_name)?;
