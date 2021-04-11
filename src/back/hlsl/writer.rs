@@ -28,7 +28,6 @@ impl<W: Write> Writer<W> {
         for (ep_index, ep) in module.entry_points.iter().enumerate() {
             let fun = &ep.function;
             let fun_name = &self.names[&NameKey::EntryPoint(ep_index as _)];
-            let has_arguments = fun.arguments.len() > 0;
             writeln!(self.out)?;
 
             let return_type_name = match fun.result {
@@ -41,7 +40,7 @@ impl<W: Write> Writer<W> {
                 "{} {}({}",
                 return_type_name,
                 fun_name,
-                if has_arguments == false { ")" } else { "" }
+                if fun.arguments.is_empty() { ")" } else { "" }
             )?;
 
             // TODO Support arguments
@@ -54,11 +53,8 @@ impl<W: Write> Writer<W> {
         writeln!(self.out, "{{")?;
 
         for statement in statements {
-            match *statement {
-                crate::Statement::Return { value: None } => {
-                    writeln!(self.out, "{}return;", INDENT)?;
-                }
-                _ => {}
+            if let crate::Statement::Return { value: None } = *statement {
+                writeln!(self.out, "{}return;", INDENT)?;
             }
         }
 
