@@ -887,14 +887,13 @@ impl<W: Write> Writer<W> {
             } => {
                 use crate::MathFunction as Mf;
 
-                let ignore = fun == Mf::Length
-                    && match &context.info[arg].ty {
-                        TypeResolution::Handle(handle) => {
-                            let ty = &context.module.types[*handle];
-                            matches!(ty.inner, crate::TypeInner::Scalar { .. })
-                        }
-                        TypeResolution::Value(ty) => matches!(ty, crate::TypeInner::Scalar { .. }),
-                    };
+                let scalar_argument = match &context.info[arg].ty {
+                    TypeResolution::Handle(handle) => {
+                        let ty = &context.module.types[*handle];
+                        matches!(ty.inner, crate::TypeInner::Scalar { .. })
+                    }
+                    TypeResolution::Value(ty) => matches!(ty, crate::TypeInner::Scalar { .. }),
+                };
 
                 let fun_name = match fun {
                     // comparison
@@ -933,6 +932,7 @@ impl<W: Write> Writer<W> {
                     Mf::Outer => return Err(Error::UnsupportedCall(format!("{:?}", fun))),
                     Mf::Cross => "cross",
                     Mf::Distance => "distance",
+                    Mf::Length if scalar_argument => "abs",
                     Mf::Length => "length",
                     Mf::Normalize => "normalize",
                     Mf::FaceForward => "faceforward",
@@ -953,8 +953,12 @@ impl<W: Write> Writer<W> {
                     Mf::ReverseBits => "reverse_bits",
                 };
 
-                if ignore {
-                    self.put_expression(arg, context, is_scoped)?;
+                if fun == Mf::Distance && scalar_argument {
+                    write!(self.out, "{}::abs(", NAMESPACE)?;
+                    self.put_expression(arg, context, true)?;
+                    write!(self.out, " - ")?;
+                    self.put_expression(arg1.unwrap(), context, true)?;
+                    write!(self.out, ")")?;
                 } else {
                     write!(self.out, "{}::{}", NAMESPACE, fun_name)?;
                     self.put_call_parameters(iter::once(arg).chain(arg1).chain(arg2), context)?;
