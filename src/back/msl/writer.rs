@@ -887,7 +887,7 @@ impl<W: Write> Writer<W> {
             } => {
                 use crate::MathFunction as Mf;
 
-                let scalar_argument = match context.resolve_type(arg) {
+                let scalar_argument = match *context.resolve_type(arg) {
                     crate::TypeInner::Scalar { .. } => true,
                     _ => false,
                 };
