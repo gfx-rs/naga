@@ -668,12 +668,12 @@ impl<W: Write> Writer<W> {
                 write!(self.out, "{}", name)?;
             }
             crate::Expression::Load { pointer } => {
-                let should_dereference = match context.info[pointer].ty {
-                    TypeResolution::Handle(handle) => {
-                        let ty = &context.module.types[handle];
-                        matches!(ty.inner, crate::TypeInner::Pointer { .. })
-                    }
-                    TypeResolution::Value(_) => false,
+                let should_dereference = match &context.function.expressions[pointer] {
+                    crate::Expression::AccessIndex { .. } => false,
+                    crate::Expression::Access { .. } => false,
+                    crate::Expression::LocalVariable { .. } => false,
+                    crate::Expression::GlobalVariable { .. } => false,
+                    _ => true,
                 };
 
                 if should_dereference {
