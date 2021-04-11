@@ -254,7 +254,8 @@ impl<'a> Display for ConstantContext<'a> {
                 }
                 crate::ScalarValue::Float(value) => {
                     if value.is_infinite() {
-                        write!(out, "INFINITY")
+                        let sign = if value.is_sign_negative() { "-" } else { "" };
+                        write!(out, "{}INFINITY", sign)
                     } else if value.is_nan() {
                         write!(out, "NAN")
                     } else {
