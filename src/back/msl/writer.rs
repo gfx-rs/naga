@@ -676,7 +676,8 @@ impl<W: Write> Writer<W> {
                 write!(self.out, "{}", name)?;
             }
             crate::Expression::Load { pointer } => {
-                //write!(self.out, "*")?;
+                // We don't do any dereferencing with `*` here as pointer arguments are done
+                // by `&` references and not `*` pointers, which do not need to be dereferenced.
                 self.put_expression(pointer, context, is_scoped)?;
             }
             crate::Expression::ImageSample {
