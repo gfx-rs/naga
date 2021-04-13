@@ -14,6 +14,7 @@ typedef Light type3[1];
 struct Lights {
     type3 data;
 };
+<<<<<<< HEAD
 constant metal::float3 c_ambient = {0.05, 0.05, 0.05};
 
 float fetch_shadow(
@@ -21,6 +22,28 @@ float fetch_shadow(
     metal::float4 homogeneous_coords,
     metal::depth2d_array<float, metal::access::sample> t_shadow,
     metal::sampler sampler_shadow
+=======
+typedef metal::depth2d_array<float, metal::access::sample> type4;
+typedef metal::sampler type5;
+typedef uint type6;
+typedef float type7;
+typedef metal::float2 type8;
+typedef metal::float3 type9;
+constexpr constant float const_0f = 0.0;
+constexpr constant float const_1f = 1.0;
+constexpr constant float const_0_50f = 0.5;
+constexpr constant float const_n0_50f = -0.5;
+constexpr constant float const_0_05f = 0.05;
+constexpr constant type9 c_ambient = type9(const_0_05f, const_0_05f, const_0_05f);
+constexpr constant unsigned c_max_lights = 10u;
+constexpr constant unsigned const_0u = 0u;
+constexpr constant unsigned const_1u = 1u;
+type7 fetch_shadow(
+    type6 light_id,
+    type2 homogeneous_coords,
+    type4 t_shadow,
+    type5 sampler_shadow
+>>>>>>> 73e1f8d (rebase onto master and update tests)
 ) {
     if (homogeneous_coords.w <= 0.0) {
         return 1.0;
@@ -30,8 +53,8 @@ float fetch_shadow(
 }
 
 struct fs_mainInput {
-    metal::float3 raw_normal [[user(loc0)]];
-    metal::float4 position [[user(loc1)]];
+    type9 raw_normal [[user(loc0)]];
+    type2 position [[user(loc1)]];
 };
 struct fs_mainOutput {
     metal::float4 member [[color(0)]];
@@ -45,8 +68,8 @@ fragment fs_mainOutput fs_main(
 ) {
     const auto raw_normal = varyings.raw_normal;
     const auto position = varyings.position;
-    metal::float3 color1 = c_ambient;
-    metal::uint i = 0u;
+    type9 color1 = c_ambient;
+    type6 i = const_0u;
     bool loop_init = true;
     while(true) {
         if (!loop_init) {
