@@ -1111,14 +1111,16 @@ impl Parser {
                     //TODO: resolve the duplicate call in `parse_singular_expression`
                     expr
                 } else {
-                    let inner = self.parse_type_decl_impl(
+                    let handle = self.parse_type_decl_name(
                         lexer,
                         TypeAttributes::default(),
                         word,
+                        None,
+                        TypeDecoration::default(),
                         ctx.types,
                         ctx.constants,
                     )?;
-                    let kind = inner.scalar_kind();
+                    let kind = ctx.types[handle].inner.scalar_kind();
 
                     lexer.expect(Token::Paren('('))?;
                     let mut components = Vec::new();
@@ -1161,8 +1163,7 @@ impl Parser {
                         }
                     } else {
                         components.push(last_component);
-                        let ty = ctx.types.fetch_or_append(crate::Type { name: None, inner });
-                        crate::Expression::Compose { ty, components }
+                        crate::Expression::Compose { ty: handle, components }
                     };
                     ctx.expressions.append(expr)
                 }
