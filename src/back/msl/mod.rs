@@ -26,7 +26,6 @@ holding the result.
 use crate::{
     arena::{Arena, Handle},
     valid::ModuleInfo,
-    FastHashMap,
 };
 use std::fmt::{Error as FmtError, Write};
 
@@ -36,14 +35,16 @@ mod writer;
 
 pub use writer::Writer;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub enum BindSamplerTarget {
     Resource(u8),
     Inline(Handle<sampler::InlineSampler>),
 }
 
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub struct BindTarget {
     #[cfg_attr(feature = "deserialize", serde(default))]
@@ -65,7 +66,7 @@ pub struct BindSource {
     pub binding: u32,
 }
 
-pub type BindingMap = FastHashMap<BindSource, BindTarget>;
+pub type BindingMap = std::collections::BTreeMap<BindSource, BindTarget>;
 
 enum ResolvedBinding {
     BuiltIn(crate::BuiltIn),
@@ -111,7 +112,8 @@ enum LocationMode {
     Uniform,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub struct Options {
     /// (Major, Minor) target version of the Metal Shading Language.
@@ -139,7 +141,8 @@ impl Default for Options {
 }
 
 // A subset of options that are meant to be changed per pipeline.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub struct PipelineOptions {
     /// Allow `BuiltIn::PointSize` in the vertex shader.
