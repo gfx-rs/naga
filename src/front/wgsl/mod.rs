@@ -1113,10 +1113,9 @@ impl Parser {
                 } else {
                     let handle = self.parse_type_decl_name(
                         lexer,
-                        TypeAttributes::default(),
                         word,
                         None,
-                        TypeDecoration::default(),
+                        TypeAttributes::default(),
                         ctx.types,
                         ctx.constants,
                     )?;
