@@ -166,12 +166,7 @@ impl std::hash::Hash for InlineSampler {
         self.mip_filter.hash(hasher);
         self.lod_clamp
             .as_ref()
-            .map(|range| {
-                (
-                    ordered_float::OrderedFloat(range.start),
-                    ordered_float::OrderedFloat(range.end),
-                )
-            })
+            .map(|range| (range.start.to_bits(), range.end.to_bits()))
             .hash(hasher);
         self.max_anisotropy.hash(hasher);
         self.compare_func.hash(hasher);
