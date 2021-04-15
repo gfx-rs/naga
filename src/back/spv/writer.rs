@@ -304,29 +304,29 @@ fn accesses_used_in_expression(
 ) {
     let mut queue: Vec<(Handle<crate::Expression>, bool)> = vec![(root, true)];
     while let Some((e, not_base)) = queue.pop() {
-        match &expressions[e] {
+        match expressions[e] {
             crate::Expression::Access { base, index } => {
                 if not_base {
                     accesses.insert(e);
                 }
-                queue.push((*base, false));
-                queue.push((*index, true));
+                queue.push((base, false));
+                queue.push((index, true));
             }
 
             crate::Expression::AccessIndex { base, .. } => {
                 if not_base {
                     accesses.insert(e);
                 }
-                queue.push((*base, false));
+                queue.push((base, false));
             }
             crate::Expression::Constant(_) => {}
-            crate::Expression::Compose { components, .. } => {
+            crate::Expression::Compose { ref components, .. } => {
                 components.iter().for_each(|e| queue.push((*e, true)))
             }
             crate::Expression::FunctionArgument(_) => {}
             crate::Expression::GlobalVariable(_) => {}
             crate::Expression::LocalVariable(_) => {}
-            crate::Expression::Load { pointer } => queue.push((*pointer, true)),
+            crate::Expression::Load { pointer } => queue.push((pointer, true)),
             crate::Expression::ImageSample {
                 image,
                 sampler,
@@ -335,9 +335,9 @@ fn accesses_used_in_expression(
                 depth_ref,
                 ..
             } => {
-                queue.push((*image, true));
-                queue.push((*sampler, true));
-                queue.push((*coordinate, true));
+                queue.push((image, true));
+                queue.push((sampler, true));
+                queue.push((coordinate, true));
                 array_index.iter().for_each(|e| queue.push((*e, true)));
                 depth_ref.iter().for_each(|e| queue.push((*e, true)));
             }
@@ -347,36 +347,36 @@ fn accesses_used_in_expression(
                 array_index,
                 index,
             } => {
-                queue.push((*image, true));
-                queue.push((*coordinate, true));
+                queue.push((image, true));
+                queue.push((coordinate, true));
                 array_index.iter().for_each(|e| queue.push((*e, true)));
                 index.iter().for_each(|e| queue.push((*e, true)));
             }
-            crate::Expression::ImageQuery { image, .. } => queue.push((*image, true)),
-            crate::Expression::Unary { expr, .. } => queue.push((*expr, true)),
+            crate::Expression::ImageQuery { image, .. } => queue.push((image, true)),
+            crate::Expression::Unary { expr, .. } => queue.push((expr, true)),
             crate::Expression::Binary { left, right, .. } => {
-                queue.push((*left, true));
-                queue.push((*right, true));
+                queue.push((left, true));
+                queue.push((right, true));
             }
             crate::Expression::Select {
                 condition,
                 accept,
                 reject,
             } => {
-                queue.push((*condition, true));
-                queue.push((*accept, true));
-                queue.push((*reject, true));
+                queue.push((condition, true));
+                queue.push((accept, true));
+                queue.push((reject, true));
             }
-            crate::Expression::Derivative { expr, .. } => queue.push((*expr, true)),
-            crate::Expression::Relational { argument, .. } => queue.push((*argument, true)),
+            crate::Expression::Derivative { expr, .. } => queue.push((expr, true)),
+            crate::Expression::Relational { argument, .. } => queue.push((argument, true)),
             crate::Expression::Math {
                 arg, arg1, arg2, ..
             } => {
-                queue.push((*arg, true));
+                queue.push((arg, true));
                 arg1.iter().for_each(|e| queue.push((*e, true)));
                 arg2.iter().for_each(|e| queue.push((*e, true)));
             }
-            crate::Expression::As { expr, .. } => queue.push((*expr, true)),
+            crate::Expression::As { expr, .. } => queue.push((expr, true)),
             crate::Expression::Call(_) => {}
             crate::Expression::ArrayLength(_) => {}
             crate::Expression::Splat { .. } => {}
