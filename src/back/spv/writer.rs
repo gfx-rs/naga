@@ -495,7 +495,7 @@ impl Writer {
     ) -> Result<(Word, Instruction), Error> {
         let id = self.id_gen.next();
         let pointer_type_id = self.get_pointer_id(types, ty, spirv::StorageClass::Function)?;
-        if let &Some(ref name) = name {
+        if let Some(name) = name {
             self.debugs.push(Instruction::name(id, name));
         }
         let instruction =
