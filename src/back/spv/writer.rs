@@ -85,7 +85,6 @@ struct Function {
     variables: crate::FastHashMap<Handle<crate::LocalVariable>, LocalVariable>,
     allocated_composites: crate::FastHashMap<Handle<crate::Expression>, Word>,
     accesses_used: crate::FastHashMap<Handle<crate::Expression>, AccessChain>,
-    // global_const_arrays: crate::FastHashMap<Handle<crate::Constant>, Word>,
     blocks: Vec<Block>,
     entry_point_context: Option<EntryPointContext>,
 }
@@ -1606,7 +1605,6 @@ impl Writer {
                 ));
                 id
             }
-
             crate::Expression::Compose {
                 ty: _,
                 ref components,
@@ -1919,7 +1917,6 @@ impl Writer {
             }
             crate::Expression::LocalVariable(variable) => function.variables[&variable].id,
             crate::Expression::Load { pointer } => {
-                log::debug!("Write expression pointer for Load");
                 let (pointer_id, _) = self.write_expression_pointer(
                     ir_module,
                     ir_function,
@@ -2262,10 +2259,6 @@ impl Writer {
         block: &mut Block,
         function: &mut Function,
     ) -> Result<(Word, spirv::StorageClass), Error> {
-        log::debug!(
-            "write_expression_pointer starting at {:?}",
-            ir_function.expressions[expr_handle]
-        );
         let result_lookup_ty = match fun_info[expr_handle].ty {
             TypeResolution::Handle(ty_handle) => LookupType::Handle(ty_handle),
             TypeResolution::Value(ref inner) => {
@@ -2276,7 +2269,6 @@ impl Writer {
 
         self.temp_list.clear();
         let (root_id, class) = loop {
-            log::debug!("  digging to {:?}", ir_function.expressions[expr_handle]);
             expr_handle = match ir_function.expressions[expr_handle] {
                 crate::Expression::Access { base, index } => {
                     let index_id = self.cached[index];
@@ -2661,7 +2653,6 @@ impl Writer {
                     block.termination = Some(Instruction::kill());
                 }
                 crate::Statement::Store { pointer, value } => {
-                    log::debug!("Write expression pointer for Store");
                     let (pointer_id, _) = self.write_expression_pointer(
                         ir_module,
                         ir_function,
