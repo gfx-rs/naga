@@ -387,7 +387,7 @@ fn accesses_used_in_expression(
 /// Identify all Access and AccessIndex expressions used in a sequence of [crate::Statement]s
 fn accesses_used_in_block(
     expressions: &Arena<crate::Expression>,
-    body: &Vec<crate::Statement>,
+    body: &[crate::Statement],
 ) -> crate::FastHashSet<Handle<crate::Expression>> {
     let mut queue: Vec<&crate::Statement> = vec![];
     let mut accesses = crate::FastHashSet::default();
@@ -401,8 +401,8 @@ fn accesses_used_in_block(
     }
     while let Some(s) = queue.pop() {
         match s {
-            crate::Statement::Emit(_) => {}
-            crate::Statement::Block(block) => {
+            &crate::Statement::Emit(_) => {}
+            &crate::Statement::Block(ref block) => {
                 for s in block.iter() {
                     queue.push(s);
                 }
@@ -472,20 +472,28 @@ fn accesses_used_in_block(
     accesses
 }
 
+/// A composite expression and its type referenced through a chain of
+/// access indices.
+struct ReferencedComposite {
+    root: Handle<crate::Expression>,
+    ty: Handle<crate::Type>,
+    chain: Vec<Index>,
+}
+
 /// Extract an array type, if any, referenced by the given expression
 /// and the index chain to that type.
 fn get_referenced_array(
     ir_module: &crate::Module,
     ir_function: &crate::Function,
     mut expr_handle: Handle<crate::Expression>,
-) -> Result<Option<(Handle<crate::Expression>, Handle<crate::Type>, Vec<Index>)>, Error> {
-    let mut indices = vec![];
+) -> Option<ReferencedComposite> {
+    let mut chain = vec![];
     let res = loop {
         expr_handle = match ir_function.expressions[expr_handle] {
             crate::Expression::Compose { ty, ref components } => match ir_module.types[ty].inner {
                 crate::TypeInner::Array { .. } => break Some((expr_handle, ty)),
-                crate::TypeInner::Struct { .. } => match indices.last() {
-                    Some(Index::Constant(i)) => components[*i as usize],
+                crate::TypeInner::Struct { .. } => match chain.last() {
+                    Some(&Index::Constant(i)) => components[i as usize],
                     _ => break Some((expr_handle, ty)),
                 },
                 _ => break None,
@@ -503,11 +511,11 @@ fn get_referenced_array(
                 }
             }
             crate::Expression::AccessIndex { base, index } => {
-                indices.push(Index::Constant(index));
+                chain.push(Index::Constant(index));
                 base
             }
             crate::Expression::Access { base, index } => {
-                indices.push(Index::Computed(index));
+                chain.push(Index::Computed(index));
                 base
             }
             crate::Expression::Load { pointer } => {
@@ -522,10 +530,14 @@ fn get_referenced_array(
             _ => break None,
         }
     };
-    Ok(res.map(|(expr, ty)| {
-        indices.reverse();
-        (expr, ty, indices)
-    }))
+    res.map(|(expr, ty)| {
+        chain.reverse();
+        ReferencedComposite {
+            root: expr,
+            ty,
+            chain,
+        }
+    })
 }
 
 impl Writer {
@@ -660,7 +672,7 @@ impl Writer {
     ) -> Result<(Word, Instruction), Error> {
         let id = self.id_gen.next();
         let pointer_type_id = self.get_pointer_id(types, ty, spirv::StorageClass::Function)?;
-        if let Some(ref name) = name {
+        if let &Some(ref name) = name {
             self.debugs.push(Instruction::name(id, name));
         }
         let instruction =
@@ -718,7 +730,9 @@ impl Writer {
 
         // Map each of those accesses to a root composite
         for handle in accesses_used {
-            if let Some((root, ty, chain)) = get_referenced_array(ir_module, ir_function, handle)? {
+            if let Some(ReferencedComposite { root, ty, chain }) =
+                get_referenced_array(ir_module, ir_function, handle)
+            {
                 match function.allocated_composites.entry(root) {
                     Entry::Occupied(_) => {}
                     Entry::Vacant(entry) => {
@@ -1640,7 +1654,7 @@ impl Writer {
                         crate::TypeInner::Array {
                             base: array_base, ..
                         } if function.accesses_used.contains_key(&expr_handle) => {
-                            if let Some(AccessChain { root, chain }) =
+                            if let Some(&AccessChain { root, ref chain }) =
                                 function.accesses_used.get(&expr_handle)
                             {
                                 if let Some(&var_id) = function.allocated_composites.get(&root) {
