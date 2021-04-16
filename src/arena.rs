@@ -128,7 +128,7 @@ impl<T> Iterator for Range<T> {
     any(feature = "serialize", feature = "deserialize"),
     serde(transparent)
 )]
-#[derive(Clone, Hash, PartialEq, Eq)]
+#[cfg_attr(test, derive(PartialEq))]
 pub struct Arena<T> {
     /// Values of this arena.
     data: Vec<T>,

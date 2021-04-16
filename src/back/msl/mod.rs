@@ -128,7 +128,7 @@ enum LocationMode {
     Uniform,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub struct Options {
@@ -156,6 +156,62 @@ impl Default for Options {
             spirv_cross_compatibility: false,
             fake_missing_bindings: true,
         }
+    }
+}
+
+impl std::hash::Hash for Options {
+    fn hash<H: std::hash::Hasher>(&self, hasher: &mut H) {
+        self.lang_version.hash(hasher);
+        self.binding_map.hash(hasher);
+        self.push_constants_map.hash(hasher);
+        self.spirv_cross_compatibility.hash(hasher);
+        for (_, is) in self.inline_samplers.iter() {
+            is.coord.hash(hasher);
+            is.address.hash(hasher);
+            is.border_color.hash(hasher);
+            is.mag_filter.hash(hasher);
+            is.min_filter.hash(hasher);
+            is.mip_filter.hash(hasher);
+            is.lod_clamp
+                .as_ref()
+                .map(|range| (range.start.to_bits(), range.end.to_bits()))
+                .hash(hasher);
+            is.max_anisotropy.hash(hasher);
+            is.compare_func.hash(hasher);
+        }
+    }
+}
+
+impl Clone for Options {
+    fn clone(&self) -> Self {
+        let mut inline_samplers = Arena::new();
+        for (_, is) in self.inline_samplers.iter() {
+            inline_samplers.append(is.clone());
+        }
+        Options {
+            lang_version: self.lang_version,
+            binding_map: self.binding_map.clone(),
+            push_constants_map: self.push_constants_map.clone(),
+            inline_samplers,
+            spirv_cross_compatibility: self.spirv_cross_compatibility,
+            fake_missing_bindings: self.fake_missing_bindings,
+        }
+    }
+}
+
+impl PartialEq for Options {
+    fn eq(&self, other: &Self) -> bool {
+        self.lang_version == other.lang_version
+            && self.binding_map == other.binding_map
+            && self.push_constants_map == other.push_constants_map
+            && self.inline_samplers.len() == other.inline_samplers.len()
+            && self
+                .inline_samplers
+                .iter()
+                .zip(other.inline_samplers.iter())
+                .all(|((_, isa), (_, isb))| isa == isb)
+            && self.spirv_cross_compatibility == other.spirv_cross_compatibility
+            && self.fake_missing_bindings == other.fake_missing_bindings
     }
 }
 
