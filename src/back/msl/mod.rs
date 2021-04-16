@@ -23,10 +23,7 @@ For the result type, if it's a structure, we re-compose it with a temporary valu
 holding the result.
 !*/
 
-use crate::{
-    arena::{Arena, Handle},
-    valid::ModuleInfo,
-};
+use crate::{arena::Handle, valid::ModuleInfo};
 use std::fmt::{Error as FmtError, Write};
 
 mod keywords;
@@ -36,13 +33,14 @@ mod writer;
 pub use writer::Writer;
 
 pub type Slot = u8;
+pub type InlineSamplerIndex = u8;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub enum BindSamplerTarget {
     Resource(Slot),
-    Inline(Handle<sampler::InlineSampler>),
+    Inline(InlineSamplerIndex),
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
@@ -128,7 +126,7 @@ enum LocationMode {
     Uniform,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug, Hash, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub struct Options {
@@ -139,7 +137,7 @@ pub struct Options {
     /// Push constants mapping to Metal.
     pub push_constants_map: PushConstantsMap,
     /// Samplers to be inlined into the code.
-    pub inline_samplers: Arena<sampler::InlineSampler>,
+    pub inline_samplers: Vec<sampler::InlineSampler>,
     /// Make it possible to link different stages via SPIRV-Cross.
     pub spirv_cross_compatibility: bool,
     /// Don't panic on missing bindings, instead generate invalid MSL.
@@ -152,66 +150,10 @@ impl Default for Options {
             lang_version: (1, 0),
             binding_map: BindingMap::default(),
             push_constants_map: PushConstantsMap::default(),
-            inline_samplers: Arena::new(),
+            inline_samplers: Vec::new(),
             spirv_cross_compatibility: false,
             fake_missing_bindings: true,
         }
-    }
-}
-
-impl std::hash::Hash for Options {
-    fn hash<H: std::hash::Hasher>(&self, hasher: &mut H) {
-        self.lang_version.hash(hasher);
-        self.binding_map.hash(hasher);
-        self.push_constants_map.hash(hasher);
-        self.spirv_cross_compatibility.hash(hasher);
-        for (_, is) in self.inline_samplers.iter() {
-            is.coord.hash(hasher);
-            is.address.hash(hasher);
-            is.border_color.hash(hasher);
-            is.mag_filter.hash(hasher);
-            is.min_filter.hash(hasher);
-            is.mip_filter.hash(hasher);
-            is.lod_clamp
-                .as_ref()
-                .map(|range| (range.start.to_bits(), range.end.to_bits()))
-                .hash(hasher);
-            is.max_anisotropy.hash(hasher);
-            is.compare_func.hash(hasher);
-        }
-    }
-}
-
-impl Clone for Options {
-    fn clone(&self) -> Self {
-        let mut inline_samplers = Arena::new();
-        for (_, is) in self.inline_samplers.iter() {
-            inline_samplers.append(is.clone());
-        }
-        Options {
-            lang_version: self.lang_version,
-            binding_map: self.binding_map.clone(),
-            push_constants_map: self.push_constants_map.clone(),
-            inline_samplers,
-            spirv_cross_compatibility: self.spirv_cross_compatibility,
-            fake_missing_bindings: self.fake_missing_bindings,
-        }
-    }
-}
-
-impl PartialEq for Options {
-    fn eq(&self, other: &Self) -> bool {
-        self.lang_version == other.lang_version
-            && self.binding_map == other.binding_map
-            && self.push_constants_map == other.push_constants_map
-            && self.inline_samplers.len() == other.inline_samplers.len()
-            && self
-                .inline_samplers
-                .iter()
-                .zip(other.inline_samplers.iter())
-                .all(|((_, isa), (_, isb))| isa == isb)
-            && self.spirv_cross_compatibility == other.spirv_cross_compatibility
-            && self.fake_missing_bindings == other.fake_missing_bindings
     }
 }
 
@@ -312,9 +254,9 @@ impl ResolvedBinding {
     fn as_inline_sampler<'a>(&self, options: &'a Options) -> Option<&'a sampler::InlineSampler> {
         match *self {
             Self::Resource(BindTarget {
-                sampler: Some(BindSamplerTarget::Inline(handle)),
+                sampler: Some(BindSamplerTarget::Inline(index)),
                 ..
-            }) => Some(&options.inline_samplers[handle]),
+            }) => Some(&options.inline_samplers[index as usize]),
             _ => None,
         }
     }

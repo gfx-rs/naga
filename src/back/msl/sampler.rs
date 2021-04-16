@@ -155,3 +155,20 @@ pub struct InlineSampler {
 }
 
 impl Eq for InlineSampler {}
+
+impl std::hash::Hash for InlineSampler {
+    fn hash<H: std::hash::Hasher>(&self, hasher: &mut H) {
+        self.coord.hash(hasher);
+        self.address.hash(hasher);
+        self.border_color.hash(hasher);
+        self.mag_filter.hash(hasher);
+        self.min_filter.hash(hasher);
+        self.mip_filter.hash(hasher);
+        self.lod_clamp
+            .as_ref()
+            .map(|range| (range.start.to_bits(), range.end.to_bits()))
+            .hash(hasher);
+        self.max_anisotropy.hash(hasher);
+        self.compare_func.hash(hasher);
+    }
+}
