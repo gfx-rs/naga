@@ -328,12 +328,50 @@ impl<'a> ExpressionContext<'a, '_, '_> {
         let mut left = parser(lexer, self.reborrow())?;
         while let Some(op) = classifier(lexer.peek().0) {
             let _ = lexer.next();
-            let expression = crate::Expression::Binary {
-                op,
-                left,
-                right: parser(lexer, self.reborrow())?,
-            };
-            left = self.expressions.append(expression);
+            let right = parser(lexer, self.reborrow())?;
+            left = self
+                .expressions
+                .append(crate::Expression::Binary { op, left, right });
+        }
+        Ok(left)
+    }
+
+    fn parse_binary_splat_op(
+        &mut self,
+        lexer: &mut Lexer<'a>,
+        classifier: impl Fn(Token<'a>) -> Option<crate::BinaryOperator>,
+        mut parser: impl FnMut(
+            &mut Lexer<'a>,
+            ExpressionContext<'a, '_, '_>,
+        ) -> Result<Handle<crate::Expression>, Error<'a>>,
+    ) -> Result<Handle<crate::Expression>, Error<'a>> {
+        let mut left = parser(lexer, self.reborrow())?;
+        while let Some(op) = classifier(lexer.peek().0) {
+            let _ = lexer.next();
+            let mut right = parser(lexer, self.reborrow())?;
+            // insert splats, if needed by the non-'*' operations
+            if op != crate::BinaryOperator::Multiply {
+                let left_size = match *self.resolve_type(left)? {
+                    crate::TypeInner::Vector { size, .. } => Some(size),
+                    _ => None,
+                };
+                match (left_size, self.resolve_type(right)?) {
+                    (Some(size), &crate::TypeInner::Scalar { .. }) => {
+                        right = self
+                            .expressions
+                            .append(crate::Expression::Splat { size, value: right });
+                    }
+                    (None, &crate::TypeInner::Vector { size, .. }) => {
+                        left = self
+                            .expressions
+                            .append(crate::Expression::Splat { size, value: left });
+                    }
+                    _ => {}
+                }
+            }
+            left = self
+                .expressions
+                .append(crate::Expression::Binary { op, left, right });
         }
         Ok(left)
     }
@@ -1095,6 +1133,13 @@ impl Parser {
                         let last_component_inner = ctx.resolve_type(last_component)?;
                         match (&inner, last_component_inner) {
                             (
+                                &crate::TypeInner::Vector { size, .. },
+                                &crate::TypeInner::Scalar { .. },
+                            ) => crate::Expression::Splat {
+                                size,
+                                value: last_component,
+                            },
+                            (
                                 &crate::TypeInner::Scalar { .. },
                                 &crate::TypeInner::Scalar { .. },
                             )
@@ -1177,6 +1222,7 @@ impl Parser {
                         crate::TypeInner::Vector { size, kind, width } => {
                             match Composition::make(handle, size, name, name_span, ctx.expressions)?
                             {
+                                //TODO: Swizzling in IR
                                 Composition::Multi(size, components) => {
                                     let inner = crate::TypeInner::Vector { size, kind, width };
                                     crate::Expression::Compose {
@@ -1200,6 +1246,7 @@ impl Parser {
                             name_span,
                             ctx.expressions,
                         )? {
+                            //TODO: is this really supported?
                             Composition::Multi(columns, components) => {
                                 let inner = crate::TypeInner::Matrix {
                                     columns,
@@ -1354,7 +1401,7 @@ impl Parser {
                             },
                             // additive_expression
                             |lexer, mut context| {
-                                context.parse_binary_op(
+                                context.parse_binary_splat_op(
                                     lexer,
                                     |token| match token {
                                         Token::Operation('+') => Some(crate::BinaryOperator::Add),
@@ -1365,7 +1412,7 @@ impl Parser {
                                     },
                                     // multiplicative_expression
                                     |lexer, mut context| {
-                                        context.parse_binary_op(
+                                        context.parse_binary_splat_op(
                                             lexer,
                                             |token| match token {
                                                 Token::Operation('*') => {

@@ -1477,6 +1477,14 @@ impl<'a, W: Write> Writer<'a, W> {
             Expression::Constant(constant) => {
                 self.write_constant(&self.module.constants[constant])?
             }
+            // `Splat` needs to actually write down a vector, it's not always inferred in GLSL.
+            Expression::Splat { size: _, value } => {
+                let resolved = ctx.info[expr].ty.inner_with(&self.module.types);
+                self.write_value_type(resolved)?;
+                write!(self.out, "(")?;
+                self.write_expr(value, ctx)?;
+                write!(self.out, ")")?
+            }
             // `Compose` is pretty simple we just write `type(components)` where `components` is a
             // comma separated list of expressions
             Expression::Compose { ty, ref components } => {
