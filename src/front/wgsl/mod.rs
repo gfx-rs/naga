@@ -1131,8 +1131,15 @@ impl Parser {
                     }
                     lexer.expect(Token::Paren(')'))?;
                     let expr = if components.is_empty() {
-                        let last_component_inner = ctx.resolve_type(last_component)?;
-                        match (&inner, last_component_inner) {
+                        // We can't use the `TypeInner` returned by this because
+                        // `resolve_type` borrows context mutably.
+                        // Use it to insert into the right maps,
+                        // and then grab it again immutably.
+                        ctx.resolve_type(last_component)?;
+                        match (
+                            &ctx.types[handle].inner,
+                            ctx.typifier.get(last_component, ctx.types),
+                        ) {
                             (
                                 &crate::TypeInner::Vector { size, .. },
                                 &crate::TypeInner::Scalar { .. },
