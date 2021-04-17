@@ -282,7 +282,9 @@ fn parse_pointers() {
         var x: f32 = 1.0;
         let px = &x;
         let py = frexp(0.5, px);
-    }").unwrap();
+    }",
+    )
+    .unwrap();
 }
 
 #[test]
