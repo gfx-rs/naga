@@ -1163,7 +1163,10 @@ impl Parser {
                         }
                     } else {
                         components.push(last_component);
-                        crate::Expression::Compose { ty: handle, components }
+                        crate::Expression::Compose {
+                            ty: handle,
+                            components,
+                        }
                     };
                     ctx.expressions.append(expr)
                 }
