@@ -616,7 +616,7 @@ pomelo! {
         VarDeclaration {
             type_qualifiers: t.0,
             ids_initializers: vec![(Some(i.1), None)],
-            ty: ty,
+            ty,
         }
     }
 
