@@ -155,35 +155,37 @@ impl<'a> Program<'a> {
                 width,
             } => columns as u8 * rows as u8 * width,
             crate::TypeInner::Pointer { .. } => {
-                Err(ErrorKind::NotImplemented("type size of pointer"))?
+                return Err(ErrorKind::NotImplemented("type size of pointer"))
             }
             crate::TypeInner::ValuePointer { .. } => {
-                Err(ErrorKind::NotImplemented("type size of value pointer"))?
+                return Err(ErrorKind::NotImplemented("type size of value pointer"))
             }
             crate::TypeInner::Array { size, stride, .. } => {
                 stride as u8
                     * match size {
                         ArraySize::Dynamic => {
-                            Err(ErrorKind::NotImplemented("type size of dynamic array"))?
+                            return Err(ErrorKind::NotImplemented("type size of dynamic array"))
                         }
                         ArraySize::Constant(constant) => {
-                            match &self.module.constants[constant].inner {
+                            match self.module.constants[constant].inner {
                                 crate::ConstantInner::Scalar { width, .. } => width,
                                 crate::ConstantInner::Composite { .. } => {
-                                    Err(ErrorKind::NotImplemented(
+                                    return Err(ErrorKind::NotImplemented(
                                         "type size of array with composite item size",
-                                    ))?
+                                    ))
                                 }
                             }
                         }
                     }
             }
             crate::TypeInner::Struct { .. } => {
-                Err(ErrorKind::NotImplemented("type size of struct"))?
+                return Err(ErrorKind::NotImplemented("type size of struct"))
             }
-            crate::TypeInner::Image { .. } => Err(ErrorKind::NotImplemented("type size of image"))?,
+            crate::TypeInner::Image { .. } => {
+                return Err(ErrorKind::NotImplemented("type size of image"))
+            }
             crate::TypeInner::Sampler { .. } => {
-                Err(ErrorKind::NotImplemented("type size of sampler"))?
+                return Err(ErrorKind::NotImplemented("type size of sampler"))
             }
         })
     }
