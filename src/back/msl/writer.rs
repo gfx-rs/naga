@@ -608,8 +608,17 @@ impl<W: Write> Writer<W> {
                 };
                 write!(self.out, "{}", coco)?;
             }
-            crate::Expression::Splat { size: _, value } => {
+            crate::Expression::Splat { size, value } => {
+                let scalar_kind = match *context.resolve_type(value) {
+                    crate::TypeInner::Scalar { kind, .. } => kind,
+                    _ => unreachable!()
+                };
+                let scalar = scalar_kind_string(scalar_kind);
+                let size = vector_size_string(size);
+
+                write!(self.out, "{}{}(", scalar, size)?;
                 self.put_expression(value, context, is_scoped)?;
+                write!(self.out, ")")?;
             }
             crate::Expression::Compose { ty, ref components } => {
                 let inner = &context.module.types[ty].inner;
