@@ -689,10 +689,58 @@ impl<W: Write> Writer<W> {
                 write!(self.out, "{}", name)?;
             }
             crate::Expression::Load { pointer } => {
-                // We don't do any dereferencing with `*` here as pointer arguments to functions
-                // are done by `&` references and not `*` pointers. These do not need to be
-                // dereferenced.
-                self.put_expression(pointer, context, is_scoped)?;
+                // Because packed vectors such as `packed_float3` cannot be directly multipied by
+                // matrices, we wrap them with `float3` on load.
+                let wrap_float_scalar_kind = match context.function.expressions[pointer] {
+                    crate::Expression::AccessIndex { base, index } => {
+                        let ty = match context.resolve_type(base) {
+                            &crate::TypeInner::Pointer { base, .. } => {
+                                &context.module.types[base].inner
+                            }
+                            ty => ty,
+                        };
+                        match *ty {
+                            crate::TypeInner::Struct { ref members, .. } => {
+                                let member = &members[index as usize];
+                                let ty = &context.module.types[member.ty].inner;
+
+                                let last_offset =
+                                    member.offset + ty.span(&context.module.constants);
+                                let is_tight = match members.get(index as usize + 1) {
+                                    Some(next) => next.offset == last_offset,
+                                    None => false,
+                                };
+
+                                match *ty {
+                                    crate::TypeInner::Vector {
+                                        size: crate::VectorSize::Tri,
+                                        kind,
+                                        ..
+                                    } if member.offset & 0xF != 0 || is_tight => Some(kind),
+                                    _ => None,
+                                }
+                            }
+                            _ => None,
+                        }
+                    }
+                    _ => None,
+                };
+
+                if let Some(scalar_kind) = wrap_float_scalar_kind {
+                    write!(
+                        self.out,
+                        "{}::{}3(",
+                        NAMESPACE,
+                        scalar_kind_string(scalar_kind)
+                    )?;
+                    self.put_expression(pointer, context, true)?;
+                    write!(self.out, ")")?;
+                } else {
+                    // We don't do any dereferencing with `*` here as pointer arguments to functions
+                    // are done by `&` references and not `*` pointers. These do not need to be
+                    // dereferenced.
+                    self.put_expression(pointer, context, is_scoped)?;
+                }
             }
             crate::Expression::ImageSample {
                 image,
