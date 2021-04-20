@@ -611,13 +611,13 @@ impl<W: Write> Writer<W> {
             crate::Expression::Splat { size, value } => {
                 let scalar_kind = match *context.resolve_type(value) {
                     crate::TypeInner::Scalar { kind, .. } => kind,
-                    _ => unreachable!()
+                    _ => return Err(Error::Validation)
                 };
                 let scalar = scalar_kind_string(scalar_kind);
                 let size = vector_size_string(size);
 
                 write!(self.out, "{}{}(", scalar, size)?;
-                self.put_expression(value, context, is_scoped)?;
+                self.put_expression(value, context, true)?;
                 write!(self.out, ")")?;
             }
             crate::Expression::Compose { ty, ref components } => {
