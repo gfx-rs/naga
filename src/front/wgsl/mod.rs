@@ -27,11 +27,12 @@ use std::{
     io::{self, Write},
     iter,
     num::NonZeroU32,
-    ops::Range,
+    ops,
 };
 use thiserror::Error;
 
-type TokenSpan<'a> = (Token<'a>, Range<usize>);
+type Span = ops::Range<usize>;
+type TokenSpan<'a> = (Token<'a>, Span);
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum Token<'a> {
@@ -61,13 +62,13 @@ pub enum Error<'a> {
     #[error("")]
     Unexpected(TokenSpan<'a>, &'a str),
     #[error("")]
-    BadInteger(Range<usize>),
+    BadInteger(Span),
     #[error("")]
-    BadFloat(Range<usize>),
+    BadFloat(Span),
     #[error("")]
-    BadScalarWidth(Range<usize>, &'a str),
+    BadScalarWidth(Span, &'a str),
     #[error("")]
-    BadAccessor(Range<usize>),
+    BadAccessor(Span),
     #[error("bad texture {0}`")]
     BadTexture(&'a str),
     #[error("bad texture coordinate")]
@@ -396,7 +397,7 @@ impl Composition {
         }
     }
 
-    fn extract_impl(name: &str, name_span: Range<usize>) -> Result<u32, Error> {
+    fn extract_impl(name: &str, name_span: Span) -> Result<u32, Error> {
         let ch = name
             .chars()
             .next()
@@ -410,13 +411,13 @@ impl Composition {
     fn extract(
         base: Handle<crate::Expression>,
         name: &str,
-        name_span: Range<usize>,
+        name_span: Span,
     ) -> Result<crate::Expression, Error> {
         Self::extract_impl(name, name_span)
             .map(|index| crate::Expression::AccessIndex { base, index })
     }
 
-    fn make(name: &str, name_span: Range<usize>) -> Result<Self, Error> {
+    fn make(name: &str, name_span: Span) -> Result<Self, Error> {
         if name.len() > 1 {
             let mut components = [crate::SwizzleComponent::X; 4];
             for (comp, ch) in components.iter_mut().zip(name.chars()) {
@@ -538,7 +539,7 @@ struct ParsedVariable<'a> {
 #[derive(Clone, Debug)]
 pub struct ParseError<'a> {
     message: String,
-    labels: Vec<(Range<usize>, String)>,
+    labels: Vec<(Span, String)>,
     notes: Vec<String>,
     source: &'a str,
 }
@@ -676,15 +677,13 @@ impl Parser {
 
         let mut arguments = Vec::new();
         lexer.expect(Token::Paren('('))?;
-        if !lexer.skip(Token::Paren(')')) {
-            loop {
-                let arg = self.parse_general_expression(lexer, ctx.reborrow())?;
-                arguments.push(arg);
-                match lexer.next() {
-                    (Token::Paren(')'), _) => break,
-                    (Token::Separator(','), _) => (),
-                    other => return Err(Error::Unexpected(other, "argument list separator")),
-                }
+        while !lexer.skip(Token::Paren(')')) {
+            let arg = self.parse_general_expression(lexer, ctx.reborrow())?;
+            arguments.push(arg);
+            match lexer.next() {
+                (Token::Paren(')'), _) => break,
+                (Token::Separator(','), _) => (),
+                other => return Err(Error::Unexpected(other, "argument list separator")),
             }
         }
         Ok(Some((fun_handle, arguments)))

@@ -1,5 +1,4 @@
-use super::{conv, Error, Token, TokenSpan};
-use std::ops::Range;
+use super::{conv, Error, Span, Token, TokenSpan};
 
 fn _consume_str<'a>(input: &'a str, what: &str) -> Option<&'a str> {
     if input.starts_with(what) {
@@ -168,6 +167,10 @@ impl<'a> Lexer<'a> {
         }
     }
 
+    pub(super) fn _leftover_span(&self) -> Span {
+        self.source.len() - self.input.len()..self.source.len()
+    }
+
     fn peek_token_and_rest(&mut self) -> (TokenSpan<'a>, &'a str) {
         let mut cloned = self.clone();
         let token = cloned.next();
@@ -256,7 +259,7 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    pub(super) fn next_ident_with_span(&mut self) -> Result<(&'a str, Range<usize>), Error<'a>> {
+    pub(super) fn next_ident_with_span(&mut self) -> Result<(&'a str, Span), Error<'a>> {
         match self.next() {
             (Token::Word(word), span) => Ok((word, span)),
             other => Err(Error::Unexpected(other, "identifier")),
