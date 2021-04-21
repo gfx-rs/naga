@@ -637,7 +637,7 @@ impl<W: Write> Writer<W> {
             crate::Expression::Splat { size, value } => {
                 let scalar_kind = match *context.resolve_type(value) {
                     crate::TypeInner::Scalar { kind, .. } => kind,
-                    _ => return Err(Error::Validation)
+                    _ => return Err(Error::Validation),
                 };
                 let scalar = scalar_kind_string(scalar_kind);
                 let size = vector_size_string(size);
@@ -645,6 +645,17 @@ impl<W: Write> Writer<W> {
                 write!(self.out, "{}{}(", scalar, size)?;
                 self.put_expression(value, context, true)?;
                 write!(self.out, ")")?;
+            }
+            crate::Expression::Swizzle {
+                size,
+                vector,
+                pattern,
+            } => {
+                self.put_expression(vector, context, is_scoped)?;
+                write!(self.out, ".")?;
+                for &sc in pattern[..size as usize].iter() {
+                    write!(self.out, "{}", COMPONENTS[sc as usize])?;
+                }
             }
             crate::Expression::Compose { ty, ref components } => {
                 let inner = &context.module.types[ty].inner;
@@ -2240,7 +2251,7 @@ fn test_stack_size() {
         let stack_size = addresses.end - addresses.start;
         // check the size (in debug only)
         // last observed macOS value: 21760
-        if stack_size < 20000 || stack_size > 23000 {
+        if stack_size < 21000 || stack_size > 23000 {
             panic!("`put_expression` stack size {} has changed!", stack_size);
         }
     }
