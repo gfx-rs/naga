@@ -723,6 +723,8 @@ impl<W: Write> Writer<W> {
                             &crate::TypeInner::Pointer { base, .. } => {
                                 &context.module.types[base].inner
                             }
+                            // This path is unexpected and shouldn't happen, but it's easier
+                            // to leave in.
                             ty => ty,
                         };
                         match *ty {
