@@ -314,6 +314,24 @@ impl<'a> Lexer<'a> {
         self.expect(Token::Paren('>'))?;
         Ok(format)
     }
+
+    pub(super) fn open_arguments(&mut self) -> Result<(), Error<'a>> {
+        self.expect(Token::Paren('('))
+    }
+
+    pub(super) fn close_arguments(&mut self) -> Result<(), Error<'a>> {
+        let _ = self.skip(Token::Separator(','));
+        self.expect(Token::Paren(')'))
+    }
+
+    pub(super) fn next_argument(&mut self) -> Result<bool, Error<'a>> {
+        let paren = Token::Paren(')');
+        if self.skip(Token::Separator(',')) {
+            Ok(!self.skip(paren))
+        } else {
+            self.expect(paren).map(|()| false)
+        }
+    }
 }
 
 #[cfg(test)]
