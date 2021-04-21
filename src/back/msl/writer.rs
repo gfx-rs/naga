@@ -316,7 +316,7 @@ fn should_pack_struct_member(
     span: u32,
     index: usize,
     module: &crate::Module,
-) -> bool {
+) -> Option<crate::ScalarKind> {
     let member = &members[index];
     let ty_inner = &module.types[member.ty].inner;
 
@@ -331,9 +331,9 @@ fn should_pack_struct_member(
         crate::TypeInner::Vector {
             size: crate::VectorSize::Tri,
             width: 4,
-            ..
-        } => member.offset & 0xF != 0 || is_tight,
-        _ => false,
+            kind,
+        } if member.offset & 0xF != 0 || is_tight => Some(kind),
+        _ => None,
     }
 }
 
@@ -741,23 +741,12 @@ impl<W: Write> Writer<W> {
                         match *ty {
                             crate::TypeInner::Struct {
                                 ref members, span, ..
-                            } => {
-                                let member = &members[index as usize];
-                                let member_ty = &context.module.types[member.ty].inner;
-                                let should_pack = should_pack_struct_member(
-                                    members,
-                                    span,
-                                    index as usize,
-                                    &context.module,
-                                );
-
-                                match *member_ty {
-                                    crate::TypeInner::Vector { kind, .. } if should_pack => {
-                                        Some(kind)
-                                    }
-                                    _ => None,
-                                }
-                            }
+                            } => should_pack_struct_member(
+                                members,
+                                span,
+                                index as usize,
+                                &context.module,
+                            ),
                             _ => None,
                         }
                     }
@@ -1519,11 +1508,10 @@ impl<W: Write> Writer<W> {
                         last_offset = member.offset + ty_inner.span(&module.constants);
 
                         let member_name = &self.names[&NameKey::StructMember(handle, index as u32)];
-                        let should_pack = should_pack_struct_member(members, span, index, module);
 
-                        match *ty_inner {
-                            // If the member should be packed (as is the case for a misaligned vec3) issue a packed vector
-                            crate::TypeInner::Vector { kind, .. } if should_pack => {
+                        // If the member should be packed (as is the case for a misaligned vec3) issue a packed vector
+                        match should_pack_struct_member(members, span, index, module) {
+                            Some(kind) => {
                                 writeln!(
                                     self.out,
                                     "{}packed_{}3 {};",
@@ -1532,7 +1520,7 @@ impl<W: Write> Writer<W> {
                                     member_name
                                 )?;
                             }
-                            _ => {
+                            None => {
                                 let base_name = TypeContext {
                                     handle: member.ty,
                                     arena: &module.types,
