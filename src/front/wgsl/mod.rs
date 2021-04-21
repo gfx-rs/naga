@@ -2205,22 +2205,18 @@ impl Parser {
                     // cases + default
                     match lexer.next() {
                         (Token::Word("case"), _) => {
+                            // parse a list of values
                             let value = loop {
-                                // values
                                 let value = lexer.next_sint_literal()?;
-                                match lexer.next() {
-                                    (Token::Separator(','), _) => {
-                                        cases.push(crate::SwitchCase {
-                                            value,
-                                            body: Vec::new(),
-                                            fall_through: true,
-                                        });
-                                    }
-                                    (Token::Separator(':'), _) => break value,
-                                    other => {
-                                        return Err(Error::Unexpected(other, "case separator"))
-                                    }
+                                let _ = lexer.skip(Token::Separator(','));
+                                if lexer.skip(Token::Separator(':')) {
+                                    break value;
                                 }
+                                cases.push(crate::SwitchCase {
+                                    value,
+                                    body: Vec::new(),
+                                    fall_through: true,
+                                });
                             };
 
                             let mut body = Vec::new();
