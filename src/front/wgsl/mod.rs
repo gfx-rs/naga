@@ -1048,6 +1048,7 @@ impl Parser {
                 )?;
 
                 lexer.open_arguments()?;
+                //Note: this expects at least one argument
                 let mut components = Vec::new();
                 while components.is_empty() || lexer.next_argument()? {
                     let component = self.parse_const_expression(lexer, type_arena, const_arena)?;
@@ -2206,8 +2207,12 @@ impl Parser {
                             // parse a list of values
                             let value = loop {
                                 let value = lexer.next_sint_literal()?;
-                                let _ = lexer.skip(Token::Separator(','));
-                                if lexer.skip(Token::Separator(':')) {
+                                if lexer.skip(Token::Separator(',')) {
+                                    if lexer.skip(Token::Separator(':')) {
+                                        break value;
+                                    }
+                                } else {
+                                    lexer.expect(Token::Separator(':'))?;
                                     break value;
                                 }
                                 cases.push(crate::SwitchCase {
