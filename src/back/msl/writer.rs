@@ -595,23 +595,19 @@ impl<W: Write> Writer<W> {
         log::trace!("expression {:?} = {:?}", expr_handle, expression);
         match *expression {
             crate::Expression::Access { base, index } => {
-                let accessing_wrapped_array = {
-                    let ty = match &context.info[base].ty {
-                        TypeResolution::Value(value) => value,
-                        TypeResolution::Handle(handle) => &context.module.types[*handle].inner,
-                    };
-
-                    match ty {
-                        crate::TypeInner::Array { .. } => true,
-                        crate::TypeInner::Pointer {
-                            base: pointer_base,
-                            class,
-                        } => match (&context.module.types[*pointer_base].inner, class) {
-                            (crate::TypeInner::Array { .. }, crate::StorageClass::Function) => true,
-                            _ => false,
-                        },
+                let accessing_wrapped_array = match *context.info[base]
+                    .ty
+                    .inner_with(&context.module.types)
+                {
+                    crate::TypeInner::Array { .. } => true,
+                    crate::TypeInner::Pointer {
+                        base: pointer_base,
+                        class,
+                    } => match (&context.module.types[pointer_base].inner, class) {
+                        (&crate::TypeInner::Array { .. }, crate::StorageClass::Function) => true,
                         _ => false,
-                    }
+                    },
+                    _ => false,
                 };
 
                 self.put_expression(base, context, false)?;
