@@ -1,7 +1,9 @@
 #include <metal_stdlib>
 #include <simd/simd.h>
 
-typedef float type6[1u];
+struct type6 {
+    float inner[1u];
+};
 struct gl_PerVertex {
     metal::float4 gl_Position;
     float gl_PointSize;
