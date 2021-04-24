@@ -125,7 +125,20 @@ impl<'a> Display for TypeContext<'a> {
                     vector_size_string(size),
                 )
             }
-            crate::TypeInner::Array { .. } | crate::TypeInner::Struct { .. } => unreachable!(),
+            crate::TypeInner::Array { base, .. } => {
+                let sub = Self {
+                    arena: self.arena,
+                    names: self.names,
+                    handle: base,
+                    usage: self.usage,
+                    access: self.access,
+                    first_time: false,
+                };
+                // Array lengths go at the end of the type definition,
+                // so just print the element type here.
+                write!(out, "{}", sub)
+            }
+            crate::TypeInner::Struct { .. } => unreachable!(),
             crate::TypeInner::Image {
                 dim,
                 arrayed,
@@ -565,7 +578,7 @@ impl<W: Write> Writer<W> {
                     write!(self.out, ",")?;
                 }
                 self.put_expression(component, context, false)?;
-                write!(self.out, "[{}]", j)?;
+                write!(self.out, ".inner[{}]", j)?;
             }
             write!(self.out, "}}")?;
         } else {
@@ -595,20 +608,21 @@ impl<W: Write> Writer<W> {
         log::trace!("expression {:?} = {:?}", expr_handle, expression);
         match *expression {
             crate::Expression::Access { base, index } => {
-                let accessing_wrapped_array = match *context.info[base]
-                    .ty
-                    .inner_with(&context.module.types)
-                {
-                    crate::TypeInner::Array { .. } => true,
-                    crate::TypeInner::Pointer {
-                        base: pointer_base,
-                        class,
-                    } => match (&context.module.types[pointer_base].inner, class) {
-                        (&crate::TypeInner::Array { .. }, crate::StorageClass::Function) => true,
+                let accessing_wrapped_array =
+                    match *context.info[base].ty.inner_with(&context.module.types) {
+                        crate::TypeInner::Array { .. } => true,
+                        crate::TypeInner::Pointer {
+                            base: pointer_base,
+                            class,
+                        } => match &context.module.types[pointer_base].inner {
+                            &crate::TypeInner::Array { .. } => {
+                                class == crate::StorageClass::Function
+                                    || class == crate::StorageClass::Private
+                            }
+                            _ => false,
+                        },
                         _ => false,
-                    },
-                    _ => false,
-                };
+                    };
 
                 self.put_expression(base, context, false)?;
                 if accessing_wrapped_array {
@@ -1180,7 +1194,7 @@ impl<W: Write> Writer<W> {
                                     if j != 0 {
                                         write!(self.out, ",")?;
                                     }
-                                    write!(self.out, "{}.{}[{}]", tmp, name, j)?;
+                                    write!(self.out, "{}.{}.inner[{}]", tmp, name, j)?;
                                 }
                                 write!(self.out, "}}")?;
                             } else {
@@ -1994,7 +2008,7 @@ impl<W: Write> Writer<W> {
                             names: &self.names,
                             usage: GlobalUse::empty(),
                             access: crate::StorageAccess::empty(),
-                            first_time: false,
+                            first_time: true,
                         };
                         let binding = binding.ok_or(Error::Validation)?;
                         if !pipeline_options.allow_point_size
@@ -2002,9 +2016,19 @@ impl<W: Write> Writer<W> {
                         {
                             continue;
                         }
+                        let array_len = match &module.types[ty].inner {
+                            crate::TypeInner::Array {
+                                size: crate::ArraySize::Constant(handle),
+                                ..
+                            } => module.constants[*handle].to_array_length(),
+                            _ => None,
+                        };
                         let resolved = options.resolve_local_binding(binding, out_mode)?;
                         write!(self.out, "{}{} {}", INDENT, ty_name, name)?;
                         resolved.try_fmt_decorated(&mut self.out, "")?;
+                        if let Some(array_len) = array_len {
+                            write!(self.out, " [{}]", array_len)?;
+                        }
                         writeln!(self.out, ";")?;
                     }
                     writeln!(self.out, "}};")?;
