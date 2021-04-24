@@ -578,7 +578,7 @@ impl<W: Write> Writer<W> {
                     write!(self.out, ",")?;
                 }
                 self.put_expression(component, context, false)?;
-                write!(self.out, ".inner[{}]", j)?;
+                write!(self.out, ".{}[{}]", WRAPPED_ARRAY_FIELD, j)?;
             }
             write!(self.out, "}}")?;
         } else {
@@ -614,8 +614,8 @@ impl<W: Write> Writer<W> {
                         crate::TypeInner::Pointer {
                             base: pointer_base,
                             class,
-                        } => match &context.module.types[pointer_base].inner {
-                            &crate::TypeInner::Array { .. } => {
+                        } => match context.module.types[pointer_base].inner {
+                            crate::TypeInner::Array { .. } => {
                                 class == crate::StorageClass::Function
                                     || class == crate::StorageClass::Private
                             }
@@ -1194,7 +1194,11 @@ impl<W: Write> Writer<W> {
                                     if j != 0 {
                                         write!(self.out, ",")?;
                                     }
-                                    write!(self.out, "{}.{}.inner[{}]", tmp, name, j)?;
+                                    write!(
+                                        self.out,
+                                        "{}.{}.{}[{}]",
+                                        tmp, name, WRAPPED_ARRAY_FIELD, j
+                                    )?;
                                 }
                                 write!(self.out, "}}")?;
                             } else {
@@ -2016,11 +2020,11 @@ impl<W: Write> Writer<W> {
                         {
                             continue;
                         }
-                        let array_len = match &module.types[ty].inner {
+                        let array_len = match module.types[ty].inner {
                             crate::TypeInner::Array {
                                 size: crate::ArraySize::Constant(handle),
                                 ..
-                            } => module.constants[*handle].to_array_length(),
+                            } => module.constants[handle].to_array_length(),
                             _ => None,
                         };
                         let resolved = options.resolve_local_binding(binding, out_mode)?;
