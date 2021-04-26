@@ -1,4 +1,9 @@
-#![allow(clippy::panic, clippy::needless_lifetimes, clippy::upper_case_acronyms)]
+#![allow(
+    unused_braces,
+    clippy::panic,
+    clippy::needless_lifetimes,
+    clippy::upper_case_acronyms
+)]
 use pomelo::pomelo;
 pomelo! {
     //%verbose;
@@ -1052,7 +1057,7 @@ pomelo! {
         for (pos, arg) in args.into_iter().enumerate() {
             if let Some(name) = arg.name.clone() {
                 let exp = extra.context.expressions.append(Expression::FunctionArgument(pos as u32));
-                extra.context.add_local_var(name, exp);
+                extra.context.add_function_arg(name, exp);
             }
             extra.context.arguments.push(arg);
         }
@@ -1079,8 +1084,8 @@ pomelo! {
         FunctionArgument { name: Some(n.1), ty, binding: None }
     }
     // parameter_declarator ::= type_specifier(ty) Identifier(ident) array_specifier;
-    parameter_declaration ::= parameter_declarator;
-    parameter_declaration ::= parameter_type_specifier(ty) {
+    parameter_declaration ::= In? parameter_declarator(arg) { arg };
+    parameter_declaration ::= In? parameter_type_specifier(ty) {
         FunctionArgument { name: None, ty, binding: None }
     }
 

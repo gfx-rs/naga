@@ -68,7 +68,10 @@ pub const SUPPORTED_CAPABILITIES: &[spirv::Capability] = &[
     spirv::Capability::UniformBufferArrayDynamicIndexing,
     spirv::Capability::StorageBufferArrayDynamicIndexing,
 ];
-pub const SUPPORTED_EXTENSIONS: &[&str] = &["SPV_KHR_vulkan_memory_model"];
+pub const SUPPORTED_EXTENSIONS: &[&str] = &[
+    "SPV_KHR_storage_buffer_storage_class",
+    "SPV_KHR_vulkan_memory_model",
+];
 pub const SUPPORTED_EXT_SETS: &[&str] = &["GLSL.std.450"];
 
 #[derive(Copy, Clone)]
@@ -347,6 +350,8 @@ pub struct Options {
     /// so by default we flip the Y coordinate of the `BuiltIn::Position`.
     /// This flag can be used to avoid this.
     pub adjust_coordinate_space: bool,
+    /// Only allow shaders with the known set of capabilities.
+    pub strict_capabilities: bool,
     pub flow_graph_dump_prefix: Option<PathBuf>,
 }
 
@@ -354,6 +359,7 @@ impl Default for Options {
     fn default() -> Self {
         Options {
             adjust_coordinate_space: true,
+            strict_capabilities: false,
             flow_graph_dump_prefix: None,
         }
     }
@@ -583,6 +589,57 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             left: p1_lexp.handle,
             right: p2_lexp.handle,
         };
+        self.lookup_expression.insert(
+            result_id,
+            LookupExpression {
+                handle: expressions.append(expr),
+                type_id: result_type_id,
+            },
+        );
+        Ok(())
+    }
+
+    /// A more complicated version of the binary op,
+    /// where we force the operand to have the same type as the result.
+    /// This is mostly needed for "i++" and "i--" coming from GLSL.
+    fn parse_expr_binary_op_sign_adjusted(
+        &mut self,
+        expressions: &mut Arena<crate::Expression>,
+        op: crate::BinaryOperator,
+        types: &Arena<crate::Type>,
+    ) -> Result<(), Error> {
+        let result_type_id = self.next()?;
+        let result_id = self.next()?;
+        let p1_id = self.next()?;
+        let p2_id = self.next()?;
+
+        let p1_lexp = self.lookup_expression.lookup(p1_id)?;
+        let p2_lexp = self.lookup_expression.lookup(p2_id)?;
+        let result_lookup_ty = self.lookup_type.lookup(result_type_id)?;
+        let kind = types[result_lookup_ty.handle].inner.scalar_kind().unwrap();
+
+        let expr = crate::Expression::Binary {
+            op,
+            left: if p1_lexp.type_id == result_type_id {
+                p1_lexp.handle
+            } else {
+                expressions.append(crate::Expression::As {
+                    expr: p1_lexp.handle,
+                    kind,
+                    convert: true,
+                })
+            },
+            right: if p2_lexp.type_id == result_type_id {
+                p2_lexp.handle
+            } else {
+                expressions.append(crate::Expression::As {
+                    expr: p2_lexp.handle,
+                    kind,
+                    convert: true,
+                })
+            },
+        };
+
         self.lookup_expression.insert(
             result_id,
             LookupExpression {
@@ -1255,11 +1312,27 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     inst.expect(4)?;
                     self.parse_expr_unary_op(expressions, crate::UnaryOperator::Negate)?;
                 }
-                Op::IAdd | Op::FAdd => {
+                Op::IAdd => {
+                    inst.expect(5)?;
+                    self.parse_expr_binary_op_sign_adjusted(
+                        expressions,
+                        crate::BinaryOperator::Add,
+                        type_arena,
+                    )?;
+                }
+                Op::FAdd => {
                     inst.expect(5)?;
                     self.parse_expr_binary_op(expressions, crate::BinaryOperator::Add)?;
                 }
-                Op::ISub | Op::FSub => {
+                Op::ISub => {
+                    inst.expect(5)?;
+                    self.parse_expr_binary_op_sign_adjusted(
+                        expressions,
+                        crate::BinaryOperator::Subtract,
+                        type_arena,
+                    )?;
+                }
+                Op::FSub => {
                     inst.expect(5)?;
                     self.parse_expr_binary_op(expressions, crate::BinaryOperator::Subtract)?;
                 }
@@ -1377,19 +1450,37 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     let extra = inst.expect_at_least(5)?;
                     self.parse_image_load(extra, type_arena, global_arena, expressions)?;
                 }
-                Op::ImageSampleImplicitLod
-                | Op::ImageSampleExplicitLod
-                | Op::ImageSampleProjImplicitLod
-                | Op::ImageSampleProjExplicitLod => {
+                Op::ImageSampleImplicitLod | Op::ImageSampleExplicitLod => {
                     let extra = inst.expect_at_least(5)?;
-                    self.parse_image_sample(extra, type_arena, global_arena, expressions)?;
+                    let options = image::SamplingOptions {
+                        compare: false,
+                        project: false,
+                    };
+                    self.parse_image_sample(extra, options, type_arena, global_arena, expressions)?;
                 }
-                Op::ImageSampleDrefImplicitLod
-                | Op::ImageSampleDrefExplicitLod
-                | Op::ImageSampleProjDrefImplicitLod
-                | Op::ImageSampleProjDrefExplicitLod => {
+                Op::ImageSampleProjImplicitLod | Op::ImageSampleProjExplicitLod => {
+                    let extra = inst.expect_at_least(5)?;
+                    let options = image::SamplingOptions {
+                        compare: false,
+                        project: true,
+                    };
+                    self.parse_image_sample(extra, options, type_arena, global_arena, expressions)?;
+                }
+                Op::ImageSampleDrefImplicitLod | Op::ImageSampleDrefExplicitLod => {
                     let extra = inst.expect_at_least(6)?;
-                    self.parse_image_sample_dref(extra, type_arena, global_arena, expressions)?;
+                    let options = image::SamplingOptions {
+                        compare: true,
+                        project: false,
+                    };
+                    self.parse_image_sample(extra, options, type_arena, global_arena, expressions)?;
+                }
+                Op::ImageSampleProjDrefImplicitLod | Op::ImageSampleProjDrefExplicitLod => {
+                    let extra = inst.expect_at_least(6)?;
+                    let options = image::SamplingOptions {
+                        compare: true,
+                        project: true,
+                    };
+                    self.parse_image_sample(extra, options, type_arena, global_arena, expressions)?;
                 }
                 Op::ImageQuerySize => {
                     inst.expect(4)?;
@@ -2123,7 +2214,11 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         let cap =
             spirv::Capability::from_u32(capability).ok_or(Error::UnknownCapability(capability))?;
         if !SUPPORTED_CAPABILITIES.contains(&cap) {
-            return Err(Error::UnsupportedCapability(cap));
+            if self.options.strict_capabilities {
+                return Err(Error::UnsupportedCapability(cap));
+            } else {
+                log::warn!("Unknown capability {:?}", cap);
+            }
         }
         Ok(())
     }

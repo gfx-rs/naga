@@ -1,5 +1,6 @@
 use super::{
-    helpers::map_storage_class, Instruction, LogicalLayout, Options, PhysicalLayout, WriterFlags,
+    helpers::{contains_builtin, map_storage_class},
+    Instruction, LogicalLayout, Options, PhysicalLayout, WriterFlags,
 };
 use crate::{
     arena::{Arena, Handle},
@@ -123,9 +124,15 @@ enum LocalType {
         base: Handle<crate::Type>,
         class: spirv::StorageClass,
     },
-    SampledImage {
-        image_type: Handle<crate::Type>,
+    Image {
+        dim: crate::ImageDimension,
+        arrayed: bool,
+        class: crate::ImageClass,
     },
+    SampledImage {
+        image_type_id: Word,
+    },
+    Sampler,
 }
 
 impl PhysicalLayout {
@@ -167,6 +174,16 @@ impl PhysicalLayout {
                 width,
                 pointer_class: Some(map_storage_class(class)),
             },
+            crate::TypeInner::Image {
+                dim,
+                arrayed,
+                class,
+            } => LocalType::Image {
+                dim,
+                arrayed,
+                class,
+            },
+            crate::TypeInner::Sampler { comparison: _ } => LocalType::Sampler,
             _ => return None,
         })
     }
@@ -267,6 +284,7 @@ pub struct Writer {
     logical_layout: LogicalLayout,
     id_gen: IdGenerator,
     capabilities: crate::FastHashSet<spirv::Capability>,
+    strict_capabilities: bool,
     debugs: Vec<Instruction>,
     annotations: Vec<Instruction>,
     flags: WriterFlags,
@@ -300,7 +318,15 @@ impl Writer {
             physical_layout: PhysicalLayout::new(raw_version),
             logical_layout: LogicalLayout::default(),
             id_gen,
-            capabilities: options.capabilities.clone(),
+            capabilities: match options.capabilities {
+                Some(ref caps) => caps.clone(),
+                None => {
+                    let mut caps = crate::FastHashSet::default();
+                    caps.insert(spirv::Capability::Shader);
+                    caps
+                }
+            },
+            strict_capabilities: options.capabilities.is_some(),
             debugs: vec![],
             annotations: vec![],
             flags: options.flags,
@@ -319,14 +345,19 @@ impl Writer {
     }
 
     fn check(&mut self, capabilities: &[spirv::Capability]) -> Result<(), Error> {
-        if capabilities.is_empty()
-            || capabilities
-                .iter()
-                .any(|cap| self.capabilities.contains(cap))
-        {
-            Ok(())
+        if self.strict_capabilities {
+            if capabilities.is_empty()
+                || capabilities
+                    .iter()
+                    .any(|cap| self.capabilities.contains(cap))
+            {
+                Ok(())
+            } else {
+                Err(Error::MissingCapabilities(capabilities.to_vec()))
+            }
         } else {
-            Err(Error::MissingCapabilities(capabilities.to_vec()))
+            self.capabilities.extend(capabilities);
+            Ok(())
         }
     }
 
@@ -636,6 +667,17 @@ impl Writer {
         Ok(function_id)
     }
 
+    fn write_execution_mode(
+        &mut self,
+        function_id: Word,
+        mode: spirv::ExecutionMode,
+    ) -> Result<(), Error> {
+        self.check(mode.required_capabilities())?;
+        Instruction::execution_mode(function_id, mode, &[])
+            .to_words(&mut self.logical_layout.execution_modes);
+        Ok(())
+    }
+
     // TODO Move to instructions module
     fn write_entry_point(
         &mut self,
@@ -654,10 +696,20 @@ impl Writer {
         let exec_model = match entry_point.stage {
             crate::ShaderStage::Vertex => spirv::ExecutionModel::Vertex,
             crate::ShaderStage::Fragment => {
-                let execution_mode = spirv::ExecutionMode::OriginUpperLeft;
-                self.check(execution_mode.required_capabilities())?;
-                Instruction::execution_mode(function_id, execution_mode, &[])
-                    .to_words(&mut self.logical_layout.execution_modes);
+                self.write_execution_mode(function_id, spirv::ExecutionMode::OriginUpperLeft)?;
+                if let Some(ref result) = entry_point.function.result {
+                    if contains_builtin(
+                        result.binding.as_ref(),
+                        result.ty,
+                        &ir_module.types,
+                        crate::BuiltIn::FragDepth,
+                    ) {
+                        self.write_execution_mode(
+                            function_id,
+                            spirv::ExecutionMode::DepthReplacing,
+                        )?;
+                    }
+                }
                 spirv::ExecutionModel::Fragment
             }
             crate::ShaderStage::Compute => {
@@ -682,7 +734,7 @@ impl Writer {
         ))
     }
 
-    fn write_scalar(&self, id: Word, kind: crate::ScalarKind, width: crate::Bytes) -> Instruction {
+    fn make_scalar(&self, id: Word, kind: crate::ScalarKind, width: crate::Bytes) -> Instruction {
         let bits = (width * BITS_PER_BYTE) as u32;
         match kind {
             crate::ScalarKind::Sint => {
@@ -708,7 +760,7 @@ impl Writer {
                 kind,
                 width,
                 pointer_class: None,
-            } => self.write_scalar(id, kind, width),
+            } => self.make_scalar(id, kind, width),
             LocalType::Value {
                 vector_size: Some(size),
                 kind,
@@ -763,8 +815,9 @@ impl Writer {
                 )?;
                 Instruction::type_pointer(id, class, type_id)
             }
-            LocalType::SampledImage { image_type } => {
-                let image_type_id = self.get_type_id(arena, LookupType::Handle(image_type))?;
+            // all the samplers and image types go through `write_type_declaration_arena`
+            LocalType::Image { .. } | LocalType::Sampler => unreachable!(),
+            LocalType::SampledImage { image_type_id } => {
                 Instruction::type_sampled_image(id, image_type_id)
             }
         };
@@ -810,7 +863,7 @@ impl Writer {
         use spirv::Decoration;
 
         let instruction = match ty.inner {
-            crate::TypeInner::Scalar { kind, width } => self.write_scalar(id, kind, width),
+            crate::TypeInner::Scalar { kind, width } => self.make_scalar(id, kind, width),
             crate::TypeInner::Vector { size, kind, width } => {
                 let scalar_id = self.get_type_id(
                     arena,
@@ -1363,6 +1416,27 @@ impl Writer {
         Ok((id, variable))
     }
 
+    fn is_intermediate(
+        &self,
+        expr_handle: Handle<crate::Expression>,
+        ir_function: &crate::Function,
+        ir_types: &Arena<crate::Type>,
+    ) -> bool {
+        match ir_function.expressions[expr_handle] {
+            crate::Expression::GlobalVariable(_) | crate::Expression::LocalVariable(_) => true,
+            crate::Expression::FunctionArgument(index) => {
+                let arg = &ir_function.arguments[index as usize];
+                match ir_types[arg.ty].inner {
+                    crate::TypeInner::Pointer { .. } | crate::TypeInner::ValuePointer { .. } => {
+                        true
+                    }
+                    _ => false,
+                }
+            }
+            _ => self.cached.ids[expr_handle.index()] == 0,
+        }
+    }
+
     /// Cache an expression for a value.
     fn cache_expression_value(
         &mut self,
@@ -1377,80 +1451,74 @@ impl Writer {
             self.get_expression_type_id(&ir_module.types, &fun_info[expr_handle].ty)?;
 
         let id = match ir_function.expressions[expr_handle] {
+            crate::Expression::Access { base, index: _ }
+                if self.is_intermediate(base, ir_function, &ir_module.types) =>
+            {
+                0
+            }
             crate::Expression::Access { base, index } => {
-                let base_is_var = match ir_function.expressions[base] {
-                    crate::Expression::GlobalVariable(_) | crate::Expression::LocalVariable(_) => {
-                        true
+                let index_id = self.cached[index];
+                let base_id = self.cached[base];
+                match *fun_info[base].ty.inner_with(&ir_module.types) {
+                    crate::TypeInner::Vector { .. } => {
+                        let id = self.id_gen.next();
+                        block.body.push(Instruction::vector_extract_dynamic(
+                            result_type_id,
+                            id,
+                            base_id,
+                            index_id,
+                        ));
+                        id
                     }
-                    _ => self.cached.ids[base.index()] == 0,
-                };
-                if base_is_var {
-                    0
-                } else {
-                    let index_id = self.cached[index];
-                    let base_id = self.cached[base];
-                    match *fun_info[base].ty.inner_with(&ir_module.types) {
-                        crate::TypeInner::Vector { .. } => {
-                            let id = self.id_gen.next();
-                            block.body.push(Instruction::vector_extract_dynamic(
-                                result_type_id,
-                                id,
-                                base_id,
-                                index_id,
-                            ));
-                            id
-                        }
-                        crate::TypeInner::Array {
-                            base: ty_element, ..
-                        } => {
-                            let (id, variable) = self.promote_access_expression_to_variable(
-                                &ir_module.types,
-                                result_type_id,
-                                base_id,
-                                &fun_info[base].ty,
-                                index_id,
-                                ty_element,
-                                block,
-                            )?;
-                            function.internal_variables.push(variable);
-                            id
-                        }
-                        ref other => {
-                            log::error!("Unable to access {:?}", other);
-                            return Err(Error::FeatureNotImplemented("access for type"));
-                        }
+                    crate::TypeInner::Array {
+                        base: ty_element, ..
+                    } => {
+                        let (id, variable) = self.promote_access_expression_to_variable(
+                            &ir_module.types,
+                            result_type_id,
+                            base_id,
+                            &fun_info[base].ty,
+                            index_id,
+                            ty_element,
+                            block,
+                        )?;
+                        function.internal_variables.push(variable);
+                        id
+                    }
+                    ref other => {
+                        log::error!(
+                            "Unable to access base {:?} of type {:?}",
+                            ir_function.expressions[base],
+                            other
+                        );
+                        return Err(Error::FeatureNotImplemented("access for type"));
                     }
                 }
             }
+            crate::Expression::AccessIndex { base, index: _ }
+                if self.is_intermediate(base, ir_function, &ir_module.types) =>
+            {
+                0
+            }
             crate::Expression::AccessIndex { base, index } => {
-                let base_is_var = match ir_function.expressions[base] {
-                    crate::Expression::GlobalVariable(_) | crate::Expression::LocalVariable(_) => {
-                        true
+                match *fun_info[base].ty.inner_with(&ir_module.types) {
+                    crate::TypeInner::Vector { .. }
+                    | crate::TypeInner::Matrix { .. }
+                    | crate::TypeInner::Array { .. }
+                    | crate::TypeInner::Struct { .. } => {
+                        let id = self.id_gen.next();
+                        let base_id = self.cached[base];
+                        block.body.push(Instruction::composite_extract(
+                            result_type_id,
+                            id,
+                            base_id,
+                            &[index],
+                        ));
+                        id
                     }
-                    _ => self.cached.ids[base.index()] == 0,
-                };
-                if base_is_var {
-                    0
-                } else {
-                    match *fun_info[base].ty.inner_with(&ir_module.types) {
-                        crate::TypeInner::Vector { .. }
-                        | crate::TypeInner::Matrix { .. }
-                        | crate::TypeInner::Array { .. }
-                        | crate::TypeInner::Struct { .. } => {
-                            let id = self.id_gen.next();
-                            let base_id = self.cached[base];
-                            block.body.push(Instruction::composite_extract(
-                                result_type_id,
-                                id,
-                                base_id,
-                                &[index],
-                            ));
-                            id
-                        }
-                        ref other => {
-                            log::error!("Unable to access index of {:?}", other);
-                            return Err(Error::FeatureNotImplemented("access index for type"));
-                        }
+                    ref other => {
+                        log::error!("Unable to access index of {:?}", other);
+                        return Err(Error::FeatureNotImplemented("access index for type"));
                     }
                 }
             }
@@ -1521,7 +1589,10 @@ impl Writer {
                             return Err(Error::FeatureNotImplemented("negation"));
                         }
                     },
-                    crate::UnaryOperator::Not => spirv::Op::Not,
+                    crate::UnaryOperator::Not => match expr_ty_inner.scalar_kind() {
+                        Some(crate::ScalarKind::Bool) => spirv::Op::LogicalNot,
+                        _ => spirv::Op::Not,
+                    },
                 };
 
                 block
@@ -1951,9 +2022,11 @@ impl Writer {
                 };
 
                 // OpTypeSampledImage
+                let image_type_id =
+                    self.get_type_id(&ir_module.types, LookupType::Handle(image_type))?;
                 let sampled_image_type_id = self.get_type_id(
                     &ir_module.types,
-                    LookupType::Local(LocalType::SampledImage { image_type }),
+                    LookupType::Local(LocalType::SampledImage { image_type_id }),
                 )?;
 
                 let sampler_id = self.get_expression_global(ir_function, sampler);
@@ -1975,6 +2048,8 @@ impl Writer {
                 let id = self.id_gen.next();
 
                 let depth_id = depth_ref.map(|handle| self.cached[handle]);
+                let mut mask = spirv::ImageOperands::empty();
+                mask.set(spirv::ImageOperands::CONST_OFFSET, offset.is_some());
 
                 let mut main_instruction = match level {
                     crate::SampleLevel::Zero => {
@@ -1996,7 +2071,9 @@ impl Writer {
                             None,
                             &ir_module.types,
                         )?;
-                        inst.add_operand(spirv::ImageOperands::LOD.bits());
+
+                        mask |= spirv::ImageOperands::LOD;
+                        inst.add_operand(mask.bits());
                         inst.add_operand(zero_id);
 
                         inst
@@ -2020,7 +2097,8 @@ impl Writer {
                         );
 
                         let lod_id = self.cached[lod_handle];
-                        inst.add_operand(spirv::ImageOperands::LOD.bits());
+                        mask |= spirv::ImageOperands::LOD;
+                        inst.add_operand(mask.bits());
                         inst.add_operand(lod_id);
 
                         inst
@@ -2036,7 +2114,7 @@ impl Writer {
                         );
 
                         let bias_id = self.cached[bias_handle];
-                        inst.add_operand(spirv::ImageOperands::BIAS.bits());
+                        mask |= spirv::ImageOperands::BIAS;
                         inst.add_operand(bias_id);
 
                         inst
@@ -2053,7 +2131,7 @@ impl Writer {
 
                         let x_id = self.cached[x];
                         let y_id = self.cached[y];
-                        inst.add_operand(spirv::ImageOperands::GRAD.bits());
+                        mask |= spirv::ImageOperands::GRAD;
                         inst.add_operand(x_id);
                         inst.add_operand(y_id);
 
@@ -2063,7 +2141,6 @@ impl Writer {
 
                 if let Some(offset_const) = offset {
                     let offset_id = self.constant_ids[offset_const.index()];
-                    main_instruction.add_operand(spirv::ImageOperands::CONST_OFFSET.bits());
                     main_instruction.add_operand(offset_id);
                 }
 
@@ -2098,15 +2175,18 @@ impl Writer {
                 id
             }
             crate::Expression::Derivative { axis, expr } => {
-                use crate::DerivativeAxis;
+                use crate::DerivativeAxis as Da;
 
                 let id = self.id_gen.next();
                 let expr_id = self.cached[expr];
-                block.body.push(match axis {
-                    DerivativeAxis::X => Instruction::derive_x(result_type_id, id, expr_id),
-                    DerivativeAxis::Y => Instruction::derive_y(result_type_id, id, expr_id),
-                    DerivativeAxis::Width => Instruction::derive_width(result_type_id, id, expr_id),
-                });
+                let op = match axis {
+                    Da::X => spirv::Op::DPdx,
+                    Da::Y => spirv::Op::DPdy,
+                    Da::Width => spirv::Op::Fwidth,
+                };
+                block
+                    .body
+                    .push(Instruction::derivative(op, result_type_id, id, expr_id));
                 id
             }
             crate::Expression::ImageQuery { image, query } => {
@@ -2249,7 +2329,26 @@ impl Writer {
                     }
                 }
             }
-            crate::Expression::Relational { .. } | crate::Expression::ArrayLength(_) => {
+            crate::Expression::Relational { fun, argument } => {
+                use crate::RelationalFunction as Rf;
+                let arg_id = self.cached[argument];
+                let op = match fun {
+                    Rf::All => spirv::Op::All,
+                    Rf::Any => spirv::Op::Any,
+                    Rf::IsNan => spirv::Op::IsNan,
+                    Rf::IsInf => spirv::Op::IsInf,
+                    //TODO: these require Kernel capability
+                    Rf::IsFinite | Rf::IsNormal => {
+                        return Err(Error::FeatureNotImplemented("is finite/normal"))
+                    }
+                };
+                let id = self.id_gen.next();
+                block
+                    .body
+                    .push(Instruction::relational(op, result_type_id, id, arg_id));
+                id
+            }
+            crate::Expression::ArrayLength(_) => {
                 log::error!("unimplemented {:?}", ir_function.expressions[expr_handle]);
                 return Err(Error::FeatureNotImplemented("expression"));
             }
@@ -2297,6 +2396,10 @@ impl Writer {
                 crate::Expression::LocalVariable(variable) => {
                     let local_var = &function.variables[&variable];
                     break (local_var.id, spirv::StorageClass::Function);
+                }
+                crate::Expression::FunctionArgument(index) => {
+                    let id = function.parameters[index as usize].result_id.unwrap();
+                    break (id, spirv::StorageClass::Function);
                 }
                 ref other => unimplemented!("Unexpected pointer expression {:?}", other),
             }
@@ -2737,8 +2840,19 @@ impl Writer {
                 Some(id) => Instruction::branch(id),
                 // This can happen if the last branch had all the paths
                 // leading out of the graph (i.e. returning).
-                // So it doesn't matter what we do here, but it has to be valid.
-                None => Instruction::branch(label_id),
+                // Or it may be the end of the function.
+                None => match ir_function.result {
+                    Some(ref result) if function.entry_point_context.is_none() => {
+                        // create a Null and return it
+                        let null_id = self.id_gen.next();
+                        let type_id =
+                            self.get_type_id(&ir_module.types, LookupType::Handle(result.ty))?;
+                        Instruction::constant_null(type_id, null_id)
+                            .to_words(&mut self.logical_layout.declarations);
+                        Instruction::return_value(null_id)
+                    }
+                    _ => Instruction::return_void(),
+                },
             });
         }
 

@@ -127,7 +127,7 @@ fn check_output_spv(
     let options = spv::Options {
         lang_version: params.spv_version,
         flags,
-        capabilities: params.spv_capabilities.clone(),
+        capabilities: Some(params.spv_capabilities.clone()),
     };
 
     let spv = spv::write_vec(module, info, &options).unwrap();
@@ -226,9 +226,9 @@ fn convert_wgsl() {
         ),
         (
             "quad",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::DOT,
+            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::DOT | Targets::WGSL,
         ),
-        ("boids", Targets::SPIRV | Targets::METAL),
+        ("boids", Targets::SPIRV | Targets::METAL | Targets::GLSL),
         ("skybox", Targets::SPIRV | Targets::METAL | Targets::GLSL),
         (
             "collatz",
@@ -242,7 +242,7 @@ fn convert_wgsl() {
             "interpolate",
             Targets::SPIRV | Targets::METAL | Targets::GLSL,
         ),
-        ("access", Targets::SPIRV | Targets::METAL),
+        ("access", Targets::SPIRV | Targets::METAL | Targets::WGSL),
     ];
 
     for &(name, targets) in inputs.iter() {
@@ -263,6 +263,7 @@ fn convert_spv(name: &str, adjust_coordinate_space: bool, targets: Targets) {
         &fs::read(format!("{}/{}/{}.spv", root, DIR_IN, name)).expect("Couldn't find spv file"),
         &naga::front::spv::Options {
             adjust_coordinate_space,
+            strict_capabilities: false,
             flow_graph_dump_prefix: None,
         },
     )

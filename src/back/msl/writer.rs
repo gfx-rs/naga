@@ -4,6 +4,7 @@ use super::{
 };
 use crate::{
     arena::{Arena, Handle},
+    back::vector_size_str,
     proc::{EntryPointIndex, NameKey, Namer, TypeResolution},
     valid::{FunctionInfo, GlobalUse, ModuleInfo},
     FastHashMap,
@@ -66,7 +67,7 @@ impl<'a> Display for TypeContext<'a> {
                     "{}::{}{}",
                     NAMESPACE,
                     scalar_kind_string(kind),
-                    vector_size_string(size),
+                    vector_size_str(size),
                 )
             }
             crate::TypeInner::Matrix { columns, rows, .. } => {
@@ -75,8 +76,8 @@ impl<'a> Display for TypeContext<'a> {
                     "{}::{}{}x{}",
                     NAMESPACE,
                     scalar_kind_string(crate::ScalarKind::Float),
-                    vector_size_string(columns),
-                    vector_size_string(rows),
+                    vector_size_str(columns),
+                    vector_size_str(rows),
                 )
             }
             crate::TypeInner::Pointer { base, class } => {
@@ -119,7 +120,7 @@ impl<'a> Display for TypeContext<'a> {
                     class_name,
                     NAMESPACE,
                     scalar_kind_string(kind),
-                    vector_size_string(size),
+                    vector_size_str(size),
                 )
             }
             crate::TypeInner::Array { base, .. } => {
@@ -303,14 +304,6 @@ fn scalar_kind_string(kind: crate::ScalarKind) -> &'static str {
         crate::ScalarKind::Sint => "int",
         crate::ScalarKind::Uint => "uint",
         crate::ScalarKind::Bool => "bool",
-    }
-}
-
-fn vector_size_string(size: crate::VectorSize) -> &'static str {
-    match size {
-        crate::VectorSize::Bi => "2",
-        crate::VectorSize::Tri => "3",
-        crate::VectorSize::Quad => "4",
     }
 }
 
@@ -539,7 +532,7 @@ impl<W: Write> Writer<W> {
         // coordinates in IR are int, but Metal expects uint
         let size_str = match *context.info[expr].ty.inner_with(&context.module.types) {
             crate::TypeInner::Scalar { .. } => "",
-            crate::TypeInner::Vector { size, .. } => vector_size_string(size),
+            crate::TypeInner::Vector { size, .. } => vector_size_str(size),
             _ => return Err(Error::Validation),
         };
         write!(self.out, "{}::uint{}(", NAMESPACE, size_str)?;
@@ -639,7 +632,7 @@ impl<W: Write> Writer<W> {
                     _ => return Err(Error::Validation),
                 };
                 let scalar = scalar_kind_string(scalar_kind);
-                let size = vector_size_string(size);
+                let size = vector_size_str(size);
 
                 write!(self.out, "{}{}(", scalar, size)?;
                 self.put_expression(value, context, true)?;
@@ -669,7 +662,7 @@ impl<W: Write> Writer<W> {
                             "{}::{}{}",
                             NAMESPACE,
                             scalar_kind_string(kind),
-                            vector_size_string(size)
+                            vector_size_str(size)
                         )?;
                         self.put_call_parameters(components.iter().cloned(), context)?;
                     }
@@ -680,8 +673,8 @@ impl<W: Write> Writer<W> {
                             "{}::{}{}x{}",
                             NAMESPACE,
                             scalar_kind_string(kind),
-                            vector_size_string(columns),
-                            vector_size_string(rows)
+                            vector_size_str(columns),
+                            vector_size_str(rows)
                         )?;
                         self.put_call_parameters(components.iter().cloned(), context)?;
                     }
@@ -890,26 +883,7 @@ impl<W: Write> Writer<W> {
                 self.put_expression(expr, context, false)?;
             }
             crate::Expression::Binary { op, left, right } => {
-                let op_str = match op {
-                    crate::BinaryOperator::Add => "+",
-                    crate::BinaryOperator::Subtract => "-",
-                    crate::BinaryOperator::Multiply => "*",
-                    crate::BinaryOperator::Divide => "/",
-                    crate::BinaryOperator::Modulo => "%",
-                    crate::BinaryOperator::Equal => "==",
-                    crate::BinaryOperator::NotEqual => "!=",
-                    crate::BinaryOperator::Less => "<",
-                    crate::BinaryOperator::LessEqual => "<=",
-                    crate::BinaryOperator::Greater => ">",
-                    crate::BinaryOperator::GreaterEqual => ">=",
-                    crate::BinaryOperator::And => "&",
-                    crate::BinaryOperator::ExclusiveOr => "^",
-                    crate::BinaryOperator::InclusiveOr => "|",
-                    crate::BinaryOperator::LogicalAnd => "&&",
-                    crate::BinaryOperator::LogicalOr => "||",
-                    crate::BinaryOperator::ShiftLeft => "<<",
-                    crate::BinaryOperator::ShiftRight => ">>",
-                };
+                let op_str = crate::back::binary_operation_str(op);
                 let kind = context
                     .resolve_type(left)
                     .scalar_kind()
@@ -1078,7 +1052,7 @@ impl<W: Write> Writer<W> {
                 let scalar = scalar_kind_string(kind);
                 let size = match *context.resolve_type(expr) {
                     crate::TypeInner::Scalar { .. } => "",
-                    crate::TypeInner::Vector { size, .. } => vector_size_string(size),
+                    crate::TypeInner::Vector { size, .. } => vector_size_str(size),
                     _ => return Err(Error::Validation),
                 };
                 let op = if convert { "static_cast" } else { "as_type" };
@@ -1210,7 +1184,7 @@ impl<W: Write> Writer<W> {
                     "{}::{}{}",
                     NAMESPACE,
                     scalar_kind_string(kind),
-                    vector_size_string(size)
+                    vector_size_str(size)
                 )?;
             }
             TypeResolution::Value(crate::TypeInner::Matrix { columns, rows, .. }) => {
@@ -1219,8 +1193,8 @@ impl<W: Write> Writer<W> {
                     "{}::{}{}x{}",
                     NAMESPACE,
                     scalar_kind_string(crate::ScalarKind::Float),
-                    vector_size_string(columns),
-                    vector_size_string(rows),
+                    vector_size_str(columns),
+                    vector_size_str(rows),
                 )?;
             }
             TypeResolution::Value(ref other) => {

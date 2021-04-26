@@ -350,6 +350,13 @@ impl super::Instruction {
     //  Constant-Creation Instructions
     //
 
+    pub(super) fn constant_null(result_type_id: Word, id: Word) -> Self {
+        let mut instruction = Self::new(Op::ConstantNull);
+        instruction.set_type(result_type_id);
+        instruction.set_result(id);
+        instruction
+    }
+
     pub(super) fn constant_true(result_type_id: Word, id: Word) -> Self {
         let mut instruction = Self::new(Op::ConstantTrue);
         instruction.set_type(result_type_id);
@@ -705,6 +712,14 @@ impl super::Instruction {
         instruction
     }
 
+    pub(super) fn relational(op: Op, result_type_id: Word, id: Word, expr_id: Word) -> Self {
+        let mut instruction = Self::new(op);
+        instruction.set_type(result_type_id);
+        instruction.set_result(id);
+        instruction.add_operand(expr_id);
+        instruction
+    }
+
     //
     // Bit Instructions
     //
@@ -717,24 +732,8 @@ impl super::Instruction {
     // Derivative Instructions
     //
 
-    pub(super) fn derive_x(result_type_id: Word, id: Word, expr_id: Word) -> Self {
-        let mut instruction = Self::new(Op::DPdx);
-        instruction.set_type(result_type_id);
-        instruction.set_result(id);
-        instruction.add_operand(expr_id);
-        instruction
-    }
-
-    pub(super) fn derive_y(result_type_id: Word, id: Word, expr_id: Word) -> Self {
-        let mut instruction = Self::new(Op::DPdy);
-        instruction.set_type(result_type_id);
-        instruction.set_result(id);
-        instruction.add_operand(expr_id);
-        instruction
-    }
-
-    pub(super) fn derive_width(result_type_id: Word, id: Word, expr_id: Word) -> Self {
-        let mut instruction = Self::new(Op::Fwidth);
+    pub(super) fn derivative(op: Op, result_type_id: Word, id: Word, expr_id: Word) -> Self {
+        let mut instruction = Self::new(op);
         instruction.set_type(result_type_id);
         instruction.set_result(id);
         instruction.add_operand(expr_id);
