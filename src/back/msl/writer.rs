@@ -576,10 +576,10 @@ impl<W: Write> Writer<W> {
                             base: pointer_base,
                             class,
                         } => match context.module.types[pointer_base].inner {
-                            crate::TypeInner::Array { .. } => {
-                                class == crate::StorageClass::Function
-                                    || class == crate::StorageClass::Private
-                            }
+                            crate::TypeInner::Array {
+                                size: crate::ArraySize::Constant(_),
+                                ..
+                            } => true,
                             _ => false,
                         },
                         _ => false,
