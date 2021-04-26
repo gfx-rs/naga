@@ -81,12 +81,9 @@ impl<'a> Display for TypeContext<'a> {
             }
             crate::TypeInner::Pointer { base, class } => {
                 let sub = Self {
-                    arena: self.arena,
-                    names: self.names,
                     handle: base,
-                    usage: self.usage,
-                    access: self.access,
                     first_time: false,
+                    ..*self
                 };
                 let class_name = match class.get_name(self.usage) {
                     Some(name) => name,
@@ -127,12 +124,9 @@ impl<'a> Display for TypeContext<'a> {
             }
             crate::TypeInner::Array { base, .. } => {
                 let sub = Self {
-                    arena: self.arena,
-                    names: self.names,
                     handle: base,
-                    usage: self.usage,
-                    access: self.access,
                     first_time: false,
+                    ..*self
                 };
                 // Array lengths go at the end of the type definition,
                 // so just print the element type here.
@@ -626,10 +620,9 @@ impl<W: Write> Writer<W> {
 
                 self.put_expression(base, context, false)?;
                 if accessing_wrapped_array {
-                    write!(self.out, ".{}[", WRAPPED_ARRAY_FIELD)?;
-                } else {
-                    write!(self.out, "[")?;
+                    write!(self.out, ".{}", WRAPPED_ARRAY_FIELD)?;
                 }
+                write!(self.out, "[")?;
                 self.put_expression(index, context, true)?;
                 write!(self.out, "]")?;
             }
