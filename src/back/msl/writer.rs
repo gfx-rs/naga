@@ -566,8 +566,7 @@ impl<W: Write> Writer<W> {
                     match *context.info[base].ty.inner_with(&context.module.types) {
                         crate::TypeInner::Array { .. } => true,
                         crate::TypeInner::Pointer {
-                            base: pointer_base,
-                            class,
+                            base: pointer_base, ..
                         } => match context.module.types[pointer_base].inner {
                             crate::TypeInner::Array {
                                 size: crate::ArraySize::Constant(_),
