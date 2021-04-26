@@ -548,39 +548,6 @@ impl<W: Write> Writer<W> {
         Ok(())
     }
 
-    fn put_initialization_component(
-        &mut self,
-        component: Handle<crate::Expression>,
-        context: &ExpressionContext,
-    ) -> Result<(), Error> {
-        // we can't initialize the array members just like other members,
-        // we have to unwrap them one level deeper...
-        let component_res = &context.info[component].ty;
-        if let crate::TypeInner::Array {
-            size: crate::ArraySize::Constant(const_handle),
-            ..
-        } = *component_res.inner_with(&context.module.types)
-        {
-            //HACK: we are forcefully duplicating the expression here,
-            // it would be nice to find a more C++ idiomatic solution for initializing array members
-            let size = context.module.constants[const_handle]
-                .to_array_length()
-                .unwrap();
-            write!(self.out, "{{")?;
-            for j in 0..size {
-                if j != 0 {
-                    write!(self.out, ",")?;
-                }
-                self.put_expression(component, context, false)?;
-                write!(self.out, ".{}[{}]", WRAPPED_ARRAY_FIELD, j)?;
-            }
-            write!(self.out, "}}")?;
-        } else {
-            self.put_expression(component, context, true)?;
-        }
-        Ok(())
-    }
-
     fn put_expression(
         &mut self,
         expr_handle: Handle<crate::Expression>,
@@ -724,7 +691,7 @@ impl<W: Write> Writer<W> {
                             if i != 0 {
                                 write!(self.out, ", ")?;
                             }
-                            self.put_initialization_component(component, context)?;
+                            self.put_expression(component, context, true)?;
                         }
                         write!(self.out, "}}")?;
                     }
@@ -1173,7 +1140,9 @@ impl<W: Write> Writer<W> {
                             let comma = if is_first { "" } else { "," };
                             is_first = false;
                             let name = &self.names[&NameKey::StructMember(result_ty, index as u32)];
-                            // logic similar to `put_initialization_component`
+                            // HACK: we are forcefully deduplicating the expression here
+                            // to convert from a wrapped struct to a raw array, e.g.
+                            // `float gl_ClipDistance1 [[clip_distance]] [1];`.
                             if let crate::TypeInner::Array {
                                 size: crate::ArraySize::Constant(const_handle),
                                 ..
