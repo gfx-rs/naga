@@ -2136,7 +2136,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             self.index_constants.push(handle);
         }
 
-        // register radians -> degrees constants
+        // register maths constants
         self.maths_constants.clear();
         {
             let handle = module.constants.append(crate::Constant {
