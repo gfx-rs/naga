@@ -1707,29 +1707,19 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                             self.lookup_expression.lookup(arg_id)?.handle
                         };
 
-                        let constant_expr = self.maths_constant_expressions[0];
-
-                        self.lookup_expression.insert(
-                            result_id,
-                            LookupExpression {
-                                handle: constant_expr,
-                                type_id: result_type_id,
-                            },
-                        );
-
-                        let op = match gl_op {
-                            Glo::Radians => crate::BinaryOperator::Multiply,
-                            Glo::Degrees => crate::BinaryOperator::Divide,
-                            _ => unreachable!(),
-                        };
+                        let pi_div_180 = self.maths_constant_expressions[0];
 
                         self.lookup_expression.insert(
                             result_id,
                             LookupExpression {
                                 handle: expressions.append(crate::Expression::Binary {
-                                    op,
+                                    op: match gl_op {
+                                        Glo::Radians => crate::BinaryOperator::Multiply,
+                                        Glo::Degrees => crate::BinaryOperator::Divide,
+                                        _ => unreachable!(),
+                                    },
                                     left: arg,
-                                    right: constant_expr,
+                                    right: pi_div_180,
                                 }),
                                 type_id: result_type_id,
                             },
