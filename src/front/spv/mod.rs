@@ -885,7 +885,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         },
                     );
                 }
-                Op::AccessChain => {
+                Op::AccessChain | Op::InBoundsAccessChain => {
                     struct AccessExpression {
                         base_handle: Handle<crate::Expression>,
                         type_id: spirv::Word,
