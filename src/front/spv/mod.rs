@@ -2006,41 +2006,18 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         } => {}
                         _ => return Err(Error::InvalidParameter(Op::ArrayLength)),
                     }
-                    let structure = self.lookup_expression.lookup(structure_id)?;
-                    let structure_type = self.lookup_type.lookup(structure.type_id)?;
-                    match type_arena[structure_type.handle].inner {
-                        crate::TypeInner::Pointer { base, .. } => {
-                            if let crate::TypeInner::Struct { ref members, .. } =
-                                type_arena[base].inner
-                            {
-                                if let Some(last) = members.last() {
-                                    match type_arena[last.ty].inner {
-                                        crate::TypeInner::Array {
-                                            size: crate::ArraySize::Dynamic,
-                                            ..
-                                        } => if members.len() - 1 == member_index as _ {},
-                                        _ => return Err(Error::InvalidParameter(Op::ArrayLength)),
-                                    }
-                                } else {
-                                    return Err(Error::InvalidParameter(Op::ArrayLength));
-                                }
-                            } else {
-                                return Err(Error::InvalidParameter(Op::ArrayLength));
-                            }
-                        }
-                        _ => return Err(Error::InvalidParameter(Op::ArrayLength)),
-                    }
 
-                    let structure_expr = expressions.append(crate::Expression::Load {
-                        pointer: structure.handle,
-                    });
+                    // We're assuming that the validation pass, if it's run, will catch if the
+                    // wrong types or parameters are supplied here.
 
-                    let array = expressions.append(crate::Expression::AccessIndex {
-                        base: structure_expr,
+                    let structure_ptr = self.lookup_expression.lookup(structure_id)?;
+
+                    let member_ptr = expressions.append(crate::Expression::AccessIndex {
+                        base: structure_ptr.handle,
                         index: member_index,
                     });
 
-                    let length = expressions.append(crate::Expression::ArrayLength(array));
+                    let length = expressions.append(crate::Expression::ArrayLength(member_ptr));
 
                     self.lookup_expression.insert(
                         result_id,
