@@ -1710,7 +1710,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                                 width: 4,
                                 value: crate::ScalarValue::Float(match gl_op {
                                     Glo::Radians => std::f64::consts::PI / 180.0,
-                                    Glo::Degrees => 180.0 / std::f64::consts::PI / 180.0,
+                                    Glo::Degrees => 180.0 / std::f64::consts::PI,
                                     _ => unreachable!(),
                                 }),
                             },
