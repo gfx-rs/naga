@@ -397,9 +397,7 @@ pub struct Parser<I> {
     function_call_graph: GraphMap<spirv::Word, (), petgraph::Directed>,
     options: Options,
     index_constants: Vec<Handle<crate::Constant>>,
-    maths_constants: Vec<Handle<crate::Constant>>,
     index_constant_expressions: Vec<Handle<crate::Expression>>,
-    maths_constant_expressions: Vec<Handle<crate::Expression>>,
 }
 
 impl<I: Iterator<Item = u32>> Parser<I> {
@@ -429,9 +427,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             function_call_graph: GraphMap::new(),
             options: options.clone(),
             index_constants: Vec::new(),
-            maths_constants: Vec::new(),
             index_constant_expressions: Vec::new(),
-            maths_constant_expressions: Vec::new(),
         }
     }
 
@@ -776,8 +772,8 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         function_id: spirv::Word,
         expressions: &mut Arena<crate::Expression>,
         local_arena: &mut Arena<crate::LocalVariable>,
+        const_arena: &mut Arena<crate::Constant>,
         type_arena: &Arena<crate::Type>,
-        const_arena: &Arena<crate::Constant>,
         global_arena: &Arena<crate::GlobalVariable>,
     ) -> Result<ControlFlowNode, Error> {
         let mut block = Vec::new();
@@ -1707,19 +1703,29 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                             self.lookup_expression.lookup(arg_id)?.handle
                         };
 
-                        let pi_div_180 = self.maths_constant_expressions[0];
+                        let constant_handle = const_arena.fetch_or_append(crate::Constant {
+                            name: None,
+                            specialization: None,
+                            inner: crate::ConstantInner::Scalar {
+                                width: 4,
+                                value: crate::ScalarValue::Float(match gl_op {
+                                    Glo::Radians => std::f64::consts::PI / 180.0,
+                                    Glo::Degrees => 180.0 / std::f64::consts::PI / 180.0,
+                                    _ => unreachable!(),
+                                }),
+                            },
+                        });
+
+                        let expr_handle =
+                            expressions.append(crate::Expression::Constant(constant_handle));
 
                         self.lookup_expression.insert(
                             result_id,
                             LookupExpression {
                                 handle: expressions.append(crate::Expression::Binary {
-                                    op: match gl_op {
-                                        Glo::Radians => crate::BinaryOperator::Multiply,
-                                        Glo::Degrees => crate::BinaryOperator::Divide,
-                                        _ => unreachable!(),
-                                    },
+                                    op: crate::BinaryOperator::Multiply,
                                     left: arg,
-                                    right: pi_div_180,
+                                    right: expr_handle,
                                 }),
                                 type_id: result_type_id,
                             },
@@ -2016,11 +2022,6 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             let handle = expressions.append(crate::Expression::Constant(con_handle));
             self.index_constant_expressions.push(handle);
         }
-        self.maths_constant_expressions.clear();
-        for &con_handle in self.maths_constants.iter() {
-            let handle = expressions.append(crate::Expression::Constant(con_handle));
-            self.maths_constant_expressions.push(handle);
-        }
         // register constants
         for (&id, con) in self.lookup_constant.iter() {
             let handle = expressions.append(crate::Expression::Constant(con.handle));
@@ -2134,20 +2135,6 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 },
             });
             self.index_constants.push(handle);
-        }
-
-        // register maths constants
-        self.maths_constants.clear();
-        {
-            let handle = module.constants.append(crate::Constant {
-                name: None,
-                specialization: None,
-                inner: crate::ConstantInner::Scalar {
-                    width: 4,
-                    value: crate::ScalarValue::Float(std::f64::consts::PI / 180.0),
-                },
-            });
-            self.maths_constants.push(handle);
         }
 
         self.dummy_functions = Arena::new();
