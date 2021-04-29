@@ -2010,17 +2010,22 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     let structure_type = self.lookup_type.lookup(structure.type_id)?;
                     match type_arena[structure_type.handle].inner {
                         crate::TypeInner::Pointer { base, .. } => {
-                            if let crate::TypeInner::Struct { ref members, .. } = type_arena[base].inner {
+                            if let crate::TypeInner::Struct { ref members, .. } =
+                                type_arena[base].inner
+                            {
                                 if let Some(last) = members.last() {
                                     match type_arena[last.ty].inner {
-                                        crate::TypeInner::Array { size: crate::ArraySize::Dynamic, .. } => if members.len() - 1 == member_index as _ {},
+                                        crate::TypeInner::Array {
+                                            size: crate::ArraySize::Dynamic,
+                                            ..
+                                        } => if members.len() - 1 == member_index as _ {},
                                         _ => return Err(Error::InvalidParameter(Op::ArrayLength)),
                                     }
                                 } else {
-                                    return Err(Error::InvalidParameter(Op::ArrayLength))
+                                    return Err(Error::InvalidParameter(Op::ArrayLength));
                                 }
                             } else {
-                                return Err(Error::InvalidParameter(Op::ArrayLength))
+                                return Err(Error::InvalidParameter(Op::ArrayLength));
                             }
                         }
                         _ => return Err(Error::InvalidParameter(Op::ArrayLength)),
@@ -2057,16 +2062,16 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         spirv::MemoryAccess::NONE
                     };
 
-                    block.extend(emitter.finish(expressions));
-
                     // TODO: check if the source and target types are the same?
                     let target = self.lookup_expression.lookup(target_id)?;
                     let source = self.lookup_expression.lookup(source_id)?;
-                    
+
                     // This operation is practically the same as loading and then storing, I think.
                     let value_expr = expressions.append(crate::Expression::Load {
                         pointer: source.handle,
                     });
+
+                    block.extend(emitter.finish(expressions));
                     block.push(crate::Statement::Store {
                         pointer: target.handle,
                         value: value_expr,
@@ -3168,7 +3173,13 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         Ok(())
     }
 
-    fn generate_null_constant(&mut self, constants: &mut Arena<crate::Constant>, types: &Arena<crate::Type>, ty: Handle<crate::Type>, inner: &crate::TypeInner) -> Result<crate::ConstantInner, Error> {
+    fn generate_null_constant(
+        &mut self,
+        constants: &mut Arena<crate::Constant>,
+        types: &Arena<crate::Type>,
+        ty: Handle<crate::Type>,
+        inner: &crate::TypeInner,
+    ) -> Result<crate::ConstantInner, Error> {
         fn make_scalar_inner(kind: crate::ScalarKind, width: crate::Bytes) -> crate::ConstantInner {
             crate::ConstantInner::Scalar {
                 width,
@@ -3181,9 +3192,9 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             }
         }
 
-        let inner = match inner {
-            &crate::TypeInner::Scalar { kind, width } => make_scalar_inner(kind, width),
-            &crate::TypeInner::Vector { size, kind, width } => {
+        let inner = match *inner {
+            crate::TypeInner::Scalar { kind, width } => make_scalar_inner(kind, width),
+            crate::TypeInner::Vector { size, kind, width } => {
                 let mut components = Vec::with_capacity(size as usize);
                 for _ in 0..size as usize {
                     components.push(constants.fetch_or_append(crate::Constant {
@@ -3194,11 +3205,12 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 }
                 crate::ConstantInner::Composite { ty, components }
             }
-            crate::TypeInner::Struct { members, ..} => {
+            crate::TypeInner::Struct { ref members, .. } => {
                 let mut components = Vec::with_capacity(members.len());
                 for field in members {
                     let ty_inner = &types[field.ty].inner;
-                    let inner = self.generate_null_constant(constants, types, field.ty, ty_inner)?;
+                    let inner =
+                        self.generate_null_constant(constants, types, field.ty, ty_inner)?;
                     components.push(constants.fetch_or_append(crate::Constant {
                         name: None,
                         specialization: None,
@@ -3207,8 +3219,8 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 }
 
                 crate::ConstantInner::Composite { ty, components }
-            },
-            //TODO: handle matrices, arrays, and structures
+            }
+            //TODO: handle matrices, arrays
             ref other => {
                 log::warn!("null constant type {:?}", other);
                 return Err(Error::UnsupportedType(ty));
@@ -3229,7 +3241,12 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         let type_lookup = self.lookup_type.lookup(type_id)?;
         let ty = type_lookup.handle;
 
-        let inner = self.generate_null_constant(&mut module.constants, &module.types, ty, &module.types[ty].inner)?;
+        let inner = self.generate_null_constant(
+            &mut module.constants,
+            &module.types,
+            ty,
+            &module.types[ty].inner,
+        )?;
 
         self.lookup_constant.insert(
             id,
