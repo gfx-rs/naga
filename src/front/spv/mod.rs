@@ -2042,6 +2042,35 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         },
                     );
                 }
+                Op::CopyMemory => {
+                    inst.expect_at_least(3)?;
+                    let target_id = self.next()?;
+                    let source_id = self.next()?;
+                    let _memory_access = if inst.wc != 3 {
+                        inst.expect(4)?;
+                        spirv::MemoryAccess::from_bits(self.next()?)
+                            .ok_or(Error::InvalidParameter(Op::CopyMemory))?
+                    } else {
+                        spirv::MemoryAccess::NONE
+                    };
+
+                    block.extend(emitter.finish(expressions));
+
+                    // TODO: check if the source and target types are the same?
+                    let target = self.lookup_expression.lookup(target_id)?;
+                    let source = self.lookup_expression.lookup(source_id)?;
+                    
+                    // This operation is practically the same as loading and then storing, I think.
+                    let value_expr = expressions.append(crate::Expression::Load {
+                        pointer: source.handle,
+                    });
+                    block.push(crate::Statement::Store {
+                        pointer: target.handle,
+                        value: value_expr,
+                    });
+
+                    emitter.start(expressions);
+                }
                 _ => return Err(Error::UnsupportedInstruction(self.state, inst.op)),
             }
         };
