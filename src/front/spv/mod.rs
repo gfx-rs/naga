@@ -1997,16 +1997,6 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     let structure_id = self.next()?;
                     let member_index = self.next()?;
 
-                    // Validate that all the types are correct.
-                    let result_type = self.lookup_type.lookup(result_type_id)?;
-                    match type_arena[result_type.handle].inner {
-                        crate::TypeInner::Scalar {
-                            kind: crate::ScalarKind::Uint,
-                            width: 4,
-                        } => {}
-                        _ => return Err(Error::InvalidParameter(Op::ArrayLength)),
-                    }
-
                     // We're assuming that the validation pass, if it's run, will catch if the
                     // wrong types or parameters are supplied here.
 
