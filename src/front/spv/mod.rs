@@ -1987,6 +1987,61 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 Op::Fwidth | Op::FwidthFine | Op::FwidthCoarse => {
                     self.parse_expr_derivative(expressions, crate::DerivativeAxis::Width)?;
                 }
+                Op::ArrayLength => {
+                    inst.expect(5)?;
+                    let result_type_id = self.next()?;
+                    let result_id = self.next()?;
+                    let structure_id = self.next()?;
+                    let member_index = self.next()?;
+
+                    // Validate that all the types are correct.
+                    let result_type = self.lookup_type.lookup(result_type_id)?;
+                    match type_arena[result_type.handle].inner {
+                        crate::TypeInner::Scalar {
+                            kind: crate::ScalarKind::Uint,
+                            width: 4,
+                        } => {}
+                        _ => return Err(Error::InvalidParameter(Op::ArrayLength)),
+                    }
+                    let structure = self.lookup_expression.lookup(structure_id)?;
+                    let structure_type = self.lookup_type.lookup(structure.type_id)?;
+                    match type_arena[structure_type.handle].inner {
+                        crate::TypeInner::Pointer { base, .. } => {
+                            if let crate::TypeInner::Struct { ref members, .. } = type_arena[base].inner {
+                                if let Some(last) = members.last() {
+                                    match type_arena[last.ty].inner {
+                                        crate::TypeInner::Array { size: crate::ArraySize::Dynamic, .. } => if members.len() - 1 == member_index as _ {},
+                                        _ => return Err(Error::InvalidParameter(Op::ArrayLength)),
+                                    }
+                                } else {
+                                    return Err(Error::InvalidParameter(Op::ArrayLength))
+                                }
+                            } else {
+                                return Err(Error::InvalidParameter(Op::ArrayLength))
+                            }
+                        }
+                        _ => return Err(Error::InvalidParameter(Op::ArrayLength)),
+                    }
+
+                    let structure_expr = expressions.append(crate::Expression::Load {
+                        pointer: structure.handle,
+                    });
+
+                    let array = expressions.append(crate::Expression::AccessIndex {
+                        base: structure_expr,
+                        index: member_index,
+                    });
+
+                    let length = expressions.append(crate::Expression::ArrayLength(array));
+
+                    self.lookup_expression.insert(
+                        result_id,
+                        LookupExpression {
+                            handle: length,
+                            type_id: result_type_id,
+                        },
+                    );
+                }
                 _ => return Err(Error::UnsupportedInstruction(self.state, inst.op)),
             }
         };
