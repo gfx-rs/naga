@@ -64,6 +64,9 @@ pub const SUPPORTED_CAPABILITIES: &[spirv::Capability] = &[
     spirv::Capability::StorageImageExtendedFormats,
     spirv::Capability::Sampled1D,
     spirv::Capability::SampledCubeArray,
+    spirv::Capability::Int8,
+    spirv::Capability::Int16,
+    spirv::Capability::Int64,
     // tricky ones
     spirv::Capability::UniformBufferArrayDynamicIndexing,
     spirv::Capability::StorageBufferArrayDynamicIndexing,
@@ -2993,15 +2996,12 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 kind: crate::ScalarKind::Sint,
                 width,
             } => {
-                use std::cmp::Ordering;
                 let low = self.next()?;
-                let high = match width.cmp(&4) {
-                    Ordering::Less => return Err(Error::InvalidTypeWidth(u32::from(width))),
-                    Ordering::Greater => {
-                        inst.expect(4)?;
-                        self.next()?
-                    }
-                    Ordering::Equal => 0,
+                let high = if width > 4 {
+                    inst.expect(4)?;
+                    self.next()?
+                } else {
+                    0
                 };
                 crate::ConstantInner::Scalar {
                     width,
@@ -3081,18 +3081,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         Ok(())
     }
 
-    fn parse_null_constant(
-        &mut self,
-        inst: Instruction,
-        module: &mut crate::Module,
-    ) -> Result<(), Error> {
-        self.switch(ModuleState::Type, inst.op)?;
-        inst.expect(3)?;
-        let type_id = self.next()?;
-        let id = self.next()?;
-        let type_lookup = self.lookup_type.lookup(type_id)?;
-        let ty = type_lookup.handle;
-
+    fn generate_null_constant(&mut self, constants: &mut Arena<crate::Constant>, types: &Arena<crate::Type>, ty: Handle<crate::Type>, inner: &crate::TypeInner) -> Result<crate::ConstantInner, Error> {
         fn make_scalar_inner(kind: crate::ScalarKind, width: crate::Bytes) -> crate::ConstantInner {
             crate::ConstantInner::Scalar {
                 width,
@@ -3105,12 +3094,12 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             }
         }
 
-        let inner = match module.types[ty].inner {
-            crate::TypeInner::Scalar { kind, width } => make_scalar_inner(kind, width),
-            crate::TypeInner::Vector { size, kind, width } => {
+        let inner = match inner {
+            &crate::TypeInner::Scalar { kind, width } => make_scalar_inner(kind, width),
+            &crate::TypeInner::Vector { size, kind, width } => {
                 let mut components = Vec::with_capacity(size as usize);
                 for _ in 0..size as usize {
-                    components.push(module.constants.fetch_or_append(crate::Constant {
+                    components.push(constants.fetch_or_append(crate::Constant {
                         name: None,
                         specialization: None,
                         inner: make_scalar_inner(kind, width),
@@ -3118,12 +3107,42 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 }
                 crate::ConstantInner::Composite { ty, components }
             }
+            crate::TypeInner::Struct { members, ..} => {
+                let mut components = Vec::with_capacity(members.len());
+                for field in members {
+                    let ty_inner = &types[field.ty].inner;
+                    let inner = self.generate_null_constant(constants, types, field.ty, ty_inner)?;
+                    components.push(constants.fetch_or_append(crate::Constant {
+                        name: None,
+                        specialization: None,
+                        inner,
+                    }));
+                }
+
+                crate::ConstantInner::Composite { ty, components }
+            },
             //TODO: handle matrices, arrays, and structures
             ref other => {
                 log::warn!("null constant type {:?}", other);
-                return Err(Error::UnsupportedType(type_lookup.handle));
+                return Err(Error::UnsupportedType(ty));
             }
         };
+        Ok(inner)
+    }
+
+    fn parse_null_constant(
+        &mut self,
+        inst: Instruction,
+        module: &mut crate::Module,
+    ) -> Result<(), Error> {
+        self.switch(ModuleState::Type, inst.op)?;
+        inst.expect(3)?;
+        let type_id = self.next()?;
+        let id = self.next()?;
+        let type_lookup = self.lookup_type.lookup(type_id)?;
+        let ty = type_lookup.handle;
+
+        let inner = self.generate_null_constant(&mut module.constants, &module.types, ty, &module.types[ty].inner)?;
 
         self.lookup_constant.insert(
             id,
