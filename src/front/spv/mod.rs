@@ -1620,7 +1620,9 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 | Op::ConvertSToF
                 | Op::ConvertUToF
                 | Op::ConvertFToU
-                | Op::ConvertFToS => {
+                | Op::ConvertFToS
+                | Op::UConvert
+                | Op::SConvert => {
                     inst.expect_at_least(4)?;
                     let result_type_id = self.next()?;
                     let result_id = self.next()?;
@@ -1848,7 +1850,8 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 | Op::FOrdLessThanEqual
                 | Op::FUnordLessThanEqual
                 | Op::FOrdGreaterThanEqual
-                | Op::FUnordGreaterThanEqual => {
+                | Op::FUnordGreaterThanEqual
+                | Op::LogicalNotEqual => {
                     inst.expect(5)?;
                     let operator = map_binary_operator(inst.op)?;
                     self.parse_expr_binary_op(expressions, operator)?;
