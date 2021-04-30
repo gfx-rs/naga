@@ -3,5 +3,16 @@
 	spv_capabilities: [ Shader, Image1D, Sampled1D ],
 	spv_debug: true,
 	spv_adjust_coordinate_space: false,
-	msl_custom: false,
+	msl_custom: true,
+	msl: (
+		lang_version: (2, 0),
+		binding_map: {
+		},
+		push_constants_map: (
+		),
+		inline_samplers: [],
+		spirv_cross_compatibility: false,
+		fake_missing_bindings: false,
+        sizes_buffer_binding: Some(24),
+	),
 )

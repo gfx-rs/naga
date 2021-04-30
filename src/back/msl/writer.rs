@@ -1,10 +1,10 @@
 use super::{
-    keywords::RESERVED, sampler as sm, Error, LocationMode, Options, PipelineOptions,
+    keywords::RESERVED, sampler as sm, BindTarget, Error, LocationMode, Options, PipelineOptions,
     ResolvedBinding, TranslationInfo,
 };
 use crate::{
     arena::{Arena, Handle},
-    back::{msl::BindTarget, vector_size_str},
+    back::vector_size_str,
     proc::{EntryPointIndex, NameKey, Namer, TypeResolution},
     valid::{FunctionInfo, GlobalUse, ModuleInfo},
     FastHashMap,
@@ -426,6 +426,7 @@ struct StatementContext<'a> {
     expression: ExpressionContext<'a>,
     mod_info: &'a ModuleInfo,
     result_struct: Option<&'a str>,
+    has_buffer_sizes: bool,
 }
 
 impl<W: Write> Writer<W> {
@@ -1062,38 +1063,53 @@ impl<W: Write> Writer<W> {
             }
             // has to be a named expression
             crate::Expression::Call(_) => unreachable!(),
-            crate::Expression::ArrayLength(expr) => match *context.resolve_type(expr) {
-                crate::TypeInner::Pointer { base, .. } => match context.module.types[base].inner {
-                    crate::TypeInner::Array { stride, .. } => {
-                        let handle = context.info[expr].assignable_global.unwrap();
-
-                        let global = &context.module.global_variables[handle];
-                        if let crate::TypeInner::Struct { ref members, .. } = context.module.types[global.ty].inner {
-                            if let Some(&crate::StructMember { offset, .. }) = members.last() {
-                                let buffer_idx = self.runtime_sized_buffers[&handle];
-                                write!(self.out, "((x_buffer_sizes.buffer_size{} - {}) / {})", buffer_idx, offset, stride)?;
-                            } else {
-                                return Err(Error::Validation)
-                            }
-                        } else {
-                            return Err(Error::Validation)
+            crate::Expression::ArrayLength(expr) => {
+                let handle = match context.function.expressions[expr] {
+                    crate::Expression::AccessIndex { base, .. } => {
+                        match context.function.expressions[base] {
+                            crate::Expression::GlobalVariable(handle) => handle,
+                            _ => return Err(Error::Validation),
                         }
                     }
                     _ => return Err(Error::Validation),
-                },
-                _ => return Err(Error::Validation),
-            },
-            // crate::Expression::ArrayLength(expr) => match context.function.expressions[expr] {
-            //     crate::Expression::AccessIndex { base, .. } => match context.function.expressions[base] {
-            //         crate::Expression::GlobalVariable(gv) => {
-            //             println!("gv handle: {:?}", gv);
-            //             let buffer_idx = self.runtime_sized_buffers[&gv];
-            //             write!(self.out, "x_buffer_sizes.buffer_size{}", buffer_idx)?;
-            //         }
-            //         _ => return Err(Error::Validation),
-            //     }
-            //     _ => return Err(Error::Validation),
-            // }
+                };
+
+                let global = &context.module.global_variables[handle];
+                if let crate::TypeInner::Struct { ref members, .. } =
+                    context.module.types[global.ty].inner
+                {
+                    if let Some(&crate::StructMember {
+                        offset,
+                        ty: array_ty,
+                        ..
+                    }) = members.last()
+                    {
+                        let (span, stride) = match context.module.types[array_ty].inner {
+                            crate::TypeInner::Array { base, stride, .. } => (
+                                context.module.types[base]
+                                    .inner
+                                    .span(&context.module.constants),
+                                stride,
+                            ),
+                            _ => return Err(Error::Validation),
+                        };
+
+                        let buffer_idx = self.runtime_sized_buffers[&handle];
+                        write!(
+                            self.out,
+                            "(1 + (_buffer_sizes.size{idx} - {offset} - {span}) / {stride})",
+                            idx = buffer_idx,
+                            offset = offset,
+                            span = span,
+                            stride = stride,
+                        )?;
+                    } else {
+                        return Err(Error::Validation);
+                    }
+                } else {
+                    return Err(Error::Validation);
+                }
+            }
         }
         Ok(())
     }
@@ -1224,7 +1240,6 @@ impl<W: Write> Writer<W> {
         level: Level,
         statements: &[crate::Statement],
         context: &StatementContext,
-        has_buffer_sizes: bool,
     ) -> Result<(), Error> {
         // Add to the set in order to track the stack size.
         #[cfg(test)]
@@ -1251,7 +1266,7 @@ impl<W: Write> Writer<W> {
                 crate::Statement::Block(ref block) => {
                     if !block.is_empty() {
                         writeln!(self.out, "{}{{", level)?;
-                        self.put_block(level.next(), block, context, has_buffer_sizes)?;
+                        self.put_block(level.next(), block, context)?;
                         writeln!(self.out, "{}}}", level)?;
                     }
                 }
@@ -1263,10 +1278,10 @@ impl<W: Write> Writer<W> {
                     write!(self.out, "{}if (", level)?;
                     self.put_expression(condition, &context.expression, true)?;
                     writeln!(self.out, ") {{")?;
-                    self.put_block(level.next(), accept, context, has_buffer_sizes)?;
+                    self.put_block(level.next(), accept, context)?;
                     if !reject.is_empty() {
                         writeln!(self.out, "{}}} else {{", level)?;
-                        self.put_block(level.next(), reject, context, has_buffer_sizes)?;
+                        self.put_block(level.next(), reject, context)?;
                     }
                     writeln!(self.out, "{}}}", level)?;
                 }
@@ -1281,14 +1296,14 @@ impl<W: Write> Writer<W> {
                     let lcase = level.next();
                     for case in cases.iter() {
                         writeln!(self.out, "{}case {}: {{", lcase, case.value)?;
-                        self.put_block(lcase.next(), &case.body, context, has_buffer_sizes)?;
+                        self.put_block(lcase.next(), &case.body, context)?;
                         if !case.fall_through {
                             writeln!(self.out, "{}break;", lcase.next())?;
                         }
                         writeln!(self.out, "{}}}", lcase)?;
                     }
                     writeln!(self.out, "{}default: {{", lcase)?;
-                    self.put_block(lcase.next(), default, context, has_buffer_sizes)?;
+                    self.put_block(lcase.next(), default, context)?;
                     writeln!(self.out, "{}}}", lcase)?;
                     writeln!(self.out, "{}}}", level)?;
                 }
@@ -1302,13 +1317,13 @@ impl<W: Write> Writer<W> {
                         writeln!(self.out, "{}while(true) {{", level)?;
                         let lif = level.next();
                         writeln!(self.out, "{}if (!{}) {{", lif, gate_name)?;
-                        self.put_block(lif.next(), continuing, context, has_buffer_sizes)?;
+                        self.put_block(lif.next(), continuing, context)?;
                         writeln!(self.out, "{}}}", lif)?;
                         writeln!(self.out, "{}{} = false;", lif, gate_name)?;
                     } else {
                         writeln!(self.out, "{}while(true) {{", level)?;
                     }
-                    self.put_block(level.next(), body, context, has_buffer_sizes)?;
+                    self.put_block(level.next(), body, context)?;
                     writeln!(self.out, "{}}}", level)?;
                 }
                 crate::Statement::Break => {
@@ -1420,12 +1435,12 @@ impl<W: Write> Writer<W> {
                             write!(self.out, "{}", name)?;
                         }
                     }
-                    if has_buffer_sizes {
+                    if context.has_buffer_sizes {
                         if separate {
                             write!(self.out, ", ")?;
                         }
 
-                        write!(self.out, "x_buffer_sizes")?;
+                        write!(self.out, "_buffer_sizes")?;
                     }
 
                     // done
@@ -1461,7 +1476,7 @@ impl<W: Write> Writer<W> {
         writeln!(self.out)?;
 
         if options.sizes_buffer_binding.is_some() {
-            writeln!(self.out, "struct mslBufferSizes {{")?;
+            writeln!(self.out, "struct _mslBufferSizes {{")?;
 
             for (handle, gv) in module.global_variables.iter() {
                 if let crate::TypeInner::Struct { ref members, .. } = module.types[gv.ty].inner {
@@ -1471,8 +1486,8 @@ impl<W: Write> Writer<W> {
                             ..
                         } = module.types[member.ty].inner
                         {
-                            let idx = self.runtime_sized_buffers.len();
-                            writeln!(self.out, "{}metal::uint buffer_size{};", INDENT, idx)?;
+                            let idx = handle.index();
+                            writeln!(self.out, "{}{}::uint size{};", INDENT, NAMESPACE, idx)?;
                             self.runtime_sized_buffers.insert(handle, idx);
                         }
                     }
@@ -1820,7 +1835,7 @@ impl<W: Write> Writer<W> {
             if options.sizes_buffer_binding.is_some() {
                 writeln!(
                     self.out,
-                    "{}constant mslBufferSizes& x_buffer_sizes",
+                    "{}constant _mslBufferSizes& _buffer_sizes",
                     INDENT
                 )?;
             }
@@ -1859,14 +1874,10 @@ impl<W: Write> Writer<W> {
                 },
                 mod_info,
                 result_struct: None,
+                has_buffer_sizes: options.sizes_buffer_binding.is_some(),
             };
             self.named_expressions.clear();
-            self.put_block(
-                Level(1),
-                &fun.body,
-                &context,
-                options.sizes_buffer_binding.is_some(),
-            )?;
+            self.put_block(Level(1), &fun.body, &context)?;
             writeln!(self.out, "}}")?;
         }
 
@@ -2120,7 +2131,7 @@ impl<W: Write> Writer<W> {
                 };
                 write!(
                     self.out,
-                    "{} constant mslBufferSizes& x_buffer_sizes",
+                    "{} constant _mslBufferSizes& _buffer_sizes",
                     separator,
                 )?;
 
@@ -2253,14 +2264,10 @@ impl<W: Write> Writer<W> {
                 },
                 mod_info,
                 result_struct: Some(&stage_out_name),
+                has_buffer_sizes: options.sizes_buffer_binding.is_some(),
             };
             self.named_expressions.clear();
-            self.put_block(
-                Level(1),
-                &fun.body,
-                &context,
-                options.sizes_buffer_binding.is_some(),
-            )?;
+            self.put_block(Level(1), &fun.body, &context)?;
             writeln!(self.out, "}}")?;
             if ep_index + 1 != module.entry_points.len() {
                 writeln!(self.out)?;

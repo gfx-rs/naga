@@ -140,7 +140,7 @@ pub struct SamplingKey {
 pub struct ExpressionInfo {
     pub uniformity: Uniformity,
     pub ref_count: usize,
-    pub assignable_global: Option<Handle<crate::GlobalVariable>>,
+    assignable_global: Option<Handle<crate::GlobalVariable>>,
     pub ty: TypeResolution,
 }
 

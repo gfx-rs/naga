@@ -77,10 +77,6 @@ fn main() {
                         panic!("Unknown profile: {}", string)
                     };
                 }
-                #[cfg(feature = "msl-out")]
-                "sizes-buffer-slot" => {
-                    params.msl.sizes_buffer_binding = Some(args.next().unwrap().parse().unwrap());
-                }
                 other => log::warn!("Unknown parameter: {}", other),
             }
         } else if input_path.is_none() {

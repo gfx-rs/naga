@@ -1,17 +1,14 @@
 #include <metal_stdlib>
 #include <simd/simd.h>
 
-struct type3 {
-    int inner[5];
+struct _mslBufferSizes {
+    metal::uint size0;
 };
 
-struct fooInput {
+typedef metal::uint type1[1];
+struct Bar {
+    type1 data;
 };
-struct fooOutput {
-    metal::float4 member [[position]];
+struct type4 {
+    int inner[5];
 };
-vertex fooOutput foo(
-  metal::uint vi [[vertex_id]]
-) {
-    return fooOutput { static_cast<float4>(int4(type3 {1, 2, 3, 4, 5}.inner[vi])) };
-}

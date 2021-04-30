@@ -159,7 +159,7 @@ pub struct Options {
     pub fake_missing_bindings: bool,
     /// The slot of a buffer that contains an array of `u32`,
     /// one for the size of each bound buffer that contains a runtime array,
-    /// in order of declaration in the module.
+    /// in order of [`GlobalVariable`] declarations.
     pub sizes_buffer_binding: Option<Slot>,
 }
 

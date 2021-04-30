@@ -249,7 +249,6 @@ fn convert_wgsl() {
             Targets::SPIRV | Targets::METAL | Targets::GLSL,
         ),
         ("access", Targets::SPIRV | Targets::METAL | Targets::WGSL),
-        ("arraylength", Targets::METAL),
     ];
 
     for &(name, targets) in inputs.iter() {
