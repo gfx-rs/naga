@@ -1469,6 +1469,7 @@ impl<W: Write> Writer<W> {
     ) -> Result<TranslationInfo, Error> {
         self.names.clear();
         self.namer.reset(module, RESERVED, &mut self.names);
+        self.runtime_sized_buffers.clear();
 
         writeln!(self.out, "#include <metal_stdlib>")?;
         writeln!(self.out, "#include <simd/simd.h>")?;
@@ -1507,12 +1508,7 @@ impl<W: Write> Writer<W> {
         self.write_scalar_constants(module)?;
         self.write_type_defs(module)?;
         self.write_composite_constants(module)?;
-        self.write_functions(
-            module,
-            info,
-            options,
-            pipeline_options,
-        )
+        self.write_functions(module, info, options, pipeline_options)
     }
 
     fn write_type_defs(&mut self, module: &crate::Module) -> Result<(), Error> {
@@ -1837,8 +1833,10 @@ impl<W: Write> Writer<W> {
                     usage: fun_info[handle],
                     reference: true,
                 };
-                let separator =
-                    separate(index + 1 != pass_through_globals.len() || !self.runtime_sized_buffers.is_empty());
+                let separator = separate(
+                    index + 1 != pass_through_globals.len()
+                        || !self.runtime_sized_buffers.is_empty(),
+                );
                 write!(self.out, "{}", INDENT)?;
                 tyvar.try_fmt(&mut self.out)?;
                 writeln!(self.out, "{}", separator)?;
