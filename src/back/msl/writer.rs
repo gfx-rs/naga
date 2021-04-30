@@ -426,7 +426,7 @@ struct StatementContext<'a> {
     expression: ExpressionContext<'a>,
     mod_info: &'a ModuleInfo,
     result_struct: Option<&'a str>,
-    has_buffer_sizes: bool,
+    uses_unsized_buffers: bool,
 }
 
 impl<W: Write> Writer<W> {
@@ -1435,7 +1435,7 @@ impl<W: Write> Writer<W> {
                             write!(self.out, "{}", name)?;
                         }
                     }
-                    if context.has_buffer_sizes {
+                    if context.uses_unsized_buffers {
                         if separate {
                             write!(self.out, ", ")?;
                         }
@@ -1475,9 +1475,8 @@ impl<W: Write> Writer<W> {
         writeln!(self.out, "#include <simd/simd.h>")?;
         writeln!(self.out)?;
 
-        if options.sizes_buffer_binding.is_some() {
-            writeln!(self.out, "struct _mslBufferSizes {{")?;
-
+        let uses_unsized_buffers = {
+            let mut indices = vec![];
             for (handle, gv) in module.global_variables.iter() {
                 if let crate::TypeInner::Struct { ref members, .. } = module.types[gv.ty].inner {
                     if let Some(member) = members.last() {
@@ -1487,21 +1486,38 @@ impl<W: Write> Writer<W> {
                         } = module.types[member.ty].inner
                         {
                             let idx = handle.index();
-                            writeln!(self.out, "{}{}::uint size{};", INDENT, NAMESPACE, idx)?;
                             self.runtime_sized_buffers.insert(handle, idx);
+                            indices.push(idx);
                         }
                     }
                 }
             }
 
-            writeln!(self.out, "}};")?;
-            writeln!(self.out)?;
-        }
+            if !indices.is_empty() {
+                writeln!(self.out, "struct _mslBufferSizes {{")?;
+
+                for idx in indices {
+                    writeln!(self.out, "{}{}::uint size{};", INDENT, NAMESPACE, idx)?;
+                }
+
+                writeln!(self.out, "}};")?;
+                writeln!(self.out)?;
+                true
+            } else {
+                false
+            }
+        };
 
         self.write_scalar_constants(module)?;
         self.write_type_defs(module)?;
         self.write_composite_constants(module)?;
-        self.write_functions(module, info, options, pipeline_options)
+        self.write_functions(
+            module,
+            info,
+            options,
+            pipeline_options,
+            uses_unsized_buffers,
+        )
     }
 
     fn write_type_defs(&mut self, module: &crate::Module) -> Result<(), Error> {
@@ -1768,6 +1784,7 @@ impl<W: Write> Writer<W> {
         mod_info: &ModuleInfo,
         options: &Options,
         pipeline_options: &PipelineOptions,
+        uses_unsized_buffers: bool,
     ) -> Result<TranslationInfo, Error> {
         let mut pass_through_globals = Vec::new();
         for (fun_handle, fun) in module.functions.iter() {
@@ -1810,7 +1827,7 @@ impl<W: Write> Writer<W> {
                 let separator = separate(
                     !pass_through_globals.is_empty()
                         || index + 1 != fun.arguments.len()
-                        || options.sizes_buffer_binding.is_some(),
+                        || uses_unsized_buffers,
                 );
                 writeln!(
                     self.out,
@@ -1832,7 +1849,7 @@ impl<W: Write> Writer<W> {
                 writeln!(self.out, "{}", separator)?;
             }
 
-            if options.sizes_buffer_binding.is_some() {
+            if uses_unsized_buffers {
                 writeln!(
                     self.out,
                     "{}constant _mslBufferSizes& _buffer_sizes",
@@ -1874,8 +1891,7 @@ impl<W: Write> Writer<W> {
                 },
                 mod_info,
                 result_struct: None,
-                has_buffer_sizes: options.sizes_buffer_binding.is_some()
-                    || options.fake_missing_bindings,
+                uses_unsized_buffers,
             };
             self.named_expressions.clear();
             self.put_block(Level(1), &fun.body, &context)?;
@@ -2124,7 +2140,7 @@ impl<W: Write> Writer<W> {
                 writeln!(self.out)?;
             }
 
-            if options.sizes_buffer_binding.is_some() || options.fake_missing_bindings {
+            if uses_unsized_buffers {
                 let resolved = if let Some(slot) = options.sizes_buffer_binding {
                     ResolvedBinding::Resource(BindTarget {
                         buffer: Some(slot),
@@ -2273,8 +2289,7 @@ impl<W: Write> Writer<W> {
                 },
                 mod_info,
                 result_struct: Some(&stage_out_name),
-                has_buffer_sizes: options.sizes_buffer_binding.is_some()
-                    || options.fake_missing_bindings,
+                uses_unsized_buffers,
             };
             self.named_expressions.clear();
             self.put_block(Level(1), &fun.body, &context)?;

@@ -7,6 +7,7 @@
 	msl: (
 		lang_version: (2, 0),
 		binding_map: {
+			(stage: Vertex, group: 0, binding: 0): (buffer: Some(0), mutable: true),
 		},
 		push_constants_map: (
 		),

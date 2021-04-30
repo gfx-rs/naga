@@ -12,3 +12,17 @@ struct Bar {
 struct type4 {
     int inner[5];
 };
+
+struct fooInput {
+};
+struct fooOutput {
+    metal::float4 member [[position]];
+};
+vertex fooOutput foo(
+  metal::uint vi [[vertex_id]]
+, device Bar& bar [[buffer(0)]]
+, constant _mslBufferSizes& _buffer_sizes [[buffer(24)]]
+) {
+    bar.data[(1 + (_buffer_sizes.size0 - 0 - 4) / 4) - 1u] = 0u;
+    return fooOutput { static_cast<float4>(int4(type4 {1, 2, 3, 4, 5}.inner[vi])) };
+}
