@@ -14,6 +14,6 @@ kernel void main1(
   device Foo& foo [[buffer(0)]]
 , constant mslBufferSizes& x_buffer_sizes [[buffer(24)]]
 ) {
-    foo.data[x_buffer_sizes.buffer_size0 - 1u] = 0u;
+    foo.data[((x_buffer_sizes.buffer_size0 - 0) / 4) - 1u] = 0u;
     return;
 }
