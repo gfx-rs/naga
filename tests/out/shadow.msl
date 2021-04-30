@@ -24,7 +24,7 @@ float fetch_shadow(
     metal::uint light_id,
     metal::float4 homogeneous_coords,
     metal::depth2d_array<float, metal::access::sample> t_shadow,
-    metal::sampler sampler_shadow
+    metal::sampler sampler_shadow,
     constant _mslBufferSizes& _buffer_sizes
 ) {
     if (homogeneous_coords.w <= 0.0) {
