@@ -1843,7 +1843,8 @@ impl<W: Write> Writer<W> {
                     usage: fun_info[handle],
                     reference: true,
                 };
-                let separator = separate(index + 1 != pass_through_globals.len());
+                let separator =
+                    separate(index + 1 != pass_through_globals.len() || uses_unsized_buffers);
                 write!(self.out, "{}", INDENT)?;
                 tyvar.try_fmt(&mut self.out)?;
                 writeln!(self.out, "{}", separator)?;
