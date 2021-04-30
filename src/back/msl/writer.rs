@@ -426,7 +426,6 @@ struct StatementContext<'a> {
     expression: ExpressionContext<'a>,
     mod_info: &'a ModuleInfo,
     result_struct: Option<&'a str>,
-    uses_unsized_buffers: bool,
 }
 
 impl<W: Write> Writer<W> {
@@ -1435,7 +1434,7 @@ impl<W: Write> Writer<W> {
                             write!(self.out, "{}", name)?;
                         }
                     }
-                    if context.uses_unsized_buffers {
+                    if !self.runtime_sized_buffers.is_empty() {
                         if separate {
                             write!(self.out, ", ")?;
                         }
@@ -1475,7 +1474,7 @@ impl<W: Write> Writer<W> {
         writeln!(self.out, "#include <simd/simd.h>")?;
         writeln!(self.out)?;
 
-        let uses_unsized_buffers = {
+        {
             let mut indices = vec![];
             for (handle, gv) in module.global_variables.iter() {
                 if let crate::TypeInner::Struct { ref members, .. } = module.types[gv.ty].inner {
@@ -1502,9 +1501,6 @@ impl<W: Write> Writer<W> {
 
                 writeln!(self.out, "}};")?;
                 writeln!(self.out)?;
-                true
-            } else {
-                false
             }
         };
 
@@ -1516,7 +1512,6 @@ impl<W: Write> Writer<W> {
             info,
             options,
             pipeline_options,
-            uses_unsized_buffers,
         )
     }
 
@@ -1784,7 +1779,6 @@ impl<W: Write> Writer<W> {
         mod_info: &ModuleInfo,
         options: &Options,
         pipeline_options: &PipelineOptions,
-        uses_unsized_buffers: bool,
     ) -> Result<TranslationInfo, Error> {
         let mut pass_through_globals = Vec::new();
         for (fun_handle, fun) in module.functions.iter() {
@@ -1827,7 +1821,7 @@ impl<W: Write> Writer<W> {
                 let separator = separate(
                     !pass_through_globals.is_empty()
                         || index + 1 != fun.arguments.len()
-                        || uses_unsized_buffers,
+                        || !self.runtime_sized_buffers.is_empty(),
                 );
                 writeln!(
                     self.out,
@@ -1844,13 +1838,13 @@ impl<W: Write> Writer<W> {
                     reference: true,
                 };
                 let separator =
-                    separate(index + 1 != pass_through_globals.len() || uses_unsized_buffers);
+                    separate(index + 1 != pass_through_globals.len() || !self.runtime_sized_buffers.is_empty());
                 write!(self.out, "{}", INDENT)?;
                 tyvar.try_fmt(&mut self.out)?;
                 writeln!(self.out, "{}", separator)?;
             }
 
-            if uses_unsized_buffers {
+            if !self.runtime_sized_buffers.is_empty() {
                 writeln!(
                     self.out,
                     "{}constant _mslBufferSizes& _buffer_sizes",
@@ -1892,7 +1886,6 @@ impl<W: Write> Writer<W> {
                 },
                 mod_info,
                 result_struct: None,
-                uses_unsized_buffers,
             };
             self.named_expressions.clear();
             self.put_block(Level(1), &fun.body, &context)?;
@@ -2141,7 +2134,7 @@ impl<W: Write> Writer<W> {
                 writeln!(self.out)?;
             }
 
-            if uses_unsized_buffers {
+            if !self.runtime_sized_buffers.is_empty() {
                 let resolved = if let Some(slot) = options.sizes_buffer_binding {
                     ResolvedBinding::Resource(BindTarget {
                         buffer: Some(slot),
@@ -2290,7 +2283,6 @@ impl<W: Write> Writer<W> {
                 },
                 mod_info,
                 result_struct: Some(&stage_out_name),
-                uses_unsized_buffers,
             };
             self.named_expressions.clear();
             self.put_block(Level(1), &fun.body, &context)?;

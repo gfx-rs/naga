@@ -10,7 +10,7 @@ var<storage> bar: [[access(read_write)]] Bar;
 
 [[stage(vertex)]]
 fn foo([[builtin(vertex_index)]] vi: u32) -> [[builtin(position)]] vec4<f32> {
-	bar.data[arrayLength(&bar.data) - 1u] = 0u; // Comment this out!
+	bar.data[arrayLength(&bar.data) - 1u] = 0u;
 	
 	let array = array<i32, 5>(1, 2, 3, 4, 5);
 	let value = array[vi];
