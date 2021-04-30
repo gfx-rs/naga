@@ -1874,7 +1874,8 @@ impl<W: Write> Writer<W> {
                 },
                 mod_info,
                 result_struct: None,
-                has_buffer_sizes: options.sizes_buffer_binding.is_some(),
+                has_buffer_sizes: options.sizes_buffer_binding.is_some()
+                    || options.fake_missing_bindings,
             };
             self.named_expressions.clear();
             self.put_block(Level(1), &fun.body, &context)?;
@@ -2123,7 +2124,21 @@ impl<W: Write> Writer<W> {
                 writeln!(self.out)?;
             }
 
-            if let Some(slot) = options.sizes_buffer_binding {
+            if options.sizes_buffer_binding.is_some() || options.fake_missing_bindings {
+                let resolved = if let Some(slot) = options.sizes_buffer_binding {
+                    ResolvedBinding::Resource(BindTarget {
+                        buffer: Some(slot),
+                        mutable: false,
+                        ..Default::default()
+                    })
+                } else {
+                    ResolvedBinding::User {
+                        prefix: "fake",
+                        index: 0,
+                        interpolation: None,
+                    }
+                };
+
                 let separator = if module.global_variables.is_empty() {
                     ' '
                 } else {
@@ -2134,12 +2149,6 @@ impl<W: Write> Writer<W> {
                     "{} constant _mslBufferSizes& _buffer_sizes",
                     separator,
                 )?;
-
-                let resolved = ResolvedBinding::Resource(BindTarget {
-                    buffer: Some(slot),
-                    mutable: false,
-                    ..Default::default()
-                });
                 resolved.try_fmt_decorated(&mut self.out, "\n")?;
             }
 
@@ -2264,7 +2273,8 @@ impl<W: Write> Writer<W> {
                 },
                 mod_info,
                 result_struct: Some(&stage_out_name),
-                has_buffer_sizes: options.sizes_buffer_binding.is_some(),
+                has_buffer_sizes: options.sizes_buffer_binding.is_some()
+                    || options.fake_missing_bindings,
             };
             self.named_expressions.clear();
             self.put_block(Level(1), &fun.body, &context)?;
