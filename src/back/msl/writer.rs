@@ -1069,7 +1069,7 @@ impl<W: Write> Writer<W> {
 
                         let global = &context.module.global_variables[handle];
                         if let crate::TypeInner::Struct { ref members, .. } = context.module.types[global.ty].inner {
-                            if let Some(crate::StructMember { offset, .. }) = members.last() {
+                            if let Some(&crate::StructMember { offset, .. }) = members.last() {
                                 let buffer_idx = self.runtime_sized_buffers[&handle];
                                 write!(self.out, "((x_buffer_sizes.buffer_size{} - {}) / {})", buffer_idx, offset, stride)?;
                             } else {
