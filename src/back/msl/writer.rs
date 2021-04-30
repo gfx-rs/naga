@@ -1,10 +1,10 @@
 use super::{
     keywords::RESERVED, sampler as sm, Error, LocationMode, Options, PipelineOptions,
-    TranslationInfo,
+    ResolvedBinding, TranslationInfo,
 };
 use crate::{
     arena::{Arena, Handle},
-    back::vector_size_str,
+    back::{msl::BindTarget, vector_size_str},
     proc::{EntryPointIndex, NameKey, Namer, TypeResolution},
     valid::{FunctionInfo, GlobalUse, ModuleInfo},
     FastHashMap,
@@ -290,6 +290,7 @@ pub struct Writer<W> {
     names: FastHashMap<NameKey, String>,
     named_expressions: BitSet,
     namer: Namer,
+    runtime_sized_buffers: FastHashMap<Handle<crate::GlobalVariable>, usize>,
     #[cfg(test)]
     put_expression_stack_pointers: crate::FastHashSet<*const ()>,
     #[cfg(test)]
@@ -435,6 +436,7 @@ impl<W: Write> Writer<W> {
             names: FastHashMap::default(),
             named_expressions: BitSet::new(),
             namer: Namer::default(),
+            runtime_sized_buffers: FastHashMap::default(),
             #[cfg(test)]
             put_expression_stack_pointers: Default::default(),
             #[cfg(test)]
@@ -1074,9 +1076,9 @@ impl<W: Write> Writer<W> {
                     write!(self.out, "{}", coco)?;
                 }
                 crate::TypeInner::Array { .. } => {
-                    return Err(Error::FeatureNotImplemented(
-                        "dynamic array size".to_string(),
-                    ))
+                    let gv_handle = context.info[expr].assignable_global.unwrap();
+                    let buffer_idx = self.runtime_sized_buffers[&gv_handle];
+                    write!(self.out, "x_buffer_sizes.buffer_size{}", buffer_idx)?;
                 }
                 _ => return Err(Error::Validation),
             },
@@ -1210,6 +1212,7 @@ impl<W: Write> Writer<W> {
         level: Level,
         statements: &[crate::Statement],
         context: &StatementContext,
+        has_buffer_sizes: bool,
     ) -> Result<(), Error> {
         // Add to the set in order to track the stack size.
         #[cfg(test)]
@@ -1236,7 +1239,7 @@ impl<W: Write> Writer<W> {
                 crate::Statement::Block(ref block) => {
                     if !block.is_empty() {
                         writeln!(self.out, "{}{{", level)?;
-                        self.put_block(level.next(), block, context)?;
+                        self.put_block(level.next(), block, context, has_buffer_sizes)?;
                         writeln!(self.out, "{}}}", level)?;
                     }
                 }
@@ -1248,10 +1251,10 @@ impl<W: Write> Writer<W> {
                     write!(self.out, "{}if (", level)?;
                     self.put_expression(condition, &context.expression, true)?;
                     writeln!(self.out, ") {{")?;
-                    self.put_block(level.next(), accept, context)?;
+                    self.put_block(level.next(), accept, context, has_buffer_sizes)?;
                     if !reject.is_empty() {
                         writeln!(self.out, "{}}} else {{", level)?;
-                        self.put_block(level.next(), reject, context)?;
+                        self.put_block(level.next(), reject, context, has_buffer_sizes)?;
                     }
                     writeln!(self.out, "{}}}", level)?;
                 }
@@ -1266,14 +1269,14 @@ impl<W: Write> Writer<W> {
                     let lcase = level.next();
                     for case in cases.iter() {
                         writeln!(self.out, "{}case {}: {{", lcase, case.value)?;
-                        self.put_block(lcase.next(), &case.body, context)?;
+                        self.put_block(lcase.next(), &case.body, context, has_buffer_sizes)?;
                         if !case.fall_through {
                             writeln!(self.out, "{}break;", lcase.next())?;
                         }
                         writeln!(self.out, "{}}}", lcase)?;
                     }
                     writeln!(self.out, "{}default: {{", lcase)?;
-                    self.put_block(lcase.next(), default, context)?;
+                    self.put_block(lcase.next(), default, context, has_buffer_sizes)?;
                     writeln!(self.out, "{}}}", lcase)?;
                     writeln!(self.out, "{}}}", level)?;
                 }
@@ -1287,13 +1290,13 @@ impl<W: Write> Writer<W> {
                         writeln!(self.out, "{}while(true) {{", level)?;
                         let lif = level.next();
                         writeln!(self.out, "{}if (!{}) {{", lif, gate_name)?;
-                        self.put_block(lif.next(), continuing, context)?;
+                        self.put_block(lif.next(), continuing, context, has_buffer_sizes)?;
                         writeln!(self.out, "{}}}", lif)?;
                         writeln!(self.out, "{}{} = false;", lif, gate_name)?;
                     } else {
                         writeln!(self.out, "{}while(true) {{", level)?;
                     }
-                    self.put_block(level.next(), body, context)?;
+                    self.put_block(level.next(), body, context, has_buffer_sizes)?;
                     writeln!(self.out, "{}}}", level)?;
                 }
                 crate::Statement::Break => {
@@ -1405,6 +1408,14 @@ impl<W: Write> Writer<W> {
                             write!(self.out, "{}", name)?;
                         }
                     }
+                    if has_buffer_sizes {
+                        if separate {
+                            write!(self.out, ", ")?;
+                        }
+
+                        write!(self.out, "x_buffer_sizes")?;
+                    }
+
                     // done
                     writeln!(self.out, ");")?;
                 }
@@ -1436,6 +1447,29 @@ impl<W: Write> Writer<W> {
         writeln!(self.out, "#include <metal_stdlib>")?;
         writeln!(self.out, "#include <simd/simd.h>")?;
         writeln!(self.out)?;
+
+        if options.sizes_buffer_binding.is_some() {
+            writeln!(self.out, "struct mslBufferSizes {{")?;
+
+            for (handle, gv) in module.global_variables.iter() {
+                if let crate::TypeInner::Struct { ref members, .. } = module.types[gv.ty].inner {
+                    if let Some(member) = members.last() {
+                        if let crate::TypeInner::Array {
+                            size: crate::ArraySize::Dynamic,
+                            ..
+                        } = module.types[member.ty].inner
+                        {
+                            let idx = self.runtime_sized_buffers.len();
+                            writeln!(self.out, "{}metal::uint buffer_size{};", INDENT, idx)?;
+                            self.runtime_sized_buffers.insert(handle, idx);
+                        }
+                    }
+                }
+            }
+
+            writeln!(self.out, "}};")?;
+            writeln!(self.out)?;
+        }
 
         self.write_scalar_constants(module)?;
         self.write_type_defs(module)?;
@@ -1746,8 +1780,11 @@ impl<W: Write> Writer<W> {
                     access: crate::StorageAccess::empty(),
                     first_time: false,
                 };
-                let separator =
-                    separate(!pass_through_globals.is_empty() || index + 1 != fun.arguments.len());
+                let separator = separate(
+                    !pass_through_globals.is_empty()
+                        || index + 1 != fun.arguments.len()
+                        || options.sizes_buffer_binding.is_some(),
+                );
                 writeln!(
                     self.out,
                     "{}{} {}{}",
@@ -1767,6 +1804,15 @@ impl<W: Write> Writer<W> {
                 tyvar.try_fmt(&mut self.out)?;
                 writeln!(self.out, "{}", separator)?;
             }
+
+            if options.sizes_buffer_binding.is_some() {
+                writeln!(
+                    self.out,
+                    "{}constant mslBufferSizes& x_buffer_sizes",
+                    INDENT
+                )?;
+            }
+
             writeln!(self.out, ") {{")?;
 
             for (local_handle, local) in fun.local_variables.iter() {
@@ -1803,7 +1849,12 @@ impl<W: Write> Writer<W> {
                 result_struct: None,
             };
             self.named_expressions.clear();
-            self.put_block(Level(1), &fun.body, &context)?;
+            self.put_block(
+                Level(1),
+                &fun.body,
+                &context,
+                options.sizes_buffer_binding.is_some(),
+            )?;
             writeln!(self.out, "}}")?;
         }
 
@@ -2049,6 +2100,26 @@ impl<W: Write> Writer<W> {
                 writeln!(self.out)?;
             }
 
+            if let Some(slot) = options.sizes_buffer_binding {
+                let separator = if module.global_variables.is_empty() {
+                    ' '
+                } else {
+                    ','
+                };
+                write!(
+                    self.out,
+                    "{} constant mslBufferSizes& x_buffer_sizes",
+                    separator,
+                )?;
+
+                let resolved = ResolvedBinding::Resource(BindTarget {
+                    buffer: Some(slot),
+                    mutable: false,
+                    ..Default::default()
+                });
+                resolved.try_fmt_decorated(&mut self.out, "\n")?;
+            }
+
             // end of the entry point argument list
             writeln!(self.out, ") {{")?;
 
@@ -2172,7 +2243,12 @@ impl<W: Write> Writer<W> {
                 result_struct: Some(&stage_out_name),
             };
             self.named_expressions.clear();
-            self.put_block(Level(1), &fun.body, &context)?;
+            self.put_block(
+                Level(1),
+                &fun.body,
+                &context,
+                options.sizes_buffer_binding.is_some(),
+            )?;
             writeln!(self.out, "}}")?;
             if ep_index + 1 != module.entry_points.len() {
                 writeln!(self.out)?;

@@ -157,6 +157,10 @@ pub struct Options {
     pub spirv_cross_compatibility: bool,
     /// Don't panic on missing bindings, instead generate invalid MSL.
     pub fake_missing_bindings: bool,
+    /// The slot of a buffer that contains an array of `u32`,
+    /// one for the size of each bound buffer, in order of declaration in the
+    /// module.
+    pub sizes_buffer_binding: Option<Slot>,
 }
 
 impl Default for Options {
@@ -168,6 +172,7 @@ impl Default for Options {
             inline_samplers: Vec::new(),
             spirv_cross_compatibility: false,
             fake_missing_bindings: true,
+            sizes_buffer_binding: None,
         }
     }
 }
