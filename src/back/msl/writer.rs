@@ -1063,25 +1063,27 @@ impl<W: Write> Writer<W> {
             // has to be a named expression
             crate::Expression::Call(_) => unreachable!(),
             crate::Expression::ArrayLength(expr) => match *context.resolve_type(expr) {
-                crate::TypeInner::Array {
-                    size: crate::ArraySize::Constant(const_handle),
-                    ..
-                } => {
-                    let coco = ConstantContext {
-                        handle: const_handle,
-                        arena: &context.module.constants,
-                        names: &self.names,
-                        first_time: false,
-                    };
-                    write!(self.out, "{}", coco)?;
-                }
-                crate::TypeInner::Array { .. } => {
-                    let gv_handle = context.info[expr].assignable_global.unwrap();
-                    let buffer_idx = self.runtime_sized_buffers[&gv_handle];
-                    write!(self.out, "x_buffer_sizes.buffer_size{}", buffer_idx)?;
-                }
+                crate::TypeInner::Pointer { base, .. } => match context.module.types[base].inner {
+                    crate::TypeInner::Array { .. } => {
+                        let gv_handle = context.info[expr].assignable_global.unwrap();
+                        let buffer_idx = self.runtime_sized_buffers[&gv_handle];
+                        write!(self.out, "x_buffer_sizes.buffer_size{}", buffer_idx)?;
+                    }
+                    _ => return Err(Error::Validation),
+                },
                 _ => return Err(Error::Validation),
             },
+            // crate::Expression::ArrayLength(expr) => match context.function.expressions[expr] {
+            //     crate::Expression::AccessIndex { base, .. } => match context.function.expressions[base] {
+            //         crate::Expression::GlobalVariable(gv) => {
+            //             println!("gv handle: {:?}", gv);
+            //             let buffer_idx = self.runtime_sized_buffers[&gv];
+            //             write!(self.out, "x_buffer_sizes.buffer_size{}", buffer_idx)?;
+            //         }
+            //         _ => return Err(Error::Validation),
+            //     }
+            //     _ => return Err(Error::Validation),
+            // }
         }
         Ok(())
     }

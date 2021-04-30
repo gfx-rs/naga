@@ -1,0 +1,19 @@
+#include <metal_stdlib>
+#include <simd/simd.h>
+
+struct mslBufferSizes {
+    metal::uint buffer_size0;
+};
+
+typedef metal::uint type1[1];
+struct Foo {
+    type1 data;
+};
+
+kernel void main1(
+  device Foo& foo [[buffer(0)]]
+, constant mslBufferSizes& x_buffer_sizes [[buffer(24)]]
+) {
+    foo.data[x_buffer_sizes.buffer_size0 - 1u] = 0u;
+    return;
+}
