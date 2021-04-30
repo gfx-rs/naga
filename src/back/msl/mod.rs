@@ -158,8 +158,8 @@ pub struct Options {
     /// Don't panic on missing bindings, instead generate invalid MSL.
     pub fake_missing_bindings: bool,
     /// The slot of a buffer that contains an array of `u32`,
-    /// one for the size of each bound buffer, in order of declaration in the
-    /// module.
+    /// one for the size of each bound buffer that contains a runtime array,
+    /// in order of declaration in the module.
     pub sizes_buffer_binding: Option<Slot>,
 }
 
