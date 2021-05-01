@@ -2357,8 +2357,8 @@ fn test_stack_size() {
         }
         let stack_size = addresses.end - addresses.start;
         // check the size (in debug only)
-        // last observed macOS value: 12736
-        if stack_size < 12000 || stack_size > 13500 {
+        // last observed macOS value: 13600
+        if stack_size < 12000 || stack_size > 14500 {
             panic!("`put_block` stack size {} has changed!", stack_size);
         }
     }
