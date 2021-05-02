@@ -7,7 +7,7 @@ on:
 jobs:
   validate-windows:
     name: HLSL
-    runs-on: windows-2019
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v2
       - name: Add DirectXShaderCompiler
