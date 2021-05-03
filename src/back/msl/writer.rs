@@ -2133,17 +2133,11 @@ impl<W: Write> Writer<W> {
             }
 
             if !self.runtime_sized_buffers.is_empty() {
-                let resolved = if let Some(slot) = options.sizes_buffer_binding {
-                    ResolvedBinding::Resource(BindTarget {
-                        buffer: Some(slot),
-                        mutable: false,
-                        ..Default::default()
-                    })
-                } else {
-                    ResolvedBinding::User {
-                        prefix: "fake",
-                        index: 0,
-                        interpolation: None,
+                let resolved = match options.resolve_sizes_buffer(ep.stage) {
+                    Ok(resolved) => resolved,
+                    Err(e) => {
+                        info.entry_point_names.push(Err(e));
+                        continue;
                     }
                 };
 
