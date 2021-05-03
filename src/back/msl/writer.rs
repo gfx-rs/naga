@@ -1,6 +1,6 @@
 use super::{
-    keywords::RESERVED, sampler as sm, BindTarget, Error, LocationMode, Options, PipelineOptions,
-    ResolvedBinding, TranslationInfo,
+    keywords::RESERVED, sampler as sm, Error, LocationMode, Options, PipelineOptions,
+    TranslationInfo,
 };
 use crate::{
     arena::{Arena, Handle},
