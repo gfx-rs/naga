@@ -71,18 +71,6 @@ pub type BindingMap = std::collections::BTreeMap<BindSource, BindTarget>;
 #[derive(Clone, Debug, Default, Hash, Eq, Ord, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
-pub struct PushConstantsMap {
-    #[cfg_attr(feature = "deserialize", serde(default))]
-    pub vs_buffer: Option<Slot>,
-    #[cfg_attr(feature = "deserialize", serde(default))]
-    pub fs_buffer: Option<Slot>,
-    #[cfg_attr(feature = "deserialize", serde(default))]
-    pub cs_buffer: Option<Slot>,
-}
-
-#[derive(Clone, Debug, Default, Hash, Eq, Ord, PartialEq, PartialOrd)]
-#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
-#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub struct PerStageResources {
     #[cfg_attr(feature = "deserialize", serde(default))]
     pub push_constant_buffer: Option<Slot>,
