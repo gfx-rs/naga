@@ -15,8 +15,9 @@ fn foo([[builtin(vertex_index)]] vi: u32) -> [[builtin(position)]] vec4<f32> {
 	let b = bar.matrix[index].x;
 
 	let a = bar.data[arrayLength(&bar.data) - 1u];
-	
-	let array = array<i32, 5>(a, i32(b), 3, 4, 5);
+
+	var array: array<i32, 5> = array<i32, 5>(a, i32(b), 3, 4, 5);
+        array[vi + 1u] = 42;
 	let value = array[vi];
 
 	return vec4<f32>(vec4<i32>(value));
