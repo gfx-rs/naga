@@ -1336,6 +1336,18 @@ impl Writer {
         })
     }
 
+    /// Subscript an array with a dynamically computed index.
+    ///
+    /// Given `container_id` with type `OpTypeArray`, and an index expression
+    /// `index_id`, add instructions to `block` to compute the value of the
+    /// given element of the array. Return the id of the result.
+    ///
+    /// SPIR-V has no direct way to index an `OpTypeArray` value:
+    /// `OpAccessChain` requires a pointer to the array, and SPIR-V has no
+    /// 'address-of' operator. `OpVectorExtractDynamic` applies only to
+    /// `OpTypeVector`. So this function copies the entire array to a temporary
+    /// variable, takes its address, and then uses `OpAccessChain`. In
+    /// experiments, drivers were generally able to optimize out the temporary.
     #[allow(clippy::too_many_arguments)]
     fn promote_access_expression_to_variable(
         &mut self,
@@ -1392,6 +1404,59 @@ impl Writer {
         Ok((id, variable))
     }
 
+    /// Emit code to restrict an index to be in range for a vector, matrix, or array.
+    ///
+    /// Add instructions to `block` to restrict `index_id` to the proper range
+    /// for indexes into a value of type `base_ty`. Return the id of the
+    /// restricted index value.
+    ///
+    /// By 'restricted', we mean only that in-bounds indices are unchanged, and
+    /// out-of-bounds indices are changed to some arbitrary in-bounds index.
+    /// This is not necessarily clamping; for example, negative indices might be
+    /// changed to refer to the last element of the array, not the first, as
+    /// clamping would do.
+    ///
+    /// If `base_ty`'s length is not known at compile time, just return `index`
+    /// unclamped. TODO: find the dynamic length.
+    fn restrict_index(
+        &mut self,
+        index: Handle<crate::Expression>,
+        base_ty: &crate::TypeInner,
+        ir_module: &crate::Module,
+        ir_function: &crate::Function,
+        fun_info: &FunctionInfo,
+        block: &mut Block,
+    ) -> Result<Word, Error> {
+        let index_id = self.cached[index];
+        let index_ty_id = self.get_expression_type_id(&ir_module.types, &fun_info[index].ty)?;
+
+        if let Some(known_length) = base_ty.to_known_length(ir_module) {
+            // We should have thrown out all attempts to subscript zero-length
+            // sequences during validation.
+            assert!(known_length > 0);
+
+            // When the length and index are known at compile time, we do the bounds check
+            // during validation, so there's no need to check anything here.
+            if let crate::Expression::Constant(_) = ir_function.expressions[index] {
+                return Ok(index_id);
+            }
+
+            let limit = known_length - 1;
+            let length_id = self.get_index_constant(limit, &ir_module.types)?;
+            let restricted_index_id = self.id_gen.next();
+            block.body.push(Instruction::ext_inst(
+                self.gl450_ext_inst_id,
+                spirv::GLOp::UMax,
+                index_ty_id,
+                restricted_index_id,
+                &[index_id, length_id],
+            ));
+            Ok(restricted_index_id)
+        } else {
+            Ok(index_id)
+        }
+    }
+
     fn is_intermediate(
         &self,
         expr_handle: Handle<crate::Expression>,
@@ -1433,9 +1498,11 @@ impl Writer {
                 0
             }
             crate::Expression::Access { base, index } => {
-                let index_id = self.cached[index];
                 let base_id = self.cached[base];
-                match *fun_info[base].ty.inner_with(&ir_module.types) {
+                let base_ty = fun_info[base].ty.inner_with(&ir_module.types);
+                let index_id =
+                    self.restrict_index(index, base_ty, ir_module, ir_function, fun_info, block)?;
+                match *base_ty {
                     crate::TypeInner::Vector { .. } => {
                         let id = self.id_gen.next();
                         block.body.push(Instruction::vector_extract_dynamic(
@@ -2388,7 +2455,15 @@ impl Writer {
         let (root_id, class) = loop {
             expr_handle = match ir_function.expressions[expr_handle] {
                 crate::Expression::Access { base, index } => {
-                    let index_id = self.cached[index];
+                    let base_ty = fun_info[base].ty.inner_with(&ir_module.types);
+                    let index_id = self.restrict_index(
+                        index,
+                        base_ty,
+                        ir_module,
+                        ir_function,
+                        fun_info,
+                        block,
+                    )?;
                     self.temp_list.push(index_id);
                     base
                 }

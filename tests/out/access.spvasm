@@ -1,7 +1,7 @@
 ; SPIR-V
 ; Version: 1.1
 ; Generator: rspirv
-; Bound: 52
+; Bound: 55
 OpCapability Image1D
 OpCapability Shader
 OpCapability Sampled1D
@@ -57,7 +57,8 @@ OpDecorate %25 BuiltIn Position
 %36 = OpTypePointer StorageBuffer %14
 %39 = OpTypePointer StorageBuffer %7
 %45 = OpTypePointer Function %7
-%49 = OpTypeVector %7 4
+%46 = OpConstant  %4  4
+%52 = OpTypeVector %7 4
 %27 = OpFunction  %2  None %28
 %21 = OpLabel
 %19 = OpVariable  %20  Function
@@ -75,12 +76,14 @@ OpBranch %29
 %43 = OpCompositeConstruct  %16  %41 %42 %8 %9 %6
 OpStore %19 %43
 %44 = OpIAdd  %4  %24 %5
-%46 = OpAccessChain  %45  %19 %44
-OpStore %46 %10
-%47 = OpAccessChain  %45  %19 %24
-%48 = OpLoad  %7  %47
-%50 = OpCompositeConstruct  %49  %48 %48 %48 %48
-%51 = OpConvertSToF  %12  %50
-OpStore %25 %51
+%47 = OpExtInst  %4  %1 UMax %44 %46
+%48 = OpAccessChain  %45  %19 %47
+OpStore %48 %10
+%49 = OpExtInst  %4  %1 UMax %24 %46
+%50 = OpAccessChain  %45  %19 %49
+%51 = OpLoad  %7  %50
+%53 = OpCompositeConstruct  %52  %51 %51 %51 %51
+%54 = OpConvertSToF  %12  %53
+OpStore %25 %54
 OpReturn
 OpFunctionEnd

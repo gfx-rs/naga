@@ -58,6 +58,16 @@ impl super::ScalarValue {
             Self::Bool(_) => super::ScalarKind::Bool,
         }
     }
+
+    pub fn as_u32(self) -> Option<u32> {
+        use std::convert::TryInto;
+        match self {
+            Self::Uint(u) => u.try_into().ok(),
+            Self::Sint(s) => s.try_into().ok(),
+            Self::Float(_) => None,
+            Self::Bool(_) => None,
+        }
+    }
 }
 
 pub const POINTER_SPAN: u32 = 4;
@@ -103,6 +113,37 @@ impl super::TypeInner {
             }
             Self::Struct { span, .. } => span,
             Self::Image { .. } | Self::Sampler { .. } => 0,
+        }
+    }
+
+    /// Return the length of a subscriptable type, if known at compile time.
+    ///
+    /// The value returned is appropriate for bounds checks on subscripting. If
+    /// the length is dynamic (say, a WGSL runtime-sized array), then return
+    /// `None`.
+    ///
+    /// `self` must be a vector, matrix, or array.
+    pub fn to_known_length(&self, module: &super::Module) -> Option<u32> {
+        match *self {
+            Self::Vector { size, .. } => Some(size as _),
+            Self::Matrix { columns, .. } => Some(columns as _),
+            Self::Array { size, .. } => size.to_known_length(module),
+            Self::ValuePointer {
+                size: Some(size), ..
+            } => Some(size as _),
+            Self::Pointer { base, .. } => {
+                // When assigning types to expressions, ResolveContext::Resolve
+                // does a separate sub-match here instead of a full recursion,
+                // so we'll do the same.
+                let base_inner = &module.types[base].inner;
+                match *base_inner {
+                    Self::Vector { size, .. } => Some(size as _),
+                    Self::Matrix { columns, .. } => Some(columns as _),
+                    Self::Array { size, .. } => size.to_known_length(module),
+                    _ => unreachable!("pointed-to type does not have a length: {:?}", base_inner),
+                }
+            }
+            _ => unreachable!("type does not have a length: {:?}", self),
         }
     }
 }
@@ -191,6 +232,22 @@ impl crate::SampleLevel {
     }
 }
 
+impl crate::ArraySize {
+    pub fn to_known_length(&self, module: &super::Module) -> Option<u32> {
+        use super::Constant as K;
+        match *self {
+            Self::Constant(k) => match module.constants[k] {
+                K {
+                    specialization: Some(_),
+                    ..
+                } => None,
+                ref unspecialized => unspecialized.to_array_length(),
+            },
+            Self::Dynamic => None,
+        }
+    }
+}
+
 impl crate::Constant {
     pub fn to_array_length(&self) -> Option<u32> {
         use std::convert::TryInto;
@@ -206,6 +263,24 @@ impl crate::Constant {
             },
             // caught by type validation
             crate::ConstantInner::Composite { .. } => None,
+        }
+    }
+
+    /// Return the scalar value of `self`, if it is known at compile time.
+    pub fn to_known_scalar(&self) -> Option<super::ScalarValue> {
+        match *self {
+            Self {
+                specialization: Some(_),
+                ..
+            } => None,
+            Self {
+                inner: crate::ConstantInner::Scalar { value, .. },
+                ..
+            } => Some(value),
+            Self {
+                inner: crate::ConstantInner::Composite { .. },
+                ..
+            } => None,
         }
     }
 }

@@ -19,6 +19,8 @@ pub enum ExpressionError {
     InvalidIndexType(Handle<crate::Expression>),
     #[error("Accessing index {1} is out of {0:?} bounds")]
     IndexOutOfBounds(Handle<crate::Expression>, u32),
+    #[error("Accessing any element of zero-length array {0:?} is out of bounds")]
+    IndexingZeroLengthArray(Handle<crate::Expression>),
     #[error("Function argument {0:?} doesn't exist")]
     FunctionArgumentDoesntExist(u32),
     #[error("Constant {0:?} doesn't exist")]
@@ -142,7 +144,8 @@ impl super::Validator {
 
         let stages = match *expression {
             E::Access { base, index } => {
-                match *resolver.resolve(base)? {
+                let base_type = resolver.resolve(base)?;
+                match *base_type {
                     Ti::Vector { .. }
                     | Ti::Matrix { .. }
                     | Ti::Array { .. }
@@ -168,6 +171,25 @@ impl super::Validator {
                         return Err(ExpressionError::InvalidIndexType(index));
                     }
                 }
+
+                // If we know both the length and the index, we can do the
+                // bounds check now.
+                if let Some(known_length) = base_type.to_known_length(module) {
+                    if known_length == 0 {
+                        return Err(ExpressionError::IndexingZeroLengthArray(base));
+                    }
+                    if let E::Constant(k) = function.expressions[index] {
+                        if let Some(index) = module.constants[k]
+                            .to_known_scalar()
+                            .and_then(crate::ScalarValue::as_u32)
+                        {
+                            if index >= known_length {
+                                return Err(ExpressionError::IndexOutOfBounds(base, index));
+                            }
+                        }
+                    }
+                }
+
                 ShaderStages::all()
             }
             E::AccessIndex { base, index } => {
