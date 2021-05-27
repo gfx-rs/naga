@@ -28,6 +28,8 @@ impl crate::Expression {
             crate::Expression::ImageSample { .. } | crate::Expression::ImageLoad { .. } => 1,
             // derivatives use the control flow
             crate::Expression::Derivative { .. } => 1,
+            // load can depend on state that changes during program flow
+            crate::Expression::Load { .. } => 1,
             // cache expressions that are referenced multiple times
             _ => 2,
         }
