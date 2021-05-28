@@ -36,15 +36,22 @@ void main() {
     vec3 color1 = vec3(0.05, 0.05, 0.05);
     uint i = 0u;
     while(true) {
-        if((i >= min(_group_0_binding_0.num_lights.x, 10u))) {
+        uint _expr12 = i;
+        uvec4 _expr14 = _group_0_binding_0.num_lights;
+        if((_expr12 >= min(_expr14.x, 10u))) {
             break;
         }
-        Light _expr21 = _group_0_binding_1.data[i];
-        float _expr25 = fetch_shadow(i, (_expr21.proj * position));
-        color1 = (color1 + ((_expr25 * max(0.0, dot(normalize(raw_normal), normalize((_expr21.pos.xyz - position.xyz))))) * _expr21.color.xyz));
-        i = (i + 1u);
+        uint _expr19 = i;
+        Light _expr21 = _group_0_binding_1.data[_expr19];
+        uint _expr22 = i;
+        float _expr25 = fetch_shadow(_expr22, (_expr21.proj * position));
+        vec3 _expr34 = color1;
+        color1 = (_expr34 + ((_expr25 * max(0.0, dot(normalize(raw_normal), normalize((_expr21.pos.xyz - position.xyz))))) * _expr21.color.xyz));
+        uint _expr40 = i;
+        i = (_expr40 + 1u);
     }
-    _fs2p_location0 = vec4(color1, 1.0);
+    vec3 _expr43 = color1;
+    _fs2p_location0 = vec4(_expr43, 1.0);
     return;
 }
 

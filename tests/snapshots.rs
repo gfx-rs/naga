@@ -288,6 +288,10 @@ fn convert_wgsl() {
             Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::WGSL,
         ),
         (
+            "baked_load",
+            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
+        ),
+        (
             "standard",
             Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::WGSL,
         ),
