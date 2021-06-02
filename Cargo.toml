@@ -9,6 +9,7 @@ repository = "https://github.com/gfx-rs/naga"
 keywords = ["shader", "SPIR-V", "GLSL", "MSL"]
 license = "MIT OR Apache-2.0"
 exclude = ["bin/**/*", "tests/**/*", "Cargo.lock", "target/**/*"]
+resolver = "2"
 
 [package.metadata.docs.rs]
 all-features = true
@@ -43,13 +44,13 @@ wgsl-in = ["codespan-reporting"]
 wgsl-out = []
 hlsl-out = []
 
-[[bin]]
-name = "naga"
-path = "bin/naga.rs"
-
 [dev-dependencies]
 diff = "0.1"
 ron = "0.6"
 serde = { version = "1.0", features = ["derive"] }
 spirv = { package = "spirv_headers", version = "1.5", features = ["deserialize"] }
 rspirv = "0.7"
+
+[workspace]
+members = [".", "naga-cli"]
+default-members = ["naga-cli"]
