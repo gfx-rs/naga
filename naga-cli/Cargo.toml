@@ -9,22 +9,11 @@ repository = "https://github.com/gfx-rs/naga"
 keywords = ["shader", "SPIR-V", "GLSL", "MSL"]
 license = "MIT OR Apache-2.0"
 
-[features]
-dot-out = ["naga/dot-out"]
-glsl-in = ["naga/glsl-in"]
-glsl-out = ["naga/glsl-out"]
-msl-out = ["naga/msl-out"]
-spv-in = ["naga/spv-in"]
-spv-out = ["naga/spv-out"]
-wgsl-in = ["naga/wgsl-in"]
-wgsl-out = ["naga/wgsl-out"]
-hlsl-out = ["naga/hlsl-out"]
-
 [[bin]]
 name = "naga"
 path = "src/main.rs"
 
 [dependencies]
-naga = { path = "../" }
+naga = { path = "../", features = ["wgsl-in", "wgsl-out", "glsl-in", "glsl-out", "spv-in", "spv-out", "msl-out", "hlsl-out", "dot-out"] }
 log = "0.4"
 codespan-reporting = "0.11"

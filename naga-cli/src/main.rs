@@ -6,15 +6,10 @@ use std::{env, error::Error, path::Path};
 #[derive(Default)]
 struct Parameters {
     validation_flags: naga::valid::ValidationFlags,
-    #[cfg(feature = "spv-in")]
     spv_adjust_coordinate_space: bool,
-    #[cfg(feature = "spv-in")]
     spv_flow_dump_prefix: Option<String>,
-    #[cfg(feature = "spv-out")]
     spv: naga::back::spv::Options,
-    #[cfg(feature = "msl-out")]
     msl: naga::back::msl::Options,
-    #[cfg(feature = "glsl-out")]
     glsl: naga::back::glsl::Options,
 }
 
@@ -66,11 +61,8 @@ fn main() {
                     params.validation_flags =
                         naga::valid::ValidationFlags::from_bits(value).unwrap();
                 }
-                #[cfg(feature = "spv-in")]
                 "flow-dir" => params.spv_flow_dump_prefix = args.next(),
-                #[cfg(feature = "glsl-out")]
                 "entry-point" => params.glsl.entry_point = args.next().unwrap(),
-                #[cfg(feature = "glsl-out")]
                 "profile" => {
                     use naga::back::glsl::Version;
                     let string = args.next().unwrap();
@@ -105,7 +97,6 @@ fn main() {
         .to_str()
         .unwrap()
     {
-        #[cfg(feature = "spv-in")]
         "spv" => {
             let options = naga::front::spv::Options {
                 adjust_coordinate_space: params.spv_adjust_coordinate_space,
@@ -115,7 +106,6 @@ fn main() {
             let input = fs::read(input_path).unwrap();
             naga::front::spv::parse_u8_slice(&input, &options).unwrap()
         }
-        #[cfg(feature = "wgsl-in")]
         "wgsl" => {
             let input = fs::read_to_string(input_path).unwrap();
             let result = naga::front::wgsl::parse_str(&input);
@@ -127,7 +117,6 @@ fn main() {
                 }
             }
         }
-        #[cfg(feature = "glsl-in")]
         "vert" => {
             let input = fs::read_to_string(input_path).unwrap();
             let mut entry_points = naga::FastHashMap::default();
@@ -141,7 +130,6 @@ fn main() {
             )
             .unwrap_pretty()
         }
-        #[cfg(feature = "glsl-in")]
         "frag" => {
             let input = fs::read_to_string(input_path).unwrap();
             let mut entry_points = naga::FastHashMap::default();
@@ -155,7 +143,6 @@ fn main() {
             )
             .unwrap_pretty()
         }
-        #[cfg(feature = "glsl-in")]
         "comp" => {
             let input = fs::read_to_string(input_path).unwrap();
             let mut entry_points = naga::FastHashMap::default();
@@ -218,7 +205,6 @@ fn main() {
                     writeln!(file, "{:#?}", info).unwrap();
                 }
             }
-            #[cfg(feature = "msl-out")]
             "metal" => {
                 use naga::back::msl;
 
@@ -232,7 +218,6 @@ fn main() {
                 .unwrap_pretty();
                 fs::write(output_path, msl).unwrap();
             }
-            #[cfg(feature = "spv-out")]
             "spv" => {
                 use naga::back::spv;
 
@@ -247,7 +232,6 @@ fn main() {
 
                 fs::write(output_path, bytes.as_slice()).unwrap();
             }
-            #[cfg(feature = "glsl-out")]
             stage @ "vert" | stage @ "frag" | stage @ "comp" => {
                 use naga::back::glsl;
 
@@ -265,21 +249,18 @@ fn main() {
                 writer.write().unwrap();
                 fs::write(output_path, buffer).unwrap();
             }
-            #[cfg(feature = "dot-out")]
             "dot" => {
                 use naga::back::dot;
 
                 let output = dot::write(&module, info.as_ref()).unwrap();
                 fs::write(output_path, output).unwrap();
             }
-            #[cfg(feature = "hlsl-out")]
             "hlsl" => {
                 use naga::back::hlsl;
 
                 let hlsl = hlsl::write_string(&module).unwrap_pretty();
                 fs::write(output_path, hlsl).unwrap();
             }
-            #[cfg(feature = "wgsl-out")]
             "wgsl" => {
                 use naga::back::wgsl;
 
@@ -288,10 +269,7 @@ fn main() {
             }
             other => {
                 let _ = params;
-                println!(
-                    "Unknown output extension: {}, forgot to enable a feature?",
-                    other
-                );
+                println!("Unknown output extension: {}", other);
             }
         }
     }
