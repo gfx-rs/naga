@@ -409,8 +409,9 @@ fn convert_glsl_folder() {
             .join(DIR_OUT)
             .join(&file_name.replace(".", "-"));
 
-        #[cfg(feature = "wgsl-out")]
-        check_output_wgsl(&module, &info, &dest);
+        // FIXME: https://github.com/gfx-rs/naga/issues/945
+        // #[cfg(feature = "wgsl-out")]
+        // check_output_wgsl(&module, &info, &dest);
     }
 }
 
