@@ -41,7 +41,7 @@ impl<T, E: Error> PrettyResult for Result<T, E> {
 }
 
 fn main() {
-    //env_logger::init(); // uncomment during development
+    env_logger::init();
 
     let mut input_path = None;
     let mut output_paths = Vec::new();
