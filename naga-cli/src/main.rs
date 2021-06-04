@@ -156,13 +156,7 @@ fn main() {
             )
             .unwrap_pretty()
         }
-        other => {
-            if true {
-                // prevent "unreachable_code" warnings
-                panic!("Unknown input extension: {}", other);
-            }
-            naga::Module::default()
-        }
+        other => panic!("Unknown input extension: {}", other),
     };
 
     // validate the IR
@@ -268,7 +262,6 @@ fn main() {
                 fs::write(output_path, wgsl).unwrap();
             }
             other => {
-                let _ = params;
                 println!("Unknown output extension: {}", other);
             }
         }
