@@ -2130,7 +2130,18 @@ impl<'a, W: Write> Writer<'a, W> {
                 self.write_value_type(inner)?;
             }
         }
-        write!(self.out, " {} = ", name)?;
+
+        let base_ty_res = &ctx.info[handle].ty;
+        let resolved = base_ty_res.inner_with(&self.module.types);
+
+        // If rhs is a array type, we should write temp variable as a dynamic array
+        let array_str = if let TypeInner::Array {..} = *resolved {
+            "[]"
+        } else {
+            ""
+        };
+
+        write!(self.out, " {}{} = ", name, array_str)?;
         self.write_expr(handle, ctx)?;
         writeln!(self.out, ";")?;
         self.named_expressions.insert(handle, name);
