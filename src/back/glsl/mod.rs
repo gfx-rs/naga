@@ -521,7 +521,11 @@ impl<'a, W: Write> Writer<'a, W> {
                 // glsl has no concept of samplers so we just ignore it
                 TypeInner::Sampler { .. } => continue,
                 // All other globals are written by `write_global`
-                _ => self.write_global(handle, global)?,
+                _ => {
+                    self.write_global(handle, global)?;
+                    // Add a newline (only for readability)
+                    writeln!(self.out)?;
+                }
             }
         }
 
@@ -2135,7 +2139,7 @@ impl<'a, W: Write> Writer<'a, W> {
         let resolved = base_ty_res.inner_with(&self.module.types);
 
         // If rhs is a array type, we should write temp variable as a dynamic array
-        let array_str = if let TypeInner::Array {..} = *resolved {
+        let array_str = if let TypeInner::Array { .. } = *resolved {
             "[]"
         } else {
             ""
