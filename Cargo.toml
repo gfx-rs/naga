@@ -52,5 +52,5 @@ spirv = { package = "spirv_headers", version = "1.5", features = ["deserialize"]
 rspirv = "0.7"
 
 [workspace]
-members = [".", "naga-cli"]
-default-members = ["naga-cli"]
+members = [".", "cli"]
+default-members = ["cli"]
