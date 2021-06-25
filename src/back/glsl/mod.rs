@@ -218,7 +218,7 @@ impl fmt::Display for VaryingName<'_> {
 }
 
 /// Shorthand result used internally by the backend
-type BackendResult = Result<(), Error>;
+type BackendResult<T = ()> = Result<T, Error>;
 
 /// A glsl compilation error.
 #[derive(Debug, Error)]
@@ -892,14 +892,42 @@ impl<'a, W: Write> Writer<'a, W> {
         };
         self.write_slice(arguments, |this, i, arg| {
             // Write the argument type
-            // `write_type` adds no trailing spaces
-            this.write_type(arg.ty)?;
+            match this.module.types[arg.ty].inner {
+                // We treat images separately because they might require
+                // writing the storage format
+                TypeInner::Image {
+                    dim,
+                    arrayed,
+                    class,
+                } => {
+                    // Write the storage format if needed
+                    if let TypeInner::Image {
+                        class: crate::ImageClass::Storage(format),
+                        ..
+                    } = this.module.types[arg.ty].inner
+                    {
+                        write!(this.out, "layout({}) ", glsl_storage_format(format))?;
+                    }
+
+                    // write the type
+                    //
+                    // This is way we need the leading space because `write_image_type` doesn't add
+                    // any spaces at the beginning or end
+                    this.write_image_type(dim, arrayed, class)?;
+                }
+                // glsl has no concept of samplers so we just ignore it
+                TypeInner::Sampler { .. } => return Ok(false),
+                // All other types are written by `write_type`
+                _ => {
+                    this.write_type(arg.ty)?;
+                }
+            }
 
             // Write the argument name
             // The leading space is important
             write!(this.out, " {}", &this.names[&ctx.argument_key(i)])?;
 
-            Ok(())
+            Ok(true)
         })?;
 
         // Close the parentheses and open braces to start the function body
@@ -995,14 +1023,16 @@ impl<'a, W: Write> Writer<'a, W> {
     /// # Notes
     /// - Adds no newlines or leading/trailing whitespace
     /// - The last element won't have a trailing `,`
-    fn write_slice<T, F: FnMut(&mut Self, u32, &T) -> BackendResult>(
+    fn write_slice<T, F: FnMut(&mut Self, u32, &T) -> BackendResult<bool>>(
         &mut self,
         data: &[T],
         mut f: F,
     ) -> BackendResult {
         // Loop trough `data` invoking `f` for each element
         for (i, item) in data.iter().enumerate() {
-            f(self, i as u32, item)?;
+            if !f(self, i as u32, item)? {
+                continue;
+            }
 
             // Only write a comma if isn't the last element
             if i != data.len().saturating_sub(1) {
@@ -1047,7 +1077,8 @@ impl<'a, W: Write> Writer<'a, W> {
 
                 // Write the comma separated constants
                 self.write_slice(components, |this, _, arg| {
-                    this.write_constant(&this.module.constants[*arg])
+                    this.write_constant(&this.module.constants[*arg])?;
+                    Ok(true)
                 })?;
 
                 write!(self.out, ")")?
@@ -1467,7 +1498,16 @@ impl<'a, W: Write> Writer<'a, W> {
                     self.named_expressions.insert(expr, name);
                 }
                 write!(self.out, "{}(", &self.names[&NameKey::Function(function)])?;
-                self.write_slice(arguments, |this, _, arg| this.write_expr(*arg, ctx))?;
+                self.write_slice(arguments, |this, i, arg| {
+                    let arg_ty = this.module.functions[function].arguments[i as usize].ty;
+                    if let TypeInner::Sampler { .. } = this.module.types[arg_ty].inner {
+                        return Ok(false);
+                    }
+
+                    this.write_expr(*arg, ctx)?;
+
+                    Ok(true)
+                })?;
                 writeln!(self.out, ");")?
             }
         }
@@ -1567,7 +1607,10 @@ impl<'a, W: Write> Writer<'a, W> {
                 self.write_type(ty)?;
 
                 write!(self.out, "(")?;
-                self.write_slice(components, |this, _, arg| this.write_expr(*arg, ctx))?;
+                self.write_slice(components, |this, _, arg| {
+                    this.write_expr(*arg, ctx)?;
+                    Ok(true)
+                })?;
                 write!(self.out, ")")?
             }
             // Function arguments are written as the argument name
@@ -1803,7 +1846,8 @@ impl<'a, W: Write> Writer<'a, W> {
                         write!(self.out, ")",)?;
                     }
                 }
-                return Err(Error::Custom("ImageQuery not implemented".to_string()));
+                // TODO: Why is this not implemented ???
+                // return Err(Error::Custom("ImageQuery not implemented".to_string()));
             }
             // `Unary` is pretty straightforward
             // "-" - for `Negate`
