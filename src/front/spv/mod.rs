@@ -32,6 +32,7 @@ mod flow;
 mod function;
 mod image;
 mod null;
+mod reveal_doms;
 
 use convert::*;
 pub use error::Error;
@@ -2227,10 +2228,9 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     ref mut cases,
                     ref mut default,
                 } => {
-                    if cases.is_empty() {
-                        // uplift "default" into the parent
-                        let extracted = mem::take(default);
-                        statements.splice(i + 1..i + 1, extracted.into_iter());
+                    if cases.is_empty() && !default.is_empty() {
+                        let default = mem::take(default);
+                        reveal_doms::reveal_dominators(statements, i, default);
                     } else {
                         for case in cases.iter_mut() {
                             self.patch_statements(&mut case.body)?;
