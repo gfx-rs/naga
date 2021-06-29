@@ -1846,8 +1846,6 @@ impl<'a, W: Write> Writer<'a, W> {
                         write!(self.out, ")",)?;
                     }
                 }
-                // TODO: Why is this not implemented ???
-                // return Err(Error::Custom("ImageQuery not implemented".to_string()));
             }
             // `Unary` is pretty straightforward
             // "-" - for `Negate`
