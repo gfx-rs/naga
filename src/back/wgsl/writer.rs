@@ -908,10 +908,56 @@ impl<W: Write> Writer<W> {
                 write!(self.out, "{}", name)?;
             }
             Expression::Binary { op, left, right } => {
+                let (convert_to_uint_left, convert_to_uint_right) = match op {
+                    crate::BinaryOperator::ShiftLeft | crate::BinaryOperator::ShiftRight => {
+                        let left_inner = func_ctx.info[left].ty.inner_with(&module.types);
+                        let right_inner = func_ctx.info[right].ty.inner_with(&module.types);
+
+                        let convert_to_uint_left = if let TypeInner::Scalar {
+                            kind: crate::ScalarKind::Uint,
+                            ..
+                        } = *left_inner
+                        {
+                            false
+                        } else {
+                            true
+                        };
+
+                        let convert_to_uint_right = if let TypeInner::Scalar {
+                            kind: crate::ScalarKind::Uint,
+                            ..
+                        } = *right_inner
+                        {
+                            false
+                        } else {
+                            true
+                        };
+
+                        (convert_to_uint_left, convert_to_uint_right)
+                    }
+                    _ => (false, false),
+                };
+
                 write!(self.out, "(")?;
+
+                if convert_to_uint_left {
+                    write!(self.out, "u32(")?;
+                }
                 self.write_expr(module, left, func_ctx)?;
+                if convert_to_uint_left {
+                    write!(self.out, ")")?;
+                }
+
                 write!(self.out, " {} ", back::binary_operation_str(op))?;
+
+                if convert_to_uint_right {
+                    write!(self.out, "u32(")?;
+                }
                 self.write_expr(module, right, func_ctx)?;
+                if convert_to_uint_right {
+                    write!(self.out, ")")?;
+                }
+
                 write!(self.out, ")")?;
             }
             // TODO: copy-paste from glsl-out
