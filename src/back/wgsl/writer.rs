@@ -324,25 +324,30 @@ impl<W: Write> Writer<W> {
                 Attribute::Binding(id) => format!("binding({})", id),
                 Attribute::Group(id) => format!("group({})", id),
                 Attribute::Interpolate(interpolation, sampling) => {
-                    if interpolation.is_some() || sampling.is_some() {
-                        let interpolation_str = if let Some(interpolation) = interpolation {
-                            interpolation_str(interpolation)
+                    let sampling_part = match sampling {
+                        Some(sampling) if sampling != crate::Sampling::default() => {
+                            Some(sampling_str(sampling))
+                        }
+                        _ => None,
+                    };
+                    let parts: Vec<_> = vec![
+                        if sampling_part.is_some()
+                            || (interpolation.is_some()
+                                && interpolation != Some(crate::Interpolation::default()))
+                        {
+                            Some(interpolation_str(interpolation.unwrap_or_default()))
                         } else {
-                            ""
-                        };
-                        let sampling_str = if let Some(sampling) = sampling {
-                            // Center sampling is the default
-                            if sampling == crate::Sampling::Center {
-                                String::from("")
-                            } else {
-                                format!(",{}", sampling_str(sampling))
-                            }
-                        } else {
-                            String::from("")
-                        };
-                        format!("interpolate({}{})", interpolation_str, sampling_str)
-                    } else {
+                            None
+                        },
+                        sampling_part,
+                    ]
+                    .into_iter()
+                    .flatten()
+                    .collect();
+                    if parts.is_empty() {
                         String::from("")
+                    } else {
+                        format!("interpolate({})", parts.join(", "))
                     }
                 }
             };

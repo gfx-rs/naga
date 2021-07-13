@@ -340,6 +340,12 @@ pub enum Interpolation {
     Flat,
 }
 
+impl Default for Interpolation {
+    fn default() -> Self {
+        Self::Perspective
+    }
+}
+
 /// The sampling qualifiers of a binding or struct field.
 #[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
@@ -356,6 +362,12 @@ pub enum Sampling {
     /// Interpolate the value at each sample location. In multisampling, invoke
     /// the fragment shader once per sample.
     Sample,
+}
+
+impl Default for Sampling {
+    fn default() -> Self {
+        Self::Center
+    }
 }
 
 /// Member of a user-defined structure.
