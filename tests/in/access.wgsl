@@ -9,15 +9,19 @@ struct Bar {
 [[group(0), binding(0)]]
 var<storage> bar: [[access(read_write)]] Bar;
 
+[[group(0), binding(1)]]
+var<storage> qux: Bar;
+
 [[stage(vertex)]]
 fn foo([[builtin(vertex_index)]] vi: u32) -> [[builtin(position)]] vec4<f32> {
-    var foo: f32 = 0.0;
-    // We should check that backed doesn't skip this expression
-    let baz: f32 = foo;
-    foo = 1.0;
+  var foo: f32 = 0.0;
+  // We should check that backend doesn't skip this expression
+  let baz: f32 = foo;
+  foo = 1.0;
 
 	let index = 3u;
 	let b = bar.matrix[index].x;
+	let q = qux.matrix[index].x;
 
 	let a = bar.data[arrayLength(&bar.data) - 2u];
 
