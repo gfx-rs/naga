@@ -324,30 +324,25 @@ impl<W: Write> Writer<W> {
                 Attribute::Binding(id) => format!("binding({})", id),
                 Attribute::Group(id) => format!("group({})", id),
                 Attribute::Interpolate(interpolation, sampling) => {
-                    let sampling_part = match sampling {
-                        Some(sampling) if sampling != crate::Sampling::default() => {
-                            Some(sampling_str(sampling))
-                        }
-                        _ => None,
-                    };
-                    let parts: Vec<_> = vec![
-                        if sampling_part.is_some()
-                            || (interpolation.is_some()
-                                && interpolation != Some(crate::Interpolation::default()))
-                        {
-                            Some(interpolation_str(interpolation.unwrap_or_default()))
-                        } else {
-                            None
-                        },
-                        sampling_part,
-                    ]
-                    .into_iter()
-                    .flatten()
-                    .collect();
-                    if parts.is_empty() {
-                        String::from("")
+                    if sampling.is_some() && sampling != Some(crate::Sampling::Center) {
+                        format!(
+                            "interpolate({}, {})",
+                            interpolation_str(
+                                interpolation.unwrap_or(crate::Interpolation::Perspective)
+                            ),
+                            sampling_str(sampling.unwrap_or(crate::Sampling::Center))
+                        )
+                    } else if interpolation.is_some()
+                        && interpolation != Some(crate::Interpolation::Perspective)
+                    {
+                        format!(
+                            "interpolate({})",
+                            interpolation_str(
+                                interpolation.unwrap_or(crate::Interpolation::Perspective)
+                            )
+                        )
                     } else {
-                        format!("interpolate({})", parts.join(", "))
+                        String::from("")
                     }
                 }
             };
