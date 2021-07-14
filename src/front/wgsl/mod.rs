@@ -3269,13 +3269,22 @@ impl Parser {
                         _ => crate::StorageClass::Private,
                     },
                 };
+                let storage_access = match class {
+                    crate::StorageClass::Storage => match module.types[pvar.ty].inner {
+                        crate::TypeInner::Struct { .. } | crate::TypeInner::Array { .. } => {
+                            pvar.access | crate::StorageAccess::LOAD
+                        }
+                        _ => pvar.access,
+                    },
+                    _ => pvar.access,
+                };
                 let var_handle = module.global_variables.append(crate::GlobalVariable {
                     name: Some(pvar.name.to_owned()),
                     class,
                     binding: binding.take(),
                     ty: pvar.ty,
                     init: pvar.init,
-                    storage_access: pvar.access,
+                    storage_access,
                 });
                 lookup_global_expression
                     .insert(pvar.name, crate::Expression::GlobalVariable(var_handle));
