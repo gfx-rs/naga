@@ -8,6 +8,16 @@ use super::ast::*;
 use super::error::ErrorKind;
 use super::token::SourceMetadata;
 
+macro_rules! qualifier_arm {
+    ($src:expr, $tgt:expr, $meta:expr, $msg:literal $(,)?) => {{
+        if $tgt.is_some() {
+            return Err(ErrorKind::SemanticError($meta, $msg.into()));
+        }
+
+        $tgt = Some($src);
+    }};
+}
+
 pub struct VarDeclaration<'a> {
     pub qualifiers: &'a [(TypeQualifier, SourceMetadata)],
     pub ty: Handle<Type>,
@@ -35,7 +45,7 @@ impl Program<'_> {
             return Ok(Some(global_var));
         }
 
-        let mut add_builtin = |inner, builtin, mutable, prologue| {
+        let mut add_builtin = |inner, builtin, mutable, prologue, storage| {
             let ty = self
                 .module
                 .types
@@ -56,6 +66,7 @@ impl Program<'_> {
                 binding: Binding::BuiltIn(builtin),
                 handle,
                 prologue,
+                storage,
             });
 
             self.global_variables.push((
@@ -90,25 +101,49 @@ impl Program<'_> {
                 },
                 BuiltIn::Position,
                 true,
+                PrologueStage::empty(),
+                StorageQualifier::Output,
+            ),
+            "gl_FragCoord" => add_builtin(
+                TypeInner::Vector {
+                    size: VectorSize::Quad,
+                    kind: ScalarKind::Float,
+                    width: 4,
+                },
+                BuiltIn::Position,
+                false,
                 PrologueStage::FRAGMENT,
+                StorageQualifier::Input,
+            ),
+            "gl_FragDepth" => add_builtin(
+                TypeInner::Scalar {
+                    kind: ScalarKind::Float,
+                    width: 4,
+                },
+                BuiltIn::FragDepth,
+                true,
+                PrologueStage::empty(),
+                StorageQualifier::Output,
             ),
             "gl_VertexIndex" => add_builtin(
                 TypeInner::Scalar {
-                    kind: ScalarKind::Sint,
+                    kind: ScalarKind::Uint,
                     width: 4,
                 },
                 BuiltIn::VertexIndex,
                 false,
                 PrologueStage::VERTEX,
+                StorageQualifier::Input,
             ),
             "gl_InstanceIndex" => add_builtin(
                 TypeInner::Scalar {
-                    kind: ScalarKind::Sint,
+                    kind: ScalarKind::Uint,
                     width: 4,
                 },
                 BuiltIn::InstanceIndex,
                 false,
                 PrologueStage::VERTEX,
+                StorageQualifier::Input,
             ),
             "gl_GlobalInvocationID" => add_builtin(
                 TypeInner::Vector {
@@ -119,15 +154,17 @@ impl Program<'_> {
                 BuiltIn::GlobalInvocationId,
                 false,
                 PrologueStage::COMPUTE,
+                StorageQualifier::Input,
             ),
             "gl_FrontFacing" => add_builtin(
                 TypeInner::Scalar {
                     kind: ScalarKind::Bool,
-                    width: 1,
+                    width: crate::BOOL_WIDTH,
                 },
                 BuiltIn::FrontFacing,
                 false,
                 PrologueStage::FRAGMENT,
+                StorageQualifier::Input,
             ),
             _ => Ok(None),
         }
@@ -292,6 +329,7 @@ impl Program<'_> {
         let mut location = None;
         let mut sampling = None;
         let mut layout = None;
+        let mut precision = None;
 
         for &(ref qualifier, meta) in qualifiers {
             match *qualifier {
@@ -310,57 +348,42 @@ impl Program<'_> {
 
                     storage = s;
                 }
-                TypeQualifier::Interpolation(i) => {
-                    if interpolation.is_some() {
-                        return Err(ErrorKind::SemanticError(
-                            meta,
-                            "Cannot use more than one interpolation qualifier per declaration"
-                                .into(),
-                        ));
-                    }
-
-                    interpolation = Some(i);
-                }
-                TypeQualifier::ResourceBinding(ref r) => {
-                    if binding.is_some() {
-                        return Err(ErrorKind::SemanticError(
-                            meta,
-                            "Cannot use more than one binding per declaration".into(),
-                        ));
-                    }
-
-                    binding = Some(r.clone());
-                }
-                TypeQualifier::Location(l) => {
-                    if location.is_some() {
-                        return Err(ErrorKind::SemanticError(
-                            meta,
-                            "Cannot use more than one binding per declaration".into(),
-                        ));
-                    }
-
-                    location = Some(l);
-                }
-                TypeQualifier::Sampling(s) => {
-                    if sampling.is_some() {
-                        return Err(ErrorKind::SemanticError(
-                            meta,
-                            "Cannot use more than one sampling qualifier per declaration".into(),
-                        ));
-                    }
-
-                    sampling = Some(s);
-                }
-                TypeQualifier::Layout(ref l) => {
-                    if layout.is_some() {
-                        return Err(ErrorKind::SemanticError(
-                            meta,
-                            "Cannot use more than one layout qualifier per declaration".into(),
-                        ));
-                    }
-
-                    layout = Some(l);
-                }
+                TypeQualifier::Interpolation(i) => qualifier_arm!(
+                    i,
+                    interpolation,
+                    meta,
+                    "Cannot use more than one interpolation qualifier per declaration"
+                ),
+                TypeQualifier::ResourceBinding(ref r) => qualifier_arm!(
+                    r.clone(),
+                    binding,
+                    meta,
+                    "Cannot use more than one binding per declaration"
+                ),
+                TypeQualifier::Location(l) => qualifier_arm!(
+                    l,
+                    location,
+                    meta,
+                    "Cannot use more than one binding per declaration"
+                ),
+                TypeQualifier::Sampling(s) => qualifier_arm!(
+                    s,
+                    sampling,
+                    meta,
+                    "Cannot use more than one sampling qualifier per declaration"
+                ),
+                TypeQualifier::Layout(ref l) => qualifier_arm!(
+                    l,
+                    layout,
+                    meta,
+                    "Cannot use more than one layout qualifier per declaration"
+                ),
+                TypeQualifier::Precision(ref p) => qualifier_arm!(
+                    p,
+                    precision,
+                    meta,
+                    "Cannot use more than one precision qualifier per declaration"
+                ),
                 _ => {
                     return Err(ErrorKind::SemanticError(
                         meta,
@@ -425,6 +448,7 @@ impl Program<'_> {
                 },
                 handle,
                 prologue,
+                storage,
             });
 
             if let Some(name) = name {

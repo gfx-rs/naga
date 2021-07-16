@@ -26,14 +26,10 @@ pub struct GlobalLookup {
     pub mutable: bool,
 }
 
-#[derive(Debug, PartialEq, Eq, Hash)]
-pub struct FunctionSignature {
-    pub name: String,
-    pub parameters: Vec<Handle<Type>>,
-}
-
 #[derive(Debug, Clone)]
 pub struct FunctionDeclaration {
+    /// Normalized function parameters, modifiers are not applied
+    pub parameters: Vec<Handle<Type>>,
     pub qualifiers: Vec<ParameterQualifier>,
     pub handle: Handle<Function>,
     /// Wheter this function was already defined or is just a prototype
@@ -73,6 +69,7 @@ pub struct EntryArg {
     pub binding: Binding,
     pub handle: Handle<GlobalVariable>,
     pub prologue: PrologueStage,
+    pub storage: StorageQualifier,
 }
 
 #[derive(Debug)]
@@ -80,11 +77,12 @@ pub struct Program<'a> {
     pub version: u16,
     pub profile: Profile,
     pub entry_points: &'a FastHashMap<String, ShaderStage>,
+    pub strip_unused_linkages: bool,
 
     pub workgroup_size: [u32; 3],
     pub early_fragment_tests: bool,
 
-    pub lookup_function: FastHashMap<FunctionSignature, FunctionDeclaration>,
+    pub lookup_function: FastHashMap<String, Vec<FunctionDeclaration>>,
     pub lookup_type: FastHashMap<String, Handle<Type>>,
 
     pub global_variables: Vec<(String, GlobalLookup)>,
@@ -98,11 +96,12 @@ pub struct Program<'a> {
 }
 
 impl<'a> Program<'a> {
-    pub fn new(entry_points: &'a FastHashMap<String, ShaderStage>) -> Program<'a> {
+    pub fn new(entry_points: &'a FastHashMap<String, ShaderStage>, strip_unused_linkages: bool) -> Program<'a> {
         Program {
             version: 0,
             profile: Profile::Core,
             entry_points,
+            strip_unused_linkages,
 
             workgroup_size: [1; 3],
             early_fragment_tests: false,
@@ -119,58 +118,37 @@ impl<'a> Program<'a> {
         }
     }
 
+    pub fn typifier_grow(
+        &self,
+        context: &mut Context,
+        handle: Handle<Expression>,
+        meta: SourceMetadata,
+    ) -> Result<(), ErrorKind> {
+        let resolve_ctx = ResolveContext {
+            constants: &self.module.constants,
+            types: &self.module.types,
+            global_vars: &self.module.global_variables,
+            local_vars: context.locals,
+            functions: &self.module.functions,
+            arguments: context.arguments,
+        };
+
+        context
+            .typifier
+            .grow(handle, context.expressions, &resolve_ctx)
+            .map_err(|error| {
+                ErrorKind::SemanticError(meta, format!("Can't resolve type: {:?}", error).into())
+            })
+    }
+
     pub fn resolve_type<'b>(
-        &'b mut self,
+        &'b self,
         context: &'b mut Context,
         handle: Handle<Expression>,
         meta: SourceMetadata,
     ) -> Result<&'b TypeInner, ErrorKind> {
-        let resolve_ctx = ResolveContext {
-            constants: &self.module.constants,
-            types: &self.module.types,
-            global_vars: &self.module.global_variables,
-            local_vars: context.locals,
-            functions: &self.module.functions,
-            arguments: context.arguments,
-        };
-        match context
-            .typifier
-            .grow(handle, context.expressions, &resolve_ctx)
-        {
-            //TODO: better error report
-            Err(error) => Err(ErrorKind::SemanticError(
-                meta,
-                format!("Can't resolve type: {:?}", error).into(),
-            )),
-            Ok(()) => Ok(context.typifier.get(handle, &self.module.types)),
-        }
-    }
-
-    pub fn resolve_handle(
-        &mut self,
-        context: &mut Context,
-        handle: Handle<Expression>,
-        meta: SourceMetadata,
-    ) -> Result<Handle<Type>, ErrorKind> {
-        let resolve_ctx = ResolveContext {
-            constants: &self.module.constants,
-            types: &self.module.types,
-            global_vars: &self.module.global_variables,
-            local_vars: context.locals,
-            functions: &self.module.functions,
-            arguments: context.arguments,
-        };
-        match context
-            .typifier
-            .grow(handle, context.expressions, &resolve_ctx)
-        {
-            //TODO: better error report
-            Err(error) => Err(ErrorKind::SemanticError(
-                meta,
-                format!("Can't resolve type: {:?}", error).into(),
-            )),
-            Ok(()) => Ok(context.typifier.get_handle(handle, &mut self.module.types)),
-        }
+        self.typifier_grow(context, handle, meta)?;
+        Ok(context.typifier.get(handle, &self.module.types))
     }
 
     pub fn solve_constant(
@@ -362,7 +340,7 @@ impl<'function> Context<'function> {
     pub fn add_function_arg(
         &mut self,
         program: &mut Program,
-        sig: &mut FunctionSignature,
+        parameters: &mut Vec<Handle<Type>>,
         body: &mut Block,
         name: Option<String>,
         ty: Handle<Type>,
@@ -374,7 +352,12 @@ impl<'function> Context<'function> {
             ty,
             binding: None,
         };
-        sig.parameters.push(ty);
+        parameters.push(ty);
+
+        let opaque = match program.module.types[ty].inner {
+            TypeInner::Image { .. } | TypeInner::Sampler { .. } => true,
+            _ => false,
+        };
 
         if qualifier.is_lhs() {
             arg.ty = program.module.types.fetch_or_append(Type {
@@ -390,7 +373,7 @@ impl<'function> Context<'function> {
 
         if let Some(name) = name {
             let expr = self.add_expression(Expression::FunctionArgument(index as u32), body);
-            let mutable = qualifier != ParameterQualifier::Const;
+            let mutable = qualifier != ParameterQualifier::Const && !opaque;
             let load = qualifier.is_lhs();
 
             if mutable && !load {
@@ -505,12 +488,15 @@ impl<'function> Context<'function> {
                         self.add_expression(Expression::Access { base, index }, body)
                     });
 
-                if let TypeInner::Pointer { .. } = *program.resolve_type(self, pointer, meta)? {
-                    if !lhs {
-                        return Ok((
-                            Some(self.add_expression(Expression::Load { pointer }, body)),
-                            meta,
-                        ));
+                if !lhs {
+                    match *program.resolve_type(self, pointer, meta)? {
+                        TypeInner::Pointer { .. } | TypeInner::ValuePointer { .. } => {
+                            return Ok((
+                                Some(self.add_expression(Expression::Load { pointer }, body)),
+                                meta,
+                            ));
+                        }
+                        _ => {}
                     }
                 }
 
@@ -528,44 +514,82 @@ impl<'function> Context<'function> {
                 let (mut left, left_meta) = self.lower_expect(program, left, false, body)?;
                 let (mut right, right_meta) = self.lower_expect(program, right, false, body)?;
 
-                self.binary_implicit_conversion(
-                    program, &mut left, left_meta, &mut right, right_meta,
-                )?;
+                match op {
+                    BinaryOperator::ShiftLeft | BinaryOperator::ShiftRight => self
+                        .implicit_conversion(
+                            program,
+                            &mut right,
+                            right_meta,
+                            ScalarKind::Uint,
+                            4,
+                        )?,
+                    _ => self.binary_implicit_conversion(
+                        program, &mut left, left_meta, &mut right, right_meta,
+                    )?,
+                }
 
-                if let BinaryOperator::Equal | BinaryOperator::NotEqual = op {
-                    let equals = op == BinaryOperator::Equal;
-                    let (left_is_vector, left_dims) =
-                        match *program.resolve_type(self, left, left_meta)? {
-                            crate::TypeInner::Vector { .. } => (true, 1),
-                            crate::TypeInner::Matrix { .. } => (false, 2),
-                            _ => (false, 0),
-                        };
+                program.typifier_grow(self, left, left_meta)?;
+                program.typifier_grow(self, right, right_meta)?;
 
-                    let (right_is_vector, right_dims) =
-                        match *program.resolve_type(self, right, right_meta)? {
-                            crate::TypeInner::Vector { .. } => (true, 1),
-                            crate::TypeInner::Matrix { .. } => (false, 2),
-                            _ => (false, 0),
-                        };
+                let left_inner = self.typifier.get(left, &program.module.types);
+                let right_inner = self.typifier.get(right, &program.module.types);
 
-                    let (op, fun) = match equals {
-                        true => (BinaryOperator::Equal, RelationalFunction::All),
-                        false => (BinaryOperator::NotEqual, RelationalFunction::Any),
-                    };
+                match (left_inner, right_inner) {
+                    (&TypeInner::Vector { .. }, &TypeInner::Vector { .. })
+                    | (&TypeInner::Matrix { .. }, &TypeInner::Matrix { .. }) => match op {
+                        BinaryOperator::Equal | BinaryOperator::NotEqual => {
+                            let equals = op == BinaryOperator::Equal;
 
-                    let argument = self
-                        .expressions
-                        .append(Expression::Binary { op, left, right });
+                            let (op, fun) = match equals {
+                                true => (BinaryOperator::Equal, RelationalFunction::All),
+                                false => (BinaryOperator::NotEqual, RelationalFunction::Any),
+                            };
 
-                    if left_dims != right_dims {
-                        return Err(ErrorKind::SemanticError(meta, "Cannot compare".into()));
-                    } else if left_is_vector && right_is_vector {
-                        self.add_expression(Expression::Relational { fun, argument }, body)
-                    } else {
-                        argument
-                    }
-                } else {
-                    self.add_expression(Expression::Binary { left, op, right }, body)
+                            let argument =
+                                self.expressions
+                                    .append(Expression::Binary { op, left, right });
+
+                            self.add_expression(Expression::Relational { fun, argument }, body)
+                        }
+                        _ => self.add_expression(Expression::Binary { left, op, right }, body),
+                    },
+                    (&TypeInner::Vector { size, .. }, &TypeInner::Scalar { .. }) => match op {
+                        BinaryOperator::Add
+                        | BinaryOperator::Subtract
+                        | BinaryOperator::Divide
+                        | BinaryOperator::ShiftLeft
+                        | BinaryOperator::ShiftRight => {
+                            let scalar_vector =
+                                self.add_expression(Expression::Splat { size, value: right }, body);
+
+                            self.add_expression(
+                                Expression::Binary {
+                                    op,
+                                    left,
+                                    right: scalar_vector,
+                                },
+                                body,
+                            )
+                        }
+                        _ => self.add_expression(Expression::Binary { left, op, right }, body),
+                    },
+                    (&TypeInner::Scalar { .. }, &TypeInner::Vector { size, .. }) => match op {
+                        BinaryOperator::Add | BinaryOperator::Subtract | BinaryOperator::Divide => {
+                            let scalar_vector =
+                                self.add_expression(Expression::Splat { size, value: left }, body);
+
+                            self.add_expression(
+                                Expression::Binary {
+                                    op,
+                                    left: scalar_vector,
+                                    right,
+                                },
+                                body,
+                            )
+                        }
+                        _ => self.add_expression(Expression::Binary { left, op, right }, body),
+                    },
+                    _ => self.add_expression(Expression::Binary { left, op, right }, body),
                 }
             }
             HirExprKind::Unary { op, expr } if !lhs => {
@@ -633,15 +657,10 @@ impl<'function> Context<'function> {
                 let (pointer, ptr_meta) = self.lower_expect(program, tgt, true, body)?;
                 let (mut value, value_meta) = self.lower_expect(program, value, false, body)?;
 
-                let ptr_kind = match *program.resolve_type(self, pointer, ptr_meta)? {
-                    TypeInner::Pointer { base, .. } => {
-                        program.module.types[base].inner.scalar_kind()
-                    }
-                    ref ty => ty.scalar_kind(),
-                };
+                let scalar_components = self.expr_scalar_components(program, pointer, ptr_meta)?;
 
-                if let Some(kind) = ptr_kind {
-                    self.implicit_conversion(program, &mut value, value_meta, kind)?;
+                if let Some((kind, width)) = scalar_components {
+                    self.implicit_conversion(program, &mut value, value_meta, kind, width)?;
                 }
 
                 if let Expression::Swizzle {
@@ -796,13 +815,14 @@ impl<'function> Context<'function> {
         Ok((Some(handle), meta))
     }
 
-    pub fn expr_scalar_kind(
+    pub fn expr_scalar_components(
         &mut self,
         program: &mut Program,
         expr: Handle<Expression>,
         meta: SourceMetadata,
-    ) -> Result<Option<ScalarKind>, ErrorKind> {
-        Ok(program.resolve_type(self, expr, meta)?.scalar_kind())
+    ) -> Result<Option<(ScalarKind, crate::Bytes)>, ErrorKind> {
+        let ty = program.resolve_type(self, expr, meta)?;
+        Ok(scalar_components(ty))
     }
 
     pub fn expr_power(
@@ -812,8 +832,8 @@ impl<'function> Context<'function> {
         meta: SourceMetadata,
     ) -> Result<Option<u32>, ErrorKind> {
         Ok(self
-            .expr_scalar_kind(program, expr, meta)?
-            .and_then(type_power))
+            .expr_scalar_components(program, expr, meta)?
+            .and_then(|(kind, _)| type_power(kind)))
     }
 
     pub fn get_expression(&self, expr: Handle<Expression>) -> &Expression {
@@ -826,6 +846,7 @@ impl<'function> Context<'function> {
         expr: &mut Handle<Expression>,
         meta: SourceMetadata,
         kind: ScalarKind,
+        width: crate::Bytes,
     ) -> Result<(), ErrorKind> {
         if let (Some(tgt_power), Some(expr_power)) =
             (type_power(kind), self.expr_power(program, *expr, meta)?)
@@ -834,7 +855,7 @@ impl<'function> Context<'function> {
                 *expr = self.expressions.append(Expression::As {
                     expr: *expr,
                     kind,
-                    convert: None,
+                    convert: Some(width),
                 })
             }
         }
@@ -850,19 +871,22 @@ impl<'function> Context<'function> {
         right: &mut Handle<Expression>,
         right_meta: SourceMetadata,
     ) -> Result<(), ErrorKind> {
-        let left_kind = self.expr_scalar_kind(program, *left, left_meta)?;
-        let right_kind = self.expr_scalar_kind(program, *right, right_meta)?;
+        let left_components = self.expr_scalar_components(program, *left, left_meta)?;
+        let right_components = self.expr_scalar_components(program, *right, right_meta)?;
 
-        if let (Some((left_power, left_kind)), Some((right_power, right_kind))) = (
-            left_kind.and_then(|kind| Some((type_power(kind)?, kind))),
-            right_kind.and_then(|kind| Some((type_power(kind)?, kind))),
+        if let (
+            Some((left_power, left_width, left_kind)),
+            Some((right_power, right_width, right_kind)),
+        ) = (
+            left_components.and_then(|(kind, width)| Some((type_power(kind)?, width, kind))),
+            right_components.and_then(|(kind, width)| Some((type_power(kind)?, width, kind))),
         ) {
             match left_power.cmp(&right_power) {
                 std::cmp::Ordering::Less => {
                     *left = self.expressions.append(Expression::As {
                         expr: *left,
                         kind: right_kind,
-                        convert: None,
+                        convert: Some(right_width),
                     })
                 }
                 std::cmp::Ordering::Equal => {}
@@ -870,7 +894,7 @@ impl<'function> Context<'function> {
                     *right = self.expressions.append(Expression::As {
                         expr: *right,
                         kind: left_kind,
-                        convert: None,
+                        convert: Some(left_width),
                     })
                 }
             }
@@ -878,9 +902,37 @@ impl<'function> Context<'function> {
 
         Ok(())
     }
+
+    pub fn implicit_splat(
+        &mut self,
+        program: &mut Program,
+        expr: &mut Handle<Expression>,
+        meta: SourceMetadata,
+        vector_size: Option<VectorSize>,
+    ) -> Result<(), ErrorKind> {
+        let expr_type = program.resolve_type(self, *expr, meta)?;
+
+        if let (&TypeInner::Scalar { .. }, Some(size)) = (expr_type, vector_size) {
+            *expr = self
+                .expressions
+                .append(Expression::Splat { size, value: *expr })
+        }
+
+        Ok(())
+    }
 }
 
-fn type_power(kind: ScalarKind) -> Option<u32> {
+pub fn scalar_components(ty: &TypeInner) -> Option<(ScalarKind, crate::Bytes)> {
+    match *ty {
+        TypeInner::Scalar { kind, width } => Some((kind, width)),
+        TypeInner::Vector { kind, width, .. } => Some((kind, width)),
+        TypeInner::Matrix { width, .. } => Some((ScalarKind::Float, width)),
+        TypeInner::ValuePointer { kind, width, .. } => Some((kind, width)),
+        _ => None,
+    }
+}
+
+pub fn type_power(kind: ScalarKind) -> Option<u32> {
     Some(match kind {
         ScalarKind::Sint => 0,
         ScalarKind::Uint => 1,
@@ -950,6 +1002,7 @@ pub enum TypeQualifier {
     WorkGroupSize(usize, u32),
     Sampling(Sampling),
     Layout(StructLayout),
+    Precision(Precision),
     EarlyFragmentTests,
 }
 
@@ -977,6 +1030,14 @@ pub enum StorageQualifier {
 pub enum StructLayout {
     Std140,
     Std430,
+}
+
+// TODO: Encode precision hints in the IR
+#[derive(Debug, Clone, PartialEq, Copy)]
+pub enum Precision {
+    Low,
+    Medium,
+    High,
 }
 
 #[derive(Debug, Clone, PartialEq, Copy)]

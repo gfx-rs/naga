@@ -173,6 +173,7 @@ impl crate::TypeInner {
         }
     }
 
+    /// Return the `ImageDimension` for which `self` is an appropriate coordinate.
     fn image_storage_coordinates(&self) -> Option<crate::ImageDimension> {
         match *self {
             Self::Scalar {

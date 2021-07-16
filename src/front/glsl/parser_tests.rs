@@ -14,7 +14,7 @@ fn parse_program<'a>(
     source: &str,
     entry_points: &'a crate::FastHashMap<String, ShaderStage>,
 ) -> Result<Program<'a>, ErrorKind> {
-    let mut program = Program::new(entry_points);
+    let mut program = Program::new(entry_points, true);
     let defines = crate::FastHashMap::default();
     let lex = Lexer::new(source, &defines);
     let mut parser = parser::Parser::new(&mut program, lex);
@@ -246,6 +246,15 @@ fn declarations() {
         &entry_points,
     )
     .unwrap();
+
+    let _program = parse_program(
+        r#"
+        #version 450
+        precision highp float;
+        "#,
+        &entry_points,
+    )
+    .unwrap();
 }
 
 #[test]
@@ -262,6 +271,7 @@ fn textures() {
         layout(set = 1, binding = 2) uniform sampler tex_sampler;
         void main() {
             o_color = texture(sampler2D(tex, tex_sampler), v_uv);
+            o_color.a = texture(sampler2D(tex, tex_sampler), v_uv, 2.0).a;
         }
         "#,
         &entry_points,
@@ -455,6 +465,32 @@ fn constants() {
 }
 
 #[test]
+fn function_overloading() {
+    let mut entry_points = crate::FastHashMap::default();
+    entry_points.insert("".to_string(), ShaderStage::Vertex);
+
+    parse_program(
+        r#"
+        #  version 450
+
+        float saturate(float v) { return clamp(v, 0.0, 1.0); }
+        vec2 saturate(vec2 v) { return clamp(v, vec2(0.0), vec2(1.0)); }
+        vec3 saturate(vec3 v) { return clamp(v, vec3(0.0), vec3(1.0)); }
+        vec4 saturate(vec4 v) { return clamp(v, vec4(0.0), vec4(1.0)); }
+
+        void main() {
+            float v1 = saturate(1.5);
+            vec2 v2 = saturate(vec2(0.5, 1.5));
+            vec3 v3 = saturate(vec3(0.5, 1.5, 2.5));
+            vec3 v4 = saturate(vec4(0.5, 1.5, 2.5, 3.5));
+        }
+        "#,
+        &entry_points,
+    )
+    .unwrap();
+}
+
+#[test]
 fn implicit_conversions() {
     let mut entry_points = crate::FastHashMap::default();
     entry_points.insert("".to_string(), ShaderStage::Vertex);
@@ -471,6 +507,54 @@ fn implicit_conversions() {
         &entry_points,
     )
     .unwrap();
+
+    assert_eq!(
+        parse_program(
+            r#"
+                #  version 450
+                void test(int a) {}
+                void test(uint a) {}
+
+                void main() {
+                    test(1.0);
+                }
+                "#,
+            &entry_points
+        )
+        .err()
+        .unwrap(),
+        ErrorKind::SemanticError(
+            SourceMetadata {
+                start: 156,
+                end: 165
+            },
+            "Unknown function \'test\'".into()
+        )
+    );
+
+    assert_eq!(
+        parse_program(
+            r#"
+                #  version 450
+                void test(float a) {}
+                void test(uint a) {}
+
+                void main() {
+                    test(1);
+                }
+                "#,
+            &entry_points
+        )
+        .err()
+        .unwrap(),
+        ErrorKind::SemanticError(
+            SourceMetadata {
+                start: 158,
+                end: 165
+            },
+            "Ambiguous best function for \'test\'".into()
+        )
+    );
 }
 
 #[test]
@@ -588,4 +672,22 @@ fn swizzles() {
         &entry_points,
     )
     .unwrap_err();
+}
+
+#[test]
+fn vector_indexing() {
+    let mut entry_points = crate::FastHashMap::default();
+    entry_points.insert("".to_string(), ShaderStage::Fragment);
+
+    parse_program(
+        r#"
+        #  version 450
+        float main(int index) {
+            vec4 v = vec4(1.0, 2.0, 3.0, 4.0);
+            return v[index] + 1.0;
+        }
+        "#,
+        &entry_points,
+    )
+    .unwrap();
 }

@@ -1,8 +1,7 @@
 use super::{
     ast::{
-        Context, FunctionCall, FunctionCallKind, FunctionSignature, GlobalLookup, GlobalLookupKind,
-        HirExpr, HirExprKind, ParameterQualifier, Profile, StorageQualifier, StructLayout,
-        TypeQualifier,
+        self, Context, FunctionCall, FunctionCallKind, GlobalLookup, GlobalLookupKind, HirExpr,
+        HirExprKind, ParameterQualifier, Profile, StorageQualifier, StructLayout, TypeQualifier,
     },
     error::ErrorKind,
     lex::Lexer,
@@ -11,9 +10,11 @@ use super::{
     Program,
 };
 use crate::{
-    arena::Handle, front::glsl::error::ExpectedToken, Arena, ArraySize, BinaryOperator, Block,
-    Constant, ConstantInner, Expression, Function, FunctionResult, ResourceBinding, ScalarValue,
-    Statement, StorageClass, StructMember, SwitchCase, Type, TypeInner, UnaryOperator,
+    arena::Handle,
+    front::glsl::{ast::Precision, error::ExpectedToken},
+    Arena, ArraySize, BinaryOperator, Block, Constant, ConstantInner, Expression, Function,
+    FunctionResult, ResourceBinding, ScalarKind, ScalarValue, Statement, StorageClass,
+    StructMember, SwitchCase, Type, TypeInner, UnaryOperator,
 };
 use core::convert::TryFrom;
 use std::{iter::Peekable, mem};
@@ -207,6 +208,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
         self.lexer.peek().map_or(false, |t| match t.value {
             TokenValue::Interpolation(_)
             | TokenValue::Sampling(_)
+            | TokenValue::PrecisionQualifier(_)
             | TokenValue::Const
             | TokenValue::In
             | TokenValue::Out
@@ -242,7 +244,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                         StorageQualifier::StorageClass(StorageClass::Storage),
                     ),
                     TokenValue::Sampling(s) => TypeQualifier::Sampling(s),
-
+                    TokenValue::PrecisionQualifier(p) => TypeQualifier::Precision(p),
                     _ => unreachable!(),
                 },
                 token.meta,
@@ -589,9 +591,16 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                 .map::<Result<_>, _>(|_| {
                     let (mut expr, init_meta) = self.parse_initializer(ty, ctx.ctx, ctx.body)?;
 
-                    if let Some(kind) = self.program.module.types[ty].inner.scalar_kind() {
-                        ctx.ctx
-                            .implicit_conversion(self.program, &mut expr, init_meta, kind)?;
+                    let scalar_components =
+                        ast::scalar_components(&self.program.module.types[ty].inner);
+                    if let Some((kind, width)) = scalar_components {
+                        ctx.ctx.implicit_conversion(
+                            self.program,
+                            &mut expr,
+                            init_meta,
+                            kind,
+                            width,
+                        )?;
                     }
 
                     meta = meta.union(&init_meta);
@@ -667,12 +676,10 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                             let mut expressions = Arena::new();
                             let mut local_variables = Arena::new();
                             let mut arguments = Vec::new();
+                            // Normalized function parameters, modifiers are not applied
                             let mut parameters = Vec::new();
+                            let mut qualifiers = Vec::new();
                             let mut body = Block::new();
-                            let mut sig = FunctionSignature {
-                                name: name.clone(),
-                                parameters: Vec::new(),
-                            };
 
                             let mut context = Context::new(
                                 self.program,
@@ -685,8 +692,8 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                             self.parse_function_args(
                                 &mut context,
                                 &mut body,
+                                &mut qualifiers,
                                 &mut parameters,
-                                &mut sig,
                             )?;
 
                             let end_meta = self.expect(TokenValue::RightParen)?.meta;
@@ -698,13 +705,14 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                                     // This branch handles function prototypes
                                     self.program.add_prototype(
                                         Function {
-                                            name: Some(name),
+                                            name: Some(name.clone()),
                                             result,
                                             arguments,
                                             ..Default::default()
                                         },
-                                        sig,
+                                        name,
                                         parameters,
+                                        qualifiers,
                                         meta,
                                     )?;
 
@@ -721,7 +729,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                                     let Context { arg_use, .. } = context;
                                     let handle = self.program.add_function(
                                         Function {
-                                            name: Some(name),
+                                            name: Some(name.clone()),
                                             result,
                                             expressions,
                                             named_expressions: crate::FastHashMap::default(),
@@ -729,8 +737,9 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                                             arguments,
                                             body,
                                         },
-                                        sig,
+                                        name,
                                         parameters,
+                                        qualifiers,
                                         meta,
                                     )?;
 
@@ -795,7 +804,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                             //TODO: declaration
                             // type_qualifier IDENTIFIER SEMICOLON
                             // type_qualifier IDENTIFIER identifier_list SEMICOLON
-                            todo!()
+                            Err(ErrorKind::NotImplemented(token.meta, "variable qualifier"))
                         }
                     }
                     TokenValue::Semicolon => {
@@ -830,7 +839,51 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                 }
             }
         } else {
-            Ok(false)
+            match self.lexer.peek().map(|t| &t.value) {
+                Some(&TokenValue::Precision) => {
+                    // PRECISION precision_qualifier type_specifier SEMICOLON
+                    self.bump()?;
+
+                    let token = self.bump()?;
+                    let _ = match token.value {
+                        TokenValue::PrecisionQualifier(p) => p,
+                        _ => {
+                            return Err(ErrorKind::InvalidToken(
+                                token,
+                                vec![
+                                    TokenValue::PrecisionQualifier(Precision::High).into(),
+                                    TokenValue::PrecisionQualifier(Precision::Medium).into(),
+                                    TokenValue::PrecisionQualifier(Precision::Low).into(),
+                                ],
+                            ))
+                        }
+                    };
+
+                    let (ty, meta) = self.parse_type_non_void()?;
+
+                    match self.program.module.types[ty].inner {
+                        TypeInner::Scalar {
+                            kind: ScalarKind::Float,
+                            ..
+                        }
+                        | TypeInner::Scalar {
+                            kind: ScalarKind::Sint,
+                            ..
+                        } => {}
+                        _ => {
+                            return Err(ErrorKind::SemanticError(
+                                meta,
+                                "Precision statement can only work on floats and ints".into(),
+                            ))
+                        }
+                    }
+
+                    self.expect(TokenValue::Semicolon)?;
+
+                    Ok(true)
+                }
+                _ => Ok(false),
+            }
         }
     }
 
@@ -986,7 +1039,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
             }
         };
 
-        let handle = self.program.module.constants.append(Constant {
+        let handle = self.program.module.constants.fetch_or_append(Constant {
             name: None,
             specialization: None,
             inner: ConstantInner::Scalar { width, value },
@@ -1065,14 +1118,48 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
             TokenValue::TypeName(_) => {
                 let Token { value, mut meta } = self.bump()?;
 
-                let handle = if let TokenValue::TypeName(ty) = value {
+                let mut handle = if let TokenValue::TypeName(ty) = value {
                     self.program.module.types.fetch_or_append(ty)
                 } else {
                     unreachable!()
                 };
 
+                let maybe_size = self.parse_array_specifier()?;
+
                 self.expect(TokenValue::LeftParen)?;
                 let args = self.parse_function_call_args(ctx, body, &mut meta)?;
+
+                if let Some(array_size) = maybe_size {
+                    let stride = self.program.module.types[handle]
+                        .inner
+                        .span(&self.program.module.constants);
+
+                    let size = match array_size {
+                        ArraySize::Constant(size) => ArraySize::Constant(size),
+                        ArraySize::Dynamic => {
+                            let constant =
+                                self.program.module.constants.fetch_or_append(Constant {
+                                    name: None,
+                                    specialization: None,
+                                    inner: ConstantInner::Scalar {
+                                        width: 4,
+                                        value: ScalarValue::Sint(args.len() as i64),
+                                    },
+                                });
+
+                            ArraySize::Constant(constant)
+                        }
+                    };
+
+                    handle = self.program.module.types.fetch_or_append(Type {
+                        name: None,
+                        inner: TypeInner::Array {
+                            base: handle,
+                            size,
+                            stride,
+                        },
+                    })
+                }
 
                 ctx.hir_exprs.append(HirExpr {
                     kind: HirExprKind::Call(FunctionCall {
@@ -1737,19 +1824,26 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
         &mut self,
         context: &mut Context,
         body: &mut Block,
-        parameters: &mut Vec<ParameterQualifier>,
-        sig: &mut FunctionSignature,
+        qualifiers: &mut Vec<ParameterQualifier>,
+        parameters: &mut Vec<Handle<Type>>,
     ) -> Result<()> {
         loop {
             if self.peek_type_name() || self.peek_parameter_qualifier() {
                 let qualifier = self.parse_parameter_qualifier();
-                parameters.push(qualifier);
+                qualifiers.push(qualifier);
                 let ty = self.parse_type_non_void()?.0;
 
                 match self.expect_peek()?.value {
                     TokenValue::Comma => {
                         self.bump()?;
-                        context.add_function_arg(&mut self.program, sig, body, None, ty, qualifier);
+                        context.add_function_arg(
+                            &mut self.program,
+                            parameters,
+                            body,
+                            None,
+                            ty,
+                            qualifier,
+                        );
                         continue;
                     }
                     TokenValue::Identifier(_) => {
@@ -1760,7 +1854,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
 
                         context.add_function_arg(
                             &mut self.program,
-                            sig,
+                            parameters,
                             body,
                             Some(name),
                             ty,

@@ -2,10 +2,10 @@
 
 The central structure of the crate is [`Module`]. A `Module` contains:
 
-- [`EntryPoint`]s, the main functions for pipeline stages like vertex shading or
-  fragment shading,
+- [`Function`]s, which have arguments, a return type, local variables, and a body,
 
-- [`Function`]s, representing functions used by `EntryPoint`s and other `Function`s,
+- [`EntryPoint`]s, which are specialized functions that can serve as the entry
+  point for pipeline stages like vertex shading or fragment shading,
 
 - [`Constant`]s and [`GlobalVariable`]s used by `EntryPoint`s and `Function`s, and
 
@@ -34,6 +34,8 @@ representing a series of statements executed in order. The body of an
 `EntryPoint`s or `Function` is a `Block`, and `Statement` has a
 [`Block`][Statement::Block] variant.
 
+## Arenas
+
 To improve translator performance and reduce memory usage, most structures are
 stored in an [`Arena`]. An `Arena<T>` stores a series of `T` values, indexed by
 [`Handle<T>`](Handle) values, which are just wrappers around integer indexes.
@@ -44,65 +46,87 @@ element of an `Arena` has an index of 1, not 0.)
 
 ## Function Calls
 
-The Naga IR's representation of function calls is unusual. Most languages treat
+Naga's representation of function calls is unusual. Most languages treat
 function calls as expressions, but because calls may have side effects, Naga
-represents them with [`Statement::Call`]. A call statement may designate a
-particular `Expression` to represent its return value, if any, which can be used
-by subsequent statements and their expressions.
+represents them as a kind of statement, [`Statement::Call`]. If the function
+returns a value, a call statement designates a particular [`Expression::Call`]
+expression to represent its return value, for use by subsequent statements and
+expressions.
 
 ## `Expression` evaluation time and scope
 
-While the order of execution of [`Statement`]s is apparent from their structure,
-it is not so obvious exactly when a given [`Expression`] should be evaluated,
-since many `Statement`s and `Expression`s may refer to its value. But it is
-essential to clearly specify an expression's evaluation time, since that
-determines which statements' effects the expression should observe. It is also
-helpful to backends to limit the visibility of an `Expression`'s value to a
-portion of the statement tree.
+It is essential to know when an [`Expression`] should be evaluated, because its
+value may depend on previous [`Statement`]s' effects. But whereas the order of
+execution for a tree of `Statement`s is apparent from its structure, it is not
+so clear for `Expressions`, since an expression may be referred to by any number
+of `Statement`s and other `Expression`s.
 
-An `Expression` may only be used, whether by a `Statement` or another
-`Expression`, if one of the following is true:
+Naga's rules for when `Expression`s are evaluated are as follows:
 
-- The expression is an [`Expression::Constant`], [`Expression::FunctionArgument`], or
-  [`Expression::GlobalVariable`].
+-   [`Constant`](Expression::Constant) expressions are considered to be
+    implicitly evaluated before execution begins.
 
-- The expression is an [`Expression::LocalVariable`] that is either the
-  `pointer` (destination) of a [`Statement::Store`], or initialized by some
-  previously executed `Statement::Store`.
+-   [`FunctionArgument`] and [`LocalVariable`] expressions are considered
+    implicitly evaluated upon entry to the function to which they belong.
+    Function arguments cannot be assigned to, and `LocalVariable` expressions
+    produce a *pointer to* the variable's value (for use with [`Load`] and
+    [`Store`]). Neither varies while the function executes, so it suffices to
+    consider these expressions evaluated once on entry.
 
-- The expression is the `result` of a [`Statement::Call`], representing the
-  call's return value. The call must be 'in scope' for the use (see below).
+-   Similarly, [`GlobalVariable`] expressions are considered implicitly
+    evaluated before execution begins, since their value does not change while
+    code executes, for one of two reasons:
 
-- The expression is included in the range of some [`Statement::Emit`] that is
-  'in scope' for the use (see below). The [`Expression::needs_pre_emit`] method
-  returns `true` if the given expression does *not* need to be covered by an
-  `Emit` statement.
+    -   Most `GlobalVariable` expressions produce a pointer to the variable's
+        value, for use with [`Load`] and [`Store`], as `LocalVariable`
+        expressions do. Although the variable's value may change, its address
+        does not.
 
-The scope of an expression evaluated by an `Emit` statement covers the
-subsequent expressions in that `Emit`, any following statements in the `Block`
-to which that `Emit` belongs (if any) and their sub-statements (if any).
+    -   A `GlobalVariable` expression referring to a global in the
+        [`StorageClass::Handle`] storage class produces the value directly, not
+        a pointer. Such global variables hold opaque types like shaders or
+        images, and cannot be assigned to.
 
-If a `Call` statement has a `result` expression, then it is in scope for any
-statements following the `Call` in the `Block` to which that `Call` belongs (if
-any) and their sub-statements (if any).
+-   A [`Call`](Expression::Call) expression that is the `result` of a
+    [`Statement::Call`], representing the call's return value, is evaluated when
+    the `Call` statement is executed.
 
-This means that, for example, an expression evaluated by some statement in a
+-   All other expressions are evaluated when the (unique) [`Statement::Emit`]
+    statement that covers them is executed. The [`Expression::needs_pre_emit`]
+    method returns `true` if the given expression is one of those variants that
+    does *not* need to be covered by an `Emit` statement.
+
+Each `Expression` has a *scope*, which is the region of the function within
+which it can be used by `Statement`s and other `Expression`s. It is a validation
+error to use an `Expression` outside its scope.
+
+An expression's scope is defined as follows:
+
+-   The scope of a [`Constant`], [`GlobalVariable`], [`FunctionArgument`] or
+    [`LocalVariable`] expression covers the entire `Function` in which it
+    occurs.
+
+-   The scope of an expression evaluated by an [`Emit`] statement covers the
+    subsequent expressions in that `Emit`, the subsequent statements in the `Block`
+    to which that `Emit` belongs (if any) and their sub-statements (if any).
+
+-   If a [`Call`] statement has a `result` expression, then that expression's
+    scope covers the subsequent statements in the `Block` to which that `Call`
+    belongs (if any) and their sub-statements (if any).
+
+For example, this implies that an expression evaluated by some statement in a
 nested `Block` is not available in the `Block`'s parents. Such a value would
 need to be stored in a local variable to be carried upwards in the statement
 tree.
 
-## Variables
-
-An [`Expression::LocalVariable`] or [`Expression::GlobalVariable`] produces a
-pointer value referring to the variable's value. To retrieve the variable's
-value, use an [`Expression::Load`], with the variable expression as its
-`pointer` operand. To assign to a variable, use a [`Statement::Store`] with the
-variable expression as its `pointer` operand.
-
-As an exception, [`Expression::GlobalVariable`]s referring to
-[`GlobalVariable`]s whose `class` is [`StorageClass::Handle`] produce the
-variable's value directly; no `Load` is needed. These global variables refer to
-opaque values like samplers and images.
+[`Call`]: Statement::Call
+[`Constant`]: Expression::Constant
+[`Emit`]: Statement::Emit
+[`FunctionArgument`]: Expression::FunctionArgument
+[`GlobalVariable`]: Expression::GlobalVariable
+[`Load`]: Expression::Load
+[`LocalVariable`]: Expression::LocalVariable
+[`Store`]: Statement::Store
 
 !*/
 
@@ -164,8 +188,8 @@ pub(crate) type NamedExpressions = FastHashMap<Handle<Expression>, String>;
 /// HLSL: Attribute earlydepthstencil
 ///
 /// For more, see:
-///   - https://www.khronos.org/opengl/wiki/Early_Fragment_Test#Explicit_specification
-///   - https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/sm5-attributes-earlydepthstencil
+///   - <https://www.khronos.org/opengl/wiki/Early_Fragment_Test#Explicit_specification>
+///   - <https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/sm5-attributes-earlydepthstencil>
 #[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
@@ -180,8 +204,8 @@ pub struct EarlyDepthTest {
 /// HLSL: SV_Depth/SV_DepthGreaterEqual/SV_DepthLessEqual
 ///
 /// For more, see:
-///   - https://www.khronos.org/registry/OpenGL/extensions/ARB/ARB_conservative_depth.txt
-///   - https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-semantics#system-value-semantics
+///   - <https://www.khronos.org/registry/OpenGL/extensions/ARB/ARB_conservative_depth.txt>
+///   - <https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-semantics#system-value-semantics>
 #[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
@@ -437,7 +461,10 @@ pub enum ImageClass {
     Sampled {
         /// Kind of values to sample.
         kind: ScalarKind,
-        // Multi-sampled.
+        /// Multi-sampled image.
+        ///
+        /// A multi-sampled image holds several samples per texel. Multi-sampled
+        /// images cannot have mipmaps.
         multi: bool,
     },
     /// Depth comparison image.
@@ -477,6 +504,26 @@ pub enum TypeInner {
         width: Bytes,
     },
     /// Pointer to another type.
+    ///
+    /// ## Pointers to non-`SIZED` types
+    ///
+    /// The `base` type of a pointer may be a non-[`SIZED`] type like a
+    /// dynamically-sized [`Array`], or a [`Struct`] whose last member is a
+    /// dynamically sized array. Such pointers occur as the types of
+    /// [`GlobalVariable`] or [`AccessIndex`] expressions referring to
+    /// dynamically-sized arrays.
+    ///
+    /// However, among pointers to non-`SIZED` types, only pointers to `Struct`s
+    /// are [`DATA`]. Pointers to dynamically sized `Array`s cannot be passed as
+    /// arguments, stored in variables, or held in arrays or structures. Their
+    /// only use is as the types of `AccessIndex` expressions.
+    ///
+    /// [`SIZED`]: valid::TypeFlags::SIZED
+    /// [`DATA`]: valid::TypeFlags::DATA
+    /// [`Array`]: TypeInner::Array
+    /// [`Struct`]: TypeInner::Struct
+    /// [`GlobalVariable`]: Expression::GlobalVariable
+    /// [`AccessIndex`]: Expression::AccessIndex
     Pointer {
         base: Handle<Type>,
         class: StorageClass,
@@ -488,14 +535,57 @@ pub enum TypeInner {
         width: Bytes,
         class: StorageClass,
     },
+
     /// Homogenous list of elements.
+    ///
+    /// The `base` type must be a [`SIZED`], [`DATA`] type.
+    ///
+    /// ## Dynamically sized arrays
+    ///
+    /// An `Array` is [`SIZED`] unless its `size` is [`Dynamic`].
+    /// Dynamically-sized arrays may only appear in a few situations:
+    ///
+    /// -   They may appear as the last member of a [`Struct`] whose `top_level`
+    ///     flag is set.
+    ///
+    /// -   They may appear as the base type of a [`Pointer`]. An
+    ///     [`AccessIndex`] expression referring to a top-level struct's final
+    ///     unsized array member would have such a pointer type. However, such
+    ///     pointer types may only appear as the types of such intermediate
+    ///     expressions. They are not [`DATA`], and cannot be stored in
+    ///     variables, held in arrays or structs, or passed as parameters.
+    ///
+    /// [`SIZED`]: crate::valid::TypeFlags::SIZED
+    /// [`DATA`]: crate::valid::TypeFlags::DATA
+    /// [`Dynamic`]: ArraySize::Dynamic
+    /// [`Struct`]: TypeInner::Struct
+    /// [`Pointer`]: TypeInner::Pointer
+    /// [`AccessIndex`]: Expression::AccessIndex
     Array {
         base: Handle<Type>,
         size: ArraySize,
         stride: u32,
     },
+
     /// User-defined structure.
+    ///
+    /// A `Struct` type is [`DATA`], and the types of its members must be
+    /// `DATA` as well.
+    ///
+    /// Member types must be [`SIZED`], except for the final member of a
+    /// top-level struct, which may be a dynamically sized [`Array`]. The
+    /// `Struct` type itself is `SIZED` when all its members are `SIZED`.
+    ///
+    /// When `top_level` is true, this `Struct` represents the contents of a
+    /// buffer resource occupying a single binding slot in a shader's resource
+    /// interface. Top-level `Struct`s may not be used as members of any other
+    /// struct, or as array elements.
+    ///
+    /// [`DATA`]: crate::valid::TypeFlags::DATA
+    /// [`SIZED`]: crate::valid::TypeFlags::SIZED
+    /// [`Array`]: TypeInner::Array
     Struct {
+        /// This struct serves as the type of a binding slot in a shader's resource interface.
         top_level: bool,
         members: Vec<StructMember>,
         //TODO: should this be unaligned?
@@ -563,7 +653,7 @@ pub enum Binding {
 }
 
 /// Pipeline binding information for global resources.
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 pub struct ResourceBinding {
@@ -855,6 +945,8 @@ pub enum Expression {
         index: u32,
     },
     /// Constant value.
+    ///
+    /// Every `Constant` expression
     Constant(Handle<Constant>),
     /// Splat scalar into a vector.
     Splat {
@@ -872,12 +964,40 @@ pub enum Expression {
         ty: Handle<Type>,
         components: Vec<Handle<Expression>>,
     },
+
     /// Reference a function parameter, by its index.
+    ///
+    /// A `FunctionArgument` expression evaluates to a pointer to the argument's
+    /// value. You must use a [`Load`] expression to retrieve its value, or a
+    /// [`Store`] statement to assign it a new value.
+    ///
+    /// [`Load`]: Expression::Load
+    /// [`Store`]: Statement::Store
     FunctionArgument(u32),
+
     /// Reference a global variable.
+    ///
+    /// If the given `GlobalVariable`'s [`class`] is [`StorageClass::Handle`],
+    /// then the variable stores some opaque type like a sampler or an image,
+    /// and a `GlobalVariable` expression referring to it produces the
+    /// variable's value directly.
+    ///
+    /// For any other storage class, a `GlobalVariable` expression produces a
+    /// pointer to the variable's value. You must use a [`Load`] expression to
+    /// retrieve its value, or a [`Store`] statement to assign it a new value.
+    ///
+    /// [`class`]: GlobalVariable::class
+    /// [`Load`]: Expression::Load
+    /// [`Store`]: Statement::Store
     GlobalVariable(Handle<GlobalVariable>),
+
     /// Reference a local variable.
+    ///
+    /// A `LocalVariable` expression evaluates to a pointer to the variable's value.
+    /// You must use a [`Load`](Expression::Load) expression to retrieve its value,
+    /// or a [`Store`](Statement::Store) statement to assign it a new value.
     LocalVariable(Handle<LocalVariable>),
+
     /// Load a value indirectly.
     Load { pointer: Handle<Expression> },
     /// Sample a point from a sampled or a depth image.
@@ -892,12 +1012,70 @@ pub enum Expression {
     },
     /// Load a texel from an image.
     ImageLoad {
+        /// The image to load a texel from. This must have type [`Image`]. (This
+        /// will necessarily be a [`GlobalVariable`] or [`FunctionArgument`]
+        /// expression, since no other expressions are allowed to have that
+        /// type.)
+        ///
+        /// [`Image`]: TypeInner::Image
+        /// [`GlobalVariable`]: Expression::GlobalVariable
+        /// [`FunctionArgument`]: Expression::FunctionArgument
         image: Handle<Expression>,
+
+        /// The coordinate of the texel we wish to load. This must be a scalar
+        /// for [`D1`] images, a [`Bi`] vector for [`D2`] images, and a [`Tri`]
+        /// vector for [`D3`] images. (Array indices, sample indices, and
+        /// explicit level-of-detail values are supplied separately.) Its
+        /// component type must be [`Sint`].
+        ///
+        /// [`D1`]: ImageDimension::D1
+        /// [`D2`]: ImageDimension::D2
+        /// [`D3`]: ImageDimension::D3
+        /// [`Bi`]: VectorSize::Bi
+        /// [`Tri`]: VectorSize::Tri
+        /// [`Sint`]: ScalarKind::Sint
         coordinate: Handle<Expression>,
+
+        /// The index into an arrayed image. If the [`arrayed`] flag in
+        /// `image`'s type is `true`, then this must be `Some(expr)`, where
+        /// `expr` is a [`Sint`] scalar. Otherwise, it must be `None`.
+        ///
+        /// [`arrayed`]: TypeInner::Image::arrayed
+        /// [`Sint`]: ScalarKind::Sint
         array_index: Option<Handle<Expression>>,
-        /// For storage images, this is None.
-        /// For sampled images, this is the Some(Level).
-        /// For multisampled images, this is Some(Sample).
+
+        /// The sample within a particular texel.
+        ///
+        /// The meaning of this value depends on the [`class`] of `image`:
+        ///
+        /// -   [`Storage`] images hold exactly one sample per texel, so `index` must
+        ///     be `None`.
+        ///
+        /// -   [`Depth`] images may have mipmaps, so `index` must be `Some(level)`,
+        ///     where `level` identifies the level of detail.
+        ///
+        /// -   [`Sampled`] images may be multisampled or have mipmaps, but not both.
+        ///     Which one is indicated by the `Sampled` variant's [`multi`] field:
+        ///
+        ///     - If `multi` is `true`, then the image has multiple samples per
+        ///       texel, and `index` must be `Some(sample)`, where `sample` is
+        ///       the index of the sample to retrieve.
+        ///
+        ///     - If `multi` is `false`, then the image may have mipmaps. In
+        ///       this case, `index` must be `Some(level)`, where `level`
+        ///       identifies the level of detail. Even if the image has only the
+        ///       full-sized version, `level` must still be present; its only
+        ///       in-range value is zero.
+        ///
+        /// When `index` is `Some` the value must be a `Sint` scalar value. If
+        /// it identifes a level of detail, zero represents the full resolution
+        /// mipmap.
+        ///
+        /// [`class`]: TypeInner::Image::class
+        /// [`Sampled`]: ImageClass::Sampled
+        /// [`Storage`]: ImageClass::Storage
+        /// [`Depth`]: ImageClass::Depth
+        /// [`multi`]: ImageClass::Sampled::multi
         index: Option<Handle<Expression>>,
     },
     /// Query information from an image.
@@ -1009,16 +1187,65 @@ pub enum Statement {
         cases: Vec<SwitchCase>,
         default: Block,
     },
+
     /// Executes a block repeatedly.
+    ///
+    /// Each iteration of the loop executes the `body` block, followed by the
+    /// `continuing` block.
+    ///
+    /// Executing a [`Break`], [`Return`] or [`Kill`] statement exits the loop.
+    ///
+    /// A [`Continue`] statement in `body` jumps to the `continuing` block. The
+    /// `continuing` block is meant to be used to represent structures like the
+    /// third expression of a C-style `for` loop head, to which `continue`
+    /// statements in the loop's body jump.
+    ///
+    /// The `continuing` block and its substatements must not contain `Return`
+    /// or `Kill` statements, or any `Break` or `Continue` statements targeting
+    /// this loop. (It may have `Break` and `Continue` statements targeting
+    /// loops or switches nested within the `continuing` block.)
+    ///
+    /// [`Break`]: Statement::Break
+    /// [`Continue`]: Statement::Continue
+    /// [`Kill`]: Statement::Kill
+    /// [`Return`]: Statement::Return
     Loop { body: Block, continuing: Block },
-    /// Exits the loop.
+
+    /// Exits the innermost enclosing [`Loop`] or [`Switch`].
+    ///
+    /// A `Break` statement may only appear within a [`Loop`] or [`Switch`]
+    /// statement. It may not break out of a [`Loop`] from within the loop's
+    /// `continuing` block.
+    ///
+    /// [`Loop`]: Statement::Loop
+    /// [`Switch`]: Statement::Switch
     Break,
-    /// Skips execution to the next iteration of the loop.
+
+    /// Skips to the `continuing` block of the innermost enclosing [`Loop`].
+    ///
+    /// A `Continue` statement may only appear within the `body` block of the
+    /// innermost enclosing [`Loop`] statement. It must not appear within that
+    /// loop's `continuing` block.
+    ///
+    /// [`Loop`]: Statement::Loop
     Continue,
+
     /// Returns from the function (possibly with a value).
+    ///
+    /// `Return` statements are forbidden within the `continuing` block of a
+    /// [`Loop`] statement.
+    ///
+    /// [`Loop`]: Statement::Loop
     Return { value: Option<Handle<Expression>> },
+
     /// Aborts the current shader execution.
+    ///
+    /// `Kill` statements are forbidden within the `continuing` block of a
+    /// [`Loop`] statement.
+    ///
+    /// [`Loop`]: Statement::Loop
     Kill,
+
     /// Synchronize invocations within the work group.
     /// The `Barrier` flags control which memory accesses should be synchronized.
     /// If empty, this becomes purely an execution barrier.
@@ -1033,11 +1260,17 @@ pub enum Statement {
         pointer: Handle<Expression>,
         value: Handle<Expression>,
     },
-    /// Stores a value to an image.
+    /// Stores a texel value to an image.
     ///
-    /// Image has to point into a global variable of type `TypeInner::Image`.
+    /// The `image`, `coordinate`, and `array_index` fields have the same
+    /// meanings as the corresponding operands of an [`ImageLoad`] expression;
+    /// see that documentation for details. Storing into multisampled images or
+    /// images with mipmaps is not supported, so there is no `index`operand.
+    ///
     /// This statement is a barrier for any operations on the corresponding
-    /// `Expression::GlobalVariable` for this image.
+    /// [`Expression::GlobalVariable`] for this image.
+    ///
+    /// [`ImageLoad`]: Expression::ImageLoad
     ImageStore {
         image: Handle<Expression>,
         coordinate: Handle<Expression>,

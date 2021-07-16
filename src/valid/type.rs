@@ -5,18 +5,50 @@ use crate::{
 };
 
 bitflags::bitflags! {
+    /// Flags associated with [`Type`]s by [`Validator`].
+    ///
+    /// [`Type`]: crate::Type
+    /// [`Validator`]: crate::valid::Validator
     #[repr(transparent)]
     pub struct TypeFlags: u8 {
         /// Can be used for data variables.
+        ///
+        /// This flag is required on types of local variables, function
+        /// arguments, array elements, and struct members.
+        ///
+        /// This includes all types except `Image`, `Sampler`, `ValuePointer`,
+        /// and some `Pointer` types.
         const DATA = 0x1;
-        /// The data type has known size.
+
+        /// The data type has a size known by pipeline creation time.
+        ///
+        /// Unsized types are quite restricted. The only unsized types permitted
+        /// by Naga, other than the non-[`DATA`] types like [`Image`] and
+        /// [`Sampler`], are dynamically-sized [`Array`s], and [`Struct`s] whose
+        /// last members are such arrays. See the documentation for those types
+        /// for details.
+        ///
+        /// [`DATA`]: TypeFlags::DATA
+        /// [`Image`]: crate::Type::Image
+        /// [`Sampler`]: crate::Type::Sampler
+        /// [`Array`]: crate::Type::Array
+        /// [`Struct`]: crate::Type::struct
         const SIZED = 0x2;
+
         /// Can be be used for interfacing between pipeline stages.
+        ///
+        /// This includes non-bool scalars and vectors, matrices, and structs
+        /// and arrays containing only interface types.
         const INTERFACE = 0x4;
+
         /// Can be used for host-shareable structures.
         const HOST_SHARED = 0x8;
+
         /// This is a top-level host-shareable type.
         const TOP_LEVEL = 0x10;
+
+        /// This type can be passed as a function argument.
+        const ARGUMENT = 0x20;
     }
 }
 
@@ -42,6 +74,8 @@ pub enum TypeError {
     InvalidWidth(crate::ScalarKind, crate::Bytes),
     #[error("The base handle {0:?} can not be resolved")]
     UnresolvedBase(Handle<crate::Type>),
+    #[error("Invalid type for pointer target {0:?}")]
+    InvalidPointerBase(Handle<crate::Type>),
     #[error("Expected data type, found {0:?}")]
     InvalidData(Handle<crate::Type>),
     #[error("Structure type {0:?} can not be a block structure")]
@@ -50,6 +84,8 @@ pub enum TypeError {
     InvalidArrayBaseType(Handle<crate::Type>),
     #[error("The constant {0:?} can not be used for an array size")]
     InvalidArraySizeConstant(Handle<crate::Constant>),
+    #[error("Array type {0:?} must have a length of one or more")]
+    NonPositiveArrayLength(Handle<crate::Constant>),
     #[error("Array stride {stride} is smaller than the base element size {base_size}")]
     InsufficientArrayStride { stride: u32, base_size: u32 },
     #[error("Field '{0}' can't be dynamically-sized, has type {1:?}")]
@@ -159,7 +195,8 @@ impl super::Validator {
                     TypeFlags::DATA
                         | TypeFlags::SIZED
                         | TypeFlags::INTERFACE
-                        | TypeFlags::HOST_SHARED,
+                        | TypeFlags::HOST_SHARED
+                        | TypeFlags::ARGUMENT,
                     width as u32,
                 )
             }
@@ -172,7 +209,8 @@ impl super::Validator {
                     TypeFlags::DATA
                         | TypeFlags::SIZED
                         | TypeFlags::INTERFACE
-                        | TypeFlags::HOST_SHARED,
+                        | TypeFlags::HOST_SHARED
+                        | TypeFlags::ARGUMENT,
                     count * (width as u32),
                 )
             }
@@ -189,7 +227,8 @@ impl super::Validator {
                     TypeFlags::DATA
                         | TypeFlags::SIZED
                         | TypeFlags::INTERFACE
-                        | TypeFlags::HOST_SHARED,
+                        | TypeFlags::HOST_SHARED
+                        | TypeFlags::ARGUMENT,
                     count * (width as u32),
                 )
             }
@@ -197,7 +236,23 @@ impl super::Validator {
                 if base >= handle {
                     return Err(TypeError::UnresolvedBase(base));
                 }
-                TypeInfo::new(TypeFlags::DATA | TypeFlags::SIZED, 0)
+
+                // Pointers to dynamically-sized arrays are needed, to serve as
+                // the type of an `AccessIndex` expression referring to a
+                // dynamically sized array appearing as the final member of a
+                // top-level `Struct`. But such pointers cannot be passed to
+                // functions, stored in variables, etc. So, we mark them as not
+                // `DATA`.
+                let base_info = &self.types[base.index()];
+                let data_flag = if base_info.flags.contains(TypeFlags::SIZED) {
+                    TypeFlags::DATA | TypeFlags::ARGUMENT
+                } else if let crate::TypeInner::Struct { .. } = types[base].inner {
+                    TypeFlags::DATA | TypeFlags::ARGUMENT
+                } else {
+                    TypeFlags::empty()
+                };
+
+                TypeInfo::new(data_flag | TypeFlags::SIZED, 0)
             }
             Ti::ValuePointer {
                 size: _,
@@ -270,15 +325,15 @@ impl super::Validator {
 
                 let sized_flag = match size {
                     crate::ArraySize::Constant(const_handle) => {
-                        match constants.try_get(const_handle) {
+                        let length_is_positive = match constants.try_get(const_handle) {
                             Some(&crate::Constant {
                                 inner:
                                     crate::ConstantInner::Scalar {
                                         width: _,
-                                        value: crate::ScalarValue::Uint(_),
+                                        value: crate::ScalarValue::Uint(length),
                                     },
                                 ..
-                            }) => {}
+                            }) => length > 0,
                             // Accept a signed integer size to avoid
                             // requiring an explicit uint
                             // literal. Type inference should make
@@ -287,17 +342,21 @@ impl super::Validator {
                                 inner:
                                     crate::ConstantInner::Scalar {
                                         width: _,
-                                        value: crate::ScalarValue::Sint(_),
+                                        value: crate::ScalarValue::Sint(length),
                                     },
                                 ..
-                            }) => {}
+                            }) => length > 0,
                             other => {
                                 log::warn!("Array size {:?}", other);
                                 return Err(TypeError::InvalidArraySizeConstant(const_handle));
                             }
+                        };
+
+                        if !length_is_positive {
+                            return Err(TypeError::NonPositiveArrayLength(const_handle));
                         }
 
-                        TypeFlags::SIZED
+                        TypeFlags::SIZED | TypeFlags::ARGUMENT
                     }
                     crate::ArraySize::Dynamic => {
                         // Non-SIZED types may only appear as the last element of a structure.
@@ -323,7 +382,8 @@ impl super::Validator {
                     TypeFlags::DATA
                         | TypeFlags::SIZED
                         | TypeFlags::HOST_SHARED
-                        | TypeFlags::INTERFACE,
+                        | TypeFlags::INTERFACE
+                        | TypeFlags::ARGUMENT,
                     1,
                 );
                 let mut min_offset = 0;
@@ -407,7 +467,7 @@ impl super::Validator {
 
                 ti
             }
-            Ti::Image { .. } | Ti::Sampler { .. } => TypeInfo::new(TypeFlags::empty(), 0),
+            Ti::Image { .. } | Ti::Sampler { .. } => TypeInfo::new(TypeFlags::ARGUMENT, 0),
         })
     }
 }

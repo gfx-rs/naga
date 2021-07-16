@@ -1,0 +1,84 @@
+; SPIR-V
+; Version: 1.0
+; Generator: rspirv
+; Bound: 61
+OpCapability Shader
+%1 = OpExtInstImport "GLSL.std.450"
+OpMemoryModel Logical GLSL450
+OpEntryPoint GLCompute %55 "main"
+OpExecutionMode %55 LocalSize 1 1 1
+%2 = OpTypeVoid
+%4 = OpTypeFloat 32
+%3 = OpConstant  %4  1.0
+%5 = OpConstant  %4  2.0
+%6 = OpConstant  %4  3.0
+%7 = OpConstant  %4  4.0
+%9 = OpTypeInt 32 1
+%8 = OpConstant  %9  5
+%10 = OpConstant  %9  2
+%11 = OpConstant  %9  1
+%13 = OpTypeBool
+%12 = OpConstantTrue  %13
+%14 = OpConstant  %9  0
+%15 = OpTypeVector %4 4
+%18 = OpTypeFunction %15
+%20 = OpTypeVector %4 2
+%28 = OpTypeVector %9 4
+%37 = OpTypeFunction %9
+%44 = OpConstantNull  %9
+%52 = OpTypeVector %13 4
+%56 = OpTypeFunction %2
+%17 = OpFunction  %15  None %18
+%16 = OpLabel
+OpBranch %19
+%19 = OpLabel
+%21 = OpCompositeConstruct  %20  %5 %5
+%22 = OpCompositeConstruct  %20  %3 %3
+%23 = OpFAdd  %20  %22 %21
+%24 = OpCompositeConstruct  %20  %6 %6
+%25 = OpFSub  %20  %23 %24
+%26 = OpCompositeConstruct  %20  %7 %7
+%27 = OpFDiv  %20  %25 %26
+%29 = OpCompositeConstruct  %28  %8 %8 %8 %8
+%30 = OpCompositeConstruct  %28  %10 %10 %10 %10
+%31 = OpSMod  %28  %29 %30
+%32 = OpVectorShuffle  %15  %27 %27 0 1 0 1
+%33 = OpConvertSToF  %15  %31
+%34 = OpFAdd  %15  %32 %33
+OpReturnValue %34
+OpFunctionEnd
+%36 = OpFunction  %9  None %37
+%35 = OpLabel
+OpBranch %38
+%38 = OpLabel
+%39 = OpLogicalNot  %13  %12
+OpSelectionMerge %40 None
+OpBranchConditional %39 %41 %42
+%41 = OpLabel
+OpReturnValue %11
+%42 = OpLabel
+%43 = OpNot  %9  %11
+OpReturnValue %43
+%40 = OpLabel
+OpReturnValue %44
+OpFunctionEnd
+%46 = OpFunction  %15  None %18
+%45 = OpLabel
+OpBranch %47
+%47 = OpLabel
+%48 = OpCompositeConstruct  %15  %3 %3 %3 %3
+%49 = OpCompositeConstruct  %15  %3 %3 %3 %3
+%50 = OpSelect  %9  %12 %14 %11
+%53 = OpCompositeConstruct  %52  %12 %12 %12 %12
+%51 = OpSelect  %15  %53 %48 %49
+OpReturnValue %51
+OpFunctionEnd
+%55 = OpFunction  %2  None %56
+%54 = OpLabel
+OpBranch %57
+%57 = OpLabel
+%58 = OpFunctionCall  %15  %17
+%59 = OpFunctionCall  %9  %36
+%60 = OpFunctionCall  %15  %46
+OpReturn
+OpFunctionEnd

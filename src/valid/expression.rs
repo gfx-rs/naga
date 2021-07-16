@@ -1,7 +1,7 @@
 use super::{compose::validate_compose, ComposeError, FunctionInfo, ShaderStages, TypeFlags};
 use crate::{
     arena::{Arena, Handle},
-    proc::ResolveError,
+    proc::{ProcError, ResolveError},
 };
 
 #[derive(Clone, Debug, thiserror::Error)]
@@ -17,8 +17,8 @@ pub enum ExpressionError {
     InvalidBaseType(Handle<crate::Expression>),
     #[error("Accessing with index {0:?} can't be done")]
     InvalidIndexType(Handle<crate::Expression>),
-    #[error("Accessing index {1} is out of {0:?} bounds")]
-    IndexOutOfBounds(Handle<crate::Expression>, u32),
+    #[error("Accessing index {1:?} is out of {0:?} bounds")]
+    IndexOutOfBounds(Handle<crate::Expression>, crate::ScalarValue),
     #[error("The expression {0:?} may only be indexed by a constant")]
     IndexMustBeConstant(Handle<crate::Expression>),
     #[error("Function argument {0:?} doesn't exist")]
@@ -41,6 +41,8 @@ pub enum ExpressionError {
     InvalidSwizzleComponent(crate::SwizzleComponent, crate::VectorSize),
     #[error(transparent)]
     Compose(#[from] ComposeError),
+    #[error(transparent)]
+    Proc(#[from] ProcError),
     #[error("Operation {0:?} can't work with {1:?}")]
     InvalidUnaryOperandType(crate::UnaryOperator, Handle<crate::Expression>),
     #[error("Operation {0:?} can't work with {1:?} and {2:?}")]
@@ -59,6 +61,8 @@ pub enum ExpressionError {
     Type(#[from] ResolveError),
     #[error("Not a global variable")]
     ExpectedGlobalVariable,
+    #[error("Not a global variable or a function argument")]
+    ExpectedGlobalOrArgument,
     #[error("Calling an undeclared function {0:?}")]
     CallToUndeclaredFunction(Handle<crate::Function>),
     #[error("Needs to be an image instead of {0:?}")]
@@ -144,8 +148,9 @@ impl super::Validator {
 
         let stages = match *expression {
             E::Access { base, index } => {
+                let base_type = resolver.resolve(base)?;
                 // See the documentation for `Expression::Access`.
-                let dynamic_indexing_restricted = match *resolver.resolve(base)? {
+                let dynamic_indexing_restricted = match *base_type {
                     Ti::Vector { .. } => false,
                     Ti::Matrix { .. } | Ti::Array { .. } => true,
                     Ti::Pointer { .. } | Ti::ValuePointer { size: Some(_), .. } => false,
@@ -174,6 +179,36 @@ impl super::Validator {
                 {
                     return Err(ExpressionError::IndexMustBeConstant(base));
                 }
+
+                // If we know both the length and the index, we can do the
+                // bounds check now.
+                if let crate::proc::IndexableLength::Known(known_length) =
+                    base_type.indexable_length(module)?
+                {
+                    if let E::Constant(k) = function.expressions[index] {
+                        if let crate::Constant {
+                            // We must treat specializable constants as unknown.
+                            specialization: None,
+                            // Non-scalar indices should have been caught above.
+                            inner: crate::ConstantInner::Scalar { value, .. },
+                            ..
+                        } = module.constants[k]
+                        {
+                            match value {
+                                crate::ScalarValue::Uint(u) if u >= known_length as u64 => {
+                                    return Err(ExpressionError::IndexOutOfBounds(base, value));
+                                }
+                                crate::ScalarValue::Sint(s)
+                                    if s < 0 || s >= known_length as i64 =>
+                                {
+                                    return Err(ExpressionError::IndexOutOfBounds(base, value));
+                                }
+                                _ => (),
+                            }
+                        }
+                    }
+                }
+
                 ShaderStages::all()
             }
             E::AccessIndex { base, index } => {
@@ -208,7 +243,10 @@ impl super::Validator {
 
                 let limit = resolve_index_limit(module, base, resolver.resolve(base)?, true)?;
                 if index >= limit {
-                    return Err(ExpressionError::IndexOutOfBounds(base, index));
+                    return Err(ExpressionError::IndexOutOfBounds(
+                        base,
+                        crate::ScalarValue::Uint(limit as _),
+                    ));
                 }
                 ShaderStages::all()
             }
@@ -303,24 +341,26 @@ impl super::Validator {
                 depth_ref,
             } => {
                 // check the validity of expressions
-                let image_var = match function.expressions[image] {
+                let image_ty = match function.expressions[image] {
                     crate::Expression::GlobalVariable(var_handle) => {
-                        &module.global_variables[var_handle]
+                        module.global_variables[var_handle].ty
                     }
+                    crate::Expression::FunctionArgument(i) => function.arguments[i as usize].ty,
                     _ => return Err(ExpressionError::ExpectedGlobalVariable),
                 };
-                let sampler_var = match function.expressions[sampler] {
+                let sampler_ty = match function.expressions[sampler] {
                     crate::Expression::GlobalVariable(var_handle) => {
-                        &module.global_variables[var_handle]
+                        module.global_variables[var_handle].ty
                     }
+                    crate::Expression::FunctionArgument(i) => function.arguments[i as usize].ty,
                     _ => return Err(ExpressionError::ExpectedGlobalVariable),
                 };
-                let comparison = match module.types[sampler_var.ty].inner {
+                let comparison = match module.types[sampler_ty].inner {
                     Ti::Sampler { comparison } => comparison,
-                    _ => return Err(ExpressionError::ExpectedSamplerType(sampler_var.ty)),
+                    _ => return Err(ExpressionError::ExpectedSamplerType(sampler_ty)),
                 };
 
-                let (class, dim) = match module.types[image_var.ty].inner {
+                let (class, dim) = match module.types[image_ty].inner {
                     Ti::Image {
                         class,
                         arrayed,
@@ -341,7 +381,7 @@ impl super::Validator {
                         }
                         (class, dim)
                     }
-                    _ => return Err(ExpressionError::ExpectedImageType(image_var.ty)),
+                    _ => return Err(ExpressionError::ExpectedImageType(image_ty)),
                 };
 
                 // check sampling and comparison properties
@@ -479,13 +519,14 @@ impl super::Validator {
                 array_index,
                 index,
             } => {
-                let var = match function.expressions[image] {
+                let ty = match function.expressions[image] {
                     crate::Expression::GlobalVariable(var_handle) => {
-                        &module.global_variables[var_handle]
+                        module.global_variables[var_handle].ty
                     }
+                    crate::Expression::FunctionArgument(i) => function.arguments[i as usize].ty,
                     _ => return Err(ExpressionError::ExpectedGlobalVariable),
                 };
-                match module.types[var.ty].inner {
+                match module.types[ty].inner {
                     Ti::Image {
                         class,
                         arrayed,
@@ -528,18 +569,19 @@ impl super::Validator {
                             }
                         }
                     }
-                    _ => return Err(ExpressionError::ExpectedImageType(var.ty)),
+                    _ => return Err(ExpressionError::ExpectedImageType(ty)),
                 }
                 ShaderStages::all()
             }
             E::ImageQuery { image, query } => {
-                let var = match function.expressions[image] {
+                let ty = match function.expressions[image] {
                     crate::Expression::GlobalVariable(var_handle) => {
-                        &module.global_variables[var_handle]
+                        module.global_variables[var_handle].ty
                     }
+                    crate::Expression::FunctionArgument(i) => function.arguments[i as usize].ty,
                     _ => return Err(ExpressionError::ExpectedGlobalVariable),
                 };
-                match module.types[var.ty].inner {
+                match module.types[ty].inner {
                     Ti::Image { class, arrayed, .. } => {
                         let can_level = match class {
                             crate::ImageClass::Sampled { multi, .. } => !multi,
@@ -557,7 +599,7 @@ impl super::Validator {
                             return Err(ExpressionError::InvalidImageClass(class));
                         }
                     }
-                    _ => return Err(ExpressionError::ExpectedImageType(var.ty)),
+                    _ => return Err(ExpressionError::ExpectedImageType(ty)),
                 }
                 ShaderStages::all()
             }
@@ -1117,11 +1159,13 @@ impl super::Validator {
                     .resolve(expr)?
                     .scalar_kind()
                     .ok_or(ExpressionError::InvalidCastArgument)?;
+
+                if prev_kind == Sk::Bool || kind == Sk::Bool {
+                    return Err(ExpressionError::InvalidCastArgument);
+                }
+
                 match convert {
                     Some(width) if !self.check_width(kind, width) => {
-                        return Err(ExpressionError::InvalidCastArgument)
-                    }
-                    None if prev_kind == Sk::Bool || kind == Sk::Bool => {
                         return Err(ExpressionError::InvalidCastArgument)
                     }
                     _ => {}

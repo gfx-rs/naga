@@ -6,6 +6,8 @@ use std::{env, error::Error, path::Path};
 #[derive(Default)]
 struct Parameters {
     validation_flags: naga::valid::ValidationFlags,
+    index_bounds_check_policy: naga::back::IndexBoundsCheckPolicy,
+    entry_point: Option<String>,
     spv_adjust_coordinate_space: bool,
     spv_flow_dump_prefix: Option<String>,
     spv: naga::back::spv::Options,
@@ -69,8 +71,26 @@ fn main() {
                     params.validation_flags =
                         naga::valid::ValidationFlags::from_bits(value).unwrap();
                 }
+                "index-bounds-check-policy" => {
+                    let value = args.next().unwrap();
+                    params.index_bounds_check_policy = match value.as_str() {
+                        "Restrict" => naga::back::IndexBoundsCheckPolicy::Restrict,
+                        "ReadZeroSkipWrite" => {
+                            naga::back::IndexBoundsCheckPolicy::ReadZeroSkipWrite
+                        }
+                        "UndefinedBehavior" => {
+                            naga::back::IndexBoundsCheckPolicy::UndefinedBehavior
+                        }
+                        other => {
+                            panic!(
+                                "Unrecognized '--index-bounds-check-policy' value: {:?}",
+                                other
+                            );
+                        }
+                    };
+                }
                 "flow-dir" => params.spv_flow_dump_prefix = args.next(),
-                "entry-point" => params.glsl.entry_point = args.next().unwrap(),
+                "entry-point" => params.entry_point = Some(args.next().unwrap()),
                 "profile" => {
                     use naga::back::glsl::Version;
                     let string = args.next().unwrap();
@@ -84,10 +104,16 @@ fn main() {
                     };
                 }
                 "shader-model" => {
-                    use naga::back::hlsl::{ShaderModel, DEFAULT_SHADER_MODEL};
+                    use naga::back::hlsl::ShaderModel;
                     let string = args.next().unwrap();
-                    params.hlsl.shader_model =
-                        ShaderModel::new(string.parse().unwrap_or(DEFAULT_SHADER_MODEL));
+                    let sm_numb = string.parse::<u16>().unwrap();
+                    let sm = match string.parse().unwrap() {
+                        50 => ShaderModel::V5_0,
+                        51 => ShaderModel::V5_1,
+                        60 => ShaderModel::V6_0,
+                        _ => panic!("Unsupported shader model: {}", sm_numb),
+                    };
+                    params.hlsl.shader_model = sm;
                 }
                 other => log::warn!("Unknown parameter: {}", other),
             }
@@ -140,6 +166,7 @@ fn main() {
                 &naga::front::glsl::Options {
                     entry_points,
                     defines: Default::default(),
+                    strip_unused_linkages: false,
                 },
             )
             .unwrap_or_else(|err| {
@@ -157,6 +184,7 @@ fn main() {
                 &naga::front::glsl::Options {
                     entry_points,
                     defines: Default::default(),
+                    strip_unused_linkages: false,
                 },
             )
             .unwrap_or_else(|err| {
@@ -174,6 +202,7 @@ fn main() {
                 &naga::front::glsl::Options {
                     entry_points,
                     defines: Default::default(),
+                    strip_unused_linkages: false,
                 },
             )
             .unwrap_or_else(|err| {
@@ -241,6 +270,8 @@ fn main() {
             "spv" => {
                 use naga::back::spv;
 
+                params.spv.index_bounds_check_policy = params.index_bounds_check_policy;
+
                 let spv =
                     spv::write_vec(&module, info.as_ref().unwrap(), &params.spv).unwrap_pretty();
                 let bytes = spv
@@ -255,17 +286,28 @@ fn main() {
             stage @ "vert" | stage @ "frag" | stage @ "comp" => {
                 use naga::back::glsl;
 
-                params.glsl.shader_stage = match stage {
-                    "vert" => naga::ShaderStage::Vertex,
-                    "frag" => naga::ShaderStage::Fragment,
-                    "comp" => naga::ShaderStage::Compute,
-                    _ => unreachable!(),
+                let pipeline_options = glsl::PipelineOptions {
+                    entry_point: match params.entry_point {
+                        Some(ref name) => name.clone(),
+                        None => "main".to_string(),
+                    },
+                    shader_stage: match stage {
+                        "vert" => naga::ShaderStage::Vertex,
+                        "frag" => naga::ShaderStage::Fragment,
+                        "comp" => naga::ShaderStage::Compute,
+                        _ => unreachable!(),
+                    },
                 };
 
                 let mut buffer = String::new();
-                let mut writer =
-                    glsl::Writer::new(&mut buffer, &module, info.as_ref().unwrap(), &params.glsl)
-                        .unwrap_pretty();
+                let mut writer = glsl::Writer::new(
+                    &mut buffer,
+                    &module,
+                    info.as_ref().unwrap(),
+                    &params.glsl,
+                    &pipeline_options,
+                )
+                .unwrap_pretty();
                 writer.write().unwrap();
                 fs::write(output_path, buffer).unwrap();
             }
@@ -277,9 +319,12 @@ fn main() {
             }
             "hlsl" => {
                 use naga::back::hlsl;
-                let hlsl = hlsl::write_string(&module, info.as_ref().unwrap(), &params.hlsl)
+                let mut buffer = String::new();
+                let mut writer = hlsl::Writer::new(&mut buffer, &params.hlsl);
+                writer
+                    .write(&module, info.as_ref().unwrap())
                     .unwrap_pretty();
-                fs::write(output_path, hlsl).unwrap();
+                fs::write(output_path, buffer).unwrap();
             }
             "wgsl" => {
                 use naga::back::wgsl;
