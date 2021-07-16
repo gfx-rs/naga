@@ -2273,6 +2273,7 @@ fn glsl_built_in(built_in: BuiltIn, output: bool) -> &'static str {
         // fragment
         BuiltIn::FragDepth => "gl_FragDepth",
         BuiltIn::FrontFacing => "gl_FrontFacing",
+        BuiltIn::PrimitiveId => "gl_PrimitiveID",
         BuiltIn::SampleIndex => "gl_SampleID",
         BuiltIn::SampleMask => {
             if output {

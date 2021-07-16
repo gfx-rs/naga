@@ -58,6 +58,7 @@ bitflags::bitflags! {
         const PUSH_CONSTANT = 0x1;
         /// Float values with width = 8.
         const FLOAT64 = 0x2;
+        const PRIMITIVE_ID = 0x4;
     }
 }
 

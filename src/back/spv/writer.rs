@@ -1157,6 +1157,10 @@ impl Writer {
                     // fragment
                     Bi::FragDepth => BuiltIn::FragDepth,
                     Bi::FrontFacing => BuiltIn::FrontFacing,
+                    Bi::PrimitiveId => {
+                        self.capabilities.insert(spirv::Capability::Geometry);
+                        BuiltIn::PrimitiveId
+                    },
                     Bi::SampleIndex => BuiltIn::SampleId,
                     Bi::SampleMask => BuiltIn::SampleMask,
                     // compute

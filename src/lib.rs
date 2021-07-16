@@ -245,6 +245,7 @@ pub enum BuiltIn {
     // fragment
     FragDepth,
     FrontFacing,
+    PrimitiveId,
     SampleIndex,
     SampleMask,
     // compute

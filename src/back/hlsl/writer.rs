@@ -1071,6 +1071,7 @@ fn builtin_str(built_in: BuiltIn) -> &'static str {
         // fragment
         BuiltIn::FragDepth => "SV_Depth",
         BuiltIn::FrontFacing => "SV_IsFrontFace",
+        BuiltIn::PrimitiveId => "SV_PrimitiveID",
         BuiltIn::SampleIndex => "SV_SampleIndex",
         BuiltIn::SampleMask => "SV_Coverage",
         // compute
