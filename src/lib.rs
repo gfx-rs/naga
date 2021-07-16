@@ -269,7 +269,7 @@ pub enum BuiltIn {
     // fragment
     FragDepth,
     FrontFacing,
-    PrimitiveId,
+    PrimitiveIndex,
     SampleIndex,
     SampleMask,
     // compute

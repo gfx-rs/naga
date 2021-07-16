@@ -1012,7 +1012,7 @@ impl Writer {
                     // fragment
                     Bi::FragDepth => BuiltIn::FragDepth,
                     Bi::FrontFacing => BuiltIn::FrontFacing,
-                    Bi::PrimitiveId => {
+                    Bi::PrimitiveIndex => {
                         self.capabilities.insert(spirv::Capability::Geometry);
                         BuiltIn::PrimitiveId
                     },

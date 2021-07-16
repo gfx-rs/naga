@@ -1388,7 +1388,7 @@ fn builtin_str(built_in: crate::BuiltIn) -> &'static str {
         // fragment
         Bi::FragDepth => "SV_Depth",
         Bi::FrontFacing => "SV_IsFrontFace",
-        // Bi::PrimitiveId => "SV_PrimitiveID",
+        Bi::PrimitiveIndex => "SV_PrimitiveID",
         Bi::SampleIndex => "SV_SampleIndex",
         Bi::SampleMask => "SV_Coverage",
         // compute

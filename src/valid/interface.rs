@@ -179,10 +179,10 @@ impl VaryingContext<'_> {
                                 width: crate::BOOL_WIDTH,
                             },
                     ),
-                    Bi::PrimitiveId => {
-                        if !self.capabilities.contains(Capabilities::PRIMITIVE_ID) {
+                    Bi::PrimitiveIndex => {
+                        if !self.capabilities.contains(Capabilities::PRIMITIVE_INDEX) {
                             return Err(VaryingError::UnsupportedCapability(
-                                Capabilities::PRIMITIVE_ID
+                                Capabilities::PRIMITIVE_INDEX
                             ))
                         }
                         (

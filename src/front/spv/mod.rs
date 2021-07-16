@@ -3483,7 +3483,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         | crate::BuiltIn::InstanceIndex
                         | crate::BuiltIn::SampleIndex
                         | crate::BuiltIn::VertexIndex
-                        | crate::BuiltIn::PrimitiveId
+                        | crate::BuiltIn::PrimitiveIndex
                         | crate::BuiltIn::LocalInvocationIndex => Some(crate::TypeInner::Scalar {
                             kind: crate::ScalarKind::Uint,
                             width: 4,
