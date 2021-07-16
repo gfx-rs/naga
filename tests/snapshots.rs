@@ -355,7 +355,10 @@ fn convert_wgsl() {
             "shadow",
             Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::WGSL,
         ),
-        ("image", Targets::SPIRV | Targets::METAL | Targets::WGSL),
+        (
+            "image",
+            Targets::SPIRV | Targets::METAL | Targets::HLSL | Targets::WGSL,
+        ),
         ("extra", Targets::SPIRV | Targets::METAL | Targets::WGSL),
         (
             "operators",
@@ -368,7 +371,7 @@ fn convert_wgsl() {
         ("access", Targets::SPIRV | Targets::METAL | Targets::WGSL),
         (
             "control-flow",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::WGSL,
+            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
         ),
         (
             "standard",
