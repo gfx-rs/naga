@@ -6,7 +6,7 @@ struct PushConstants {
 
 struct FragmentIn {
     [[location(0)]] color: vec4<f32>;
-    [[builtin(primitive_id)]] primitive_index: u32;
+    [[builtin(primitive_index)]] primitive_index: u32;
 };
 
 var<push_constant> pc: PushConstants;
