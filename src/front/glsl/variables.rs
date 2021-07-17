@@ -169,7 +169,7 @@ impl Program<'_> {
             "gl_PrimitiveID" => add_builtin(
                 TypeInner::Scalar {
                     kind: ScalarKind::Uint,
-                    width: 4
+                    width: 4,
                 },
                 BuiltIn::PrimitiveIndex,
                 false,

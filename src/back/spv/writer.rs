@@ -1015,7 +1015,7 @@ impl Writer {
                     Bi::PrimitiveIndex => {
                         self.capabilities.insert(spirv::Capability::Geometry);
                         BuiltIn::PrimitiveId
-                    },
+                    }
                     Bi::SampleIndex => BuiltIn::SampleId,
                     Bi::SampleMask => BuiltIn::SampleMask,
                     // compute
