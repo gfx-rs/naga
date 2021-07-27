@@ -836,7 +836,6 @@ impl Composition {
 #[derive(Default)]
 struct TypeAttributes {
     stride: Option<NonZeroU32>,
-    access: crate::StorageAccess,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -1997,14 +1996,25 @@ impl Parser {
     ) -> Result<ParsedVariable<'a>, Error<'a>> {
         self.scopes.push(Scope::VariableDecl);
         let mut class = None;
+        let mut access = crate::StorageAccess::default();
         if lexer.skip(Token::Paren('<')) {
             let (class_str, span) = lexer.next_ident_with_span()?;
             class = Some(conv::map_storage_class(class_str, span)?);
+            // TODO only allow access for var<storage>?
+            if lexer.skip(Token::Separator(',')) {
+                let (ident, span) = lexer.next_ident_with_span()?;
+                access = match ident {
+                    "read" => crate::StorageAccess::LOAD,
+                    "write" => crate::StorageAccess::STORE,
+                    "read_write" => crate::StorageAccess::all(),
+                    _ => return Err(Error::UnknownAccess(span)),
+                };
+            }
             lexer.expect(Token::Paren('>'))?;
         }
         let name = lexer.next_ident()?;
         lexer.expect(Token::Separator(':'))?;
-        let (ty, access) = self.parse_type_decl(lexer, None, type_arena, const_arena)?;
+        let (ty, _access) = self.parse_type_decl(lexer, None, type_arena, const_arena)?;
 
         let init = if lexer.skip(Token::Operation('=')) {
             let handle = self.parse_const_expression(lexer, type_arena, const_arena)?;
@@ -2459,17 +2469,6 @@ impl Parser {
             self.scopes.push(Scope::Attribute);
             loop {
                 match lexer.next() {
-                    (Token::Word("access"), _) => {
-                        lexer.expect(Token::Paren('('))?;
-                        let (ident, span) = lexer.next_ident_with_span()?;
-                        attribute.access = match ident {
-                            "read" => crate::StorageAccess::LOAD,
-                            "write" => crate::StorageAccess::STORE,
-                            "read_write" => crate::StorageAccess::all(),
-                            _ => return Err(Error::UnknownAccess(span)),
-                        };
-                        lexer.expect(Token::Paren(')'))?;
-                    }
                     (Token::Word("stride"), _) => {
                         lexer.expect(Token::Paren('('))?;
                         let (stride, span) = lexer.capture_span(Lexer::next_uint_literal)?;
@@ -2484,7 +2483,7 @@ impl Parser {
             self.scopes.pop();
         }
 
-        let storage_access = attribute.access;
+        let storage_access = crate::StorageAccess::default();
         let (name, name_span) = lexer.next_ident_with_span()?;
         let handle = self.parse_type_decl_name(
             lexer,
@@ -3286,13 +3285,22 @@ impl Parser {
                         _ => crate::StorageClass::Private,
                     },
                 };
+                let storage_access = match class {
+                    crate::StorageClass::Storage => match module.types[pvar.ty].inner {
+                        crate::TypeInner::Struct { .. } | crate::TypeInner::Array { .. } => {
+                            pvar.access | crate::StorageAccess::LOAD
+                        }
+                        _ => pvar.access,
+                    },
+                    _ => pvar.access,
+                };
                 let var_handle = module.global_variables.append(crate::GlobalVariable {
                     name: Some(pvar.name.to_owned()),
                     class,
                     binding: binding.take(),
                     ty: pvar.ty,
                     init: pvar.init,
-                    storage_access: pvar.access,
+                    storage_access,
                 });
                 lookup_global_expression
                     .insert(pvar.name, crate::Expression::GlobalVariable(var_handle));

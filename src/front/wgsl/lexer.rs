@@ -455,5 +455,23 @@ fn test_variable_decl() {
             Token::Paren('>'),
             Token::Separator(';'),
         ],
-    )
+    );
+    sub_test(
+        "var<storage,read_write> buffer: array<u32>;",
+        &[
+            Token::Word("var"),
+            Token::Paren('<'),
+            Token::Word("storage"),
+            Token::Separator(','),
+            Token::Word("read_write"),
+            Token::Paren('>'),
+            Token::Word("buffer"),
+            Token::Separator(':'),
+            Token::Word("array"),
+            Token::Paren('<'),
+            Token::Word("u32"),
+            Token::Paren('>'),
+            Token::Separator(';'),
+        ],
+    );
 }
