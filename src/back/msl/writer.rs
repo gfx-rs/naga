@@ -157,7 +157,7 @@ impl<'a> Display for TypeContext<'a> {
                         };
                         ("depth", msaa_str, crate::ScalarKind::Float, access)
                     }
-                    crate::ImageClass::Storage(format) => {
+                    crate::ImageClass::Storage { format, .. } => {
                         let access = if self
                             .access
                             .contains(crate::StorageAccess::LOAD | crate::StorageAccess::STORE)
@@ -207,15 +207,26 @@ impl<'a> TypedGlobalVariable<'a> {
     fn try_fmt<W: Write>(&self, out: &mut W) -> BackendResult {
         let var = &self.module.global_variables[self.handle];
         let name = &self.names[&NameKey::GlobalVariable(self.handle)];
+
+        let storage_access = match var.class {
+            crate::StorageClass::Storage { access } => access,
+            _ => match self.module.types[var.ty].inner {
+                crate::TypeInner::Image {
+                    class: crate::ImageClass::Storage { access, .. },
+                    ..
+                } => access,
+                _ => crate::StorageAccess::default(),
+            },
+        };
         let ty_name = TypeContext {
             handle: var.ty,
             arena: &self.module.types,
             names: self.names,
-            access: var.storage_access,
+            access: storage_access,
             first_time: false,
         };
 
-        let (space, access, reference) = match var.class.get_name(var.storage_access) {
+        let (space, access, reference) = match var.class.get_name(storage_access) {
             Some(space) if self.reference => {
                 let access = match var.class {
                     crate::StorageClass::Private | crate::StorageClass::WorkGroup
@@ -366,7 +377,7 @@ impl crate::StorageClass {
     fn needs_pass_through(&self) -> bool {
         match *self {
             crate::StorageClass::Uniform
-            | crate::StorageClass::Storage
+            | crate::StorageClass::Storage { .. }
             | crate::StorageClass::Private
             | crate::StorageClass::PushConstant
             | crate::StorageClass::Handle => true,
@@ -379,7 +390,7 @@ impl crate::StorageClass {
             Self::Handle => None,
             Self::Uniform | Self::PushConstant => Some("constant"),
             //TODO: should still be "constant" for read-only buffers
-            Self::Storage => Some(if access.contains(crate::StorageAccess::STORE) {
+            Self::Storage { .. } => Some(if access.contains(crate::StorageAccess::STORE) {
                 "device"
             } else {
                 "constant"

@@ -118,7 +118,7 @@ impl<'a, W: Write> super::Writer<'a, W> {
                 let scalar_kind_str = kind.to_hlsl_str(4)?;
                 write!(self.out, "{}<{}4>", multi_str, scalar_kind_str)?
             }
-            crate::ImageClass::Storage(format) => {
+            crate::ImageClass::Storage { format, .. } => {
                 let storage_format_str = format.to_hlsl_str();
                 write!(self.out, "<{}>", storage_format_str)?
             }
@@ -344,10 +344,18 @@ impl<'a, W: Write> super::Writer<'a, W> {
                         }
                         ref other => unreachable!("Array length of base {:?}", other),
                     };
+                    let storage_access = match global_var.class {
+                        crate::StorageClass::Storage { access } => access,
+                        _ => match module.types[global_var.ty].inner {
+                            crate::TypeInner::Image {
+                                class: crate::ImageClass::Storage { access, .. },
+                                ..
+                            } => access,
+                            _ => crate::StorageAccess::default(),
+                        },
+                    };
                     let wal = WrappedArrayLength {
-                        writable: global_var
-                            .storage_access
-                            .contains(crate::StorageAccess::STORE),
+                        writable: storage_access.contains(crate::StorageAccess::STORE),
                     };
 
                     if !self.wrapped_array_lengths.contains(&wal) {

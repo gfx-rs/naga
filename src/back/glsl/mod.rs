@@ -499,7 +499,7 @@ impl<'a, W: Write> Writer<'a, W> {
                     // Gather the storage format if needed
                     let layout_storage_format = match self.module.types[global.ty].inner {
                         TypeInner::Image {
-                            class: crate::ImageClass::Storage(format),
+                            class: crate::ImageClass::Storage { format, .. },
                             ..
                         } => Some(glsl_storage_format(format)),
                         _ => None,
@@ -528,9 +528,10 @@ impl<'a, W: Write> Writer<'a, W> {
                         write!(self.out, ") ")?;
                     }
 
-                    if let Some(storage_access) = glsl_storage_access(global.storage_access) {
-                        write!(self.out, "{} ", storage_access)?;
-                    }
+                    // TODO pirho
+                    // if let Some(storage_access) = glsl_storage_access(global.storage_access) {
+                    //     write!(self.out, "{} ", storage_access)?;
+                    // }
 
                     // All images in glsl are `uniform`
                     // The trailing space is important
@@ -760,7 +761,7 @@ impl<'a, W: Write> Writer<'a, W> {
             Ic::Sampled { kind, multi: false } => ("sampler", kind, "", ""),
             Ic::Depth { multi: true } => ("sampler", crate::ScalarKind::Float, "MS", ""),
             Ic::Depth { multi: false } => ("sampler", crate::ScalarKind::Float, "", "Shadow"),
-            Ic::Storage(format) => ("image", format.into(), "", ""),
+            Ic::Storage { format, .. } => ("image", format.into(), "", ""),
         };
 
         write!(
@@ -798,8 +799,13 @@ impl<'a, W: Write> Writer<'a, W> {
             }
         }
 
-        if let Some(storage_access) = glsl_storage_access(global.storage_access) {
-            write!(self.out, "{} ", storage_access)?;
+        if let Some(access) = match global.class {
+            crate::StorageClass::Storage { access } => Some(access),
+            _ => None,
+        } {
+            if let Some(access) = glsl_storage_access(access) {
+                write!(self.out, "{} ", access)?;
+            }
         }
 
         // Write the storage class
@@ -1013,7 +1019,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 } => {
                     // Write the storage format if needed
                     if let TypeInner::Image {
-                        class: crate::ImageClass::Storage(format),
+                        class: crate::ImageClass::Storage { format, .. },
                         ..
                     } = this.module.types[arg.ty].inner
                     {
@@ -1939,7 +1945,7 @@ impl<'a, W: Write> Writer<'a, W> {
 
                 let fun_name = match class {
                     crate::ImageClass::Sampled { .. } => "texelFetch",
-                    crate::ImageClass::Storage(_) => "imageLoad",
+                    crate::ImageClass::Storage { .. } => "imageLoad",
                     // TODO: Is there even a function for this?
                     crate::ImageClass::Depth { multi: _ } => {
                         return Err(Error::Custom("TODO: depth sample loads".to_string()))
@@ -1992,7 +1998,7 @@ impl<'a, W: Write> Writer<'a, W> {
                                     write!(self.out, "0",)?;
                                 }
                             }
-                            ImageClass::Storage(_) => {
+                            ImageClass::Storage { .. } => {
                                 write!(self.out, "imageSize(")?;
                                 self.write_expr(image, ctx)?;
                             }
@@ -2007,7 +2013,7 @@ impl<'a, W: Write> Writer<'a, W> {
                     crate::ImageQuery::NumLayers => {
                         let fun_name = match class {
                             ImageClass::Sampled { .. } | ImageClass::Depth { .. } => "textureSize",
-                            ImageClass::Storage(_) => "imageSize",
+                            ImageClass::Storage { .. } => "imageSize",
                         };
                         write!(self.out, "{}(", fun_name)?;
                         self.write_expr(image, ctx)?;
@@ -2019,7 +2025,7 @@ impl<'a, W: Write> Writer<'a, W> {
                             ImageClass::Sampled { .. } | ImageClass::Depth { .. } => {
                                 "textureSamples"
                             }
-                            ImageClass::Storage(_) => "imageSamples",
+                            ImageClass::Storage { .. } => "imageSamples",
                         };
                         write!(self.out, "{}(", fun_name)?;
                         self.write_expr(image, ctx)?;
@@ -2454,7 +2460,7 @@ impl<'a, W: Write> Writer<'a, W> {
             }
             match self.module.types[var.ty].inner {
                 crate::TypeInner::Struct { .. } => match var.class {
-                    crate::StorageClass::Uniform | crate::StorageClass::Storage => {
+                    crate::StorageClass::Uniform | crate::StorageClass::Storage { .. } => {
                         let name = self.reflection_names[&var.ty].clone();
                         uniforms.insert(handle, name);
                     }
@@ -2568,7 +2574,7 @@ fn glsl_storage_class(class: crate::StorageClass) -> Option<&'static str> {
     match class {
         Sc::Function => None,
         Sc::Private => None,
-        Sc::Storage => Some("buffer"),
+        Sc::Storage { .. } => Some("buffer"),
         Sc::Uniform => Some("uniform"),
         Sc::Handle => Some("uniform"),
         Sc::WorkGroup => Some("shared"),
