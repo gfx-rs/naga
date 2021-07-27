@@ -932,7 +932,6 @@ struct ParsedVariable<'a> {
     name: &'a str,
     class: Option<crate::StorageClass>,
     ty: Handle<crate::Type>,
-    access: crate::StorageAccess,
     init: Option<Handle<crate::Constant>>,
 }
 
@@ -2002,20 +2001,25 @@ impl Parser {
     ) -> Result<ParsedVariable<'a>, Error<'a>> {
         self.scopes.push(Scope::VariableDecl);
         let mut class = None;
-        let mut access = crate::StorageAccess::default();
+
         if lexer.skip(Token::Paren('<')) {
             let (class_str, span) = lexer.next_ident_with_span()?;
-            class = Some(conv::map_storage_class(class_str, span)?);
-            // TODO only allow access for var<storage>?
-            if lexer.skip(Token::Separator(',')) {
-                let (ident, span) = lexer.next_ident_with_span()?;
-                access = match ident {
-                    "read" => crate::StorageAccess::LOAD,
-                    "write" => crate::StorageAccess::STORE,
-                    "read_write" => crate::StorageAccess::all(),
-                    _ => return Err(Error::UnknownAccess(span)),
-                };
-            }
+            class = Some(match class_str {
+                "storage" => {
+                    let mut access = crate::StorageAccess::default();
+                    if lexer.skip(Token::Separator(',')) {
+                        let (ident, span) = lexer.next_ident_with_span()?;
+                        access = match ident {
+                            "read" => crate::StorageAccess::LOAD,
+                            "write" => crate::StorageAccess::STORE,
+                            "read_write" => crate::StorageAccess::all(),
+                            _ => return Err(Error::UnknownAccess(span)),
+                        };
+                    }
+                    crate::StorageClass::Storage { access }
+                }
+                _ => conv::map_storage_class(class_str, span)?,
+            });
             lexer.expect(Token::Paren('>'))?;
         }
         let name = lexer.next_ident()?;
@@ -2034,7 +2038,6 @@ impl Parser {
             name,
             class,
             ty,
-            access,
             init,
         })
     }
@@ -3276,13 +3279,7 @@ impl Parser {
                     Some(c) => c,
                     None => match module.types[pvar.ty].inner {
                         crate::TypeInner::Struct { .. } if binding.is_some() => {
-                            if pvar.access.is_empty() {
-                                crate::StorageClass::Uniform
-                            } else {
-                                crate::StorageClass::Storage {
-                                    access: crate::StorageAccess::LOAD,
-                                }
-                            }
+                            crate::StorageClass::Uniform
                         }
                         crate::TypeInner::Array { .. } if binding.is_some() => {
                             crate::StorageClass::Storage {

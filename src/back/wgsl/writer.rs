@@ -480,17 +480,15 @@ impl<W: Write> Writer<W> {
                         if multi { "multisampled_" } else { "" },
                         String::from(""),
                     ),
-                    Ic::Storage { format, access } => {
+                    Ic::Storage { format, access } => (
+                        "storage_",
+                        "",
                         if access.contains(crate::StorageAccess::STORE) {
-                            (
-                                "storage_",
-                                "",
-                                format!("<{},write>", storage_format_str(format)),
-                            )
+                            format!("<{},write>", storage_format_str(format))
                         } else {
-                            ("storage_", "", format!("<{}>", storage_format_str(format)))
-                        }
-                    }
+                            format!("<{}>", storage_format_str(format))
+                        },
+                    ),
                 };
                 let ty_str = format!(
                     "texture_{}{}{}{}{}",
@@ -1578,7 +1576,11 @@ fn storage_class_str(storage_class: crate::StorageClass) -> Option<&'static str>
     match storage_class {
         Sc::Private => Some("private"),
         Sc::Uniform => Some("uniform"),
-        Sc::Storage { .. } => Some("storage"),
+        Sc::Storage { access } => Some(if access.contains(crate::StorageAccess::STORE) {
+            "storage,read_write"
+        } else {
+            "storage"
+        }),
         Sc::PushConstant => Some("push_constant"),
         Sc::WorkGroup => Some("workgroup"),
         Sc::Function | Sc::Handle => None,
