@@ -21,8 +21,8 @@ fn parse_types() {
     parse_str("var t: texture_2d<f32>;").unwrap();
     parse_str("var t: texture_cube_array<i32>;").unwrap();
     parse_str("var t: texture_multisampled_2d<u32>;").unwrap();
-    // parse_str("var t: [[access(write)]] texture_storage_1d<rgba8uint>;").unwrap();
-    // parse_str("var t: [[access(read)]] texture_storage_3d<r32float>;").unwrap();
+    parse_str("var t: texture_storage_1d<rgba8uint,write>;").unwrap();
+    parse_str("var t: texture_storage_3d<r32float>;").unwrap();
 }
 
 #[test]
@@ -69,19 +69,19 @@ fn parse_type_cast() {
 
 #[test]
 fn parse_struct() {
-    // parse_str(
-    //     "
-    //     [[block]] struct Foo { x: i32; };
-    //     struct Bar {
-    //         [[size(16)]] x: vec2<i32>;
-    //         [[align(16)]] y: f32;
-    //         [[size(32), align(8)]] z: vec3<f32>;
-    //     };
-    //     struct Empty {};
-    //     var s: [[access(read_write)]] Foo;
-    // ",
-    // )
-    // .unwrap();
+    parse_str(
+        "
+        [[block]] struct Foo { x: i32; };
+        struct Bar {
+            [[size(16)]] x: vec2<i32>;
+            [[align(16)]] y: f32;
+            [[size(32), align(8)]] z: vec3<f32>;
+        };
+        struct Empty {};
+        var<storage,read_write> s: Foo;
+    ",
+    )
+    .unwrap();
 }
 
 #[test]
@@ -217,28 +217,28 @@ fn parse_texture_load() {
     ",
     )
     .unwrap();
-    // parse_str(
-    //     "
-    //     var t: [[access(read)]] texture_storage_1d_array<r32float>;
-    //     fn foo() {
-    //         let r: vec4<f32> = textureLoad(t, 10, 2);
-    //     }
-    // ",
-    // )
-    // .unwrap();
+    parse_str(
+        "
+        var t: texture_storage_1d_array<r32float>;
+        fn foo() {
+            let r: vec4<f32> = textureLoad(t, 10, 2);
+        }
+    ",
+    )
+    .unwrap();
 }
 
 #[test]
 fn parse_texture_store() {
-    // parse_str(
-    //     "
-    //     var t: [[access(write)]] texture_storage_2d<rgba8unorm>;
-    //     fn foo() {
-    //         textureStore(t, vec2<i32>(10, 20), vec4<f32>(0.0, 1.0, 2.0, 3.0));
-    //     }
-    // ",
-    // )
-    // .unwrap();
+    parse_str(
+        "
+        var t: texture_storage_2d<rgba8unorm,write>;
+        fn foo() {
+            textureStore(t, vec2<i32>(10, 20), vec4<f32>(0.0, 1.0, 2.0, 3.0));
+        }
+    ",
+    )
+    .unwrap();
 }
 
 #[test]
