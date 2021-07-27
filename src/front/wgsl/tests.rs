@@ -350,6 +350,13 @@ fn parse_storage_buffers() {
     parse_str(
         "
         [[group(0), binding(0)]]
+        var<storage,write> foo: array<u32>;
+        ",
+    )
+    .unwrap();
+    parse_str(
+        "
+        [[group(0), binding(0)]]
         var<storage,read_write> foo: array<u32>;
         ",
     )
