@@ -512,7 +512,7 @@ impl super::Validator {
                     allowed_usage,
                     usage
                 );
-                // return Err(EntryPointError::InvalidGlobalUsage(var_handle, usage));
+                return Err(EntryPointError::InvalidGlobalUsage(var_handle, usage));
             }
 
             if let Some(ref bind) = var.binding {

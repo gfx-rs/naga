@@ -2006,7 +2006,8 @@ impl Parser {
             let (class_str, span) = lexer.next_ident_with_span()?;
             class = Some(match class_str {
                 "storage" => {
-                    let mut access = crate::StorageAccess::default();
+                    // storage buffers are always readable
+                    let mut access = crate::StorageAccess::LOAD;
                     if lexer.skip(Token::Separator(',')) {
                         let (ident, span) = lexer.next_ident_with_span()?;
                         access = match ident {

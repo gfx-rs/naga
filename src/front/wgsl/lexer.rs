@@ -347,6 +347,7 @@ impl<'a> Lexer<'a> {
         Ok(pair)
     }
 
+    // TODO relocate storage texture specifics
     pub(super) fn next_format_generic(
         &mut self,
     ) -> Result<(crate::StorageFormat, crate::StorageAccess), Error<'a>> {
@@ -358,10 +359,11 @@ impl<'a> Lexer<'a> {
             match raw {
                 "read" => crate::StorageAccess::LOAD,
                 "write" => crate::StorageAccess::STORE,
+                "read_write" => crate::StorageAccess::all(),
                 _ => return Err(Error::UnknownAccess(span)),
             }
         } else {
-            crate::StorageAccess::default()
+            crate::StorageAccess::LOAD
         };
         self.expect(Token::Paren('>'))?;
         Ok((format, access))
