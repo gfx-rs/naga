@@ -347,12 +347,24 @@ impl<'a> Lexer<'a> {
         Ok(pair)
     }
 
-    pub(super) fn next_format_generic(&mut self) -> Result<crate::StorageFormat, Error<'a>> {
+    pub(super) fn next_format_generic(
+        &mut self,
+    ) -> Result<(crate::StorageFormat, crate::StorageAccess), Error<'a>> {
         self.expect(Token::Paren('<'))?;
         let (ident, ident_span) = self.next_ident_with_span()?;
         let format = conv::map_storage_format(ident, ident_span)?;
+        let access = if self.skip(Token::Separator(',')) {
+            let (raw, span) = self.next_ident_with_span()?;
+            match raw {
+                "read" => crate::StorageAccess::LOAD,
+                "write" => crate::StorageAccess::STORE,
+                _ => return Err(Error::UnknownAccess(span)),
+            }
+        } else {
+            crate::StorageAccess::default()
+        };
         self.expect(Token::Paren('>'))?;
-        Ok(format)
+        Ok((format, access))
     }
 
     pub(super) fn open_arguments(&mut self) -> Result<(), Error<'a>> {

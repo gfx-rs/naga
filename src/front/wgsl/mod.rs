@@ -467,8 +467,12 @@ impl crate::TypeInner {
                         format!("<{}>", element_type)
                     }
                     crate::ImageClass::Depth { multi: _ } => String::new(),
-                    crate::ImageClass::Storage(format) => {
-                        format!("<{}>", format.to_wgsl())
+                    crate::ImageClass::Storage { format, access } => {
+                        if access.contains(crate::StorageAccess::STORE) {
+                            format!("<{},write>", format.to_wgsl())
+                        } else {
+                            format!("<{}>", format.to_wgsl())
+                        }
                     }
                 };
 
@@ -529,7 +533,9 @@ mod type_inner_tests {
 
         let ptr = crate::TypeInner::Pointer {
             base: mytype2,
-            class: crate::StorageClass::Storage,
+            class: crate::StorageClass::Storage {
+                access: crate::StorageAccess::default(),
+            },
         };
         assert_eq!(ptr.to_wgsl(&types, &constants), "*MyType2");
 
@@ -1351,7 +1357,7 @@ impl Parser {
                         None
                     };
                     let index = match class {
-                        crate::ImageClass::Storage(_) => None,
+                        crate::ImageClass::Storage { .. } => None,
                         // it's the MSAA index for multi-sampled, and LOD for the others
                         crate::ImageClass::Sampled { .. } | crate::ImageClass::Depth { .. } => {
                             lexer.expect(Token::Separator(','))?;
@@ -2373,43 +2379,43 @@ impl Parser {
                 class: crate::ImageClass::Depth { multi: true },
             },
             "texture_storage_1d" => {
-                let format = lexer.next_format_generic()?;
+                let (format, access) = lexer.next_format_generic()?;
                 crate::TypeInner::Image {
                     dim: crate::ImageDimension::D1,
                     arrayed: false,
-                    class: crate::ImageClass::Storage(format),
+                    class: crate::ImageClass::Storage { format, access },
                 }
             }
             "texture_storage_1d_array" => {
-                let format = lexer.next_format_generic()?;
+                let (format, access) = lexer.next_format_generic()?;
                 crate::TypeInner::Image {
                     dim: crate::ImageDimension::D1,
                     arrayed: true,
-                    class: crate::ImageClass::Storage(format),
+                    class: crate::ImageClass::Storage { format, access },
                 }
             }
             "texture_storage_2d" => {
-                let format = lexer.next_format_generic()?;
+                let (format, access) = lexer.next_format_generic()?;
                 crate::TypeInner::Image {
                     dim: crate::ImageDimension::D2,
                     arrayed: false,
-                    class: crate::ImageClass::Storage(format),
+                    class: crate::ImageClass::Storage { format, access },
                 }
             }
             "texture_storage_2d_array" => {
-                let format = lexer.next_format_generic()?;
+                let (format, access) = lexer.next_format_generic()?;
                 crate::TypeInner::Image {
                     dim: crate::ImageDimension::D2,
                     arrayed: true,
-                    class: crate::ImageClass::Storage(format),
+                    class: crate::ImageClass::Storage { format, access },
                 }
             }
             "texture_storage_3d" => {
-                let format = lexer.next_format_generic()?;
+                let (format, access) = lexer.next_format_generic()?;
                 crate::TypeInner::Image {
                     dim: crate::ImageDimension::D3,
                     arrayed: false,
-                    class: crate::ImageClass::Storage(format),
+                    class: crate::ImageClass::Storage { format, access },
                 }
             }
             _ => return Ok(None),
@@ -3273,11 +3279,15 @@ impl Parser {
                             if pvar.access.is_empty() {
                                 crate::StorageClass::Uniform
                             } else {
-                                crate::StorageClass::Storage
+                                crate::StorageClass::Storage {
+                                    access: crate::StorageAccess::LOAD,
+                                }
                             }
                         }
                         crate::TypeInner::Array { .. } if binding.is_some() => {
-                            crate::StorageClass::Storage
+                            crate::StorageClass::Storage {
+                                access: crate::StorageAccess::LOAD,
+                            }
                         }
                         crate::TypeInner::Image { .. } | crate::TypeInner::Sampler { .. } => {
                             crate::StorageClass::Handle
@@ -3285,22 +3295,12 @@ impl Parser {
                         _ => crate::StorageClass::Private,
                     },
                 };
-                let storage_access = match class {
-                    crate::StorageClass::Storage => match module.types[pvar.ty].inner {
-                        crate::TypeInner::Struct { .. } | crate::TypeInner::Array { .. } => {
-                            pvar.access | crate::StorageAccess::LOAD
-                        }
-                        _ => pvar.access,
-                    },
-                    _ => pvar.access,
-                };
                 let var_handle = module.global_variables.append(crate::GlobalVariable {
                     name: Some(pvar.name.to_owned()),
                     class,
                     binding: binding.take(),
                     ty: pvar.ty,
                     init: pvar.init,
-                    storage_access,
                 });
                 lookup_global_expression
                     .insert(pvar.name, crate::Expression::GlobalVariable(var_handle));

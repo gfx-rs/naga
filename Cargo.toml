@@ -29,7 +29,7 @@ rose_tree = { version ="0.2", optional = true }
 pp-rs = { version = "0.2.1", optional = true }
 
 [features]
-default = []
+default = ["wgsl-in", "wgsl-out"]
 dot-out = []
 glsl-in = ["pp-rs"]
 glsl-validate = []

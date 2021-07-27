@@ -324,7 +324,7 @@ impl super::Validator {
 
         let (allowed_storage_access, required_type_flags, is_resource) = match var.class {
             crate::StorageClass::Function => return Err(GlobalVariableError::InvalidUsage),
-            crate::StorageClass::Storage => {
+            crate::StorageClass::Storage { .. } => {
                 if let Err((ty_handle, disalignment)) = type_info.storage_layout {
                     if self.flags.contains(ValidationFlags::STRUCT_LAYOUTS) {
                         return Err(GlobalVariableError::Alignment(ty_handle, disalignment));
@@ -354,9 +354,9 @@ impl super::Validator {
             crate::StorageClass::Handle => {
                 let access = match types[var.ty].inner {
                     crate::TypeInner::Image {
-                        class: crate::ImageClass::Storage(_),
+                        class: crate::ImageClass::Storage { access, .. },
                         ..
-                    } => crate::StorageAccess::all(),
+                    } => access,
                     crate::TypeInner::Image { .. } | crate::TypeInner::Sampler { .. } => {
                         crate::StorageAccess::empty()
                     }
@@ -383,12 +383,25 @@ impl super::Validator {
             }
         };
 
-        if !allowed_storage_access.contains(var.storage_access) {
-            return Err(GlobalVariableError::InvalidStorageAccess {
-                seen: var.storage_access,
-                allowed: allowed_storage_access,
-            });
-        }
+        // TODO validate storage buffer access
+        if let Some(access) = match var.class {
+            crate::StorageClass::Storage { access } => Some(access),
+            crate::StorageClass::Handle => match types[var.ty].inner {
+                crate::TypeInner::Image {
+                    class: crate::ImageClass::Storage { access, .. },
+                    ..
+                } => Some(access),
+                _ => None,
+            },
+            _ => None,
+        } {
+            if !allowed_storage_access.contains(access) {
+                return Err(GlobalVariableError::InvalidStorageAccess {
+                    seen: access,
+                    allowed: allowed_storage_access,
+                });
+            }
+        };
 
         if !type_info.flags.contains(required_type_flags) {
             return Err(GlobalVariableError::MissingTypeFlags {
@@ -481,12 +494,12 @@ impl super::Validator {
             let allowed_usage = match var.class {
                 crate::StorageClass::Function => unreachable!(),
                 crate::StorageClass::Uniform => GlobalUse::READ | GlobalUse::QUERY,
-                crate::StorageClass::Storage => storage_usage(var.storage_access),
+                crate::StorageClass::Storage { access } => storage_usage(access),
                 crate::StorageClass::Handle => match module.types[var.ty].inner {
                     crate::TypeInner::Image {
-                        class: crate::ImageClass::Storage(_),
+                        class: crate::ImageClass::Storage { access, .. },
                         ..
-                    } => storage_usage(var.storage_access),
+                    } => storage_usage(access),
                     _ => GlobalUse::READ | GlobalUse::QUERY,
                 },
                 crate::StorageClass::Private | crate::StorageClass::WorkGroup => GlobalUse::all(),
@@ -499,7 +512,7 @@ impl super::Validator {
                     allowed_usage,
                     usage
                 );
-                return Err(EntryPointError::InvalidGlobalUsage(var_handle, usage));
+                // return Err(EntryPointError::InvalidGlobalUsage(var_handle, usage));
             }
 
             if let Some(ref bind) = var.binding {
