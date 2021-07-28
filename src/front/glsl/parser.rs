@@ -984,6 +984,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
         layout: StructLayout,
     ) -> Result<u32> {
         let mut span = 0;
+        let mut align = 0;
 
         loop {
             // TODO: type_qualifier
@@ -1007,6 +1008,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
             )?;
 
             span = offset::align_up(span, info.align);
+            align = align.max(info.align);
 
             members.push(StructMember {
                 name: Some(name),
@@ -1021,6 +1023,8 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                 break;
             }
         }
+
+        span = offset::align_up(span, align);
 
         Ok(span)
     }
