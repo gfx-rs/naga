@@ -2006,17 +2006,18 @@ impl Parser {
             let (class_str, span) = lexer.next_ident_with_span()?;
             class = Some(match class_str {
                 "storage" => {
-                    // storage buffers are always readable
-                    let mut access = crate::StorageAccess::LOAD;
-                    if lexer.skip(Token::Separator(',')) {
+                    let access = if lexer.skip(Token::Separator(',')) {
                         let (ident, span) = lexer.next_ident_with_span()?;
-                        access = match ident {
+                        match ident {
                             "read" => crate::StorageAccess::LOAD,
                             "write" => crate::StorageAccess::STORE,
                             "read_write" => crate::StorageAccess::all(),
                             _ => return Err(Error::UnknownAccess(span)),
-                        };
-                    }
+                        }
+                    } else {
+                        // defaulting to `read`
+                        crate::StorageAccess::LOAD
+                    };
                     crate::StorageClass::Storage { access }
                 }
                 _ => conv::map_storage_class(class_str, span)?,

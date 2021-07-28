@@ -81,7 +81,7 @@ impl<'a> Display for TypeContext<'a> {
                     first_time: false,
                     ..*self
                 };
-                let class_name = match class.get_name(self.access) {
+                let class_name = match class.to_msl_name() {
                     Some(name) => name,
                     None => return Ok(()),
                 };
@@ -93,7 +93,7 @@ impl<'a> Display for TypeContext<'a> {
                 width: _,
                 class,
             } => {
-                let class_name = match class.get_name(self.access) {
+                let class_name = match class.to_msl_name() {
                     Some(name) => name,
                     None => return Ok(()),
                 };
@@ -105,7 +105,7 @@ impl<'a> Display for TypeContext<'a> {
                 width: _,
                 class,
             } => {
-                let class_name = match class.get_name(self.access) {
+                let class_name = match class.to_msl_name() {
                     Some(name) => name,
                     None => return Ok(()),
                 };
@@ -226,7 +226,7 @@ impl<'a> TypedGlobalVariable<'a> {
             first_time: false,
         };
 
-        let (space, access, reference) = match var.class.get_name(storage_access) {
+        let (space, access, reference) = match var.class.to_msl_name() {
             Some(space) if self.reference => {
                 let access = match var.class {
                     crate::StorageClass::Private | crate::StorageClass::WorkGroup
@@ -385,16 +385,14 @@ impl crate::StorageClass {
         }
     }
 
-    fn get_name(&self, access: crate::StorageAccess) -> Option<&'static str> {
-        match *self {
+    fn to_msl_name(self) -> Option<&'static str> {
+        match self {
             Self::Handle => None,
             Self::Uniform | Self::PushConstant => Some("constant"),
-            //TODO: should still be "constant" for read-only buffers
-            Self::Storage { .. } => Some(if access.contains(crate::StorageAccess::STORE) {
-                "device"
-            } else {
-                "constant"
-            }),
+            Self::Storage { access } if access.contains(crate::StorageAccess::STORE) => {
+                Some("device")
+            }
+            Self::Storage { .. } => Some("constant"),
             Self::Private | Self::Function => Some("thread"),
             Self::WorkGroup => Some("threadgroup"),
         }

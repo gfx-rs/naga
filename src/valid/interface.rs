@@ -15,11 +15,6 @@ pub enum GlobalVariableError {
     InvalidUsage,
     #[error("Type isn't compatible with the storage class")]
     InvalidType,
-    #[error("Storage access {seen:?} exceeds the allowed {allowed:?}")]
-    InvalidStorageAccess {
-        allowed: crate::StorageAccess,
-        seen: crate::StorageAccess,
-    },
     #[error("Type flags {seen:?} do not meet the required {required:?}")]
     MissingTypeFlags {
         required: TypeFlags,
@@ -322,7 +317,7 @@ impl super::Validator {
         log::debug!("var {:?}", var);
         let type_info = &self.types[var.ty.index()];
 
-        let (allowed_storage_access, required_type_flags, is_resource) = match var.class {
+        let (required_type_flags, is_resource) = match var.class {
             crate::StorageClass::Function => return Err(GlobalVariableError::InvalidUsage),
             crate::StorageClass::Storage { .. } => {
                 if let Err((ty_handle, disalignment)) = type_info.storage_layout {
@@ -331,7 +326,6 @@ impl super::Validator {
                     }
                 }
                 (
-                    crate::StorageAccess::all(),
                     TypeFlags::DATA | TypeFlags::HOST_SHARED | TypeFlags::TOP_LEVEL,
                     true,
                 )
@@ -343,7 +337,6 @@ impl super::Validator {
                     }
                 }
                 (
-                    crate::StorageAccess::empty(),
                     TypeFlags::DATA
                         | TypeFlags::SIZED
                         | TypeFlags::HOST_SHARED
@@ -352,23 +345,15 @@ impl super::Validator {
                 )
             }
             crate::StorageClass::Handle => {
-                let access = match types[var.ty].inner {
-                    crate::TypeInner::Image {
-                        class: crate::ImageClass::Storage { access, .. },
-                        ..
-                    } => access,
-                    crate::TypeInner::Image { .. } | crate::TypeInner::Sampler { .. } => {
-                        crate::StorageAccess::empty()
-                    }
+                match types[var.ty].inner {
+                    crate::TypeInner::Image { .. } | crate::TypeInner::Sampler { .. } => {}
                     _ => return Err(GlobalVariableError::InvalidType),
                 };
-                (access, TypeFlags::empty(), true)
+                (TypeFlags::empty(), true)
             }
-            crate::StorageClass::Private | crate::StorageClass::WorkGroup => (
-                crate::StorageAccess::empty(),
-                TypeFlags::DATA | TypeFlags::SIZED,
-                false,
-            ),
+            crate::StorageClass::Private | crate::StorageClass::WorkGroup => {
+                (TypeFlags::DATA | TypeFlags::SIZED, false)
+            }
             crate::StorageClass::PushConstant => {
                 if !self.capabilities.contains(Capabilities::PUSH_CONSTANT) {
                     return Err(GlobalVariableError::UnsupportedCapability(
@@ -376,30 +361,9 @@ impl super::Validator {
                     ));
                 }
                 (
-                    crate::StorageAccess::LOAD,
                     TypeFlags::DATA | TypeFlags::HOST_SHARED | TypeFlags::SIZED,
                     false,
                 )
-            }
-        };
-
-        // TODO validate storage buffer access
-        if let Some(access) = match var.class {
-            crate::StorageClass::Storage { access } => Some(access),
-            crate::StorageClass::Handle => match types[var.ty].inner {
-                crate::TypeInner::Image {
-                    class: crate::ImageClass::Storage { access, .. },
-                    ..
-                } => Some(access),
-                _ => None,
-            },
-            _ => None,
-        } {
-            if !allowed_storage_access.contains(access) {
-                return Err(GlobalVariableError::InvalidStorageAccess {
-                    seen: access,
-                    allowed: allowed_storage_access,
-                });
             }
         };
 

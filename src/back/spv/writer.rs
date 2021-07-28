@@ -1068,13 +1068,11 @@ impl Writer {
             },
         };
         if let Some(storage_access) = storage_access {
-            let access_decoration = match storage_access {
-                crate::StorageAccess::LOAD => Some(Decoration::NonWritable),
-                crate::StorageAccess::STORE => Some(Decoration::NonReadable),
-                _ => None,
-            };
-            if let Some(decoration) = access_decoration {
-                self.decorate(id, decoration, &[]);
+            if !storage_access.contains(crate::StorageAccess::LOAD) {
+                self.decorate(id, Decoration::NonReadable, &[]);
+            }
+            if !storage_access.contains(crate::StorageAccess::STORE) {
+                self.decorate(id, Decoration::NonWritable, &[]);
             }
         }
 

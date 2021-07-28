@@ -408,13 +408,11 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             crate::StorageClass::Handle => {
                 let register = match *inner {
                     TypeInner::Sampler { .. } => "s",
+                    // all storage textures are UAV, unconditionally
                     TypeInner::Image {
-                        class: crate::ImageClass::Storage { access, .. },
+                        class: crate::ImageClass::Storage { .. },
                         ..
-                    } if access.contains(crate::StorageAccess::STORE) => {
-                        write!(self.out, "RW")?;
-                        "u"
-                    }
+                    } => "u",
                     _ => "t",
                 };
                 self.write_type(module, global.ty)?;
@@ -1388,22 +1386,19 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 index,
             } => {
                 // https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-to-load
-                let ms = match *func_ctx.info[image].ty.inner_with(&module.types) {
-                    TypeInner::Image {
-                        class: crate::ImageClass::Sampled { multi, .. },
-                        ..
-                    }
-                    | TypeInner::Image {
-                        class: crate::ImageClass::Depth { multi },
-                        ..
-                    } => multi,
-                    _ => false,
+                let (ms, storage) = match *func_ctx.info[image].ty.inner_with(&module.types) {
+                    TypeInner::Image { class, .. } => match class {
+                        crate::ImageClass::Sampled { multi, .. }
+                        | crate::ImageClass::Depth { multi } => (multi, false),
+                        crate::ImageClass::Storage { .. } => (false, true),
+                    },
+                    _ => (false, false),
                 };
 
                 self.write_expr(module, image, func_ctx)?;
                 write!(self.out, ".Load(")?;
 
-                let mip_level = if ms {
+                let mip_level = if ms || storage {
                     MipLevelCoordinate::NotApplicable
                 } else {
                     match index {
@@ -1617,13 +1612,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
 
                 let storage_access = match var.class {
                     crate::StorageClass::Storage { access } => access,
-                    _ => match module.types[var.ty].inner {
-                        crate::TypeInner::Image {
-                            class: crate::ImageClass::Storage { access, .. },
-                            ..
-                        } => access,
-                        _ => crate::StorageAccess::default(),
-                    },
+                    _ => crate::StorageAccess::default(),
                 };
                 let wrapped_array_length = WrappedArrayLength {
                     writable: storage_access.contains(crate::StorageAccess::STORE),
