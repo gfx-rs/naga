@@ -2802,12 +2802,10 @@ impl Parser {
             type_arena,
             const_arena,
         )?;
-        let span = self.pop_scope(lexer);
+        self.pop_scope(lexer);
         // Only set span if it's the first occurrence of the type.
         // Type spans therefore should only be used for errors in type declarations;
         // use variable spans/expression spans/etc. otherwise
-        #[allow(deprecated)]
-        type_arena.set_span_if_unknown(handle, NagaSpan::ByteRange(span));
         Ok((handle, storage_access))
     }
 

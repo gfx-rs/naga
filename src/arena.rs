@@ -269,27 +269,6 @@ impl<T> Arena<T> {
         return self.span_info.get(handle.index()).unwrap_or(&Span::Unknown);
         &Span::Unknown
     }
-
-    #[cfg_attr(not(feature = "span"), allow(unused_variables))]
-    #[deprecated]
-    pub fn set_span(&mut self, handle: Handle<T>, span: Span) {
-        #[cfg(feature = "span")]
-        {
-            self.span_info[handle.index()].clone_from(&span);
-        }
-    }
-
-    #[cfg_attr(not(feature = "span"), allow(unused_variables))]
-    #[deprecated]
-    pub fn set_span_if_unknown(&mut self, handle: Handle<T>, span: Span) {
-        #[cfg(feature = "span")]
-        {
-            let ref mut existing = self.span_info[handle.index()];
-            if let Span::Unknown = existing {
-                existing.clone_from(&span);
-            }
-        }
-    }
 }
 
 #[cfg(feature = "deserialize")]
