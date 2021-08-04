@@ -42,10 +42,6 @@ impl Block {
         }
     }
 
-    pub fn body(&self) -> &Vec<Statement> {
-        &self.body
-    }
-
     #[allow(unused_variables)]
     pub fn push(&mut self, end: Statement, span: Span) {
         self.body.push(end);
