@@ -262,7 +262,7 @@ impl Parser {
     ) -> Handle<Type> {
         array_specifier
             .map(|(size, size_meta)| {
-                let handle = self.module.types.fetch_or_append(
+                self.module.types.fetch_or_append(
                     Type {
                         name: None,
                         inner: TypeInner::Array {
@@ -272,8 +272,7 @@ impl Parser {
                         },
                     },
                     meta.union(&size_meta).as_span(),
-                );
-                handle
+                )
             })
             .unwrap_or(base)
     }

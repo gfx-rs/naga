@@ -1080,8 +1080,8 @@ impl Parser {
     }
 
     fn peek_scope(&mut self, lexer: &Lexer<'_>) -> Span {
-        let (_, initial) = self.scopes.last().unwrap();
-        lexer.span_from(*initial)
+        let &(_, initial) = self.scopes.last().unwrap();
+        lexer.span_from(initial)
     }
 
     fn get_constant_inner<'a>(
@@ -3412,12 +3412,10 @@ impl Parser {
         let mut expressions = Arena::new();
         for (&name, expression) in lookup_global_expression.iter() {
             let span = match *expression {
-                crate::Expression::GlobalVariable(ref handle) => {
-                    module.global_variables.get_span(handle.clone()).clone()
+                crate::Expression::GlobalVariable(handle) => {
+                    module.global_variables.get_span(handle).clone()
                 }
-                crate::Expression::Constant(ref handle) => {
-                    module.constants.get_span(handle.clone()).clone()
-                }
+                crate::Expression::Constant(handle) => module.constants.get_span(handle).clone(),
                 _ => unreachable!(),
             };
             let expr_handle = expressions.append(expression.clone(), span);

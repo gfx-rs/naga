@@ -756,6 +756,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn insert_composite(
         &self,
         root_expr: Handle<crate::Expression>,
@@ -3735,7 +3736,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         match null::generate_default_built_in(
                             Some(built_in),
                             effective_ty,
-                            &mut module.types,
+                            &module.types,
                             &mut module.constants,
                             span.clone(),
                         ) {
@@ -3766,7 +3767,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                                 let handle = null::generate_default_built_in(
                                     built_in,
                                     member_ty,
-                                    &mut module.types,
+                                    &module.types,
                                     &mut module.constants,
                                     span.clone(),
                                 )?;
