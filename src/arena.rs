@@ -262,16 +262,15 @@ impl<T> Arena<T> {
         self.data.clear()
     }
 
-    #[allow(unused_variables)]
+    #[cfg_attr(feature = "span", allow(unreachable_code))]
+    #[cfg_attr(not(feature = "span"), allow(unused_variables))]
     pub fn get_span(&self, handle: Handle<T>) -> &Span {
         #[cfg(feature = "span")]
-        {
-            return self.span_info.get(handle.index()).unwrap_or(&Span::Unknown);
-        }
+        return self.span_info.get(handle.index()).unwrap_or(&Span::Unknown);
         &Span::Unknown
     }
 
-    #[allow(unused_variables)]
+    #[cfg_attr(not(feature = "span"), allow(unused_variables))]
     #[deprecated]
     pub fn set_span(&mut self, handle: Handle<T>, span: Span) {
         #[cfg(feature = "span")]
@@ -280,7 +279,7 @@ impl<T> Arena<T> {
         }
     }
 
-    #[allow(unused_variables)]
+    #[cfg_attr(not(feature = "span"), allow(unused_variables))]
     #[deprecated]
     pub fn set_span_if_unknown(&mut self, handle: Handle<T>, span: Span) {
         #[cfg(feature = "span")]

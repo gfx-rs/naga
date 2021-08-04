@@ -1,7 +1,7 @@
 use std::ops::Range;
 
 // A source code span, used for error reporting.
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Span {
     // Span is unknown - no source information.
     Unknown,
