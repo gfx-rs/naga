@@ -365,7 +365,7 @@ impl<'source> ParsingContext<'source> {
                                 ty_name,
                                 token.meta,
                             )
-                            .map(|meta| Some(meta))
+                                .map(Some)
                         } else {
                             //TODO: declaration
                             // type_qualifier IDENTIFIER SEMICOLON

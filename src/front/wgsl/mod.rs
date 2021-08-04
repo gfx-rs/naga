@@ -1791,7 +1791,7 @@ impl Parser {
         let span = self.pop_scope(lexer);
         // Only set span if it's a named constant. Otherwise, the enclosing Expression should have
         // the span.
-        if let Some(_) = register_name {
+        if register_name.is_some() {
             const_arena.set_span(handle, NagaSpan::ByteRange(span));
         }
 

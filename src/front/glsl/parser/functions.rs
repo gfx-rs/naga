@@ -57,10 +57,9 @@ impl<'source> ParsingContext<'source> {
             block
         };
 
-        let Token { value, meta } = self.expect_peek(parser)?;
-        let meta = *meta;
+        let &Token { ref value, meta } = self.expect_peek(parser)?;
 
-        let meta_rest = match value {
+        let meta_rest = match *value {
             TokenValue::Continue => {
                 body.push(Statement::Continue, self.bump(parser)?.meta.as_span());
                 self.expect(parser, TokenValue::Semicolon)?.meta

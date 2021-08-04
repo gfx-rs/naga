@@ -151,6 +151,7 @@ tree.
 
 mod arena;
 pub mod back;
+mod block;
 pub mod front;
 pub mod proc;
 mod span;
@@ -168,7 +169,6 @@ pub use crate::span::Span;
 use serde::Deserialize;
 #[cfg(feature = "serialize")]
 use serde::Serialize;
-use std::ops::{Deref, DerefMut, RangeBounds};
 
 /// Width of a boolean type, in bytes.
 pub const BOOL_WIDTH: Bytes = 1;
@@ -1178,136 +1178,7 @@ pub enum Expression {
     ArrayLength(Handle<Expression>),
 }
 
-/// A code block is a vector of statements, with maybe a vector of spans.
-#[derive(Debug, Clone, Default)]
-#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
-#[cfg_attr(
-    any(feature = "serialize", feature = "deserialize"),
-    serde(transparent)
-)]
-pub struct Block {
-    body: Vec<Statement>,
-    #[cfg(feature = "span")]
-    #[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(skip))]
-    span_info: Vec<Span>,
-}
-
-impl Block {
-    pub fn new() -> Self {
-        Self {
-            body: Vec::new(),
-            #[cfg(feature = "span")]
-            span_info: Vec::new(),
-        }
-    }
-
-    pub fn with_capacity(capacity: usize) -> Self {
-        Self {
-            body: Vec::with_capacity(capacity),
-            #[cfg(feature = "span")]
-            span_info: Vec::with_capacity(capacity),
-        }
-    }
-
-    pub fn from_vec(body: Vec<Statement>) -> Self {
-        #[cfg(feature = "span")]
-        let span_info = std::iter::repeat(Span::Unknown).take(body.len()).collect();
-        Self {
-            body,
-            #[cfg(feature = "span")]
-            span_info,
-        }
-    }
-
-    pub fn body(&self) -> &Vec<Statement> {
-        &self.body
-    }
-
-    #[allow(unused_variables)]
-    pub fn push(&mut self, end: Statement, span: Span) {
-        self.body.push(end);
-        #[cfg(feature = "span")]
-        self.span_info.push(span);
-    }
-
-    pub fn extend(&mut self, item: Option<(Statement, Span)>) {
-        if let Some((end, span)) = item {
-            self.push(end, span)
-        }
-    }
-
-    pub fn extend_block(&mut self, other: Self) {
-        #[cfg(feature = "span")]
-        self.span_info.extend(other.span_info);
-        self.body.extend(other.body);
-    }
-
-    pub fn cull<R: RangeBounds<usize> + Clone>(&mut self, range: R) {
-        #[cfg(feature = "span")]
-        self.span_info.drain(range.clone());
-        self.body.drain(range);
-    }
-
-    pub fn splice<R: RangeBounds<usize> + Clone>(&mut self, range: R, other: Self) {
-        #[cfg(feature = "span")]
-        self.span_info
-            .splice(range.clone(), other.span_info.into_iter());
-        self.body.splice(range, other.body.into_iter());
-    }
-
-    pub fn iter(&self) -> std::slice::Iter<Statement> {
-        self.body.iter()
-    }
-
-    pub fn iter_mut(&mut self) -> impl Iterator<Item = (&mut Statement, Option<&mut Span>)> {
-        #[cfg(feature = "span")]
-        let span_iter = self.span_info.iter_mut().map(Some);
-        #[cfg(not(feature = "span"))]
-        let span_iter = std::iter::repeat_with(|| None);
-
-        self.body.iter_mut().zip(span_iter)
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.body.is_empty()
-    }
-
-    pub fn len(&self) -> usize {
-        self.body.len()
-    }
-}
-
-impl Deref for Block {
-    type Target = [Statement];
-    fn deref(&self) -> &[Statement] {
-        &self.body
-    }
-}
-
-impl DerefMut for Block {
-    fn deref_mut(&mut self) -> &mut [Statement] {
-        &mut self.body
-    }
-}
-
-impl<'a> IntoIterator for &'a Block {
-    type Item = &'a Statement;
-    type IntoIter = std::slice::Iter<'a, Statement>;
-
-    fn into_iter(self) -> std::slice::Iter<'a, Statement> {
-        self.iter()
-    }
-}
-
-#[cfg(feature = "deserialize")]
-impl<'de> serde::Deserialize<'de> for Block {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        Ok(Self::from_vec(Vec::deserialize(deserializer)?))
-    }
-}
+pub use block::Block;
 
 /// A case for a switch statement.
 // Clone is used only for error reporting and is not intended for end users

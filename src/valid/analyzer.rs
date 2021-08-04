@@ -944,14 +944,15 @@ fn uniform_control_flow() {
     let stmt_emit1 = S::Emit(emit_range_globals.clone());
     let stmt_if_uniform = S::If {
         condition: uniform_global_expr,
-        accept: Vec::new(),
+        accept: crate::Block::new(),
         reject: vec![
             S::Emit(emit_range_constant_derivative.clone()),
             S::Store {
                 pointer: constant_expr,
                 value: derivative_expr,
             },
-        ],
+        ]
+        .into(),
     };
     assert_eq!(
         info.process_block(&[stmt_emit1, stmt_if_uniform], &[], None, &expressions),
@@ -975,8 +976,9 @@ fn uniform_control_flow() {
                 pointer: constant_expr,
                 value: derivative_expr,
             },
-        ],
-        reject: Vec::new(),
+        ]
+        .into(),
+        reject: crate::Block::new(),
     };
     assert_eq!(
         info.process_block(&[stmt_emit2, stmt_if_non_uniform], &[], None, &expressions),
