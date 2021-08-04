@@ -556,8 +556,8 @@ impl<'source> ParsingContext<'source> {
                     TokenValue::Identifier(_) => {
                         let name_meta = self.expect_ident(parser)?;
 
-                        let size = self.parse_array_specifier(parser)?;
-                        let ty = parser.maybe_array(ty, size);
+                        let array_specifier = self.parse_array_specifier(parser)?;
+                        let ty = parser.maybe_array(ty, name_meta.1, array_specifier);
 
                         context.add_function_arg(parser, body, Some(name_meta), ty, qualifier);
 

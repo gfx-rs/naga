@@ -152,7 +152,8 @@ impl<'source> ParsingContext<'source> {
                 stmt.hir_exprs.append(expr)
             }
             TokenValue::TypeName(_) => {
-                let Token { value, mut meta } = self.bump(parser)?;
+                let Token { value, meta: name_meta } = self.bump(parser)?;
+                let mut meta = name_meta;
 
                 let mut handle = if let TokenValue::TypeName(ty) = value {
                     parser.module.types.fetch_or_append(ty)
@@ -165,7 +166,7 @@ impl<'source> ParsingContext<'source> {
                 self.expect(parser, TokenValue::LeftParen)?;
                 let args = self.parse_function_call_args(parser, ctx, stmt, body, &mut meta)?;
 
-                if let Some(array_size) = maybe_size {
+                if let Some((array_size, array_meta)) = maybe_size {
                     let stride = parser.module.types[handle]
                         .inner
                         .span(&parser.module.constants);
@@ -193,7 +194,8 @@ impl<'source> ParsingContext<'source> {
                             size,
                             stride,
                         },
-                    })
+                    });
+                    parser.module.types.set_span_if_unknown(handle, name_meta.union(&array_meta).as_span());
                 }
 
                 stmt.hir_exprs.append(HirExpr {

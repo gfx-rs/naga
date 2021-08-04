@@ -254,21 +254,21 @@ impl Parser {
         })
     }
 
-    pub(crate) fn maybe_array(
-        &mut self,
-        base: Handle<Type>,
-        size: Option<ArraySize>,
-    ) -> Handle<Type> {
-        size.map(|size| {
-            self.module.types.fetch_or_append(Type {
+    pub(crate) fn maybe_array(&mut self, base: Handle<Type>, meta: SourceMetadata,
+                   array_specifier: Option<(ArraySize, SourceMetadata)>) -> Handle<Type> {
+        array_specifier.map(|(size, size_meta)| {
+            let handle = self.module.types.fetch_or_append(Type {
                 name: None,
                 inner: TypeInner::Array {
                     base,
                     size,
-                    stride: self.module.types[base].inner.span(&self.module.constants),
+                    stride: self.module.types[base]
+                        .inner
+                        .span(&self.module.constants),
                 },
-            })
+            });
+            self.module.types.set_span_if_unknown(handle, meta.union(&size_meta).as_span());
+            handle
         })
-        .unwrap_or(base)
-    }
-}
+            .unwrap_or(base)
+    }}
