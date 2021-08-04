@@ -12,8 +12,8 @@ use crate::{
     proc::{
         ensure_block_returns, Alignment, Layouter, ResolveContext, ResolveError, TypeResolution,
     },
+    span::Span as NagaSpan,
     ConstantInner, FastHashMap, ScalarValue,
-    span::Span as ArenaSpan
 };
 
 use self::lexer::Lexer;
@@ -29,7 +29,6 @@ use std::{
     borrow::Cow,
     convert::TryFrom,
     io::{self, Write},
-    iter,
     num::{NonZeroU32, ParseFloatError, ParseIntError},
     ops,
 };
@@ -1176,7 +1175,7 @@ impl Parser {
             fun,
             value,
             result,
-        });
+        }, NagaSpan::ByteRange(value_span));
         Ok(result)
     }
 
@@ -1186,6 +1185,7 @@ impl Parser {
         name: &'a str,
         mut ctx: ExpressionContext<'a, '_, '_>,
     ) -> Result<Option<Handle<crate::Expression>>, Error<'a>> {
+        let span_start = lexer.current_byte_offset();
         let expr = if let Some(fun) = conv::map_relational_fun(name) {
             lexer.open_arguments()?;
             let argument = self.parse_general_expression(lexer, ctx.reborrow())?;
@@ -1321,12 +1321,13 @@ impl Parser {
                     };
 
                     let result = ctx.interrupt_emitter(expression);
+                    let span_end = lexer.current_byte_offset();
                     ctx.block.push(crate::Statement::Atomic {
                         pointer,
                         fun: crate::AtomicFunction::Exchange { compare: Some(cmp) },
                         value,
                         result,
-                    });
+                    }, NagaSpan::ByteRange(span_start..span_end));
                     return Ok(Some(result));
                 }
                 // texture sampling
@@ -1602,17 +1603,22 @@ impl Parser {
                 }
                 // other
                 _ => {
+                    let span_start = lexer.current_byte_offset();
                     let handle =
                         match self.parse_local_function_call(lexer, name, ctx.reborrow())? {
                             Some((function, arguments)) => {
+                                let span_end = lexer.current_byte_offset();
                                 let result = Some(
                                     ctx.interrupt_emitter(crate::Expression::CallResult(function)),
                                 );
-                                ctx.block.push(crate::Statement::Call {
-                                    function,
-                                    arguments,
-                                    result,
-                                });
+                                ctx.block.push(
+                                    crate::Statement::Call {
+                                        function,
+                                        arguments,
+                                        result,
+                                    },
+                                    NagaSpan::ByteRange(span_start..span_end),
+                                );
                                 result
                             }
                             None => None,
@@ -1783,7 +1789,11 @@ impl Parser {
         };
 
         let span = self.pop_scope(lexer);
-        const_arena.set_span_if_unknown(handle, ArenaSpan::ByteRange(span));
+        // Only set span if it's a named constant. Otherwise, the enclosing Expression should have
+        // the span.
+        if let Some(_) = register_name {
+            const_arena.set_span(handle, NagaSpan::ByteRange(span));
+        }
 
         Ok(handle)
     }
@@ -1834,7 +1844,7 @@ impl Parser {
             other => return Err(Error::Unexpected(other, ExpectedToken::PrimaryExpression)),
         };
         let span = self.pop_scope(lexer);
-        ctx.expressions.set_span(handle, ArenaSpan::ByteRange(span));
+        ctx.expressions.set_span(handle, NagaSpan::ByteRange(span));
         Ok(handle)
     }
 
@@ -2002,10 +2012,8 @@ impl Parser {
                     Some(handle) => {
                         let _ = lexer.next();
                         handle
-                    },
-                    None => {
-                        self.parse_primary_expression(lexer, ctx.reborrow())?
                     }
+                    None => self.parse_primary_expression(lexer, ctx.reborrow())?,
                 };
                 (true, handle)
             }
@@ -2017,7 +2025,8 @@ impl Parser {
 
         let post_handle = self.parse_postfix(lexer, ctx.reborrow(), handle, allow_deref)?;
         let span = self.pop_scope(lexer);
-        ctx.expressions.set_span(post_handle, ArenaSpan::ByteRange(span));
+        ctx.expressions
+            .set_span(post_handle, NagaSpan::ByteRange(span));
         Ok(post_handle)
     }
 
@@ -2161,7 +2170,9 @@ impl Parser {
             },
         )?;
         let span = self.pop_scope(lexer);
-        context.expressions.set_span(handle, ArenaSpan::ByteRange(span));
+        context
+            .expressions
+            .set_span(handle, NagaSpan::ByteRange(span));
         Ok(handle)
     }
 
@@ -2693,7 +2704,10 @@ impl Parser {
             const_arena,
         )?;
         let span = self.pop_scope(lexer);
-        type_arena.set_span(handle, ArenaSpan::ByteRange(span));
+        // Only set span if it's the first occurrence of the type.
+        // Type spans therefore should only be used for errors in type declarations;
+        // use variable spans/expression spans/etc. otherwise
+        type_arena.set_span_if_unknown(handle, NagaSpan::ByteRange(span));
         Ok((handle, storage_access))
     }
 
@@ -2705,6 +2719,7 @@ impl Parser {
         ident_span: Span,
         mut context: ExpressionContext<'a, '_, 'out>,
     ) -> Result<(), Error<'a>> {
+        let span_start = ident_span.start;
         context.emitter.start(context.expressions);
         let stmt = match context.lookup_ident.get(ident) {
             Some(&expr) => {
@@ -2727,10 +2742,13 @@ impl Parser {
                 }
             }
         };
+        let span_end = lexer.current_byte_offset();
         context
             .block
             .extend(context.emitter.finish(context.expressions));
-        context.block.push(stmt);
+        context
+            .block
+            .push(stmt, NagaSpan::ByteRange(span_start..span_end));
         Ok(())
     }
 
@@ -2741,11 +2759,15 @@ impl Parser {
         block: &'out mut crate::Block,
         is_uniform_control_flow: bool,
     ) -> Result<(), Error<'a>> {
+        self.push_scope(Scope::Statement, lexer);
         let (word, word_span) = match lexer.next() {
-            (Token::Separator(';'), _) => return Ok(()),
+            (Token::Separator(';'), _) => {
+                self.pop_scope(lexer);
+                return Ok(());
+            }
             (Token::Paren('{'), _) => {
                 self.push_scope(Scope::Block, lexer);
-                let mut statements = Vec::new();
+                let mut statements = crate::Block::new();
                 while !lexer.skip(Token::Paren('}')) {
                     self.parse_statement(
                         lexer,
@@ -2755,16 +2777,18 @@ impl Parser {
                     )?;
                 }
                 self.pop_scope(lexer);
-                block.push(crate::Statement::Block(statements));
+                let span = self.pop_scope(lexer);
+                block.push(
+                    crate::Statement::Block(statements),
+                    NagaSpan::ByteRange(span),
+                );
                 return Ok(());
             }
             (Token::Word(word), span) => (word, span),
             other => return Err(Error::Unexpected(other, ExpectedToken::Statement)),
         };
-
-        self.push_scope(Scope::Statement, lexer);
         let mut emitter = super::Emitter::default();
-        match word {
+        let statement = match word {
             "let" => {
                 emitter.start(context.expressions);
                 let (name, name_span) = lexer.next_ident_with_span()?;
@@ -2800,6 +2824,7 @@ impl Parser {
                 context
                     .named_expressions
                     .insert(expr_id, String::from(name));
+                None
             }
             "var" => {
                 enum Init {
@@ -2889,10 +2914,12 @@ impl Parser {
                 context.lookup_ident.insert(name, expr_id);
 
                 if let Init::Variable(value) = init {
-                    block.push(crate::Statement::Store {
+                    Some(crate::Statement::Store {
                         pointer: expr_id,
                         value,
-                    });
+                    })
+                } else {
+                    None
                 }
             }
             "return" => {
@@ -2908,54 +2935,60 @@ impl Parser {
                     None
                 };
                 lexer.expect(Token::Separator(';'))?;
-                block.push(crate::Statement::Return { value });
+                Some(crate::Statement::Return { value })
             }
             "if" => {
-                emitter.start(context.expressions);
                 lexer.expect(Token::Paren('('))?;
+                emitter.start(context.expressions);
                 let condition = self
                     .parse_general_expression(lexer, context.as_expression(block, &mut emitter))?;
-                lexer.expect(Token::Paren(')'))?;
                 block.extend(emitter.finish(context.expressions));
+                lexer.expect(Token::Paren(')'))?;
 
                 let accept = self.parse_block(lexer, context.reborrow(), false)?;
                 let mut elsif_stack = Vec::new();
+                let mut elseif_span_start = lexer.current_byte_offset();
                 while lexer.skip(Token::Word("elseif")) {
                     let mut sub_emitter = super::Emitter::default();
-                    sub_emitter.start(context.expressions);
+
                     lexer.expect(Token::Paren('('))?;
+                    sub_emitter.start(context.expressions);
                     let other_condition = self.parse_general_expression(
                         lexer,
                         context.as_expression(block, &mut sub_emitter),
                     )?;
-                    lexer.expect(Token::Paren(')'))?;
                     let other_emit = sub_emitter.finish(context.expressions);
+                    lexer.expect(Token::Paren(')'))?;
                     let other_block = self.parse_block(lexer, context.reborrow(), false)?;
-                    elsif_stack.push((other_condition, other_emit, other_block));
+                    elsif_stack.push((elseif_span_start, other_condition, other_emit, other_block));
+                    elseif_span_start = lexer.current_byte_offset();
                 }
                 let mut reject = if lexer.skip(Token::Word("else")) {
                     self.parse_block(lexer, context.reborrow(), false)?
                 } else {
-                    Vec::new()
+                    crate::Block::new()
                 };
+                let span_end = lexer.current_byte_offset();
                 // reverse-fold the else-if blocks
                 //Note: we may consider uplifting this to the IR
-                for (other_cond, other_emit, other_block) in elsif_stack.drain(..).rev() {
-                    reject = other_emit
-                        .into_iter()
-                        .chain(iter::once(crate::Statement::If {
-                            condition: other_cond,
-                            accept: other_block,
-                            reject,
-                        }))
-                        .collect();
+                for (other_span_start, other_cond, other_emit, other_block) in
+                    elsif_stack.into_iter().rev()
+                {
+                    let sub_stmt = crate::Statement::If {
+                        condition: other_cond,
+                        accept: other_block,
+                        reject,
+                    };
+                    reject = crate::Block::new();
+                    reject.extend(other_emit);
+                    reject.push(sub_stmt, NagaSpan::ByteRange(other_span_start..span_end))
                 }
 
-                block.push(crate::Statement::If {
+                Some(crate::Statement::If {
                     condition,
                     accept,
                     reject,
-                });
+                })
             }
             "switch" => {
                 emitter.start(context.expressions);
@@ -2966,7 +2999,7 @@ impl Parser {
                 block.extend(emitter.finish(context.expressions));
                 lexer.expect(Token::Paren('{'))?;
                 let mut cases = Vec::new();
-                let mut default = Vec::new();
+                let mut default = crate::Block::new();
 
                 loop {
                     // cases + default
@@ -2985,12 +3018,12 @@ impl Parser {
                                 }
                                 cases.push(crate::SwitchCase {
                                     value,
-                                    body: Vec::new(),
+                                    body: crate::Block::new(),
                                     fall_through: true,
                                 });
                             };
 
-                            let mut body = Vec::new();
+                            let mut body = crate::Block::new();
                             lexer.expect(Token::Paren('{'))?;
                             let fall_through = loop {
                                 // default statements
@@ -3020,15 +3053,15 @@ impl Parser {
                     }
                 }
 
-                block.push(crate::Statement::Switch {
+                Some(crate::Statement::Switch {
                     selector,
                     cases,
                     default,
-                });
+                })
             }
             "loop" => {
-                let mut body = Vec::new();
-                let mut continuing = Vec::new();
+                let mut body = crate::Block::new();
+                let mut continuing = crate::Block::new();
                 lexer.expect(Token::Paren('{'))?;
 
                 loop {
@@ -3043,7 +3076,7 @@ impl Parser {
                     self.parse_statement(lexer, context.reborrow(), &mut body, false)?;
                 }
 
-                block.push(crate::Statement::Loop { body, continuing });
+                Some(crate::Statement::Loop { body, continuing })
             }
             "for" => {
                 lexer.expect(Token::Paren('('))?;
@@ -3066,23 +3099,31 @@ impl Parser {
                     }
                 };
 
-                let mut body = Vec::new();
+                let mut body = crate::Block::new();
                 if !lexer.skip(Token::Separator(';')) {
-                    emitter.start(context.expressions);
-                    let condition = self.parse_general_expression(
-                        lexer,
-                        context.as_expression(&mut body, &mut emitter),
-                    )?;
-                    lexer.expect(Token::Separator(';'))?;
-                    body.extend(emitter.finish(context.expressions));
-                    body.push(crate::Statement::If {
-                        condition,
-                        accept: Vec::new(),
-                        reject: vec![crate::Statement::Break],
-                    });
+                    let (condition, span) = lexer.capture_span(|lexer| {
+                        emitter.start(context.expressions);
+                        let condition = self.parse_general_expression(
+                            lexer,
+                            context.as_expression(&mut body, &mut emitter),
+                        )?;
+                        lexer.expect(Token::Separator(';'))?;
+                        body.extend(emitter.finish(context.expressions));
+                        Ok(condition)
+                    })?;
+                    let mut reject = crate::Block::new();
+                    reject.push(crate::Statement::Break, NagaSpan::Unknown);
+                    body.push(
+                        crate::Statement::If {
+                            condition,
+                            accept: crate::Block::new(),
+                            reject,
+                        },
+                        NagaSpan::ByteRange(span),
+                    );
                 };
 
-                let mut continuing = Vec::new();
+                let mut continuing = crate::Block::new();
                 if let Token::Word(ident) = lexer.peek().0 {
                     // manually parse the next statement here instead of calling parse_statement
                     // because the statement is not terminated with a semicolon
@@ -3101,20 +3142,20 @@ impl Parser {
                     self.parse_statement(lexer, context.reborrow(), &mut body, false)?;
                 }
 
-                block.push(crate::Statement::Loop { body, continuing });
+                Some(crate::Statement::Loop { body, continuing })
             }
-            "break" => block.push(crate::Statement::Break),
-            "continue" => block.push(crate::Statement::Continue),
-            "discard" => block.push(crate::Statement::Kill),
+            "break" => Some(crate::Statement::Break),
+            "continue" => Some(crate::Statement::Continue),
+            "discard" => Some(crate::Statement::Kill),
             "storageBarrier" => {
                 lexer.expect(Token::Paren('('))?;
                 lexer.expect(Token::Paren(')'))?;
-                block.push(crate::Statement::Barrier(crate::Barrier::STORAGE));
+                Some(crate::Statement::Barrier(crate::Barrier::STORAGE))
             }
             "workgroupBarrier" => {
                 lexer.expect(Token::Paren('('))?;
                 lexer.expect(Token::Paren(')'))?;
-                block.push(crate::Statement::Barrier(crate::Barrier::WORK_GROUP));
+                Some(crate::Statement::Barrier(crate::Barrier::WORK_GROUP))
             }
             "atomicStore" => {
                 lexer.open_arguments()?;
@@ -3123,7 +3164,7 @@ impl Parser {
                 lexer.expect(Token::Separator(','))?;
                 let value = self.parse_general_expression(lexer, expression_ctx)?;
                 lexer.close_arguments()?;
-                block.push(crate::Statement::Store { pointer, value });
+                Some(crate::Statement::Store { pointer, value })
             }
             "textureStore" => {
                 emitter.start(context.expressions);
@@ -3153,12 +3194,12 @@ impl Parser {
                     .parse_general_expression(lexer, context.as_expression(block, &mut emitter))?;
                 lexer.close_arguments()?;
                 block.extend(emitter.finish(context.expressions));
-                block.push(crate::Statement::ImageStore {
+                Some(crate::Statement::ImageStore {
                     image,
                     coordinate,
                     array_index,
                     value,
-                });
+                })
             }
             // assignment or a function call
             ident => {
@@ -3169,9 +3210,13 @@ impl Parser {
                     context.as_expression(block, &mut emitter),
                 )?;
                 lexer.expect(Token::Separator(';'))?;
+                None
             }
+        };
+        let span = self.pop_scope(lexer);
+        if let Some(statement) = statement {
+            block.push(statement, NagaSpan::ByteRange(span));
         }
-        self.pop_scope(lexer);
         Ok(())
     }
 
@@ -3180,10 +3225,10 @@ impl Parser {
         lexer: &mut Lexer<'a>,
         mut context: StatementContext<'a, '_, '_>,
         is_uniform_control_flow: bool,
-    ) -> Result<Vec<crate::Statement>, Error<'a>> {
+    ) -> Result<crate::Block, Error<'a>> {
         self.push_scope(Scope::Block, lexer);
         lexer.expect(Token::Paren('{'))?;
-        let mut block = Vec::new();
+        let mut block = crate::Block::new();
         while !lexer.skip(Token::Paren('}')) {
             self.parse_statement(
                 lexer,
@@ -3282,7 +3327,7 @@ impl Parser {
             local_variables: Arena::new(),
             expressions,
             named_expressions: crate::NamedExpressions::default(),
-            body: Vec::new(),
+            body: crate::Block::new(),
         };
 
         // read body
@@ -3496,7 +3541,9 @@ impl Parser {
                     ty: pvar.ty,
                     init: pvar.init,
                 });
-                module.global_variables.set_span(var_handle, ArenaSpan::ByteRange(pvar.name_span));
+                module
+                    .global_variables
+                    .set_span(var_handle, NagaSpan::ByteRange(pvar.name_span));
                 lookup_global_expression
                     .insert(pvar.name, crate::Expression::GlobalVariable(var_handle));
             }

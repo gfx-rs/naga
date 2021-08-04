@@ -5,7 +5,7 @@ use std::{cmp::Ordering, fmt, hash, marker::PhantomData, num::NonZeroU32, ops};
 /// the same size and representation as `Handle<T>`.
 type Index = NonZeroU32;
 
-use crate::span::Span;
+use crate::Span;
 
 /// A strongly typed reference to an arena item.
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
@@ -125,7 +125,6 @@ impl<T> Iterator for Range<T> {
 /// The arena can be indexed using the given handle to obtain
 /// a reference to the stored item.
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
-#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 #[cfg_attr(
     any(feature = "serialize", feature = "deserialize"),
     serde(transparent)
@@ -134,7 +133,7 @@ impl<T> Iterator for Range<T> {
 pub struct Arena<T> {
     /// Values of this arena.
     data: Vec<T>,
-    #[cfg(feature="span")]
+    #[cfg(feature = "span")]
     #[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(skip))]
     span_info: Vec<Span>,
 }
@@ -153,7 +152,11 @@ impl<T: fmt::Debug> fmt::Debug for Arena<T> {
 impl<T> Arena<T> {
     /// Create a new arena with no initial capacity allocated.
     pub fn new() -> Self {
-        Arena { data: Vec::new(), #[cfg(feature = "span")] span_info: Vec::new() }
+        Arena {
+            data: Vec::new(),
+            #[cfg(feature = "span")]
+            span_info: Vec::new(),
+        }
     }
 
     /// Extracts the inner vector.
@@ -254,29 +257,49 @@ impl<T> Arena<T> {
     }
 
     #[allow(unused_variables)]
-    pub fn get_span(&self, handle: Handle<T>) -> Span {
-        #[cfg(feature = "span")] {
-            return self.span_info.get(handle.index()).map_or(Span::Unknown, |x| x.clone())
+    pub fn get_span(&self, handle: Handle<T>) -> &Span {
+        #[cfg(feature = "span")]
+        {
+            return self.span_info.get(handle.index()).unwrap_or(&Span::Unknown);
         }
-        Span::Unknown
+        &Span::Unknown
     }
 
     #[allow(unused_variables)]
     pub fn set_span(&mut self, handle: Handle<T>, span: Span) {
-        #[cfg(feature = "span")] {
+        #[cfg(feature = "span")]
+        {
             self.span_info[handle.index()].clone_from(&span);
         }
     }
 
     #[allow(unused_variables)]
     pub fn set_span_if_unknown(&mut self, handle: Handle<T>, span: Span) {
-
-        #[cfg(feature = "span")] {
+        #[cfg(feature = "span")]
+        {
             let ref mut existing = self.span_info[handle.index()];
             if let Span::Unknown = existing {
                 existing.clone_from(&span);
             }
         }
+    }
+}
+
+#[cfg(feature = "deserialize")]
+impl<'de, T> serde::Deserialize<'de> for Arena<T> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, <D as Deserializer<'de>>::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let data = Vec::deserialize(deserializer)?;
+        #[cfg(feature = "span")]
+        let span_info = std::iter::repeat(Span::Unknown).take(data.len()).collect();
+
+        Ok(Self {
+            data,
+            #[cfg(feature = "span")]
+            span_info,
+        })
     }
 }
 

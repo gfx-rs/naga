@@ -9,6 +9,12 @@ pub enum Span {
     ByteRange(Range<usize>),
 }
 
+impl Default for Span {
+    fn default() -> Self {
+        Self::Unknown
+    }
+}
+
 impl Span {
     pub fn subsume(&mut self, other: &Self) {
         match *self {
@@ -20,5 +26,13 @@ impl Span {
                 }
             }
         }
+    }
+
+    pub fn total_span<'a, T: Iterator<Item = &'a Self>>(from: T) -> Self {
+        let mut span: Self = Default::default();
+        for other in from {
+            span.subsume(other);
+        }
+        span
     }
 }

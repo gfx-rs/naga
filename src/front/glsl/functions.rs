@@ -68,10 +68,13 @@ impl Parser {
                             if expr_type.scalar_kind() == Some(ScalarKind::Bool)
                                 && result_scalar_kind != ScalarKind::Bool =>
                         {
+                            let (condition, expr_meta) = args[0];
                             let c0 = self.add_constant_value(result_scalar_kind, 0u64);
                             let c1 = self.add_constant_value(result_scalar_kind, 1u64);
-                            let mut reject = ctx.add_expression(Expression::Constant(c0), body);
-                            let mut accept = ctx.add_expression(Expression::Constant(c1), body);
+                            let mut reject =
+                                ctx.add_expression(Expression::Constant(c0), expr_meta, body);
+                            let mut accept =
+                                ctx.add_expression(Expression::Constant(c1), expr_meta, body);
 
                             ctx.implicit_splat(self, &mut reject, meta, vector_size)?;
                             ctx.implicit_splat(self, &mut accept, meta, vector_size)?;
@@ -80,8 +83,9 @@ impl Parser {
                                 Expression::Select {
                                     accept,
                                     reject,
-                                    condition: args[0].0,
+                                    condition,
                                 },
+                                expr_meta,
                                 body,
                             );
 
@@ -95,7 +99,7 @@ impl Parser {
                             let (mut value, meta) = args[0];
                             ctx.implicit_conversion(self, &mut value, meta, kind, width)?;
 
-                            ctx.add_expression(Expression::Splat { size, value }, body)
+                            ctx.add_expression(Expression::Splat { size, value }, meta, body)
                         }
                         TypeInner::Scalar { kind, width } => ctx.add_expression(
                             Expression::As {
@@ -103,13 +107,14 @@ impl Parser {
                                 expr: args[0].0,
                                 convert: Some(width),
                             },
+                            args[0].1,
                             body,
                         ),
                         TypeInner::Vector { size, kind, width } => {
                             let mut expr = args[0].0;
 
                             if vector_size.map_or(true, |s| s != size) {
-                                expr = ctx.vector_resize(size, expr, body);
+                                expr = ctx.vector_resize(size, expr, args[0].1, body);
                             }
 
                             ctx.add_expression(
@@ -118,6 +123,7 @@ impl Parser {
                                     expr,
                                     convert: Some(width),
                                 },
+                                args[0].1,
                                 body,
                             )
                         }
@@ -161,8 +167,11 @@ impl Parser {
                                                 value: ScalarValue::Float(0.0),
                                             },
                                         });
-                                    let zero = ctx
-                                        .add_expression(Expression::Constant(zero_constant), body);
+                                    let zero = ctx.add_expression(
+                                        Expression::Constant(zero_constant),
+                                        meta,
+                                        body,
+                                    );
 
                                     for i in 0..columns as u32 {
                                         components.push(
@@ -177,12 +186,17 @@ impl Parser {
                                                         })
                                                         .collect(),
                                                 },
+                                                meta,
                                                 body,
                                             ),
                                         )
                                     }
 
-                                    ctx.add_expression(Expression::Compose { ty, components }, body)
+                                    ctx.add_expression(
+                                        Expression::Compose { ty, components },
+                                        meta,
+                                        body,
+                                    )
                                 }
                                 TypeInner::Matrix { rows: ori_rows, .. } => {
                                     let mut components = Vec::new();
@@ -193,17 +207,22 @@ impl Parser {
                                                 base: value,
                                                 index: n,
                                             },
+                                            meta,
                                             body,
                                         );
 
                                         if ori_rows != rows {
-                                            vector = ctx.vector_resize(rows, vector, body);
+                                            vector = ctx.vector_resize(rows, vector, meta, body);
                                         }
 
                                         components.push(vector)
                                     }
 
-                                    ctx.add_expression(Expression::Compose { ty, components }, body)
+                                    ctx.add_expression(
+                                        Expression::Compose { ty, components },
+                                        meta,
+                                        body,
+                                    )
                                 }
                                 _ => {
                                     let columns =
@@ -214,6 +233,7 @@ impl Parser {
                                             ty,
                                             components: columns,
                                         },
+                                        meta,
                                         body,
                                     )
                                 }
@@ -224,6 +244,7 @@ impl Parser {
                                 ty,
                                 components: args.into_iter().map(|arg| arg.0).collect(),
                             },
+                            meta,
                             body,
                         ),
                         _ => {
@@ -262,6 +283,7 @@ impl Parser {
                                                     base: arg,
                                                     index: i,
                                                 },
+                                                meta,
                                                 body,
                                             ))
                                         }
@@ -285,6 +307,7 @@ impl Parser {
                                         ty,
                                         components: Vec::from(chunk),
                                     },
+                                    meta,
                                     body,
                                 ))
                             }
@@ -302,7 +325,7 @@ impl Parser {
                         }
                     }
 
-                    ctx.add_expression(Expression::Compose { ty, components }, body)
+                    ctx.add_expression(Expression::Compose { ty, components }, meta, body)
                 };
 
                 Ok(Some(h))
@@ -371,6 +394,7 @@ impl Parser {
                                 }),
                                 depth_ref: comps.depth_ref,
                             },
+                            meta,
                             body,
                         ),
                     ))
@@ -401,6 +425,7 @@ impl Parser {
                             level: SampleLevel::Exact(args[2].0),
                             depth_ref: comps.depth_ref,
                         },
+                        meta,
                         body,
                     )))
                 } else {
@@ -437,17 +462,19 @@ impl Parser {
                         base,
                         index: size as u32 - 1,
                     },
+                    meta,
                     body,
                 );
                 let left = if let VectorSize::Bi = size {
-                    ctx.add_expression(Expression::AccessIndex { base, index: 0 }, body)
+                    ctx.add_expression(Expression::AccessIndex { base, index: 0 }, meta, body)
                 } else {
                     let size = match size {
                         VectorSize::Tri => VectorSize::Bi,
                         _ => VectorSize::Tri,
                     };
-                    right = ctx.add_expression(Expression::Splat { size, value: right }, body);
-                    ctx.vector_resize(size, base, body)
+                    right =
+                        ctx.add_expression(Expression::Splat { size, value: right }, meta, body);
+                    ctx.vector_resize(size, base, meta, body)
                 };
                 let coords = ctx.add_expression(
                     Expression::Binary {
@@ -455,6 +482,7 @@ impl Parser {
                         left,
                         right,
                     },
+                    meta,
                     body,
                 );
                 let comps = self.coordinate_components(ctx, args[0], (coords, base_meta), body)?;
@@ -469,6 +497,7 @@ impl Parser {
                             level,
                             depth_ref: comps.depth_ref,
                         },
+                        meta,
                         body,
                     )))
                 } else {
@@ -503,6 +532,7 @@ impl Parser {
                             },
                             depth_ref: comps.depth_ref,
                         },
+                        meta,
                         body,
                     )))
                 } else {
@@ -526,6 +556,7 @@ impl Parser {
                             level: args.get(1).map(|e| e.0),
                         },
                     },
+                    meta,
                     body,
                 )))
             }
@@ -546,6 +577,7 @@ impl Parser {
                             array_index: comps.array_index,
                             index: Some(args[2].0),
                         },
+                        meta,
                         body,
                     )))
                 } else {
@@ -599,6 +631,7 @@ impl Parser {
                         arg1: None,
                         arg2: None,
                     },
+                    meta,
                     body,
                 )))
             }
@@ -618,7 +651,7 @@ impl Parser {
                     },
                     _ => return Err(Error::wrong_function_args(name, 2, args.len(), meta)),
                 };
-                Ok(Some(ctx.add_expression(expr, body)))
+                Ok(Some(ctx.add_expression(expr, meta, body)))
             }
             "mod" => {
                 if args.len() != 2 {
@@ -636,6 +669,7 @@ impl Parser {
                         left,
                         right,
                     },
+                    meta,
                     body,
                 )))
             }
@@ -667,6 +701,7 @@ impl Parser {
                         arg1: Some(arg1),
                         arg2: None,
                     },
+                    meta,
                     body,
                 )))
             }
@@ -700,6 +735,7 @@ impl Parser {
                         arg1: Some(arg1),
                         arg2: None,
                     },
+                    meta,
                     body,
                 )))
             }
@@ -739,6 +775,7 @@ impl Parser {
                                 size,
                                 value: selector,
                             },
+                            meta,
                             body,
                         )
                     }
@@ -771,7 +808,7 @@ impl Parser {
                     },
                 };
 
-                Ok(Some(ctx.add_expression(expr, body)))
+                Ok(Some(ctx.add_expression(expr, meta, body)))
             }
             "clamp" => {
                 if args.len() != 3 {
@@ -801,6 +838,7 @@ impl Parser {
                         arg1: Some(arg1),
                         arg2: Some(arg2),
                     },
+                    meta,
                     body,
                 )))
             }
@@ -821,6 +859,7 @@ impl Parser {
                         arg1: Some(args[1].0),
                         arg2: Some(args[2].0),
                     },
+                    meta,
                     body,
                 )))
             }
@@ -843,6 +882,7 @@ impl Parser {
                         left: args[0].0,
                         right: args[1].0,
                     },
+                    meta,
                     body,
                 )))
             }
@@ -996,12 +1036,15 @@ impl Parser {
                                 init: None,
                             });
                             let temp_expr =
-                                ctx.add_expression(Expression::LocalVariable(temp_var), body);
+                                ctx.add_expression(Expression::LocalVariable(temp_var), meta, body);
 
-                            body.push(Statement::Store {
-                                pointer: temp_expr,
-                                value: handle,
-                            });
+                            body.push(
+                                Statement::Store {
+                                    pointer: temp_expr,
+                                    value: handle,
+                                },
+                                meta.as_span(),
+                            );
 
                             arguments.push(temp_expr);
                             proxy_writes.push((*expr, temp_expr));
@@ -1020,27 +1063,33 @@ impl Parser {
                 ctx.emit_flush(body);
 
                 let result = if !is_void {
-                    Some(ctx.add_expression(Expression::CallResult(function), body))
+                    Some(ctx.add_expression(Expression::CallResult(function), meta, body))
                 } else {
                     None
                 };
 
-                body.push(crate::Statement::Call {
-                    function,
-                    arguments,
-                    result,
-                });
+                body.push(
+                    crate::Statement::Call {
+                        function,
+                        arguments,
+                        result,
+                    },
+                    meta.as_span(),
+                );
 
                 ctx.emit_start();
                 for (tgt, pointer) in proxy_writes {
-                    let value = ctx.add_expression(Expression::Load { pointer }, body);
+                    let value = ctx.add_expression(Expression::Load { pointer }, meta, body);
                     let target = ctx.lower_expect_inner(stmt, self, tgt, true, body)?.0;
 
                     ctx.emit_flush(body);
-                    body.push(Statement::Store {
-                        pointer: target,
-                        value,
-                    });
+                    body.push(
+                        Statement::Store {
+                            pointer: target,
+                            value,
+                        },
+                        meta.as_span(),
+                    );
                     ctx.emit_start();
                 }
 
@@ -1067,6 +1116,7 @@ impl Parser {
                 fun,
                 argument: args[0].0,
             },
+            meta,
             body,
         ))
     }
@@ -1208,7 +1258,7 @@ impl Parser {
     pub(crate) fn add_entry_point(
         &mut self,
         function: Handle<Function>,
-        mut global_init_body: Block,
+        global_init_body: Block,
         mut expressions: Arena<Expression>,
     ) {
         let mut arguments = Vec::new();
@@ -1238,16 +1288,19 @@ impl Parser {
             let pointer = expressions.append(Expression::GlobalVariable(arg.handle));
             let value = expressions.append(Expression::FunctionArgument(idx));
 
-            body.push(Statement::Store { pointer, value });
+            body.push(Statement::Store { pointer, value }, Default::default());
         }
 
-        body.append(&mut global_init_body);
+        body.extend_block(global_init_body);
 
-        body.push(Statement::Call {
-            function,
-            arguments: Vec::new(),
-            result: None,
-        });
+        body.push(
+            Statement::Call {
+                function,
+                arguments: Vec::new(),
+                result: None,
+            },
+            Default::default(),
+        );
 
         let mut span = 0;
         let mut members = Vec::new();
@@ -1272,7 +1325,10 @@ impl Parser {
             let pointer = expressions.append(Expression::GlobalVariable(arg.handle));
             let len = expressions.len();
             let load = expressions.append(Expression::Load { pointer });
-            body.push(Statement::Emit(expressions.range_from(len)));
+            body.push(
+                Statement::Emit(expressions.range_from(len)),
+                Default::default(),
+            );
             components.push(load)
         }
 
@@ -1288,14 +1344,17 @@ impl Parser {
 
             let len = expressions.len();
             let res = expressions.append(Expression::Compose { ty, components });
-            body.push(Statement::Emit(expressions.range_from(len)));
+            body.push(
+                Statement::Emit(expressions.range_from(len)),
+                Default::default(),
+            );
 
             (Some(ty), Some(res))
         } else {
             (None, None)
         };
 
-        body.push(Statement::Return { value });
+        body.push(Statement::Return { value }, Default::default());
 
         self.module.entry_points.push(EntryPoint {
             name: "main".to_string(),
@@ -1344,13 +1403,14 @@ impl Parser {
 
             let coordinate = match (image_size, coord_size) {
                 (Some(size), Some(coord_s)) if size != coord_s => {
-                    ctx.vector_resize(size, coord, body)
+                    ctx.vector_resize(size, coord, coord_meta, body)
                 }
                 (None, Some(_)) => ctx.add_expression(
                     Expression::AccessIndex {
                         base: coord,
                         index: 0,
                     },
+                    coord_meta,
                     body,
                 ),
                 _ => coord,
@@ -1362,7 +1422,11 @@ impl Parser {
                         false => image_size.map_or(0, |s| s as u32),
                     };
 
-                    Some(ctx.add_expression(Expression::AccessIndex { base: coord, index }, body))
+                    Some(ctx.add_expression(
+                        Expression::AccessIndex { base: coord, index },
+                        coord_meta,
+                        body,
+                    ))
                 }
                 _ => None,
             };
@@ -1370,7 +1434,11 @@ impl Parser {
                 true => {
                     let index = image_size.map_or(0, |s| s as u32);
 
-                    Some(ctx.add_expression(Expression::AccessIndex { base: coord, index }, body))
+                    Some(ctx.add_expression(
+                        Expression::AccessIndex { base: coord, index },
+                        coord_meta,
+                        body,
+                    ))
                 }
                 false => None,
             };

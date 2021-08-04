@@ -41,6 +41,7 @@ use function::*;
 use crate::{
     arena::{Arena, Handle},
     proc::{Alignment, Layouter},
+    span::Span,
     FastHashMap,
 };
 
@@ -378,6 +379,7 @@ struct FunctionInfo {
 
 pub struct Parser<I> {
     data: I,
+    data_offset: usize,
     state: ModuleState,
     layouter: Layouter,
     temp_bytes: Vec<u8>,
@@ -417,6 +419,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
     pub fn new(data: I, options: &Options) -> Self {
         Parser {
             data,
+            data_offset: 0,
             state: ModuleState::Empty,
             layouter: Layouter::default(),
             temp_bytes: Vec::new(),
@@ -447,7 +450,12 @@ impl<I: Iterator<Item = u32>> Parser<I> {
     }
 
     fn next(&mut self) -> Result<u32, Error> {
-        self.data.next().ok_or(Error::IncompleteData)
+        if let Some(res) = self.data.next() {
+            self.data_offset += 4;
+            Ok(res)
+        } else {
+            Err(Error::IncompleteData)
+        }
     }
 
     fn next_inst(&mut self) -> Result<Instruction, Error> {
@@ -793,7 +801,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         arguments: &[crate::FunctionArgument],
         function_info: &mut FunctionInfo,
     ) -> Result<ControlFlowNode, Error> {
-        let mut block = Vec::new();
+        let mut block = crate::Block::new();
         let mut phis = Vec::new();
         let mut emitter = super::Emitter::default();
         emitter.start(expressions);
@@ -1315,6 +1323,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     inst.expect_at_least(3)?;
                     block.extend(emitter.finish(expressions));
 
+                    let span_start = self.data_offset;
                     let pointer_id = self.next()?;
                     let value_id = self.next()?;
                     if inst.wc != 3 {
@@ -1323,10 +1332,13 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     }
                     let base_expr = self.lookup_expression.lookup(pointer_id)?;
                     let value_expr = self.lookup_expression.lookup(value_id)?;
-                    block.push(crate::Statement::Store {
-                        pointer: base_expr.handle,
-                        value: value_expr.handle,
-                    });
+                    block.push(
+                        crate::Statement::Store {
+                            pointer: base_expr.handle,
+                            value: value_expr.handle,
+                        },
+                        Span::ByteRange(span_start..self.data_offset),
+                    );
                     emitter.start(expressions);
                 }
                 // Arithmetic Instructions +, -, *, /, %
@@ -1488,6 +1500,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 Op::ImageWrite => {
                     let extra = inst.expect_at_least(4)?;
                     block.extend(emitter.finish(expressions));
+                    let span_start = self.data_offset;
                     let stmt = self.parse_image_write(
                         extra,
                         type_arena,
@@ -1495,7 +1508,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         arguments,
                         expressions,
                     )?;
-                    block.push(stmt);
+                    block.push(stmt, Span::ByteRange(span_start..self.data_offset));
                     emitter.start(expressions);
                 }
                 Op::ImageFetch | Op::ImageRead => {
@@ -1739,6 +1752,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 Op::FunctionCall => {
                     inst.expect_at_least(4)?;
                     block.extend(emitter.finish(expressions));
+                    let span_start = self.data_offset;
 
                     let result_type_id = self.next()?;
                     let result_id = self.next()?;
@@ -1767,11 +1781,14 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         );
                         Some(expr_handle)
                     };
-                    block.push(crate::Statement::Call {
-                        function,
-                        arguments,
-                        result,
-                    });
+                    block.push(
+                        crate::Statement::Call {
+                            function,
+                            arguments,
+                            result,
+                        },
+                        Span::ByteRange(span_start..self.data_offset),
+                    );
                     emitter.start(expressions);
                 }
                 Op::ExtInst => {
@@ -2110,6 +2127,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 }
                 Op::CopyMemory => {
                     inst.expect_at_least(3)?;
+                    let span_start = self.data_offset;
                     let target_id = self.next()?;
                     let source_id = self.next()?;
                     let _memory_access = if inst.wc != 3 {
@@ -2130,15 +2148,19 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     });
 
                     block.extend(emitter.finish(expressions));
-                    block.push(crate::Statement::Store {
-                        pointer: target.handle,
-                        value: value_expr,
-                    });
+                    block.push(
+                        crate::Statement::Store {
+                            pointer: target.handle,
+                            value: value_expr,
+                        },
+                        Span::ByteRange(span_start..self.data_offset),
+                    );
 
                     emitter.start(expressions);
                 }
                 Op::ControlBarrier => {
                     inst.expect(4)?;
+                    let span_start = self.data_offset;
                     let exec_scope_id = self.next()?;
                     let _mem_scope_raw = self.next()?;
                     let semantics_id = self.next()?;
@@ -2172,7 +2194,10 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                                     .bits()
                                 != 0,
                         );
-                        block.push(crate::Statement::Barrier(flags));
+                        block.push(
+                            crate::Statement::Barrier(flags),
+                            Span::ByteRange(span_start..self.data_offset),
+                        );
                     } else {
                         log::warn!("Unsupported barrier execution scope: {}", exec_scope);
                     }
@@ -2268,7 +2293,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     if let [S::Break] = reject[..] {
                         // uplift "accept" into the parent
                         let extracted = mem::take(accept);
-                        statements.splice(i + 1..i + 1, extracted.into_iter());
+                        statements.splice(i + 1..i + 1, extracted);
                     } else {
                         self.patch_statements(reject, expressions, function)?;
                         self.patch_statements(accept, expressions, function)?;
@@ -2282,7 +2307,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     if cases.is_empty() {
                         // uplift "default" into the parent
                         let extracted = mem::take(default);
-                        statements.splice(i + 1..i + 1, extracted.into_iter());
+                        statements.splice(i + 1..i + 1, extracted);
                     } else {
                         for case in cases.iter_mut() {
                             self.patch_statements(&mut case.body, expressions, function)?;

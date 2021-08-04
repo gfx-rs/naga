@@ -25,7 +25,10 @@ impl<'source> ParsingContext<'source> {
         global_ctx: &mut Context,
         global_body: &mut Block,
     ) -> Result<()> {
-        if !self.parse_declaration(parser, global_ctx, global_body, true)? {
+        if self
+            .parse_declaration(parser, global_ctx, global_body, true)?
+            .is_none()
+        {
             let token = self.bump(parser)?;
             match token.value {
                 TokenValue::Semicolon if parser.meta.version == 460 => Ok(()),
@@ -94,7 +97,7 @@ impl<'source> ParsingContext<'source> {
             }
 
             Ok((
-                ctx.add_expression(Expression::Compose { ty, components }, body),
+                ctx.add_expression(Expression::Compose { ty, components }, meta, body),
                 meta,
             ))
         } else {
@@ -203,7 +206,8 @@ impl<'source> ParsingContext<'source> {
 
             if let Some((value, _)) = init.filter(|_| maybe_constant.is_none()) {
                 ctx.flush_expressions();
-                ctx.body.push(Statement::Store { pointer, value });
+                ctx.body
+                    .push(Statement::Store { pointer, value }, meta.as_span());
             }
 
             let token = self.bump(parser)?;
@@ -232,7 +236,7 @@ impl<'source> ParsingContext<'source> {
         ctx: &mut Context,
         body: &mut Block,
         external: bool,
-    ) -> Result<bool> {
+    ) -> Result<Option<SourceMetadata>> {
         //declaration:
         //    function_prototype  SEMICOLON
         //
@@ -276,7 +280,7 @@ impl<'source> ParsingContext<'source> {
                                     // This branch handles function prototypes
                                     parser.add_prototype(context, name, result, meta);
 
-                                    Ok(true)
+                                    Ok(Some(meta))
                                 }
                                 TokenValue::LeftBrace if external => {
                                     // This branch handles function definitions
@@ -284,11 +288,16 @@ impl<'source> ParsingContext<'source> {
                                     // only happens if external is also true
 
                                     // parse the body
-                                    self.parse_compound_statement(parser, &mut context, &mut body)?;
+                                    self.parse_compound_statement(
+                                        token.meta,
+                                        parser,
+                                        &mut context,
+                                        &mut body,
+                                    )?;
 
                                     parser.add_function(context, name, result, body, meta);
 
-                                    Ok(true)
+                                    Ok(Some(meta))
                                 }
                                 _ if external => Err(Error {
                                     kind: ErrorKind::InvalidToken(
@@ -338,7 +347,7 @@ impl<'source> ParsingContext<'source> {
                     })
                 }
 
-                Ok(true)
+                Ok(Some(meta))
             } else {
                 // This branch handles struct definitions and modifiers like
                 // ```glsl
@@ -356,6 +365,7 @@ impl<'source> ParsingContext<'source> {
                                 ty_name,
                                 token.meta,
                             )
+                            .map(|meta| Some(meta))
                         } else {
                             //TODO: declaration
                             // type_qualifier IDENTIFIER SEMICOLON
@@ -367,7 +377,9 @@ impl<'source> ParsingContext<'source> {
                         }
                     }
                     TokenValue::Semicolon => {
+                        let mut meta_all = token.meta;
                         for &(ref qualifier, meta) in qualifiers.iter() {
+                            meta_all = meta_all.union(&meta);
                             match *qualifier {
                                 TypeQualifier::WorkGroupSize(i, value) => {
                                     parser.meta.workgroup_size[i] = value
@@ -391,7 +403,7 @@ impl<'source> ParsingContext<'source> {
                             }
                         }
 
-                        Ok(true)
+                        Ok(Some(meta_all))
                     }
                     _ => Err(Error {
                         kind: ErrorKind::InvalidToken(
@@ -447,9 +459,9 @@ impl<'source> ParsingContext<'source> {
 
                     self.expect(parser, TokenValue::Semicolon)?;
 
-                    Ok(true)
+                    Ok(Some(meta))
                 }
-                _ => Ok(false),
+                _ => Ok(None),
             }
         }
     }
@@ -462,7 +474,7 @@ impl<'source> ParsingContext<'source> {
         qualifiers: &[(TypeQualifier, SourceMetadata)],
         ty_name: String,
         mut meta: SourceMetadata,
-    ) -> Result<bool> {
+    ) -> Result<SourceMetadata> {
         let mut storage = None;
         let mut layout = None;
 
@@ -556,7 +568,7 @@ impl<'source> ParsingContext<'source> {
             parser.global_variables.push((k, lookup));
         }
 
-        Ok(true)
+        Ok(meta)
     }
 
     // TODO: Accept layout arguments

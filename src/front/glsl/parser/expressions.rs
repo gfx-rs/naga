@@ -133,7 +133,7 @@ impl<'source> ParsingContext<'source> {
                         meta,
                     }
                 } else {
-                    let var = match parser.lookup_variable(ctx, body, &name) {
+                    let var = match parser.lookup_variable(ctx, body, &name, meta) {
                         Some(var) => var,
                         None => {
                             return Err(Error {
