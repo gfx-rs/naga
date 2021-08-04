@@ -92,8 +92,7 @@ pub fn calculate_offset(
                     size,
                     stride,
                 },
-            });
-            types.set_span_if_unknown(ty, ty_span);
+            }, ty_span);
 
             (align, span)
         }
@@ -148,8 +147,7 @@ pub fn calculate_offset(
                     members,
                     span,
                 },
-            });
-            types.set_span_if_unknown(ty, ty_span);
+            }, ty_span);
 
             (align, span)
         }

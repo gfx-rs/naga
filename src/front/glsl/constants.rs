@@ -64,6 +64,7 @@ impl<'a> ConstantSolver<'a> {
         &mut self,
         expr: Handle<Expression>,
     ) -> Result<Handle<Constant>, ConstantSolvingError> {
+        let span = self.expressions.get_span(expr).clone();
         match self.expressions[expr] {
             Expression::Constant(constant) => Ok(constant),
             Expression::AccessIndex { base, index } => self.access(base, index as usize),
@@ -95,7 +96,7 @@ impl<'a> ConstantSolver<'a> {
                         ty,
                         components: vec![value_constant; size as usize],
                     },
-                }))
+                }, span))
             }
             Expression::Swizzle {
                 size,
@@ -133,7 +134,7 @@ impl<'a> ConstantSolver<'a> {
                     name: None,
                     specialization: None,
                     inner: ConstantInner::Composite { ty, components },
-                }))
+                }, span))
             }
             Expression::Compose { ty, ref components } => {
                 let components = components
@@ -145,18 +146,18 @@ impl<'a> ConstantSolver<'a> {
                     name: None,
                     specialization: None,
                     inner: ConstantInner::Composite { ty, components },
-                }))
+                }, span))
             }
             Expression::Unary { expr, op } => {
                 let expr_constant = self.solve(expr)?;
 
-                self.unary_op(op, expr_constant)
+                self.unary_op(op, expr_constant, span)
             }
             Expression::Binary { left, right, op } => {
                 let left_constant = self.solve(left)?;
                 let right_constant = self.solve(right)?;
 
-                self.binary_op(op, left_constant, right_constant)
+                self.binary_op(op, left_constant, right_constant, span)
             }
             Expression::Math { fun, arg, arg1, .. } => {
                 let arg = self.solve(arg)?;
@@ -196,7 +197,7 @@ impl<'a> ConstantSolver<'a> {
                             name: None,
                             specialization: None,
                             inner: ConstantInner::Scalar { width, value },
-                        }))
+                        }, span))
                     }
                     _ => Err(ConstantSolvingError::NotImplemented(format!("{:?}", fun))),
                 }
@@ -209,7 +210,7 @@ impl<'a> ConstantSolver<'a> {
                 let expr_constant = self.solve(expr)?;
 
                 match convert {
-                    Some(width) => self.cast(expr_constant, kind, width),
+                    Some(width) => self.cast(expr_constant, kind, width, span),
                     None => Err(ConstantSolvingError::Bitcast),
                 }
             }
@@ -288,6 +289,7 @@ impl<'a> ConstantSolver<'a> {
         constant: Handle<Constant>,
         kind: ScalarKind,
         target_width: crate::Bytes,
+        span: crate::Span,
     ) -> Result<Handle<Constant>, ConstantSolvingError> {
         fn inner_cast<A: num_traits::FromPrimitive>(value: ScalarValue) -> A {
             match value {
@@ -324,7 +326,7 @@ impl<'a> ConstantSolver<'a> {
                 }
 
                 for component in components {
-                    *component = self.cast(*component, kind, target_width)?;
+                    *component = self.cast(*component, kind, target_width, span.clone())?;
                 }
             }
         }
@@ -333,13 +335,14 @@ impl<'a> ConstantSolver<'a> {
             name: None,
             specialization: None,
             inner,
-        }))
+        }, span))
     }
 
     fn unary_op(
         &mut self,
         op: UnaryOperator,
         constant: Handle<Constant>,
+        span: crate::Span,
     ) -> Result<Handle<Constant>, ConstantSolvingError> {
         let mut inner = self.constants[constant].inner.clone();
 
@@ -367,7 +370,7 @@ impl<'a> ConstantSolver<'a> {
                 }
 
                 for component in components {
-                    *component = self.unary_op(op, *component)?
+                    *component = self.unary_op(op, *component, span.clone())?
                 }
             }
         }
@@ -376,7 +379,7 @@ impl<'a> ConstantSolver<'a> {
             name: None,
             specialization: None,
             inner,
-        }))
+        }, span))
     }
 
     fn binary_op(
@@ -384,6 +387,7 @@ impl<'a> ConstantSolver<'a> {
         op: BinaryOperator,
         left: Handle<Constant>,
         right: Handle<Constant>,
+        span: crate::Span,
     ) -> Result<Handle<Constant>, ConstantSolvingError> {
         let left_inner = &self.constants[left].inner;
         let right_inner = &self.constants[right].inner;
@@ -464,14 +468,14 @@ impl<'a> ConstantSolver<'a> {
             (&ConstantInner::Composite { ref components, ty }, &ConstantInner::Scalar { .. }) => {
                 let mut components = components.clone();
                 for comp in components.iter_mut() {
-                    *comp = self.binary_op(op, *comp, right)?;
+                    *comp = self.binary_op(op, *comp, right, span.clone())?;
                 }
                 ConstantInner::Composite { ty, components }
             }
             (&ConstantInner::Scalar { .. }, &ConstantInner::Composite { ref components, ty }) => {
                 let mut components = components.clone();
                 for comp in components.iter_mut() {
-                    *comp = self.binary_op(op, left, *comp)?;
+                    *comp = self.binary_op(op, left, *comp, span.clone())?;
                 }
                 ConstantInner::Composite { ty, components }
             }
@@ -482,7 +486,7 @@ impl<'a> ConstantSolver<'a> {
             name: None,
             specialization: None,
             inner,
-        }))
+        }, span))
     }
 }
 
@@ -510,7 +514,7 @@ mod tests {
                 kind: ScalarKind::Sint,
                 width: 4,
             },
-        });
+        }, Default::default());
 
         let h = constants.append(Constant {
             name: None,
@@ -519,7 +523,7 @@ mod tests {
                 width: 4,
                 value: ScalarValue::Sint(4),
             },
-        });
+        }, Default::default());
 
         let h1 = constants.append(Constant {
             name: None,
@@ -528,7 +532,7 @@ mod tests {
                 width: 4,
                 value: ScalarValue::Sint(8),
             },
-        });
+        }, Default::default());
 
         let vec_h = constants.append(Constant {
             name: None,
@@ -537,25 +541,25 @@ mod tests {
                 ty: vec_ty,
                 components: vec![h, h1],
             },
-        });
+        }, Default::default());
 
-        let expr = expressions.append(Expression::Constant(h));
-        let expr1 = expressions.append(Expression::Constant(vec_h));
+        let expr = expressions.append(Expression::Constant(h), Default::default());
+        let expr1 = expressions.append(Expression::Constant(vec_h), Default::default());
 
         let root1 = expressions.append(Expression::Unary {
             op: UnaryOperator::Negate,
             expr,
-        });
+        }, Default::default());
 
         let root2 = expressions.append(Expression::Unary {
             op: UnaryOperator::Not,
             expr,
-        });
+        }, Default::default());
 
         let root3 = expressions.append(Expression::Unary {
             op: UnaryOperator::Not,
             expr: expr1,
-        });
+        }, Default::default());
 
         let mut solver = ConstantSolver {
             types: &types,
@@ -621,15 +625,15 @@ mod tests {
                 width: 4,
                 value: ScalarValue::Sint(4),
             },
-        });
+        }, Default::default());
 
-        let expr = expressions.append(Expression::Constant(h));
+        let expr = expressions.append(Expression::Constant(h), Default::default());
 
         let root = expressions.append(Expression::As {
             expr,
             kind: ScalarKind::Bool,
             convert: Some(crate::BOOL_WIDTH),
-        });
+        }, Default::default());
 
         let mut solver = ConstantSolver {
             types: &Arena::new(),
@@ -661,7 +665,7 @@ mod tests {
                 rows: VectorSize::Tri,
                 width: 4,
             },
-        });
+        }, Default::default());
 
         let vec_ty = types.append(Type {
             name: None,
@@ -670,7 +674,7 @@ mod tests {
                 kind: ScalarKind::Float,
                 width: 4,
             },
-        });
+        }, Default::default());
 
         let mut vec1_components = Vec::with_capacity(3);
         let mut vec2_components = Vec::with_capacity(3);
@@ -683,7 +687,7 @@ mod tests {
                     width: 4,
                     value: ScalarValue::Float(i as f64),
                 },
-            });
+            }, Default::default());
 
             vec1_components.push(h)
         }
@@ -696,7 +700,7 @@ mod tests {
                     width: 4,
                     value: ScalarValue::Float(i as f64),
                 },
-            });
+            }, Default::default());
 
             vec2_components.push(h)
         }
@@ -708,7 +712,7 @@ mod tests {
                 ty: vec_ty,
                 components: vec1_components,
             },
-        });
+        }, Default::default());
 
         let vec2 = constants.append(Constant {
             name: None,
@@ -717,7 +721,7 @@ mod tests {
                 ty: vec_ty,
                 components: vec2_components,
             },
-        });
+        }, Default::default());
 
         let h = constants.append(Constant {
             name: None,
@@ -726,14 +730,14 @@ mod tests {
                 ty: matrix_ty,
                 components: vec![vec1, vec2],
             },
-        });
+        }, Default::default());
 
-        let base = expressions.append(Expression::Constant(h));
-        let root1 = expressions.append(Expression::AccessIndex { base, index: 1 });
+        let base = expressions.append(Expression::Constant(h), Default::default());
+        let root1 = expressions.append(Expression::AccessIndex { base, index: 1 }, Default::default());
         let root2 = expressions.append(Expression::AccessIndex {
             base: root1,
             index: 2,
-        });
+        }, Default::default());
 
         let mut solver = ConstantSolver {
             types: &types,

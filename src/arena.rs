@@ -195,13 +195,14 @@ impl<T> Arena<T> {
     }
 
     /// Adds a new value to the arena, returning a typed handle.
-    pub fn append(&mut self, value: T) -> Handle<T> {
+    #[cfg_attr(not(feature = "span"), allow(unused_variables))]
+    pub fn append(&mut self, value: T, span: Span) -> Handle<T> {
         let position = self.data.len() + 1;
         let index =
             Index::new(position as u32).expect("Failed to append to Arena. Handle overflows");
         self.data.push(value);
         #[cfg(feature = "span")]
-        self.span_info.push(Span::Unknown);
+        self.span_info.push(span);
         Handle::new(index)
     }
 
@@ -217,21 +218,21 @@ impl<T> Arena<T> {
     /// returns a handle pointing to
     /// an existing element if the check succeeds, or adds a new
     /// element otherwise.
-    pub fn fetch_if_or_append<F: Fn(&T, &T) -> bool>(&mut self, value: T, fun: F) -> Handle<T> {
+    pub fn fetch_if_or_append<F: Fn(&T, &T) -> bool>(&mut self, value: T, span: Span, fun: F) -> Handle<T> {
         if let Some(index) = self.data.iter().position(|d| fun(d, &value)) {
             let index = unsafe { Index::new_unchecked((index + 1) as u32) };
             Handle::new(index)
         } else {
-            self.append(value)
+            self.append(value, span)
         }
     }
 
     /// Adds a value with a check for uniqueness, where the check is plain comparison.
-    pub fn fetch_or_append(&mut self, value: T) -> Handle<T>
+    pub fn fetch_or_append(&mut self, value: T, span: Span) -> Handle<T>
     where
         T: PartialEq,
     {
-        self.fetch_if_or_append(value, T::eq)
+        self.fetch_if_or_append(value, span, T::eq)
     }
 
     pub fn try_get(&self, handle: Handle<T>) -> Option<&T> {
@@ -266,6 +267,7 @@ impl<T> Arena<T> {
     }
 
     #[allow(unused_variables)]
+    #[deprecated]
     pub fn set_span(&mut self, handle: Handle<T>, span: Span) {
         #[cfg(feature = "span")]
         {
@@ -274,6 +276,7 @@ impl<T> Arena<T> {
     }
 
     #[allow(unused_variables)]
+    #[deprecated]
     pub fn set_span_if_unknown(&mut self, handle: Handle<T>, span: Span) {
         #[cfg(feature = "span")]
         {
@@ -287,7 +290,7 @@ impl<T> Arena<T> {
 
 #[cfg(feature = "deserialize")]
 impl<'de, T> serde::Deserialize<'de> for Arena<T> {
-    fn deserialize<D>(deserializer: D) -> Result<Self, <D as Deserializer<'de>>::Error>
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
     {
@@ -310,6 +313,12 @@ impl<T> ops::Index<Handle<T>> for Arena<T> {
     }
 }
 
+impl<T> ops::IndexMut<Handle<T>> for Arena<T> {
+    fn index_mut(&mut self, handle: Handle<T>) -> &mut T {
+        &mut self.data[handle.index()]
+    }
+}
+
 impl<T> ops::Index<Range<T>> for Arena<T> {
     type Output = [T];
     fn index(&self, range: Range<T>) -> &[T] {
@@ -324,8 +333,8 @@ mod tests {
     #[test]
     fn append_non_unique() {
         let mut arena: Arena<u8> = Arena::new();
-        let t1 = arena.append(0);
-        let t2 = arena.append(0);
+        let t1 = arena.append(0, Default::default());
+        let t2 = arena.append(0, Default::default());
         assert!(t1 != t2);
         assert!(arena[t1] == arena[t2]);
     }
@@ -333,8 +342,8 @@ mod tests {
     #[test]
     fn append_unique() {
         let mut arena: Arena<u8> = Arena::new();
-        let t1 = arena.append(0);
-        let t2 = arena.append(1);
+        let t1 = arena.append(0, Default::default());
+        let t2 = arena.append(1, Default::default());
         assert!(t1 != t2);
         assert!(arena[t1] != arena[t2]);
     }
@@ -342,8 +351,8 @@ mod tests {
     #[test]
     fn fetch_or_append_non_unique() {
         let mut arena: Arena<u8> = Arena::new();
-        let t1 = arena.fetch_or_append(0);
-        let t2 = arena.fetch_or_append(0);
+        let t1 = arena.fetch_or_append(0, Default::default());
+        let t2 = arena.fetch_or_append(0, Default::default());
         assert!(t1 == t2);
         assert!(arena[t1] == arena[t2])
     }
@@ -351,8 +360,8 @@ mod tests {
     #[test]
     fn fetch_or_append_unique() {
         let mut arena: Arena<u8> = Arena::new();
-        let t1 = arena.fetch_or_append(0);
-        let t2 = arena.fetch_or_append(1);
+        let t1 = arena.fetch_or_append(0, Default::default());
+        let t2 = arena.fetch_or_append(1, Default::default());
         assert!(t1 != t2);
         assert!(arena[t1] != arena[t2]);
     }

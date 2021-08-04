@@ -505,7 +505,7 @@ impl<'source> ParsingContext<'source> {
                 members: members.clone(),
                 span,
             },
-        });
+        }, Default::default());
 
         let token = self.bump(parser)?;
         let name = match token.value {

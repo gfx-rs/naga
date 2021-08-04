@@ -34,14 +34,15 @@ impl<'source> ParsingContext<'source> {
         let token = self.bump(parser)?;
         let handle = match token.value {
             TokenValue::Void => None,
-            TokenValue::TypeName(ty) => Some(parser.module.types.fetch_or_append(ty)),
+            TokenValue::TypeName(ty) => Some(parser.module.types.fetch_or_append(ty, token.meta.as_span())),
             TokenValue::Struct => {
+                let meta = token.meta;
                 let ty_name = self.expect_ident(parser)?.0;
                 self.expect(parser, TokenValue::LeftBrace)?;
                 let mut members = Vec::new();
                 let span =
                     self.parse_struct_declaration_list(parser, &mut members, StructLayout::Std140)?;
-                self.expect(parser, TokenValue::RightBrace)?;
+                let end_meta = self.expect(parser, TokenValue::RightBrace)?.meta;
 
                 let ty = parser.module.types.append(Type {
                     name: Some(ty_name.clone()),
@@ -50,7 +51,7 @@ impl<'source> ParsingContext<'source> {
                         members,
                         span,
                     },
-                });
+                }, meta.union(&end_meta).as_span());
                 parser.lookup_type.insert(ty_name, ty);
                 Some(ty)
             }

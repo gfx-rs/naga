@@ -266,8 +266,7 @@ impl Parser {
                         .inner
                         .span(&self.module.constants),
                 },
-            });
-            self.module.types.set_span_if_unknown(handle, meta.union(&size_meta).as_span());
+            }, meta.union(&size_meta).as_span());
             handle
         })
             .unwrap_or(base)

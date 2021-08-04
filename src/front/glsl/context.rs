@@ -79,8 +79,9 @@ impl Context {
         self.emit_flush(body);
         let (expr, load) = match kind {
             GlobalLookupKind::Variable(v) => {
+                let span = parser.module.global_variables.get_span(v).clone();
                 let res = (
-                    self.expressions.append(Expression::GlobalVariable(v)),
+                    self.expressions.append(Expression::GlobalVariable(v), span),
                     parser.module.global_variables[v].class != StorageClass::Handle,
                 );
                 self.emit_start();
@@ -88,11 +89,12 @@ impl Context {
                 res
             }
             GlobalLookupKind::BlockSelect(handle, index) => {
-                let base = self.expressions.append(Expression::GlobalVariable(handle));
+                let span = parser.module.global_variables.get_span(handle).clone();
+                let base = self.expressions.append(Expression::GlobalVariable(handle), span.clone());
                 self.emit_start();
                 let expr = self
                     .expressions
-                    .append(Expression::AccessIndex { base, index });
+                    .append(Expression::AccessIndex { base, index }, span);
 
                 (expr, {
                     let ty = parser.module.global_variables[handle].ty;
@@ -114,7 +116,8 @@ impl Context {
                 })
             }
             GlobalLookupKind::Constant(v) => {
-                let res = (self.expressions.append(Expression::Constant(v)), false);
+                let span = parser.module.constants.get_span(v).clone();
+                let res = (self.expressions.append(Expression::Constant(v), span), false);
                 self.emit_start();
                 res
             }
@@ -148,8 +151,7 @@ impl Context {
         if needs_pre_emit {
             self.emit_flush(body);
         }
-        let handle = self.expressions.append(expr);
-        self.expressions.set_span(handle, meta.as_span());
+        let handle = self.expressions.append(expr, meta.as_span());
         if needs_pre_emit {
             self.emit_start();
         }
@@ -216,13 +218,14 @@ impl Context {
         };
 
         if qualifier.is_lhs() {
+            let span = parser.module.types.get_span(arg.ty).clone();
             arg.ty = parser.module.types.fetch_or_append(Type {
                 name: None,
                 inner: TypeInner::Pointer {
                     base: arg.ty,
                     class: StorageClass::Function,
                 },
-            })
+            }, span)
         }
 
         self.arguments.push(arg);
@@ -242,7 +245,7 @@ impl Context {
                     name: Some(name.clone()),
                     ty,
                     init: None,
-                });
+                }, meta.as_span());
                 let local_expr = self.add_expression(Expression::LocalVariable(handle), meta, body);
 
                 self.emit_flush(body);
@@ -466,7 +469,7 @@ impl Context {
 
                             let argument =
                                 self.expressions
-                                    .append(Expression::Binary { op, left, right });
+                                    .append(Expression::Binary { op, left, right }, meta.as_span());
 
                             self.add_expression(
                                 Expression::Relational { fun, argument },
@@ -699,7 +702,7 @@ impl Context {
                             false => crate::ScalarValue::Sint(1),
                         },
                     },
-                });
+                }, Default::default());
                 let right = self.add_expression(Expression::Constant(one), meta, body);
 
                 let value = self.add_expression(Expression::Binary { op, left, right }, meta, body);
@@ -716,9 +719,9 @@ impl Context {
                                 },
                                 width: 4,
                             },
-                        }),
+                        }, meta.as_span()),
                         init: None,
-                    });
+                    }, meta.as_span());
 
                     let expr = self.add_expression(Expression::LocalVariable(local), meta, body);
                     let load = self.add_expression(Expression::Load { pointer: expr }, meta, body);
@@ -800,7 +803,7 @@ impl Context {
                     expr: *expr,
                     kind,
                     convert: Some(width),
-                })
+                }, meta.as_span())
             }
         }
 
@@ -831,7 +834,7 @@ impl Context {
                         expr: *left,
                         kind: right_kind,
                         convert: Some(right_width),
-                    })
+                    }, left_meta.as_span())
                 }
                 std::cmp::Ordering::Equal => {}
                 std::cmp::Ordering::Greater => {
@@ -839,7 +842,7 @@ impl Context {
                         expr: *right,
                         kind: left_kind,
                         convert: Some(left_width),
-                    })
+                    }, right_meta.as_span())
                 }
             }
         }
@@ -860,7 +863,7 @@ impl Context {
         if let (&TypeInner::Scalar { .. }, Some(size)) = (expr_type, vector_size) {
             *expr = self
                 .expressions
-                .append(Expression::Splat { size, value: *expr })
+                .append(Expression::Splat { size, value: *expr }, meta.as_span())
         }
 
         Ok(())

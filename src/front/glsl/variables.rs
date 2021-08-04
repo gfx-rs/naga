@@ -55,7 +55,7 @@ impl Parser {
             let ty = self
                 .module
                 .types
-                .fetch_or_append(Type { name: None, inner });
+                .fetch_or_append(Type { name: None, inner }, meta.as_span());
 
             let handle = self.module.global_variables.append(GlobalVariable {
                 name: Some(name.into()),
@@ -63,7 +63,7 @@ impl Parser {
                 binding: None,
                 ty,
                 init: None,
-            });
+            }, meta.as_span());
 
             let idx = self.entry_args.len();
             self.entry_args.push(EntryArg {
@@ -494,7 +494,7 @@ impl Parser {
                 binding: None,
                 ty,
                 init,
-            });
+            }, meta.as_span());
 
             let idx = self.entry_args.len();
             self.entry_args.push(EntryArg {
@@ -562,7 +562,7 @@ impl Parser {
             }),
             ty,
             init,
-        });
+        }, meta.as_span());
 
         if let Some(name) = name {
             let lookup = GlobalLookup {
@@ -637,7 +637,7 @@ impl Parser {
             name: name.clone(),
             ty,
             init,
-        });
+        }, meta.as_span());
         let expr = ctx.add_expression(Expression::LocalVariable(handle), meta, body);
 
         if let Some(name) = name {

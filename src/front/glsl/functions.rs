@@ -23,7 +23,7 @@ struct CoordComponents {
 }
 
 impl Parser {
-    fn add_constant_value(&mut self, scalar_kind: ScalarKind, value: u64) -> Handle<Constant> {
+    fn add_constant_value(&mut self, scalar_kind: ScalarKind, value: u64, meta: SourceMetadata) -> Handle<Constant> {
         let value = match scalar_kind {
             ScalarKind::Uint => ScalarValue::Uint(value),
             ScalarKind::Sint => ScalarValue::Sint(value as i64),
@@ -35,7 +35,7 @@ impl Parser {
             name: None,
             specialization: None,
             inner: ConstantInner::Scalar { width: 4, value },
-        })
+        }, meta.as_span())
     }
 
     pub(crate) fn function_or_constructor_call(
@@ -69,8 +69,8 @@ impl Parser {
                                 && result_scalar_kind != ScalarKind::Bool =>
                         {
                             let (condition, expr_meta) = args[0];
-                            let c0 = self.add_constant_value(result_scalar_kind, 0u64);
-                            let c1 = self.add_constant_value(result_scalar_kind, 1u64);
+                            let c0 = self.add_constant_value(result_scalar_kind, 0u64, meta);
+                            let c1 = self.add_constant_value(result_scalar_kind, 1u64, meta);
                             let mut reject =
                                 ctx.add_expression(Expression::Constant(c0), expr_meta, body);
                             let mut accept =
@@ -157,7 +157,7 @@ impl Parser {
                                             kind: ScalarKind::Float,
                                             width,
                                         },
-                                    });
+                                    }, meta.as_span());
                                     let zero_constant =
                                         self.module.constants.fetch_or_append(Constant {
                                             name: None,
@@ -166,7 +166,7 @@ impl Parser {
                                                 width,
                                                 value: ScalarValue::Float(0.0),
                                             },
-                                        });
+                                        }, meta.as_span());
                                     let zero = ctx.add_expression(
                                         Expression::Constant(zero_constant),
                                         meta,
@@ -299,7 +299,7 @@ impl Parser {
                                     kind: ScalarKind::Float,
                                     width,
                                 },
-                            });
+                            }, meta.as_span());
 
                             for chunk in flattened.chunks(rows as usize) {
                                 components.push(ctx.add_expression(
@@ -1029,12 +1029,12 @@ impl Parser {
                             let ty = self.module.types.fetch_or_append(Type {
                                 name: None,
                                 inner: TypeInner::Vector { size, kind, width },
-                            });
+                            }, meta.as_span());
                             let temp_var = ctx.locals.append(LocalVariable {
                                 name: None,
                                 ty,
                                 init: None,
-                            });
+                            }, meta.as_span());
                             let temp_expr =
                                 ctx.add_expression(Expression::LocalVariable(temp_var), meta, body);
 
@@ -1185,7 +1185,7 @@ impl Parser {
             return;
         }
 
-        let handle = module.functions.append(function);
+        let handle = module.functions.append(function, meta.as_span());
         declarations.push(FunctionDeclaration {
             parameters,
             parameters_info,
@@ -1245,7 +1245,7 @@ impl Parser {
             });
         }
 
-        let handle = module.functions.append(function);
+        let handle = module.functions.append(function, meta.as_span());
         declarations.push(FunctionDeclaration {
             parameters,
             parameters_info,
@@ -1285,8 +1285,8 @@ impl Parser {
                 binding: Some(arg.binding.clone()),
             });
 
-            let pointer = expressions.append(Expression::GlobalVariable(arg.handle));
-            let value = expressions.append(Expression::FunctionArgument(idx));
+            let pointer = expressions.append(Expression::GlobalVariable(arg.handle), Default::default());
+            let value = expressions.append(Expression::FunctionArgument(idx), Default::default());
 
             body.push(Statement::Store { pointer, value }, Default::default());
         }
@@ -1322,9 +1322,9 @@ impl Parser {
 
             span += self.module.types[ty].inner.span(&self.module.constants);
 
-            let pointer = expressions.append(Expression::GlobalVariable(arg.handle));
+            let pointer = expressions.append(Expression::GlobalVariable(arg.handle), Default::default());
             let len = expressions.len();
-            let load = expressions.append(Expression::Load { pointer });
+            let load = expressions.append(Expression::Load { pointer }, Default::default());
             body.push(
                 Statement::Emit(expressions.range_from(len)),
                 Default::default(),
@@ -1340,10 +1340,10 @@ impl Parser {
                     members,
                     span,
                 },
-            });
+            }, Default::default());
 
             let len = expressions.len();
-            let res = expressions.append(Expression::Compose { ty, components });
+            let res = expressions.append(Expression::Compose { ty, components }, Default::default());
             body.push(
                 Statement::Emit(expressions.range_from(len)),
                 Default::default(),
@@ -1498,7 +1498,7 @@ fn sampled_to_depth(
                         arrayed,
                         class: ImageClass::Depth { multi },
                     },
-                })
+                }, module.types.get_span(*ty).clone())
             }
             ImageClass::Depth { .. } => {}
             _ => errors.push(Error {

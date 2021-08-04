@@ -63,12 +63,12 @@ impl<'source> ParsingContext<'source> {
             name: None,
             specialization: None,
             inner: ConstantInner::Scalar { width, value },
-        });
+        }, token.meta.as_span());
 
         Ok(stmt.hir_exprs.append(HirExpr {
             kind: HirExprKind::Constant(handle),
             meta: token.meta,
-        }))
+        }, Default::default()))
     }
 
     pub fn parse_function_call_args(
@@ -149,14 +149,14 @@ impl<'source> ParsingContext<'source> {
                     }
                 };
 
-                stmt.hir_exprs.append(expr)
+                stmt.hir_exprs.append(expr, Default::default())
             }
             TokenValue::TypeName(_) => {
                 let Token { value, meta: name_meta } = self.bump(parser)?;
                 let mut meta = name_meta;
 
                 let mut handle = if let TokenValue::TypeName(ty) = value {
-                    parser.module.types.fetch_or_append(ty)
+                    parser.module.types.fetch_or_append(ty, name_meta.as_span())
                 } else {
                     unreachable!()
                 };
@@ -181,7 +181,7 @@ impl<'source> ParsingContext<'source> {
                                     width: 4,
                                     value: ScalarValue::Sint(args.len() as i64),
                                 },
-                            });
+                            }, meta.as_span());
 
                             ArraySize::Constant(constant)
                         }
@@ -194,8 +194,7 @@ impl<'source> ParsingContext<'source> {
                             size,
                             stride,
                         },
-                    });
-                    parser.module.types.set_span_if_unknown(handle, name_meta.union(&array_meta).as_span());
+                    },name_meta.union(&array_meta).as_span());
                 }
 
                 stmt.hir_exprs.append(HirExpr {
@@ -204,7 +203,7 @@ impl<'source> ParsingContext<'source> {
                         args,
                     }),
                     meta,
-                })
+                }, Default::default())
             }
             _ => self.parse_primary(parser, ctx, stmt, body)?,
         };
@@ -224,7 +223,7 @@ impl<'source> ParsingContext<'source> {
                     base = stmt.hir_exprs.append(HirExpr {
                         kind: HirExprKind::Access { base, index },
                         meta: meta.union(&end_meta),
-                    })
+                    }, Default::default())
                 }
                 TokenValue::Dot => {
                     let (field, end_meta) = self.expect_ident(parser)?;
@@ -232,7 +231,7 @@ impl<'source> ParsingContext<'source> {
                     base = stmt.hir_exprs.append(HirExpr {
                         kind: HirExprKind::Select { base, field },
                         meta: meta.union(&end_meta),
-                    })
+                    }, Default::default())
                 }
                 TokenValue::Increment => {
                     base = stmt.hir_exprs.append(HirExpr {
@@ -242,7 +241,7 @@ impl<'source> ParsingContext<'source> {
                             expr: base,
                         },
                         meta,
-                    })
+                    }, Default::default())
                 }
                 TokenValue::Decrement => {
                     base = stmt.hir_exprs.append(HirExpr {
@@ -252,7 +251,7 @@ impl<'source> ParsingContext<'source> {
                             expr: base,
                         },
                         meta,
-                    })
+                    }, Default::default())
                 }
                 _ => unreachable!(),
             }
@@ -291,7 +290,7 @@ impl<'source> ParsingContext<'source> {
                 stmt.hir_exprs.append(HirExpr {
                     kind,
                     meta: meta.union(&end_meta),
-                })
+                }, Default::default())
             }
             TokenValue::Increment | TokenValue::Decrement => {
                 let Token { value, meta } = self.bump(parser)?;
@@ -309,7 +308,7 @@ impl<'source> ParsingContext<'source> {
                         expr,
                     },
                     meta,
-                })
+                }, Default::default())
             }
             _ => self.parse_postfix(parser, ctx, stmt, body)?,
         })
@@ -367,7 +366,7 @@ impl<'source> ParsingContext<'source> {
                     right,
                 },
                 meta: start_meta.union(&end_meta),
-            })
+            }, Default::default())
         }
 
         Ok(left)
@@ -397,7 +396,7 @@ impl<'source> ParsingContext<'source> {
                     reject,
                 },
                 meta: start_meta.union(&end_meta),
-            })
+            }, Default::default())
         }
 
         Ok(condition)
@@ -422,7 +421,7 @@ impl<'source> ParsingContext<'source> {
                 stmt.hir_exprs.append(HirExpr {
                     kind: HirExprKind::Assign { tgt, value },
                     meta: start_meta.union(&end_meta),
-                })
+                }, Default::default())
             }
             TokenValue::OrAssign
             | TokenValue::AndAssign
@@ -457,12 +456,12 @@ impl<'source> ParsingContext<'source> {
                         },
                         right,
                     },
-                });
+                }, Default::default());
 
                 stmt.hir_exprs.append(HirExpr {
                     kind: HirExprKind::Assign { tgt, value },
                     meta: start_meta.union(&end_meta),
-                })
+                }, Default::default())
             }
             _ => self.parse_conditional(parser, ctx, stmt, body, Some(tgt))?,
         })
