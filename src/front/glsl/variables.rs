@@ -57,13 +57,16 @@ impl Parser {
                 .types
                 .fetch_or_append(Type { name: None, inner }, meta.as_span());
 
-            let handle = self.module.global_variables.append(GlobalVariable {
-                name: Some(name.into()),
-                class: StorageClass::Private,
-                binding: None,
-                ty,
-                init: None,
-            }, meta.as_span());
+            let handle = self.module.global_variables.append(
+                GlobalVariable {
+                    name: Some(name.into()),
+                    class: StorageClass::Private,
+                    binding: None,
+                    ty,
+                    init: None,
+                },
+                meta.as_span(),
+            );
 
             let idx = self.entry_args.len();
             self.entry_args.push(EntryArg {
@@ -488,13 +491,16 @@ impl Parser {
                 })
             });
 
-            let handle = self.module.global_variables.append(GlobalVariable {
-                name: name.clone(),
-                class: StorageClass::Private,
-                binding: None,
-                ty,
-                init,
-            }, meta.as_span());
+            let handle = self.module.global_variables.append(
+                GlobalVariable {
+                    name: name.clone(),
+                    class: StorageClass::Private,
+                    binding: None,
+                    ty,
+                    init,
+                },
+                meta.as_span(),
+            );
 
             let idx = self.entry_args.len();
             self.entry_args.push(EntryArg {
@@ -553,16 +559,19 @@ impl Parser {
             }
         };
 
-        let handle = self.module.global_variables.append(GlobalVariable {
-            name: name.clone(),
-            class,
-            binding: binding.map(|binding| ResourceBinding {
-                group: set.unwrap_or(0),
-                binding,
-            }),
-            ty,
-            init,
-        }, meta.as_span());
+        let handle = self.module.global_variables.append(
+            GlobalVariable {
+                name: name.clone(),
+                class,
+                binding: binding.map(|binding| ResourceBinding {
+                    group: set.unwrap_or(0),
+                    binding,
+                }),
+                ty,
+                init,
+            },
+            meta.as_span(),
+        );
 
         if let Some(name) = name {
             let lookup = GlobalLookup {
@@ -633,11 +642,14 @@ impl Parser {
             }
         }
 
-        let handle = ctx.locals.append(LocalVariable {
-            name: name.clone(),
-            ty,
-            init,
-        }, meta.as_span());
+        let handle = ctx.locals.append(
+            LocalVariable {
+                name: name.clone(),
+                ty,
+                init,
+            },
+            meta.as_span(),
+        );
         let expr = ctx.add_expression(Expression::LocalVariable(handle), meta, body);
 
         if let Some(name) = name {

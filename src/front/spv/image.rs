@@ -94,56 +94,80 @@ fn extract_image_coordinates(
     match extra_coordinate {
         ExtraCoordinate::ArrayLayer => {
             let extracted = match required_size {
-                None => expressions.append(crate::Expression::AccessIndex { base, index: 0 }, base_span.clone()),
+                None => expressions.append(
+                    crate::Expression::AccessIndex { base, index: 0 },
+                    base_span.clone(),
+                ),
                 Some(size) => {
                     let mut components = Vec::with_capacity(size as usize);
                     for index in 0..size as u32 {
-                        let comp =
-                            expressions.append(crate::Expression::AccessIndex { base, index }, base_span.clone());
+                        let comp = expressions.append(
+                            crate::Expression::AccessIndex { base, index },
+                            base_span.clone(),
+                        );
                         components.push(comp);
                     }
-                    expressions.append(crate::Expression::Compose {
-                        ty: required_ty.unwrap(),
-                        components,
-                    }, base_span.clone())
+                    expressions.append(
+                        crate::Expression::Compose {
+                            ty: required_ty.unwrap(),
+                            components,
+                        },
+                        base_span.clone(),
+                    )
                 }
             };
             let array_index_f32 = expressions.append(extra_expr, base_span.clone());
-            let array_index = expressions.append(crate::Expression::As {
-                kind: crate::ScalarKind::Sint,
-                expr: array_index_f32,
-                convert: Some(4),
-            }, base_span);
+            let array_index = expressions.append(
+                crate::Expression::As {
+                    kind: crate::ScalarKind::Sint,
+                    expr: array_index_f32,
+                    convert: Some(4),
+                },
+                base_span,
+            );
             (extracted, Some(array_index))
         }
         ExtraCoordinate::Projection => {
             let projection = expressions.append(extra_expr, base_span.clone());
             let divided = match required_size {
                 None => {
-                    let temp =
-                        expressions.append(crate::Expression::AccessIndex { base, index: 0 }, base_span.clone());
-                    expressions.append(crate::Expression::Binary {
-                        op: crate::BinaryOperator::Divide,
-                        left: temp,
-                        right: projection,
-                    }, base_span)
+                    let temp = expressions.append(
+                        crate::Expression::AccessIndex { base, index: 0 },
+                        base_span.clone(),
+                    );
+                    expressions.append(
+                        crate::Expression::Binary {
+                            op: crate::BinaryOperator::Divide,
+                            left: temp,
+                            right: projection,
+                        },
+                        base_span,
+                    )
                 }
                 Some(size) => {
                     let mut components = Vec::with_capacity(size as usize);
                     for index in 0..size as u32 {
-                        let temp =
-                            expressions.append(crate::Expression::AccessIndex { base, index }, base_span.clone());
-                        let comp = expressions.append(crate::Expression::Binary {
-                            op: crate::BinaryOperator::Divide,
-                            left: temp,
-                            right: projection,
-                        }, base_span.clone());
+                        let temp = expressions.append(
+                            crate::Expression::AccessIndex { base, index },
+                            base_span.clone(),
+                        );
+                        let comp = expressions.append(
+                            crate::Expression::Binary {
+                                op: crate::BinaryOperator::Divide,
+                                left: temp,
+                                right: projection,
+                            },
+                            base_span.clone(),
+                        );
                         components.push(comp);
                     }
-                    expressions.append(crate::Expression::Compose {
-                        ty: required_ty.unwrap(),
-                        components,
-                    }, base_span)
+                    expressions.append(
+                        crate::Expression::Compose {
+                            ty: required_ty.unwrap(),
+                            components,
+                        },
+                        base_span,
+                    )
                 }
             };
             (divided, None)
@@ -194,10 +218,13 @@ pub(super) fn patch_comparison_type(
     };
 
     let name = original_ty.name.clone();
-    var.ty = arena.append(crate::Type {
-        name,
-        inner: ty_inner,
-    }, original_ty_span);
+    var.ty = arena.append(
+        crate::Type {
+            name,
+            inner: ty_inner,
+        },
+        original_ty_span,
+    );
     true
 }
 

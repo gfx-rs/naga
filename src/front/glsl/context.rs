@@ -90,7 +90,9 @@ impl Context {
             }
             GlobalLookupKind::BlockSelect(handle, index) => {
                 let span = parser.module.global_variables.get_span(handle).clone();
-                let base = self.expressions.append(Expression::GlobalVariable(handle), span.clone());
+                let base = self
+                    .expressions
+                    .append(Expression::GlobalVariable(handle), span.clone());
                 self.emit_start();
                 let expr = self
                     .expressions
@@ -117,7 +119,10 @@ impl Context {
             }
             GlobalLookupKind::Constant(v) => {
                 let span = parser.module.constants.get_span(v).clone();
-                let res = (self.expressions.append(Expression::Constant(v), span), false);
+                let res = (
+                    self.expressions.append(Expression::Constant(v), span),
+                    false,
+                );
                 self.emit_start();
                 res
             }
@@ -219,13 +224,16 @@ impl Context {
 
         if qualifier.is_lhs() {
             let span = parser.module.types.get_span(arg.ty).clone();
-            arg.ty = parser.module.types.fetch_or_append(Type {
-                name: None,
-                inner: TypeInner::Pointer {
-                    base: arg.ty,
-                    class: StorageClass::Function,
+            arg.ty = parser.module.types.fetch_or_append(
+                Type {
+                    name: None,
+                    inner: TypeInner::Pointer {
+                        base: arg.ty,
+                        class: StorageClass::Function,
+                    },
                 },
-            }, span)
+                span,
+            )
         }
 
         self.arguments.push(arg);
@@ -241,11 +249,14 @@ impl Context {
             let load = qualifier.is_lhs();
 
             if mutable && !load {
-                let handle = self.locals.append(LocalVariable {
-                    name: Some(name.clone()),
-                    ty,
-                    init: None,
-                }, meta.as_span());
+                let handle = self.locals.append(
+                    LocalVariable {
+                        name: Some(name.clone()),
+                        ty,
+                        init: None,
+                    },
+                    meta.as_span(),
+                );
                 let local_expr = self.add_expression(Expression::LocalVariable(handle), meta, body);
 
                 self.emit_flush(body);
@@ -467,9 +478,9 @@ impl Context {
                                 false => (BinaryOperator::NotEqual, RelationalFunction::Any),
                             };
 
-                            let argument =
-                                self.expressions
-                                    .append(Expression::Binary { op, left, right }, meta.as_span());
+                            let argument = self
+                                .expressions
+                                .append(Expression::Binary { op, left, right }, meta.as_span());
 
                             self.add_expression(
                                 Expression::Relational { fun, argument },
@@ -692,36 +703,45 @@ impl Context {
                     }
                 };
 
-                let one = parser.module.constants.append(Constant {
-                    name: None,
-                    specialization: None,
-                    inner: crate::ConstantInner::Scalar {
-                        width: 4,
-                        value: match uint {
-                            true => crate::ScalarValue::Uint(1),
-                            false => crate::ScalarValue::Sint(1),
+                let one = parser.module.constants.append(
+                    Constant {
+                        name: None,
+                        specialization: None,
+                        inner: crate::ConstantInner::Scalar {
+                            width: 4,
+                            value: match uint {
+                                true => crate::ScalarValue::Uint(1),
+                                false => crate::ScalarValue::Sint(1),
+                            },
                         },
                     },
-                }, Default::default());
+                    Default::default(),
+                );
                 let right = self.add_expression(Expression::Constant(one), meta, body);
 
                 let value = self.add_expression(Expression::Binary { op, left, right }, meta, body);
 
                 if postfix {
-                    let local = self.locals.append(LocalVariable {
-                        name: None,
-                        ty: parser.module.types.fetch_or_append(Type {
+                    let local = self.locals.append(
+                        LocalVariable {
                             name: None,
-                            inner: TypeInner::Scalar {
-                                kind: match uint {
-                                    true => ScalarKind::Uint,
-                                    false => ScalarKind::Sint,
+                            ty: parser.module.types.fetch_or_append(
+                                Type {
+                                    name: None,
+                                    inner: TypeInner::Scalar {
+                                        kind: match uint {
+                                            true => ScalarKind::Uint,
+                                            false => ScalarKind::Sint,
+                                        },
+                                        width: 4,
+                                    },
                                 },
-                                width: 4,
-                            },
-                        }, meta.as_span()),
-                        init: None,
-                    }, meta.as_span());
+                                meta.as_span(),
+                            ),
+                            init: None,
+                        },
+                        meta.as_span(),
+                    );
 
                     let expr = self.add_expression(Expression::LocalVariable(local), meta, body);
                     let load = self.add_expression(Expression::Load { pointer: expr }, meta, body);
@@ -799,11 +819,14 @@ impl Context {
             (type_power(kind), self.expr_power(parser, *expr, meta)?)
         {
             if tgt_power > expr_power {
-                *expr = self.expressions.append(Expression::As {
-                    expr: *expr,
-                    kind,
-                    convert: Some(width),
-                }, meta.as_span())
+                *expr = self.expressions.append(
+                    Expression::As {
+                        expr: *expr,
+                        kind,
+                        convert: Some(width),
+                    },
+                    meta.as_span(),
+                )
             }
         }
 
@@ -830,19 +853,25 @@ impl Context {
         ) {
             match left_power.cmp(&right_power) {
                 std::cmp::Ordering::Less => {
-                    *left = self.expressions.append(Expression::As {
-                        expr: *left,
-                        kind: right_kind,
-                        convert: Some(right_width),
-                    }, left_meta.as_span())
+                    *left = self.expressions.append(
+                        Expression::As {
+                            expr: *left,
+                            kind: right_kind,
+                            convert: Some(right_width),
+                        },
+                        left_meta.as_span(),
+                    )
                 }
                 std::cmp::Ordering::Equal => {}
                 std::cmp::Ordering::Greater => {
-                    *right = self.expressions.append(Expression::As {
-                        expr: *right,
-                        kind: left_kind,
-                        convert: Some(left_width),
-                    }, right_meta.as_span())
+                    *right = self.expressions.append(
+                        Expression::As {
+                            expr: *right,
+                            kind: left_kind,
+                            convert: Some(left_width),
+                        },
+                        right_meta.as_span(),
+                    )
                 }
             }
         }

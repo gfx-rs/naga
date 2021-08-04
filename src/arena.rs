@@ -218,7 +218,12 @@ impl<T> Arena<T> {
     /// returns a handle pointing to
     /// an existing element if the check succeeds, or adds a new
     /// element otherwise.
-    pub fn fetch_if_or_append<F: Fn(&T, &T) -> bool>(&mut self, value: T, span: Span, fun: F) -> Handle<T> {
+    pub fn fetch_if_or_append<F: Fn(&T, &T) -> bool>(
+        &mut self,
+        value: T,
+        span: Span,
+        fun: F,
+    ) -> Handle<T> {
         if let Some(index) = self.data.iter().position(|d| fun(d, &value)) {
             let index = unsafe { Index::new_unchecked((index + 1) as u32) };
             Handle::new(index)

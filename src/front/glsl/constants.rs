@@ -89,14 +89,17 @@ impl<'a> ConstantSolver<'a> {
 
                 //TODO: register the new type if needed
                 let ty = ty.ok_or(ConstantSolvingError::DestinationTypeNotFound)?;
-                Ok(self.constants.fetch_or_append(Constant {
-                    name: None,
-                    specialization: None,
-                    inner: ConstantInner::Composite {
-                        ty,
-                        components: vec![value_constant; size as usize],
+                Ok(self.constants.fetch_or_append(
+                    Constant {
+                        name: None,
+                        specialization: None,
+                        inner: ConstantInner::Composite {
+                            ty,
+                            components: vec![value_constant; size as usize],
+                        },
                     },
-                }, span))
+                    span,
+                ))
             }
             Expression::Swizzle {
                 size,
@@ -130,11 +133,14 @@ impl<'a> ConstantSolver<'a> {
                     .map(|&sc| src_components[sc as usize])
                     .collect();
 
-                Ok(self.constants.fetch_or_append(Constant {
-                    name: None,
-                    specialization: None,
-                    inner: ConstantInner::Composite { ty, components },
-                }, span))
+                Ok(self.constants.fetch_or_append(
+                    Constant {
+                        name: None,
+                        specialization: None,
+                        inner: ConstantInner::Composite { ty, components },
+                    },
+                    span,
+                ))
             }
             Expression::Compose { ty, ref components } => {
                 let components = components
@@ -142,11 +148,14 @@ impl<'a> ConstantSolver<'a> {
                     .map(|c| self.solve(*c))
                     .collect::<Result<_, _>>()?;
 
-                Ok(self.constants.fetch_or_append(Constant {
-                    name: None,
-                    specialization: None,
-                    inner: ConstantInner::Composite { ty, components },
-                }, span))
+                Ok(self.constants.fetch_or_append(
+                    Constant {
+                        name: None,
+                        specialization: None,
+                        inner: ConstantInner::Composite { ty, components },
+                    },
+                    span,
+                ))
             }
             Expression::Unary { expr, op } => {
                 let expr_constant = self.solve(expr)?;
@@ -193,11 +202,14 @@ impl<'a> ConstantSolver<'a> {
                             _ => return Err(ConstantSolvingError::InvalidMathArg),
                         };
 
-                        Ok(self.constants.fetch_or_append(Constant {
-                            name: None,
-                            specialization: None,
-                            inner: ConstantInner::Scalar { width, value },
-                        }, span))
+                        Ok(self.constants.fetch_or_append(
+                            Constant {
+                                name: None,
+                                specialization: None,
+                                inner: ConstantInner::Scalar { width, value },
+                            },
+                            span,
+                        ))
                     }
                     _ => Err(ConstantSolvingError::NotImplemented(format!("{:?}", fun))),
                 }
@@ -331,11 +343,14 @@ impl<'a> ConstantSolver<'a> {
             }
         }
 
-        Ok(self.constants.fetch_or_append(Constant {
-            name: None,
-            specialization: None,
-            inner,
-        }, span))
+        Ok(self.constants.fetch_or_append(
+            Constant {
+                name: None,
+                specialization: None,
+                inner,
+            },
+            span,
+        ))
     }
 
     fn unary_op(
@@ -375,11 +390,14 @@ impl<'a> ConstantSolver<'a> {
             }
         }
 
-        Ok(self.constants.fetch_or_append(Constant {
-            name: None,
-            specialization: None,
-            inner,
-        }, span))
+        Ok(self.constants.fetch_or_append(
+            Constant {
+                name: None,
+                specialization: None,
+                inner,
+            },
+            span,
+        ))
     }
 
     fn binary_op(
@@ -482,11 +500,14 @@ impl<'a> ConstantSolver<'a> {
             _ => return Err(ConstantSolvingError::InvalidBinaryOpArgs),
         };
 
-        Ok(self.constants.fetch_or_append(Constant {
-            name: None,
-            specialization: None,
-            inner,
-        }, span))
+        Ok(self.constants.fetch_or_append(
+            Constant {
+                name: None,
+                specialization: None,
+                inner,
+            },
+            span,
+        ))
     }
 }
 
@@ -507,59 +528,80 @@ mod tests {
         let mut expressions = Arena::new();
         let mut constants = Arena::new();
 
-        let vec_ty = types.append(Type {
-            name: None,
-            inner: TypeInner::Vector {
-                size: VectorSize::Bi,
-                kind: ScalarKind::Sint,
-                width: 4,
+        let vec_ty = types.append(
+            Type {
+                name: None,
+                inner: TypeInner::Vector {
+                    size: VectorSize::Bi,
+                    kind: ScalarKind::Sint,
+                    width: 4,
+                },
             },
-        }, Default::default());
+            Default::default(),
+        );
 
-        let h = constants.append(Constant {
-            name: None,
-            specialization: None,
-            inner: ConstantInner::Scalar {
-                width: 4,
-                value: ScalarValue::Sint(4),
+        let h = constants.append(
+            Constant {
+                name: None,
+                specialization: None,
+                inner: ConstantInner::Scalar {
+                    width: 4,
+                    value: ScalarValue::Sint(4),
+                },
             },
-        }, Default::default());
+            Default::default(),
+        );
 
-        let h1 = constants.append(Constant {
-            name: None,
-            specialization: None,
-            inner: ConstantInner::Scalar {
-                width: 4,
-                value: ScalarValue::Sint(8),
+        let h1 = constants.append(
+            Constant {
+                name: None,
+                specialization: None,
+                inner: ConstantInner::Scalar {
+                    width: 4,
+                    value: ScalarValue::Sint(8),
+                },
             },
-        }, Default::default());
+            Default::default(),
+        );
 
-        let vec_h = constants.append(Constant {
-            name: None,
-            specialization: None,
-            inner: ConstantInner::Composite {
-                ty: vec_ty,
-                components: vec![h, h1],
+        let vec_h = constants.append(
+            Constant {
+                name: None,
+                specialization: None,
+                inner: ConstantInner::Composite {
+                    ty: vec_ty,
+                    components: vec![h, h1],
+                },
             },
-        }, Default::default());
+            Default::default(),
+        );
 
         let expr = expressions.append(Expression::Constant(h), Default::default());
         let expr1 = expressions.append(Expression::Constant(vec_h), Default::default());
 
-        let root1 = expressions.append(Expression::Unary {
-            op: UnaryOperator::Negate,
-            expr,
-        }, Default::default());
+        let root1 = expressions.append(
+            Expression::Unary {
+                op: UnaryOperator::Negate,
+                expr,
+            },
+            Default::default(),
+        );
 
-        let root2 = expressions.append(Expression::Unary {
-            op: UnaryOperator::Not,
-            expr,
-        }, Default::default());
+        let root2 = expressions.append(
+            Expression::Unary {
+                op: UnaryOperator::Not,
+                expr,
+            },
+            Default::default(),
+        );
 
-        let root3 = expressions.append(Expression::Unary {
-            op: UnaryOperator::Not,
-            expr: expr1,
-        }, Default::default());
+        let root3 = expressions.append(
+            Expression::Unary {
+                op: UnaryOperator::Not,
+                expr: expr1,
+            },
+            Default::default(),
+        );
 
         let mut solver = ConstantSolver {
             types: &types,
@@ -618,22 +660,28 @@ mod tests {
         let mut expressions = Arena::new();
         let mut constants = Arena::new();
 
-        let h = constants.append(Constant {
-            name: None,
-            specialization: None,
-            inner: ConstantInner::Scalar {
-                width: 4,
-                value: ScalarValue::Sint(4),
+        let h = constants.append(
+            Constant {
+                name: None,
+                specialization: None,
+                inner: ConstantInner::Scalar {
+                    width: 4,
+                    value: ScalarValue::Sint(4),
+                },
             },
-        }, Default::default());
+            Default::default(),
+        );
 
         let expr = expressions.append(Expression::Constant(h), Default::default());
 
-        let root = expressions.append(Expression::As {
-            expr,
-            kind: ScalarKind::Bool,
-            convert: Some(crate::BOOL_WIDTH),
-        }, Default::default());
+        let root = expressions.append(
+            Expression::As {
+                expr,
+                kind: ScalarKind::Bool,
+                convert: Some(crate::BOOL_WIDTH),
+            },
+            Default::default(),
+        );
 
         let mut solver = ConstantSolver {
             types: &Arena::new(),
@@ -658,86 +706,113 @@ mod tests {
         let mut expressions = Arena::new();
         let mut constants = Arena::new();
 
-        let matrix_ty = types.append(Type {
-            name: None,
-            inner: TypeInner::Matrix {
-                columns: VectorSize::Bi,
-                rows: VectorSize::Tri,
-                width: 4,
+        let matrix_ty = types.append(
+            Type {
+                name: None,
+                inner: TypeInner::Matrix {
+                    columns: VectorSize::Bi,
+                    rows: VectorSize::Tri,
+                    width: 4,
+                },
             },
-        }, Default::default());
+            Default::default(),
+        );
 
-        let vec_ty = types.append(Type {
-            name: None,
-            inner: TypeInner::Vector {
-                size: VectorSize::Tri,
-                kind: ScalarKind::Float,
-                width: 4,
+        let vec_ty = types.append(
+            Type {
+                name: None,
+                inner: TypeInner::Vector {
+                    size: VectorSize::Tri,
+                    kind: ScalarKind::Float,
+                    width: 4,
+                },
             },
-        }, Default::default());
+            Default::default(),
+        );
 
         let mut vec1_components = Vec::with_capacity(3);
         let mut vec2_components = Vec::with_capacity(3);
 
         for i in 0..3 {
-            let h = constants.append(Constant {
-                name: None,
-                specialization: None,
-                inner: ConstantInner::Scalar {
-                    width: 4,
-                    value: ScalarValue::Float(i as f64),
+            let h = constants.append(
+                Constant {
+                    name: None,
+                    specialization: None,
+                    inner: ConstantInner::Scalar {
+                        width: 4,
+                        value: ScalarValue::Float(i as f64),
+                    },
                 },
-            }, Default::default());
+                Default::default(),
+            );
 
             vec1_components.push(h)
         }
 
         for i in 3..6 {
-            let h = constants.append(Constant {
-                name: None,
-                specialization: None,
-                inner: ConstantInner::Scalar {
-                    width: 4,
-                    value: ScalarValue::Float(i as f64),
+            let h = constants.append(
+                Constant {
+                    name: None,
+                    specialization: None,
+                    inner: ConstantInner::Scalar {
+                        width: 4,
+                        value: ScalarValue::Float(i as f64),
+                    },
                 },
-            }, Default::default());
+                Default::default(),
+            );
 
             vec2_components.push(h)
         }
 
-        let vec1 = constants.append(Constant {
-            name: None,
-            specialization: None,
-            inner: ConstantInner::Composite {
-                ty: vec_ty,
-                components: vec1_components,
+        let vec1 = constants.append(
+            Constant {
+                name: None,
+                specialization: None,
+                inner: ConstantInner::Composite {
+                    ty: vec_ty,
+                    components: vec1_components,
+                },
             },
-        }, Default::default());
+            Default::default(),
+        );
 
-        let vec2 = constants.append(Constant {
-            name: None,
-            specialization: None,
-            inner: ConstantInner::Composite {
-                ty: vec_ty,
-                components: vec2_components,
+        let vec2 = constants.append(
+            Constant {
+                name: None,
+                specialization: None,
+                inner: ConstantInner::Composite {
+                    ty: vec_ty,
+                    components: vec2_components,
+                },
             },
-        }, Default::default());
+            Default::default(),
+        );
 
-        let h = constants.append(Constant {
-            name: None,
-            specialization: None,
-            inner: ConstantInner::Composite {
-                ty: matrix_ty,
-                components: vec![vec1, vec2],
+        let h = constants.append(
+            Constant {
+                name: None,
+                specialization: None,
+                inner: ConstantInner::Composite {
+                    ty: matrix_ty,
+                    components: vec![vec1, vec2],
+                },
             },
-        }, Default::default());
+            Default::default(),
+        );
 
         let base = expressions.append(Expression::Constant(h), Default::default());
-        let root1 = expressions.append(Expression::AccessIndex { base, index: 1 }, Default::default());
-        let root2 = expressions.append(Expression::AccessIndex {
-            base: root1,
-            index: 2,
-        }, Default::default());
+        let root1 = expressions.append(
+            Expression::AccessIndex { base, index: 1 },
+            Default::default(),
+        );
+        let root2 = expressions.append(
+            Expression::AccessIndex {
+                base: root1,
+                index: 2,
+            },
+            Default::default(),
+        );
 
         let mut solver = ConstantSolver {
             types: &types,

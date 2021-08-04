@@ -365,7 +365,7 @@ impl<'source> ParsingContext<'source> {
                                 ty_name,
                                 token.meta,
                             )
-                                .map(Some)
+                            .map(Some)
                         } else {
                             //TODO: declaration
                             // type_qualifier IDENTIFIER SEMICOLON
@@ -498,14 +498,17 @@ impl<'source> ParsingContext<'source> {
         let span = self.parse_struct_declaration_list(parser, &mut members, layout)?;
         self.expect(parser, TokenValue::RightBrace)?;
 
-        let mut ty = parser.module.types.append(Type {
-            name: Some(ty_name),
-            inner: TypeInner::Struct {
-                top_level: true,
-                members: members.clone(),
-                span,
+        let mut ty = parser.module.types.append(
+            Type {
+                name: Some(ty_name),
+                inner: TypeInner::Struct {
+                    top_level: true,
+                    members: members.clone(),
+                    span,
+                },
             },
-        }, Default::default());
+            Default::default(),
+        );
 
         let token = self.bump(parser)?;
         let name = match token.value {

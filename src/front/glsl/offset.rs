@@ -85,14 +85,17 @@ pub fn calculate_offset(
             };
 
             let ty_span = types.get_span(ty).clone();
-            ty = types.fetch_or_append(Type {
-                name,
-                inner: TypeInner::Array {
-                    base: info.ty,
-                    size,
-                    stride,
+            ty = types.fetch_or_append(
+                Type {
+                    name,
+                    inner: TypeInner::Array {
+                        base: info.ty,
+                        size,
+                        stride,
+                    },
                 },
-            }, ty_span);
+                ty_span,
+            );
 
             (align, span)
         }
@@ -140,14 +143,17 @@ pub fn calculate_offset(
             }
 
             let ty_span = types.get_span(ty).clone();
-            ty = types.fetch_or_append(Type {
-                name,
-                inner: TypeInner::Struct {
-                    top_level,
-                    members,
-                    span,
+            ty = types.fetch_or_append(
+                Type {
+                    name,
+                    inner: TypeInner::Struct {
+                        top_level,
+                        members,
+                        span,
+                    },
                 },
-            }, ty_span);
+                ty_span,
+            );
 
             (align, span)
         }

@@ -23,7 +23,12 @@ struct CoordComponents {
 }
 
 impl Parser {
-    fn add_constant_value(&mut self, scalar_kind: ScalarKind, value: u64, meta: SourceMetadata) -> Handle<Constant> {
+    fn add_constant_value(
+        &mut self,
+        scalar_kind: ScalarKind,
+        value: u64,
+        meta: SourceMetadata,
+    ) -> Handle<Constant> {
         let value = match scalar_kind {
             ScalarKind::Uint => ScalarValue::Uint(value),
             ScalarKind::Sint => ScalarValue::Sint(value as i64),
@@ -31,11 +36,14 @@ impl Parser {
             _ => unreachable!(),
         };
 
-        self.module.constants.fetch_or_append(Constant {
-            name: None,
-            specialization: None,
-            inner: ConstantInner::Scalar { width: 4, value },
-        }, meta.as_span())
+        self.module.constants.fetch_or_append(
+            Constant {
+                name: None,
+                specialization: None,
+                inner: ConstantInner::Scalar { width: 4, value },
+            },
+            meta.as_span(),
+        )
     }
 
     pub(crate) fn function_or_constructor_call(
@@ -150,23 +158,28 @@ impl Parser {
                                     // value is used to initialize all the values along the diagonal of
                                     // the matrix; the rest are given zeros.
                                     let mut components = Vec::with_capacity(columns as usize);
-                                    let vector_ty = self.module.types.fetch_or_append(Type {
-                                        name: None,
-                                        inner: TypeInner::Vector {
-                                            size: rows,
-                                            kind: ScalarKind::Float,
-                                            width,
+                                    let vector_ty = self.module.types.fetch_or_append(
+                                        Type {
+                                            name: None,
+                                            inner: TypeInner::Vector {
+                                                size: rows,
+                                                kind: ScalarKind::Float,
+                                                width,
+                                            },
                                         },
-                                    }, meta.as_span());
-                                    let zero_constant =
-                                        self.module.constants.fetch_or_append(Constant {
+                                        meta.as_span(),
+                                    );
+                                    let zero_constant = self.module.constants.fetch_or_append(
+                                        Constant {
                                             name: None,
                                             specialization: None,
                                             inner: ConstantInner::Scalar {
                                                 width,
                                                 value: ScalarValue::Float(0.0),
                                             },
-                                        }, meta.as_span());
+                                        },
+                                        meta.as_span(),
+                                    );
                                     let zero = ctx.add_expression(
                                         Expression::Constant(zero_constant),
                                         meta,
@@ -292,14 +305,17 @@ impl Parser {
                                 }
                             }
 
-                            let ty = self.module.types.fetch_or_append(Type {
-                                name: None,
-                                inner: TypeInner::Vector {
-                                    size: rows,
-                                    kind: ScalarKind::Float,
-                                    width,
+                            let ty = self.module.types.fetch_or_append(
+                                Type {
+                                    name: None,
+                                    inner: TypeInner::Vector {
+                                        size: rows,
+                                        kind: ScalarKind::Float,
+                                        width,
+                                    },
                                 },
-                            }, meta.as_span());
+                                meta.as_span(),
+                            );
 
                             for chunk in flattened.chunks(rows as usize) {
                                 components.push(ctx.add_expression(
@@ -1026,15 +1042,21 @@ impl Parser {
                         if parameter_info.qualifier.is_lhs()
                             && matches!(ctx[handle], Expression::Swizzle { .. })
                         {
-                            let ty = self.module.types.fetch_or_append(Type {
-                                name: None,
-                                inner: TypeInner::Vector { size, kind, width },
-                            }, meta.as_span());
-                            let temp_var = ctx.locals.append(LocalVariable {
-                                name: None,
-                                ty,
-                                init: None,
-                            }, meta.as_span());
+                            let ty = self.module.types.fetch_or_append(
+                                Type {
+                                    name: None,
+                                    inner: TypeInner::Vector { size, kind, width },
+                                },
+                                meta.as_span(),
+                            );
+                            let temp_var = ctx.locals.append(
+                                LocalVariable {
+                                    name: None,
+                                    ty,
+                                    init: None,
+                                },
+                                meta.as_span(),
+                            );
                             let temp_expr =
                                 ctx.add_expression(Expression::LocalVariable(temp_var), meta, body);
 
@@ -1285,7 +1307,8 @@ impl Parser {
                 binding: Some(arg.binding.clone()),
             });
 
-            let pointer = expressions.append(Expression::GlobalVariable(arg.handle), Default::default());
+            let pointer =
+                expressions.append(Expression::GlobalVariable(arg.handle), Default::default());
             let value = expressions.append(Expression::FunctionArgument(idx), Default::default());
 
             body.push(Statement::Store { pointer, value }, Default::default());
@@ -1322,7 +1345,8 @@ impl Parser {
 
             span += self.module.types[ty].inner.span(&self.module.constants);
 
-            let pointer = expressions.append(Expression::GlobalVariable(arg.handle), Default::default());
+            let pointer =
+                expressions.append(Expression::GlobalVariable(arg.handle), Default::default());
             let len = expressions.len();
             let load = expressions.append(Expression::Load { pointer }, Default::default());
             body.push(
@@ -1333,17 +1357,21 @@ impl Parser {
         }
 
         let (ty, value) = if !components.is_empty() {
-            let ty = self.module.types.append(Type {
-                name: None,
-                inner: TypeInner::Struct {
-                    top_level: false,
-                    members,
-                    span,
+            let ty = self.module.types.append(
+                Type {
+                    name: None,
+                    inner: TypeInner::Struct {
+                        top_level: false,
+                        members,
+                        span,
+                    },
                 },
-            }, Default::default());
+                Default::default(),
+            );
 
             let len = expressions.len();
-            let res = expressions.append(Expression::Compose { ty, components }, Default::default());
+            let res =
+                expressions.append(Expression::Compose { ty, components }, Default::default());
             body.push(
                 Statement::Emit(expressions.range_from(len)),
                 Default::default(),
@@ -1491,14 +1519,17 @@ fn sampled_to_depth(
             arrayed,
         } => match class {
             ImageClass::Sampled { multi, .. } => {
-                *ty = module.types.fetch_or_append(Type {
-                    name: None,
-                    inner: TypeInner::Image {
-                        dim,
-                        arrayed,
-                        class: ImageClass::Depth { multi },
+                *ty = module.types.fetch_or_append(
+                    Type {
+                        name: None,
+                        inner: TypeInner::Image {
+                            dim,
+                            arrayed,
+                            class: ImageClass::Depth { multi },
+                        },
                     },
-                }, module.types.get_span(*ty).clone())
+                    module.types.get_span(*ty).clone(),
+                )
             }
             ImageClass::Depth { .. } => {}
             _ => errors.push(Error {

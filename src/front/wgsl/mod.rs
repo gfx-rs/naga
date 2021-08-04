@@ -504,31 +504,40 @@ mod type_inner_tests {
     fn to_wgsl() {
         let mut types = crate::Arena::new();
         let mut constants = crate::Arena::new();
-        let c = constants.append(crate::Constant {
-            name: Some("C".to_string()),
-            specialization: None,
-            inner: crate::ConstantInner::Scalar {
-                width: 4,
-                value: crate::ScalarValue::Uint(32),
+        let c = constants.append(
+            crate::Constant {
+                name: Some("C".to_string()),
+                specialization: None,
+                inner: crate::ConstantInner::Scalar {
+                    width: 4,
+                    value: crate::ScalarValue::Uint(32),
+                },
             },
-        }, Default::default());
+            Default::default(),
+        );
 
-        let mytype1 = types.append(crate::Type {
-            name: Some("MyType1".to_string()),
-            inner: crate::TypeInner::Struct {
-                top_level: true,
-                members: vec![],
-                span: 0,
+        let mytype1 = types.append(
+            crate::Type {
+                name: Some("MyType1".to_string()),
+                inner: crate::TypeInner::Struct {
+                    top_level: true,
+                    members: vec![],
+                    span: 0,
+                },
             },
-        }, Default::default());
-        let mytype2 = types.append(crate::Type {
-            name: Some("MyType2".to_string()),
-            inner: crate::TypeInner::Struct {
-                top_level: true,
-                members: vec![],
-                span: 0,
+            Default::default(),
+        );
+        let mytype2 = types.append(
+            crate::Type {
+                name: Some("MyType2".to_string()),
+                inner: crate::TypeInner::Struct {
+                    top_level: true,
+                    members: vec![],
+                    span: 0,
+                },
             },
-        }, Default::default());
+            Default::default(),
+        );
 
         let array = crate::TypeInner::Array {
             base: mytype1,
@@ -747,10 +756,10 @@ impl<'a> ExpressionContext<'a, '_, '_> {
             let _ = lexer.next();
             let right = parser(lexer, self.reborrow())?;
             let end = lexer.current_byte_offset();
-            left = self
-                .expressions
-                .append(crate::Expression::Binary { op, left, right },
-                        NagaSpan::ByteRange(start..end));
+            left = self.expressions.append(
+                crate::Expression::Binary { op, left, right },
+                NagaSpan::ByteRange(start..end),
+            );
         }
         Ok(left)
     }
@@ -778,24 +787,24 @@ impl<'a> ExpressionContext<'a, '_, '_> {
                 };
                 match (left_size, self.resolve_type(right)?) {
                     (Some(size), &crate::TypeInner::Scalar { .. }) => {
-                        right = self
-                            .expressions
-                            .append(crate::Expression::Splat { size, value: right },
-                            self.expressions.get_span(right).clone());
+                        right = self.expressions.append(
+                            crate::Expression::Splat { size, value: right },
+                            self.expressions.get_span(right).clone(),
+                        );
                     }
                     (None, &crate::TypeInner::Vector { size, .. }) => {
-                        left = self
-                            .expressions
-                            .append(crate::Expression::Splat { size, value: left },
-                            self.expressions.get_span(left).clone());
+                        left = self.expressions.append(
+                            crate::Expression::Splat { size, value: left },
+                            self.expressions.get_span(left).clone(),
+                        );
                     }
                     _ => {}
                 }
             }
-            left = self
-                .expressions
-                .append(crate::Expression::Binary { op, left, right },
-                NagaSpan::ByteRange(start..end));
+            left = self.expressions.append(
+                crate::Expression::Binary { op, left, right },
+                NagaSpan::ByteRange(start..end),
+            );
         }
         Ok(left)
     }
@@ -804,7 +813,11 @@ impl<'a> ExpressionContext<'a, '_, '_> {
     ///
     /// This is useful for `CallResult` and `AtomicResult` expressions, which should not be covered by
     /// `Emit` statements.
-    fn interrupt_emitter(&mut self, expression: crate::Expression, span: NagaSpan) -> Handle<crate::Expression> {
+    fn interrupt_emitter(
+        &mut self,
+        expression: crate::Expression,
+        span: NagaSpan,
+    ) -> Handle<crate::Expression> {
         self.block.extend(self.emitter.finish(self.expressions));
         let result = self.expressions.append(expression, span);
         self.emitter.start(self.expressions);
@@ -1131,6 +1144,7 @@ impl Parser {
         }
     }
 
+    /// Expects name to be peeked from lexer, does not consume if returns None.
     fn parse_local_function_call<'a>(
         &mut self,
         lexer: &mut Lexer<'a>,
@@ -1147,6 +1161,7 @@ impl Parser {
 
         let count = ctx.functions[fun_handle].arguments.len();
         let mut arguments = Vec::with_capacity(count);
+        let _ = lexer.next();
         lexer.open_arguments()?;
         while arguments.len() != count {
             if !arguments.is_empty() {
@@ -1183,16 +1198,20 @@ impl Parser {
         };
 
         let result = ctx.interrupt_emitter(expression, NagaSpan::ByteRange(value_span.clone()));
-        ctx.block.push(crate::Statement::Atomic {
-            pointer,
-            fun,
-            value,
-            result,
-        }, NagaSpan::ByteRange(value_span));
+        ctx.block.push(
+            crate::Statement::Atomic {
+                pointer,
+                fun,
+                value,
+                result,
+            },
+            NagaSpan::ByteRange(value_span),
+        );
         Ok(result)
     }
 
     /// Expects [`Scope::PrimaryExpr`] or [`Scope::SingularExpr`] on top; does not pop it.
+    /// Expects `word` to be peeked (still in lexer), doesn't consume if returning None.
     fn parse_function_call_inner<'a>(
         &mut self,
         lexer: &mut Lexer<'a>,
@@ -1201,16 +1220,19 @@ impl Parser {
     ) -> Result<Option<Handle<crate::Expression>>, Error<'a>> {
         assert!(self.scopes.last().is_some());
         let expr = if let Some(fun) = conv::map_relational_fun(name) {
+            let _ = lexer.next();
             lexer.open_arguments()?;
             let argument = self.parse_general_expression(lexer, ctx.reborrow())?;
             lexer.close_arguments()?;
             crate::Expression::Relational { fun, argument }
         } else if let Some(axis) = conv::map_derivative_axis(name) {
+            let _ = lexer.next();
             lexer.open_arguments()?;
             let expr = self.parse_general_expression(lexer, ctx.reborrow())?;
             lexer.close_arguments()?;
             crate::Expression::Derivative { axis, expr }
         } else if let Some(fun) = conv::map_standard_fun(name) {
+            let _ = lexer.next();
             lexer.open_arguments()?;
             let arg_count = fun.argument_count();
             let arg = self.parse_general_expression(lexer, ctx.reborrow())?;
@@ -1236,6 +1258,7 @@ impl Parser {
         } else {
             match name {
                 "select" => {
+                    let _ = lexer.next();
                     lexer.open_arguments()?;
                     let reject = self.parse_general_expression(lexer, ctx.reborrow())?;
                     lexer.expect(Token::Separator(','))?;
@@ -1250,6 +1273,7 @@ impl Parser {
                     }
                 }
                 "arrayLength" => {
+                    let _ = lexer.next();
                     lexer.open_arguments()?;
                     let array = self.parse_singular_expression(lexer, ctx.reborrow())?;
                     lexer.close_arguments()?;
@@ -1257,12 +1281,14 @@ impl Parser {
                 }
                 // atomics
                 "atomicLoad" => {
+                    let _ = lexer.next();
                     lexer.open_arguments()?;
                     let pointer = self.parse_atomic_pointer(lexer, ctx.reborrow())?;
                     lexer.close_arguments()?;
                     crate::Expression::Load { pointer }
                 }
                 "atomicAdd" => {
+                    let _ = lexer.next();
                     let handle = self.parse_atomic_helper(
                         lexer,
                         crate::AtomicFunction::Add,
@@ -1271,6 +1297,7 @@ impl Parser {
                     return Ok(Some(handle));
                 }
                 "atomicAnd" => {
+                    let _ = lexer.next();
                     let handle = self.parse_atomic_helper(
                         lexer,
                         crate::AtomicFunction::And,
@@ -1279,6 +1306,7 @@ impl Parser {
                     return Ok(Some(handle));
                 }
                 "atomicOr" => {
+                    let _ = lexer.next();
                     let handle = self.parse_atomic_helper(
                         lexer,
                         crate::AtomicFunction::InclusiveOr,
@@ -1287,6 +1315,7 @@ impl Parser {
                     return Ok(Some(handle));
                 }
                 "atomicXor" => {
+                    let _ = lexer.next();
                     let handle = self.parse_atomic_helper(
                         lexer,
                         crate::AtomicFunction::ExclusiveOr,
@@ -1295,16 +1324,19 @@ impl Parser {
                     return Ok(Some(handle));
                 }
                 "atomicMin" => {
+                    let _ = lexer.next();
                     let handle =
                         self.parse_atomic_helper(lexer, crate::AtomicFunction::Min, ctx)?;
                     return Ok(Some(handle));
                 }
                 "atomicMax" => {
+                    let _ = lexer.next();
                     let handle =
                         self.parse_atomic_helper(lexer, crate::AtomicFunction::Max, ctx)?;
                     return Ok(Some(handle));
                 }
                 "atomicExchange" => {
+                    let _ = lexer.next();
                     let handle = self.parse_atomic_helper(
                         lexer,
                         crate::AtomicFunction::Exchange { compare: None },
@@ -1313,6 +1345,7 @@ impl Parser {
                     return Ok(Some(handle));
                 }
                 "atomicCompareExchangeWeak" => {
+                    let _ = lexer.next();
                     lexer.open_arguments()?;
                     let pointer = self.parse_singular_expression(lexer, ctx.reborrow())?;
                     lexer.expect(Token::Separator(','))?;
@@ -1335,17 +1368,22 @@ impl Parser {
                     };
 
                     let span = self.peek_scope(lexer);
-                    let result = ctx.interrupt_emitter(expression, NagaSpan::ByteRange(span.clone()));
-                    ctx.block.push(crate::Statement::Atomic {
-                        pointer,
-                        fun: crate::AtomicFunction::Exchange { compare: Some(cmp) },
-                        value,
-                        result,
-                    }, NagaSpan::ByteRange(span));
+                    let result =
+                        ctx.interrupt_emitter(expression, NagaSpan::ByteRange(span.clone()));
+                    ctx.block.push(
+                        crate::Statement::Atomic {
+                            pointer,
+                            fun: crate::AtomicFunction::Exchange { compare: Some(cmp) },
+                            value,
+                            result,
+                        },
+                        NagaSpan::ByteRange(span),
+                    );
                     return Ok(Some(result));
                 }
                 // texture sampling
                 "textureSample" => {
+                    let _ = lexer.next();
                     lexer.open_arguments()?;
                     let (image_name, image_span) = lexer.next_ident_with_span()?;
                     lexer.expect(Token::Separator(','))?;
@@ -1376,6 +1414,7 @@ impl Parser {
                     }
                 }
                 "textureSampleLevel" => {
+                    let _ = lexer.next();
                     lexer.open_arguments()?;
                     let (image_name, image_span) = lexer.next_ident_with_span()?;
                     lexer.expect(Token::Separator(','))?;
@@ -1408,6 +1447,7 @@ impl Parser {
                     }
                 }
                 "textureSampleBias" => {
+                    let _ = lexer.next();
                     lexer.open_arguments()?;
                     let (image_name, image_span) = lexer.next_ident_with_span()?;
                     lexer.expect(Token::Separator(','))?;
@@ -1440,6 +1480,7 @@ impl Parser {
                     }
                 }
                 "textureSampleGrad" => {
+                    let _ = lexer.next();
                     lexer.open_arguments()?;
                     let (image_name, image_span) = lexer.next_ident_with_span()?;
                     lexer.expect(Token::Separator(','))?;
@@ -1474,6 +1515,7 @@ impl Parser {
                     }
                 }
                 "textureSampleCompare" => {
+                    let _ = lexer.next();
                     lexer.open_arguments()?;
                     let (image_name, image_span) = lexer.next_ident_with_span()?;
                     lexer.expect(Token::Separator(','))?;
@@ -1506,6 +1548,7 @@ impl Parser {
                     }
                 }
                 "textureSampleCompareLevel" => {
+                    let _ = lexer.next();
                     lexer.open_arguments()?;
                     let (image_name, image_span) = lexer.next_ident_with_span()?;
                     lexer.expect(Token::Separator(','))?;
@@ -1538,6 +1581,7 @@ impl Parser {
                     }
                 }
                 "textureLoad" => {
+                    let _ = lexer.next();
                     lexer.open_arguments()?;
                     let (image_name, image_span) = lexer.next_ident_with_span()?;
                     let image = ctx.lookup_ident.lookup(image_name, image_span.clone())?;
@@ -1570,6 +1614,7 @@ impl Parser {
                     }
                 }
                 "textureDimensions" => {
+                    let _ = lexer.next();
                     lexer.open_arguments()?;
                     let (image_name, image_span) = lexer.next_ident_with_span()?;
                     let image = ctx.lookup_ident.lookup(image_name, image_span)?;
@@ -1586,6 +1631,7 @@ impl Parser {
                     }
                 }
                 "textureNumLevels" => {
+                    let _ = lexer.next();
                     lexer.open_arguments()?;
                     let (image_name, image_span) = lexer.next_ident_with_span()?;
                     let image = ctx.lookup_ident.lookup(image_name, image_span)?;
@@ -1596,6 +1642,7 @@ impl Parser {
                     }
                 }
                 "textureNumLayers" => {
+                    let _ = lexer.next();
                     lexer.open_arguments()?;
                     let (image_name, image_span) = lexer.next_ident_with_span()?;
                     let image = ctx.lookup_ident.lookup(image_name, image_span)?;
@@ -1606,6 +1653,7 @@ impl Parser {
                     }
                 }
                 "textureNumSamples" => {
+                    let _ = lexer.next();
                     lexer.open_arguments()?;
                     let (image_name, image_span) = lexer.next_ident_with_span()?;
                     let image = ctx.lookup_ident.lookup(image_name, image_span)?;
@@ -1621,9 +1669,10 @@ impl Parser {
                         match self.parse_local_function_call(lexer, name, ctx.reborrow())? {
                             Some((function, arguments)) => {
                                 let span = self.peek_scope(lexer);
-                                let result = Some(
-                                    ctx.interrupt_emitter(crate::Expression::CallResult(function), NagaSpan::ByteRange(span.clone())),
-                                );
+                                let result = Some(ctx.interrupt_emitter(
+                                    crate::Expression::CallResult(function),
+                                    NagaSpan::ByteRange(span.clone()),
+                                ));
                                 ctx.block.push(
                                     crate::Statement::Call {
                                         function,
@@ -1641,7 +1690,9 @@ impl Parser {
             }
         };
         let span = self.peek_scope(lexer);
-        Ok(Some(ctx.expressions.append(expr, NagaSpan::ByteRange(span))))
+        Ok(Some(
+            ctx.expressions.append(expr, NagaSpan::ByteRange(span)),
+        ))
     }
 
     /// Expects [`Scope::PrimaryExpr`] scope on top; if returning Some(_), pops it.
@@ -1651,7 +1702,10 @@ impl Parser {
         type_name: &'a str,
         mut ctx: ExpressionContext<'a, '_, '_>,
     ) -> Result<Option<Handle<crate::Expression>>, Error<'a>> {
-        assert_eq!(self.scopes.last().map(|&(ref scope, _)| scope.clone()), Some(Scope::PrimaryExpr));
+        assert_eq!(
+            self.scopes.last().map(|&(ref scope, _)| scope.clone()),
+            Some(Scope::PrimaryExpr)
+        );
         let ty_resolution = match self.lookup_type.get(type_name) {
             Some(&handle) => TypeResolution::Handle(handle),
             None => match self.parse_type_decl_impl(
@@ -1728,16 +1782,18 @@ impl Parser {
         } else {
             let ty = match ty_resolution {
                 TypeResolution::Handle(handle) => handle,
-                TypeResolution::Value(inner) => {
-                    ctx.types.fetch_or_append(crate::Type { name: None, inner }, Default::default())
-                }
+                TypeResolution::Value(inner) => ctx
+                    .types
+                    .fetch_or_append(crate::Type { name: None, inner }, Default::default()),
             };
             components.push(last_component);
             crate::Expression::Compose { ty, components }
         };
 
         let span = self.pop_scope(lexer);
-        Ok(Some(ctx.expressions.append(expr, NagaSpan::ByteRange(span))))
+        Ok(Some(
+            ctx.expressions.append(expr, NagaSpan::ByteRange(span)),
+        ))
     }
 
     fn parse_const_expression_impl<'a>(
@@ -1795,17 +1851,23 @@ impl Parser {
         // the span.
         let span = self.pop_scope(lexer);
         let handle = if let Some(name) = register_name {
-            const_arena.append(crate::Constant {
-                name: Some(name.to_string()),
-                specialization: None,
-                inner,
-            }, NagaSpan::ByteRange(span))
+            const_arena.append(
+                crate::Constant {
+                    name: Some(name.to_string()),
+                    specialization: None,
+                    inner,
+                },
+                NagaSpan::ByteRange(span),
+            )
         } else {
-            const_arena.fetch_or_append(crate::Constant {
-                name: None,
-                specialization: None,
-                inner,
-            }, Default::default())
+            const_arena.fetch_or_append(
+                crate::Constant {
+                    name: None,
+                    specialization: None,
+                    inner,
+                },
+                Default::default(),
+            )
         };
 
         Ok(handle)
@@ -1827,8 +1889,9 @@ impl Parser {
     ) -> Result<Handle<crate::Expression>, Error<'a>> {
         // Will be popped inside match, possibly inside parse_function_call_inner or parse_construction
         self.push_scope(Scope::PrimaryExpr, lexer);
-        let handle = match lexer.next() {
+        let handle = match lexer.peek() {
             (Token::Paren('('), _) => {
+                let _ = lexer.next();
                 let expr = self.parse_general_expression(lexer, ctx.reborrow())?;
                 lexer.expect(Token::Paren(')'))?;
                 self.pop_scope(lexer);
@@ -1837,13 +1900,18 @@ impl Parser {
             token @ (Token::Word("true"), _)
             | token @ (Token::Word("false"), _)
             | token @ (Token::Number { .. }, _) => {
+                let _ = lexer.next();
                 let const_handle =
                     self.parse_const_expression_impl(token, lexer, None, ctx.types, ctx.constants)?;
                 let span = self.pop_scope(lexer);
-                ctx.interrupt_emitter(crate::Expression::Constant(const_handle), NagaSpan::ByteRange(span))
+                ctx.interrupt_emitter(
+                    crate::Expression::Constant(const_handle),
+                    NagaSpan::ByteRange(span),
+                )
             }
             (Token::Word(word), span) => {
                 if let Some(&expr) = ctx.lookup_ident.get(word) {
+                    let _ = lexer.next();
                     self.pop_scope(lexer);
                     expr
                 } else if let Some(expr) =
@@ -1852,10 +1920,13 @@ impl Parser {
                     //TODO: resolve the duplicate call in `parse_singular_expression`
                     self.pop_scope(lexer);
                     expr
-                } else if let Some(expr) = self.parse_construction(lexer, word, ctx.reborrow())? {
-                    expr
                 } else {
-                    return Err(Error::UnknownIdent(span, word));
+                    let _ = lexer.next();
+                    if let Some(expr) = self.parse_construction(lexer, word, ctx.reborrow())? {
+                        expr
+                    } else {
+                        return Err(Error::UnknownIdent(span, word));
+                    }
                 }
             }
             other => return Err(Error::Unexpected(other, ExpectedToken::PrimaryExpression)),
@@ -1891,8 +1962,9 @@ impl Parser {
                 };
                 if now {
                     let expression = crate::Expression::Load { pointer: handle };
-                    handle = ctx.expressions.append(expression,
-                                                    NagaSpan::ByteRange(lexer.span_from(span_start)));
+                    handle = ctx
+                        .expressions
+                        .append(expression, NagaSpan::ByteRange(lexer.span_from(span_start)));
                     needs_deref = false;
                 }
             }
@@ -1984,15 +2056,17 @@ impl Parser {
                     // after we reached for the value, load it
                     return Ok(if needs_deref {
                         let expression = crate::Expression::Load { pointer: handle };
-                        ctx.expressions.append(expression,
-                                               ctx.expressions.get_span(handle).clone())
+                        ctx.expressions
+                            .append(expression, ctx.expressions.get_span(handle).clone())
                     } else {
                         handle
                     });
                 }
             };
 
-            handle = ctx.expressions.append(expression, NagaSpan::ByteRange(lexer.span_from(span_start)));
+            handle = ctx
+                .expressions
+                .append(expression, NagaSpan::ByteRange(lexer.span_from(span_start)));
         }
     }
 
@@ -2012,7 +2086,10 @@ impl Parser {
                     expr: self.parse_singular_expression(lexer, ctx.reborrow())?,
                 };
                 let span = self.peek_scope(lexer);
-                (true, ctx.expressions.append(expr, NagaSpan::ByteRange(span)))
+                (
+                    true,
+                    ctx.expressions.append(expr, NagaSpan::ByteRange(span)),
+                )
             }
             Token::Operation('!') | Token::Operation('~') => {
                 let _ = lexer.next();
@@ -2021,7 +2098,10 @@ impl Parser {
                     expr: self.parse_singular_expression(lexer, ctx.reborrow())?,
                 };
                 let span = self.peek_scope(lexer);
-                (true, ctx.expressions.append(expr, NagaSpan::ByteRange(span)))
+                (
+                    true,
+                    ctx.expressions.append(expr, NagaSpan::ByteRange(span)),
+                )
             }
             Token::Operation('&') => {
                 let _ = lexer.next();
@@ -2030,10 +2110,7 @@ impl Parser {
             }
             Token::Word(word) => {
                 let handle = match self.parse_function_call_inner(lexer, word, ctx.reborrow())? {
-                    Some(handle) => {
-                        let _ = lexer.next();
-                        handle
-                    }
+                    Some(handle) => handle,
                     None => self.parse_primary_expression(lexer, ctx.reborrow())?,
                 };
                 (true, handle)
@@ -2672,10 +2749,13 @@ impl Parser {
                 match self.parse_type_decl_impl(lexer, attribute, name, type_arena, const_arena)? {
                     Some(inner) => {
                         let span = name_span.start..lexer.current_byte_offset();
-                        type_arena.fetch_or_append(crate::Type {
-                            name: debug_name.map(|s| s.to_string()),
-                            inner,
-                        }, NagaSpan::ByteRange(span))
+                        type_arena.fetch_or_append(
+                            crate::Type {
+                                name: debug_name.map(|s| s.to_string()),
+                                inner,
+                            },
+                            NagaSpan::ByteRange(span),
+                        )
                     }
                     None => return Err(Error::UnknownType(name_span)),
                 }
@@ -2732,6 +2812,7 @@ impl Parser {
     }
 
     /// Parse a statement that is either an assignment or a function call.
+    /// Expects `ident` to still be in the lexer.
     fn parse_statement_restricted<'a, 'out>(
         &mut self,
         lexer: &mut Lexer<'a>,
@@ -2743,7 +2824,9 @@ impl Parser {
         context.emitter.start(context.expressions);
         let stmt = match context.lookup_ident.get(ident) {
             Some(&expr) => {
-                let left = self.parse_postfix(span_start, lexer, context.reborrow(), expr, false)?;
+                let _ = lexer.next();
+                let left =
+                    self.parse_postfix(span_start, lexer, context.reborrow(), expr, false)?;
                 lexer.expect(Token::Operation('='))?;
                 let value = self.parse_general_expression(lexer, context.reborrow())?;
                 crate::Statement::Store {
@@ -2780,13 +2863,15 @@ impl Parser {
         is_uniform_control_flow: bool,
     ) -> Result<(), Error<'a>> {
         self.push_scope(Scope::Statement, lexer);
-        let (word, word_span) = match lexer.next() {
+        let (word, word_span) = match lexer.peek() {
             (Token::Separator(';'), _) => {
+                let _ = lexer.next();
                 self.pop_scope(lexer);
                 return Ok(());
             }
             (Token::Paren('{'), _) => {
                 self.push_scope(Scope::Block, lexer);
+                let _ = lexer.next();
                 let mut statements = crate::Block::new();
                 while !lexer.skip(Token::Paren('}')) {
                     self.parse_statement(
@@ -2810,6 +2895,7 @@ impl Parser {
         let mut emitter = super::Emitter::default();
         let statement = match word {
             "let" => {
+                let _ = lexer.next();
                 emitter.start(context.expressions);
                 let (name, name_span) = lexer.next_ident_with_span()?;
                 let given_ty = if lexer.skip(Token::Separator(':')) {
@@ -2847,6 +2933,7 @@ impl Parser {
                 None
             }
             "var" => {
+                let _ = lexer.next();
                 enum Init {
                     Empty,
                     Constant(Handle<crate::Constant>),
@@ -2894,9 +2981,10 @@ impl Parser {
                             // register the type, if needed
                             match context.typifier[value].clone() {
                                 TypeResolution::Handle(ty) => ty,
-                                TypeResolution::Value(inner) => context
-                                    .types
-                                    .fetch_or_append(crate::Type { name: None, inner }, Default::default()),
+                                TypeResolution::Value(inner) => context.types.fetch_or_append(
+                                    crate::Type { name: None, inner },
+                                    Default::default(),
+                                ),
                             }
                         }
                     };
@@ -2919,14 +3007,17 @@ impl Parser {
                 };
 
                 lexer.expect(Token::Separator(';'))?;
-                let var_id = context.variables.append(crate::LocalVariable {
-                    name: Some(name.to_owned()),
-                    ty,
-                    init: match init {
-                        Init::Constant(value) => Some(value),
-                        _ => None,
+                let var_id = context.variables.append(
+                    crate::LocalVariable {
+                        name: Some(name.to_owned()),
+                        ty,
+                        init: match init {
+                            Init::Constant(value) => Some(value),
+                            _ => None,
+                        },
                     },
-                }, NagaSpan::ByteRange(name_span));
+                    NagaSpan::ByteRange(name_span),
+                );
 
                 // Doesn't make sense to assign a span to cached lookup
                 let expr_id = context
@@ -2944,6 +3035,7 @@ impl Parser {
                 }
             }
             "return" => {
+                let _ = lexer.next();
                 let value = if lexer.peek().0 != Token::Separator(';') {
                     emitter.start(context.expressions);
                     let handle = self.parse_general_expression(
@@ -2959,6 +3051,7 @@ impl Parser {
                 Some(crate::Statement::Return { value })
             }
             "if" => {
+                let _ = lexer.next();
                 lexer.expect(Token::Paren('('))?;
                 emitter.start(context.expressions);
                 let condition = self
@@ -3012,6 +3105,7 @@ impl Parser {
                 })
             }
             "switch" => {
+                let _ = lexer.next();
                 emitter.start(context.expressions);
                 lexer.expect(Token::Paren('('))?;
                 let selector = self
@@ -3081,6 +3175,7 @@ impl Parser {
                 })
             }
             "loop" => {
+                let _ = lexer.next();
                 let mut body = crate::Block::new();
                 let mut continuing = crate::Block::new();
                 lexer.expect(Token::Paren('{'))?;
@@ -3100,6 +3195,7 @@ impl Parser {
                 Some(crate::Statement::Loop { body, continuing })
             }
             "for" => {
+                let _ = lexer.next();
                 lexer.expect(Token::Paren('('))?;
                 if !lexer.skip(Token::Separator(';')) {
                     let num_statements = block.len();
@@ -3145,10 +3241,9 @@ impl Parser {
                 };
 
                 let mut continuing = crate::Block::new();
-                if let Token::Word(ident) = lexer.peek().0 {
+                if let (Token::Word(ident), ident_span) = lexer.peek() {
                     // manually parse the next statement here instead of calling parse_statement
                     // because the statement is not terminated with a semicolon
-                    let (_, ident_span) = lexer.next();
                     self.parse_statement_restricted(
                         lexer,
                         ident,
@@ -3165,20 +3260,32 @@ impl Parser {
 
                 Some(crate::Statement::Loop { body, continuing })
             }
-            "break" => Some(crate::Statement::Break),
-            "continue" => Some(crate::Statement::Continue),
-            "discard" => Some(crate::Statement::Kill),
+            "break" => {
+                let _ = lexer.next();
+                Some(crate::Statement::Break)
+            }
+            "continue" => {
+                let _ = lexer.next();
+                Some(crate::Statement::Continue)
+            }
+            "discard" => {
+                let _ = lexer.next();
+                Some(crate::Statement::Kill)
+            }
             "storageBarrier" => {
+                let _ = lexer.next();
                 lexer.expect(Token::Paren('('))?;
                 lexer.expect(Token::Paren(')'))?;
                 Some(crate::Statement::Barrier(crate::Barrier::STORAGE))
             }
             "workgroupBarrier" => {
+                let _ = lexer.next();
                 lexer.expect(Token::Paren('('))?;
                 lexer.expect(Token::Paren(')'))?;
                 Some(crate::Statement::Barrier(crate::Barrier::WORK_GROUP))
             }
             "atomicStore" => {
+                let _ = lexer.next();
                 lexer.open_arguments()?;
                 let mut expression_ctx = context.as_expression(block, &mut emitter);
                 let pointer = self.parse_atomic_pointer(lexer, expression_ctx.reborrow())?;
@@ -3188,6 +3295,7 @@ impl Parser {
                 Some(crate::Statement::Store { pointer, value })
             }
             "textureStore" => {
+                let _ = lexer.next();
                 emitter.start(context.expressions);
                 lexer.open_arguments()?;
                 let (image_name, image_span) = lexer.next_ident_with_span()?;
@@ -3303,13 +3411,16 @@ impl Parser {
         // populate initial expressions
         let mut expressions = Arena::new();
         for (&name, expression) in lookup_global_expression.iter() {
-            let span = if let crate::Expression::GlobalVariable(ref handle) = *expression {
-                module.global_variables.get_span(handle.clone()).clone()
-            } else {
-                unreachable!()
+            let span = match *expression {
+                crate::Expression::GlobalVariable(ref handle) => {
+                    module.global_variables.get_span(handle.clone()).clone()
+                }
+                crate::Expression::Constant(ref handle) => {
+                    module.constants.get_span(handle.clone()).clone()
+                }
+                _ => unreachable!(),
             };
-            let expr_handle = expressions.append(expression.clone(),
-                                                 span);
+            let expr_handle = expressions.append(expression.clone(), span);
             lookup_ident.insert(name, expr_handle);
         }
         // read parameter list
@@ -3327,9 +3438,10 @@ impl Parser {
             let (param_name, param_name_span, param_type, _access) =
                 self.parse_variable_ident_decl(lexer, &mut module.types, &mut module.constants)?;
             let param_index = arguments.len() as u32;
-            let expression_token =
-                expressions.append(crate::Expression::FunctionArgument(param_index),
-                                   NagaSpan::ByteRange(param_name_span));
+            let expression_token = expressions.append(
+                crate::Expression::FunctionArgument(param_index),
+                NagaSpan::ByteRange(param_name_span),
+            );
             lookup_ident.insert(param_name, expression_token);
             arguments.push(crate::FunctionArgument {
                 name: Some(param_name.to_string()),
@@ -3488,14 +3600,17 @@ impl Parser {
                 let (members, span) =
                     self.parse_struct_body(lexer, &mut module.types, &mut module.constants)?;
                 let type_span = lexer.span_from(start);
-                let ty = module.types.fetch_or_append(crate::Type {
-                    name: Some(name.to_string()),
-                    inner: crate::TypeInner::Struct {
-                        top_level: is_block,
-                        members,
-                        span,
+                let ty = module.types.fetch_or_append(
+                    crate::Type {
+                        name: Some(name.to_string()),
+                        inner: crate::TypeInner::Struct {
+                            top_level: is_block,
+                            members,
+                            span,
+                        },
                     },
-                }, NagaSpan::ByteRange(type_span));
+                    NagaSpan::ByteRange(type_span),
+                );
                 self.lookup_type.insert(name.to_owned(), ty);
                 lexer.expect(Token::Separator(';'))?;
             }
@@ -3564,13 +3679,16 @@ impl Parser {
                         _ => crate::StorageClass::Private,
                     },
                 };
-                let var_handle = module.global_variables.append(crate::GlobalVariable {
-                    name: Some(pvar.name.to_owned()),
-                    class,
-                    binding: binding.take(),
-                    ty: pvar.ty,
-                    init: pvar.init,
-                }, NagaSpan::ByteRange(pvar.name_span));
+                let var_handle = module.global_variables.append(
+                    crate::GlobalVariable {
+                        name: Some(pvar.name.to_owned()),
+                        class,
+                        binding: binding.take(),
+                        ty: pvar.ty,
+                        init: pvar.init,
+                    },
+                    NagaSpan::ByteRange(pvar.name_span),
+                );
                 lookup_global_expression
                     .insert(pvar.name, crate::Expression::GlobalVariable(var_handle));
             }
@@ -3586,7 +3704,9 @@ impl Parser {
                         function,
                     }),
                     None => {
-                        module.functions.append(function, NagaSpan::ByteRange(lexer.span_from(start)));
+                        module
+                            .functions
+                            .append(function, NagaSpan::ByteRange(lexer.span_from(start)));
                     }
                 }
             }
