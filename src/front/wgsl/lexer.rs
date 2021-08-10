@@ -37,7 +37,7 @@ enum NLDigitState {
 }
 
 struct NumberLexerState {
-    minus: bool,
+    _minus: bool,
     hex: bool,
     leading_zeros: usize,
     digit_state: NLDigitState,
@@ -47,17 +47,17 @@ struct NumberLexerState {
 impl NumberLexerState {
     // TODO: add proper error reporting, possibly through try_into_token function returning Result
 
-    pub fn is_valid_number(&self) -> bool {
+    pub fn _is_valid_number(&self) -> bool {
         match *self {
             Self {
-                minus: false, // No negative zero for integers.
+                _minus: false, // No negative zero for integers.
                 hex,
                 leading_zeros,
                 digit_state: NLDigitState::LeadingZero,
                 ..
             } => hex || leading_zeros == 1, // No leading zeros allowed in non-hex integers, "0" is always allowed.
             Self {
-                minus,
+                _minus: minus,
                 hex,
                 leading_zeros,
                 digit_state: NLDigitState::DigitBeforeDot,
@@ -100,7 +100,7 @@ fn consume_number(input: &str) -> (Token, &str) {
     let (hex, working_substr, hex_offset) = try_skip_prefix(working_substr, "0x");
 
     let mut state = NumberLexerState {
-        minus,
+        _minus: minus,
         hex,
         leading_zeros: 0,
         digit_state: NLDigitState::Nothing,
@@ -294,48 +294,27 @@ fn consume_number(input: &str) -> (Token, &str) {
     //       This means all relevant characters fit into one byte
     //       and using string slicing (which slices UTF-8 bytes) works for us.
 
-    if state.is_valid_number() {
-        (
-            Token::Number {
-                value: if state.uint_suffix {
-                    &value[..value.len() - 1]
-                } else {
-                    value
-                },
-                ty: if state.uint_suffix {
-                    'u'
-                } else if state.is_float() {
-                    'f'
-                } else {
-                    'i'
-                },
-                width: "",
-            },
-            rest,
-        )
-    } else {
-        // TODO: A syntax error can already be recognized here, possibly report it at this stage.
+    // TODO: A syntax error can already be recognized here, possibly report it at this stage.
 
-        // Return known incorrect token for now.
-        (
-            Token::Number {
-                value: if state.uint_suffix {
-                    &value[..value.len() - 1]
-                } else {
-                    value
-                },
-                ty: if state.uint_suffix {
-                    'u'
-                } else if state.is_float() {
-                    'f'
-                } else {
-                    'i'
-                },
-                width: "",
+    // Return possibly knowably incorrect (given !state.is_valid_number()) token for now.
+    (
+        Token::Number {
+            value: if state.uint_suffix {
+                &value[..value.len() - 1]
+            } else {
+                value
             },
-            rest,
-        )
-    }
+            ty: if state.uint_suffix {
+                'u'
+            } else if state.is_float() {
+                'f'
+            } else {
+                'i'
+            },
+            width: "",
+        },
+        rest,
+    )
 }
 
 fn consume_token(mut input: &str, generic: bool) -> (Token<'_>, &str) {
