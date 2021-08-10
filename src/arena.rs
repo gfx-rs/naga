@@ -195,8 +195,9 @@ impl<T> Arena<T> {
     }
 
     /// Adds a new value to the arena, returning a typed handle.
-    #[cfg_attr(not(feature = "span"), allow(unused_variables))]
     pub fn append(&mut self, value: T, span: Span) -> Handle<T> {
+        #[cfg(not(feature = "span"))]
+        let _ = span;
         let position = self.data.len() + 1;
         let index =
             Index::new(position as u32).expect("Failed to append to Arena. Handle overflows");
@@ -262,12 +263,16 @@ impl<T> Arena<T> {
         self.data.clear()
     }
 
-    #[cfg_attr(feature = "span", allow(unreachable_code))]
-    #[cfg_attr(not(feature = "span"), allow(unused_variables))]
     pub fn get_span(&self, handle: Handle<T>) -> &Span {
         #[cfg(feature = "span")]
-        return self.span_info.get(handle.index()).unwrap_or(&Span::Unknown);
-        &Span::Unknown
+        {
+            return self.span_info.get(handle.index()).unwrap_or(&Span::Unknown);
+        }
+        #[cfg(not(feature = "span"))]
+        {
+            let _ = handle;
+            &Span::Unknown
+        }
     }
 }
 
