@@ -277,7 +277,10 @@ impl<T> Arena<T> {
 }
 
 #[cfg(feature = "deserialize")]
-impl<'de, T> serde::Deserialize<'de> for Arena<T> {
+impl<'de, T> serde::Deserialize<'de> for Arena<T>
+where
+    T: serde::Deserialize<'de>,
+{
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
