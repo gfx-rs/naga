@@ -681,7 +681,12 @@ fn test_tokens() {
             Token::Number {
                 value: "2",
                 ty: 'u',
-                width: "3",
+                width: "",
+            },
+            Token::Number {
+                value: "3",
+                ty: 'i',
+                width: "",
             },
             Token::Word("o"),
         ],
@@ -692,9 +697,9 @@ fn test_tokens() {
             Token::Number {
                 value: "2.4",
                 ty: 'f',
-                width: "44",
+                width: "",
             },
-            Token::Word("po"),
+            Token::Word("f44po"),
         ],
     );
     sub_test(

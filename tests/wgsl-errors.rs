@@ -62,22 +62,6 @@ fn invalid_float() {
 }
 
 #[test]
-fn invalid_scalar_width() {
-    check(
-        "let scale: f32 = 1.1f1000;",
-        r###"error: invalid width of `1000` for literal
-  ┌─ wgsl:1:18
-  │
-1 │ let scale: f32 = 1.1f1000;
-  │                  ^^^^^^^^ invalid width
-  │
-  = note: valid widths are 8, 16, 32, 64
-
-"###,
-    );
-}
-
-#[test]
 fn invalid_texture_sample_type() {
     check(
         "let x: texture_2d<f16>;",

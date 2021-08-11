@@ -88,7 +88,7 @@ fn parse_type_inference() {
         fn foo() {
             let a = 2u;
             let b: u32 = a;
-            var x = 3f32;
+            var x = 3.;
             var y = vec2<f32>(1, 2);
         }",
     )
