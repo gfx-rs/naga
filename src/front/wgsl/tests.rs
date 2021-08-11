@@ -28,6 +28,7 @@ fn parse_decimal_floats() {
     parse_str("let a : f32 = 2.3e+55;").unwrap();
 
     assert!(parse_str("let a : f32 = 42.1234f;").is_err());
+    assert!(parse_str("let a : f32 = 42.1234f32;").is_err());
 }
 
 #[test]
@@ -39,6 +40,9 @@ fn parse_hex_floats() {
     parse_str("let a : f32 = -0x.1p-5;").unwrap();
     parse_str("let a : f32 = 0xC.8p+55;").unwrap();
     parse_str("let a : f32 = 0x1p1;").unwrap();
+
+    assert!(parse_str("let a : f32 = 0x1p1f;").is_err());
+    assert!(parse_str("let a : f32 = 0x1p1f32;").is_err());
 }
 
 #[test]
@@ -50,6 +54,8 @@ fn parse_decimal_ints() {
 
     assert!(parse_str("let a : i32 = -0;").is_err());
     assert!(parse_str("let a : i32 = 1.0;").is_err());
+    assert!(parse_str("let a : i32 = 1i;").is_err());
+    assert!(parse_str("let a : i32 = 1i32;").is_err());
 
     // u32 /^0x[0-9a-fA-F]+u|0u|[1-9][0-9]*u$/
     parse_str("let a : u32 = 0u;").unwrap();
@@ -57,6 +63,7 @@ fn parse_decimal_ints() {
 
     assert!(parse_str("let a : u32 = -0u;").is_err());
     assert!(parse_str("let a : u32 = 1.0u;").is_err());
+    assert!(parse_str("let a : u32 = 1u32;").is_err());
 }
 
 #[test]
@@ -65,9 +72,14 @@ fn parse_hex_ints() {
     parse_str("let a : i32 = -0x0;").unwrap();
     parse_str("let a : i32 = 0x2a4D2;").unwrap();
 
+    assert!(parse_str("let a : i32 = 0x2a4D2i;").is_err());
+    assert!(parse_str("let a : i32 = 0x2a4D2i32;").is_err());
+
     // u32 /^0x[0-9a-fA-F]+u|0u|[1-9][0-9]*u$/
     parse_str("let a : u32 = 0x0u;").unwrap();
     parse_str("let a : u32 = 0x2a4D2u;").unwrap();
+
+    assert!(parse_str("let a : u32 = 0x2a4D2u32;").is_err());
 }
 
 #[test]
