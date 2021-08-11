@@ -17,13 +17,14 @@ fn consume_any(input: &str, what: impl Fn(char) -> bool) -> (&str, &str) {
 /// Returns whether the prefix was present and could therefore be skipped,
 /// the remaining str and the number of *bytes* skipped.
 fn try_skip_prefix<'a, 'b>(input: &'a str, prefix: &'b str) -> (bool, &'a str, usize) {
-    if let Some(input_without_prefix) = input.strip_prefix(prefix) {
-        (true, input_without_prefix, prefix.len())
+    if input.starts_with(prefix) {
+        (true, &input[prefix.len()..], prefix.len())
     } else {
         (false, input, 0)
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
 enum NLDigitState {
     Nothing,
     LeadingZero,
@@ -68,29 +69,15 @@ impl NumberLexerState {
                                               // i.e. it is not just "0".
                     && (minus ^ uint_suffix) // Either a negative number, or and unsigned integer, not both.
             }
-            Self {
-                digit_state:
-                    NLDigitState::DigitsThenDot
-                    | NLDigitState::DigitAfterDot
-                    | NLDigitState::DigitAfterExponent,
-                uint_suffix: false, // These states are only valid for floating point numbers.
-                ..
-            } => true,
-            _ => false,
+            _ => self.is_float(),
         }
     }
 
     pub fn is_float(&self) -> bool {
-        match self {
-            Self {
-                digit_state:
-                    NLDigitState::DigitsThenDot
-                    | NLDigitState::DigitAfterDot
-                    | NLDigitState::DigitAfterExponent,
-                ..
-            } => true,
-            _ => false,
-        }
+        !self.uint_suffix
+            && (self.digit_state == NLDigitState::DigitsThenDot
+                || self.digit_state == NLDigitState::DigitAfterDot
+                || self.digit_state == NLDigitState::DigitAfterExponent)
     }
 }
 
@@ -227,7 +214,13 @@ fn consume_number(input: &str) -> (Token, &str) {
 
             NumberLexerState {
                 hex,
-                digit_state: NLDigitState::DigitsThenDot | NLDigitState::DigitAfterDot,
+                digit_state: NLDigitState::DigitsThenDot,
+                uint_suffix: false,
+                ..
+            }
+            | NumberLexerState {
+                hex,
+                digit_state: NLDigitState::DigitAfterDot,
                 uint_suffix: false,
                 ..
             } => match c {
@@ -267,7 +260,12 @@ fn consume_number(input: &str) -> (Token, &str) {
             },
 
             NumberLexerState {
-                digit_state: NLDigitState::SignAfterExponent | NLDigitState::DigitAfterExponent,
+                digit_state: NLDigitState::SignAfterExponent,
+                uint_suffix: false,
+                ..
+            }
+            | NumberLexerState {
+                digit_state: NLDigitState::DigitAfterExponent,
                 uint_suffix: false,
                 ..
             } => match c {
