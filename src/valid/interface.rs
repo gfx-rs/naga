@@ -1,7 +1,6 @@
 use super::{
     analyzer::{FunctionInfo, GlobalUse},
     Capabilities, Disalignment, FunctionError, ModuleInfo, ShaderStages, TypeFlags,
-    ValidationFlags,
 };
 use crate::arena::{Arena, Handle};
 
@@ -320,8 +319,9 @@ impl super::Validator {
         let (required_type_flags, is_resource) = match var.class {
             crate::StorageClass::Function => return Err(GlobalVariableError::InvalidUsage),
             crate::StorageClass::Storage { .. } => {
+                #[cfg(feature = "validate")]
                 if let Err((ty_handle, disalignment)) = type_info.storage_layout {
-                    if self.flags.contains(ValidationFlags::STRUCT_LAYOUTS) {
+                    if self.flags.contains(super::ValidationFlags::STRUCT_LAYOUTS) {
                         return Err(GlobalVariableError::Alignment(ty_handle, disalignment));
                     }
                 }
@@ -331,8 +331,9 @@ impl super::Validator {
                 )
             }
             crate::StorageClass::Uniform => {
+                #[cfg(feature = "validate")]
                 if let Err((ty_handle, disalignment)) = type_info.uniform_layout {
-                    if self.flags.contains(ValidationFlags::STRUCT_LAYOUTS) {
+                    if self.flags.contains(super::ValidationFlags::STRUCT_LAYOUTS) {
                         return Err(GlobalVariableError::Alignment(ty_handle, disalignment));
                     }
                 }

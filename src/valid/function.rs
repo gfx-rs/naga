@@ -1,6 +1,6 @@
 use super::{
     analyzer::{UniformityDisruptor, UniformityRequirements},
-    ExpressionError, FunctionInfo, ModuleInfo, ShaderStages, TypeFlags, ValidationFlags,
+    ExpressionError, FunctionInfo, ModuleInfo, ShaderStages, TypeFlags,
 };
 use crate::arena::{Arena, Handle};
 use bit_set::BitSet;
@@ -678,7 +678,8 @@ impl super::Validator {
             if expr.needs_pre_emit() {
                 self.valid_expression_set.insert(handle.index());
             }
-            if self.flags.contains(ValidationFlags::EXPRESSIONS) {
+            #[cfg(feature = "validate")]
+            if self.flags.contains(super::ValidationFlags::EXPRESSIONS) {
                 match self.validate_expression(
                     handle,
                     expr,
@@ -693,7 +694,8 @@ impl super::Validator {
             }
         }
 
-        if self.flags.contains(ValidationFlags::BLOCKS) {
+        #[cfg(feature = "validate")]
+        if self.flags.contains(super::ValidationFlags::BLOCKS) {
             let stages = self.validate_block(
                 &fun.body,
                 &BlockContext::new(fun, module, &info, &mod_info.functions),

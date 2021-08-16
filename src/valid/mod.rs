@@ -29,14 +29,19 @@ bitflags::bitflags! {
     #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
     pub struct ValidationFlags: u8 {
         /// Expressions.
+        #[cfg(feature = "validate")]
         const EXPRESSIONS = 0x1;
         /// Statements and blocks of them.
+        #[cfg(feature = "validate")]
         const BLOCKS = 0x2;
         /// Uniformity of control flow for operations that require it.
+        #[cfg(feature = "validate")]
         const CONTROL_FLOW_UNIFORMITY = 0x4;
         /// Host-shareable structure layouts.
+        #[cfg(feature = "validate")]
         const STRUCT_LAYOUTS = 0x8;
         /// Constants.
+        #[cfg(feature = "validate")]
         const CONSTANTS = 0x10;
     }
 }
@@ -257,6 +262,7 @@ impl Validator {
         self.reset_types(module.types.len());
         self.layouter.update(&module.types, &module.constants)?;
 
+        #[cfg(feature = "validate")]
         if self.flags.contains(ValidationFlags::CONSTANTS) {
             for (handle, constant) in module.constants.iter() {
                 self.validate_constant(handle, &module.constants, &module.types)

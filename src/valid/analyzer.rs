@@ -620,9 +620,10 @@ impl FunctionInfo {
                     let mut requirements = UniformityRequirements::empty();
                     for expr in range.clone() {
                         let req = self.expressions[expr.index()].uniformity.requirements;
+                        #[cfg(feature = "validate")]
                         if self
                             .flags
-                            .contains(super::ValidationFlags::CONTROL_FLOW_UNIFORMITY)
+                            .contains(ValidationFlags::CONTROL_FLOW_UNIFORMITY)
                             && !req.is_empty()
                         {
                             if let Some(cause) = disruptor {
