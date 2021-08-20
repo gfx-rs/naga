@@ -16,7 +16,7 @@ fn consume_any(input: &str, what: impl Fn(char) -> bool) -> (&str, &str) {
 /// Tries to skip a given prefix in the input string.
 /// Returns whether the prefix was present and could therefore be skipped,
 /// the remaining str and the number of *bytes* skipped.
-fn try_skip_prefix<'a, 'b>(input: &'a str, prefix: &'b str) -> (bool, &'a str, usize) {
+pub fn try_skip_prefix<'a, 'b>(input: &'a str, prefix: &'b str) -> (bool, &'a str, usize) {
     if input.starts_with(prefix) {
         (true, &input[prefix.len()..], prefix.len())
     } else {
@@ -546,34 +546,6 @@ impl<'a> Lexer<'a> {
         match self.next() {
             (Token::Word(word), _) => Ok(word),
             other => Err(Error::Unexpected(other, ExpectedToken::Identifier)),
-        }
-    }
-
-    fn _next_float_literal(&mut self) -> Result<f32, Error<'a>> {
-        match self.next() {
-            (Token::Number { value, .. }, span) => {
-                value.parse().map_err(|e| Error::BadFloat(span, e))
-            }
-            other => Err(Error::Unexpected(other, ExpectedToken::Float)),
-        }
-    }
-
-    pub(super) fn next_uint_literal(&mut self) -> Result<u32, Error<'a>> {
-        match self.next() {
-            (Token::Number { value, .. }, span) => {
-                let v = value.parse();
-                v.map_err(|e| Error::BadU32(span, e))
-            }
-            other => Err(Error::Unexpected(other, ExpectedToken::Uint)),
-        }
-    }
-
-    pub(super) fn next_sint_literal(&mut self) -> Result<i32, Error<'a>> {
-        match self.next() {
-            (Token::Number { value, .. }, span) => {
-                value.parse().map_err(|e| Error::BadI32(span, e))
-            }
-            other => Err(Error::Unexpected(other, ExpectedToken::Sint)),
         }
     }
 

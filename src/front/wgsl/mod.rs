@@ -16,7 +16,7 @@ use crate::{
     ConstantInner, FastHashMap, ScalarValue,
 };
 
-use self::lexer::Lexer;
+use self::lexer::{try_skip_prefix, Lexer};
 use codespan_reporting::{
     diagnostic::{Diagnostic, Label},
     files::{Files, SimpleFile},
@@ -64,9 +64,10 @@ pub enum Token<'a> {
 pub enum ExpectedToken<'a> {
     Token(Token<'a>),
     Identifier,
-    Float,
-    Uint,
-    Sint,
+    Number {
+        ty: Option<char>,
+        width: Option<&'a str>,
+    },
     Constant,
     /// Expected: constant, parenthesized expression, identifier
     PrimaryExpression,
@@ -88,12 +89,23 @@ pub enum ExpectedToken<'a> {
     StructAttribute,
 }
 
+#[derive(Clone, Debug, Error)]
+pub enum BadFloatError {
+    #[error(transparent)]
+    ParseFloatError(#[from] ParseFloatError),
+    #[error("hex float literals are not yet implemented")]
+    HexFloat,
+}
+
 #[derive(Clone, Debug)]
 pub enum Error<'a> {
     Unexpected(TokenSpan<'a>, ExpectedToken<'a>),
     BadU32(Span, ParseIntError),
     BadI32(Span, ParseIntError),
-    BadFloat(Span, ParseFloatError),
+    /// A negative signed integer literal where both signed and unsigned,
+    /// but only non-negative literals are allowed.
+    NegativeInt(Span),
+    BadFloat(Span, BadFloatError),
     BadU32Constant(Span),
     BadScalarWidth(Span, &'a str),
     BadAccessor(Span),
@@ -158,9 +170,27 @@ impl<'a> Error<'a> {
                             }
                         }
                         ExpectedToken::Identifier => "identifier".to_string(),
-                        ExpectedToken::Float => "floating point literal".to_string(),
-                        ExpectedToken::Uint => "non-negative integer literal".to_string(),
-                        ExpectedToken::Sint => "integer literal".to_string(),
+                        ExpectedToken::Number { ty, width } => {
+                            let literal_ty_str = ty.map(|ty| match ty {
+                                    'f' => "floating-point",
+                                    'u' => "unsigned integer",
+                                    'i' => "signed integer",
+                                    // TODO: possibly use an enum for Token.ty for cleaner code
+                                    _ => unreachable!("f, u, i are the only possible number types"),
+                                }).unwrap_or("arbitrary number");
+                            if let Some(width) = width {
+                                format!(
+                                    "{} literal of {}-bit width",
+                                    literal_ty_str,
+                                    width,
+                                )
+                            } else {
+                                format!(
+                                    "{} literal of arbitrary width",
+                                    literal_ty_str,
+                                )
+                            }
+                        },
                         ExpectedToken::Constant => "constant".to_string(),
                         ExpectedToken::PrimaryExpression => "expression".to_string(),
                         ExpectedToken::AttributeSeparator => "attribute separator (',') or an end of the attribute list (']]')".to_string(),
@@ -187,10 +217,10 @@ impl<'a> Error<'a> {
             },
             Error::BadU32(ref bad_span, ref err) => ParseError {
                 message: format!(
-                    "expected non-negative integer literal, found `{}`",
+                    "expected unsigned integer literal, found `{}`",
                     &source[bad_span.clone()],
                 ),
-                labels: vec![(bad_span.clone(), "expected positive integer".into())],
+                labels: vec![(bad_span.clone(), "expected unsigned integer".into())],
                 notes: vec![err.to_string()],
             },
             Error::BadI32(ref bad_span, ref err) => ParseError {
@@ -198,8 +228,16 @@ impl<'a> Error<'a> {
                     "expected integer literal, found `{}`",
                     &source[bad_span.clone()],
                 ),
-                labels: vec![(bad_span.clone(), "expected integer".into())],
+                labels: vec![(bad_span.clone(), "expected signed integer".into())],
                 notes: vec![err.to_string()],
+            },
+            Error::NegativeInt(ref bad_span) => ParseError {
+                message: format!(
+                    "expected non-negative integer literal, found `{}`",
+                    &source[bad_span.clone()],
+                ),
+                labels: vec![(bad_span.clone(), "expected non-negative integer".into())],
+                notes: vec![],
             },
             Error::BadFloat(ref bad_span, ref err) => ParseError {
                 message: format!(
@@ -211,10 +249,10 @@ impl<'a> Error<'a> {
             },
             Error::BadU32Constant(ref bad_span) => ParseError {
                 message: format!(
-                    "expected non-negative integer constant expression, found `{}`",
+                    "expected unsigned integer constant expression, found `{}`",
                     &source[bad_span.clone()],
                 ),
-                labels: vec![(bad_span.clone(), "expected non-negative integer".into())],
+                labels: vec![(bad_span.clone(), "expected unsigned integer".into())],
                 notes: vec![],
             },
 
@@ -923,6 +961,214 @@ pub enum Scope {
 
 type LocalFunctionCall = (Handle<crate::Function>, Vec<Handle<crate::Expression>>);
 
+fn get_i32_literal(word: &str, span: Span) -> Result<i32, Error<'_>> {
+    let (minus, word_without_minus, _) = try_skip_prefix(word, "-");
+    let (hex, word_without_minus_and_0x, _) = try_skip_prefix(word_without_minus, "0x");
+
+    // TODO: fail for non-hex negative zero or remove test for it
+    let parsed_val = match (hex, minus) {
+        (true, true) => i32::from_str_radix(&format!("-{}", word_without_minus_and_0x), 16),
+        (true, false) => i32::from_str_radix(word_without_minus_and_0x, 16),
+        (false, _) => word.parse(),
+    };
+
+    parsed_val.map_err(|e| Error::BadI32(span, e))
+}
+
+fn get_u32_literal(word: &str, span: Span) -> Result<u32, Error<'_>> {
+    let (minus, word_without_minus, _) = try_skip_prefix(word, "-");
+    let (hex, word_without_minus_and_0x, _) = try_skip_prefix(word_without_minus, "0x");
+
+    // We need to add a minus here as well, since the lexer also accepts syntactically incorrect negative uints
+    let parsed_val = match (hex, minus) {
+        (true, true) => u32::from_str_radix(&format!("-{}", word_without_minus_and_0x), 16),
+        (true, false) => u32::from_str_radix(word_without_minus_and_0x, 16),
+        (false, _) => word.parse(),
+    };
+
+    parsed_val.map_err(|e| Error::BadU32(span, e))
+}
+
+fn get_f32_literal(word: &str, span: Span) -> Result<f32, Error<'_>> {
+    let hex = word.starts_with("0x") || word.starts_with("-0x");
+
+    let parsed_val = if hex {
+        Err(BadFloatError::HexFloat)
+    } else {
+        word.parse::<f32>().map_err(BadFloatError::ParseFloatError)
+    };
+
+    parsed_val.map_err(|e| Error::BadFloat(span, e))
+}
+
+fn parse_sint_literal<'a>(lexer: &mut Lexer<'a>, width: &'a str) -> Result<i32, Error<'a>> {
+    let token_span = lexer.next();
+
+    if !width.is_empty() && width != "32" {
+        // Only 32-bit literals supported by the spec and naga for now!
+        return Err(Error::BadScalarWidth(token_span.1, width));
+    }
+
+    match token_span {
+        (
+            Token::Number {
+                value,
+                ty: 'i',
+                width: token_width,
+            },
+            span,
+        ) if token_width == "" && width == "32" || token_width == width => {
+            get_i32_literal(value, span)
+        }
+        other => Err(Error::Unexpected(
+            other,
+            ExpectedToken::Number {
+                ty: Some('i'),
+                width: Some(width),
+            },
+        )),
+    }
+}
+
+fn _parse_uint_literal<'a>(lexer: &mut Lexer<'a>, width: &'a str) -> Result<u32, Error<'a>> {
+    let token_span = lexer.next();
+
+    if !width.is_empty() && width != "32" {
+        // Only 32-bit literals supported by the spec and naga for now!
+        return Err(Error::BadScalarWidth(token_span.1, width));
+    }
+
+    match token_span {
+        (
+            Token::Number {
+                value,
+                ty: 'u',
+                width: token_width,
+            },
+            span,
+        ) if token_width == "" && width == "32" || token_width == width => {
+            get_u32_literal(value, span)
+        }
+        other => Err(Error::Unexpected(
+            other,
+            ExpectedToken::Number {
+                ty: Some('u'),
+                width: Some(width),
+            },
+        )),
+    }
+}
+
+/// Parse a non-negative signed integer literal.
+/// This is for attributes like `size`, `location` and others.
+fn parse_non_negative_sint_literal<'a>(
+    lexer: &mut Lexer<'a>,
+    width: &'a str,
+) -> Result<u32, Error<'a>> {
+    let token_span = lexer.next();
+
+    if !width.is_empty() && width != "32" {
+        // Only 32-bit literals supported by the spec and naga for now!
+        return Err(Error::BadScalarWidth(token_span.1, width));
+    }
+
+    match token_span {
+        (
+            Token::Number {
+                value,
+                ty: 'i',
+                width: token_width,
+            },
+            span,
+        ) if token_width == "" && width == "32" || token_width == width => {
+            let i32_val = get_i32_literal(value, span.clone())?;
+            u32::try_from(i32_val).map_err(|_| Error::NegativeInt(span))
+        }
+        other => Err(Error::Unexpected(
+            other,
+            ExpectedToken::Number {
+                ty: Some('i'),
+                width: Some(width),
+            },
+        )),
+    }
+}
+
+/// Parse a non-negative integer literal that may be either signed or unsigned.
+/// This is for the `workgroup_size` attribute and array lengths.
+/// Note: these values should be no larger than [`i32::MAX`], but this is not checked here.
+fn parse_generic_non_negative_int_literal<'a>(
+    lexer: &mut Lexer<'a>,
+    width: &'a str,
+) -> Result<u32, Error<'a>> {
+    let token_span = lexer.next();
+
+    if !width.is_empty() && width != "32" {
+        // Only 32-bit literals supported by the spec and naga for now!
+        return Err(Error::BadScalarWidth(token_span.1, width));
+    }
+
+    match token_span {
+        (
+            Token::Number {
+                value,
+                ty: 'i',
+                width: token_width,
+            },
+            span,
+        ) if token_width == "" && width == "32" || token_width == width => {
+            let i32_val = get_i32_literal(value, span.clone())?;
+            u32::try_from(i32_val).map_err(|_| Error::NegativeInt(span))
+        }
+        (
+            Token::Number {
+                value,
+                ty: 'u',
+                width: token_width,
+            },
+            span,
+        ) if token_width == "" && width == "32" || token_width == width => {
+            get_u32_literal(value, span)
+        }
+        other => Err(Error::Unexpected(
+            other,
+            ExpectedToken::Number {
+                ty: Some('i'),
+                width: Some(width),
+            },
+        )),
+    }
+}
+
+fn _parse_float_literal<'a>(lexer: &mut Lexer<'a>, width: &'a str) -> Result<f32, Error<'a>> {
+    let token_span = lexer.next();
+
+    if !width.is_empty() && width != "32" {
+        // Only 32-bit literals supported by the spec and naga for now!
+        return Err(Error::BadScalarWidth(token_span.1, width));
+    }
+
+    match token_span {
+        (
+            Token::Number {
+                value,
+                ty: 'f',
+                width: token_width,
+            },
+            span,
+        ) if token_width == "" && width == "32" || token_width == width => {
+            get_f32_literal(value, span)
+        }
+        other => Err(Error::Unexpected(
+            other,
+            ExpectedToken::Number {
+                ty: Some('f'),
+                width: Some(width),
+            },
+        )),
+    }
+}
+
 #[derive(Default)]
 struct BindingParser {
     location: Option<u32>,
@@ -941,7 +1187,7 @@ impl BindingParser {
         match name {
             "location" => {
                 lexer.expect(Token::Paren('('))?;
-                self.location = Some(lexer.next_uint_literal()?);
+                self.location = Some(parse_non_negative_sint_literal(lexer, "32")?);
                 lexer.expect(Token::Paren(')'))?;
             }
             "builtin" => {
@@ -1105,35 +1351,23 @@ impl Parser {
         word: &'a str,
         ty: char,
         width: &'a str,
-        token: TokenSpan<'a>,
+        token_span: TokenSpan<'a>,
     ) -> Result<ConstantInner, Error<'a>> {
-        let span = token.1;
+        let span = token_span.1;
+
+        if !width.is_empty() && width != "32" {
+            // Only 32-bit literals supported by the spec and naga for now!
+            return Err(Error::BadScalarWidth(span, width));
+        }
+
         let value = match ty {
-            'i' => word
-                .parse()
-                .map(crate::ScalarValue::Sint)
-                .map_err(|e| Error::BadI32(span.clone(), e))?,
-            'u' => word
-                .parse()
-                .map(crate::ScalarValue::Uint)
-                .map_err(|e| Error::BadU32(span.clone(), e))?,
-            'f' => word
-                .parse()
-                .map(crate::ScalarValue::Float)
-                .map_err(|e| Error::BadFloat(span.clone(), e))?,
+            'i' => get_i32_literal(word, span).map(|val| crate::ScalarValue::Sint(val as i64))?,
+            'u' => get_u32_literal(word, span).map(|val| crate::ScalarValue::Uint(val as u64))?,
+            'f' => get_f32_literal(word, span).map(|val| crate::ScalarValue::Float(val as f64))?,
             _ => unreachable!(),
         };
-        Ok(crate::ConstantInner::Scalar {
-            value,
-            width: if width.is_empty() {
-                4
-            } else {
-                match width.parse::<crate::Bytes>() {
-                    Ok(bits) if (bits % 8) == 0 => Ok(bits / 8),
-                    _ => Err(Error::BadScalarWidth(span, width)),
-                }?
-            },
-        })
+
+        Ok(crate::ConstantInner::Scalar { value, width: 4 })
     }
 
     fn parse_atomic_pointer<'a>(
@@ -2424,8 +2658,9 @@ impl Parser {
                             match word {
                                 "size" => {
                                     lexer.expect(Token::Paren('('))?;
-                                    let (value, span) =
-                                        lexer.capture_span(Lexer::next_uint_literal)?;
+                                    let (value, span) = lexer.capture_span(|lexer| {
+                                        parse_non_negative_sint_literal(lexer, "32")
+                                    })?;
                                     lexer.expect(Token::Paren(')'))?;
                                     size = Some(
                                         NonZeroU32::new(value)
@@ -2434,8 +2669,9 @@ impl Parser {
                                 }
                                 "align" => {
                                     lexer.expect(Token::Paren('('))?;
-                                    let (value, span) =
-                                        lexer.capture_span(Lexer::next_uint_literal)?;
+                                    let (value, span) = lexer.capture_span(|lexer| {
+                                        parse_non_negative_sint_literal(lexer, "32")
+                                    })?;
                                     lexer.expect(Token::Paren(')'))?;
                                     align = Some(
                                         NonZeroU32::new(value)
@@ -2841,7 +3077,8 @@ impl Parser {
                 match lexer.next() {
                     (Token::Word("stride"), _) => {
                         lexer.expect(Token::Paren('('))?;
-                        let (stride, span) = lexer.capture_span(Lexer::next_uint_literal)?;
+                        let (stride, span) = lexer
+                            .capture_span(|lexer| parse_non_negative_sint_literal(lexer, "32"))?;
                         attribute.stride =
                             Some(NonZeroU32::new(stride).ok_or(Error::ZeroStride(span))?);
                         lexer.expect(Token::Paren(')'))?;
@@ -3212,7 +3449,8 @@ impl Parser {
                                 (Token::Word("case"), _) => {
                                     // parse a list of values
                                     let value = loop {
-                                        let value = lexer.next_sint_literal()?;
+                                        // TODO: Switch statements also allow for floats, bools and unsigned integers. See https://www.w3.org/TR/WGSL/#switch-statement
+                                        let value = parse_sint_literal(lexer, "32")?;
                                         if lexer.skip(Token::Separator(',')) {
                                             if lexer.skip(Token::Separator(':')) {
                                                 break value;
@@ -3642,7 +3880,7 @@ impl Parser {
                 match lexer.next_ident_with_span()? {
                     ("binding", _) => {
                         lexer.expect(Token::Paren('('))?;
-                        bind_index = Some(lexer.next_uint_literal()?);
+                        bind_index = Some(parse_non_negative_sint_literal(lexer, "32")?);
                         lexer.expect(Token::Paren(')'))?;
                     }
                     ("block", _) => {
@@ -3650,7 +3888,7 @@ impl Parser {
                     }
                     ("group", _) => {
                         lexer.expect(Token::Paren('('))?;
-                        bind_group = Some(lexer.next_uint_literal()?);
+                        bind_group = Some(parse_non_negative_sint_literal(lexer, "32")?);
                         lexer.expect(Token::Paren(')'))?;
                     }
                     ("stage", _) => {
@@ -3662,7 +3900,7 @@ impl Parser {
                     ("workgroup_size", _) => {
                         lexer.expect(Token::Paren('('))?;
                         for (i, size) in workgroup_size.iter_mut().enumerate() {
-                            *size = lexer.next_uint_literal()?;
+                            *size = parse_generic_non_negative_int_literal(lexer, "32")?;
                             match lexer.next() {
                                 (Token::Paren(')'), _) => break,
                                 (Token::Separator(','), _) if i != 2 => (),
