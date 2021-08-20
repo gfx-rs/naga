@@ -1,4 +1,4 @@
-use super::{conv, Error, ExpectedToken, Span, Token, TokenSpan};
+use super::{conv, Error, ExpectedToken, NumberType, Span, Token, TokenSpan};
 
 fn _consume_str<'a>(input: &'a str, what: &str) -> Option<&'a str> {
     if input.starts_with(what) {
@@ -303,13 +303,13 @@ fn consume_number(input: &str) -> (Token, &str) {
                 value
             },
             ty: if state.uint_suffix {
-                'u'
+                NumberType::Uint
             } else if state.is_float() {
-                'f'
+                NumberType::Float
             } else {
-                'i'
+                NumberType::Sint
             },
-            width: "",
+            width: None,
         },
         rest,
     )
@@ -639,8 +639,8 @@ fn test_tokens() {
         &[
             Token::Number {
                 value: "92",
-                ty: 'i',
-                width: "",
+                ty: NumberType::Sint,
+                width: None,
             },
             Token::Word("No"),
         ],
@@ -650,13 +650,13 @@ fn test_tokens() {
         &[
             Token::Number {
                 value: "2",
-                ty: 'u',
-                width: "",
+                ty: NumberType::Uint,
+                width: None,
             },
             Token::Number {
                 value: "3",
-                ty: 'i',
-                width: "",
+                ty: NumberType::Sint,
+                width: None,
             },
             Token::Word("o"),
         ],
@@ -666,8 +666,8 @@ fn test_tokens() {
         &[
             Token::Number {
                 value: "2.4",
-                ty: 'f',
-                width: "",
+                ty: NumberType::Float,
+                width: None,
             },
             Token::Word("f44po"),
         ],
@@ -691,8 +691,8 @@ fn test_variable_decl() {
             Token::Paren('('),
             Token::Number {
                 value: "0",
-                ty: 'i',
-                width: "",
+                ty: NumberType::Sint,
+                width: None,
             },
             Token::Paren(')'),
             Token::DoubleParen(']'),

@@ -13,7 +13,7 @@ use crate::{
         ensure_block_returns, Alignment, Layouter, ResolveContext, ResolveError, TypeResolution,
     },
     span::Span as NagaSpan,
-    ConstantInner, FastHashMap, ScalarValue,
+    Bytes, ConstantInner, FastHashMap, ScalarValue,
 };
 
 use self::lexer::{try_skip_prefix, Lexer};
@@ -38,6 +38,13 @@ type Span = ops::Range<usize>;
 type TokenSpan<'a> = (Token<'a>, Span);
 
 #[derive(Copy, Clone, Debug, PartialEq)]
+pub enum NumberType {
+    Sint,
+    Uint,
+    Float,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub enum Token<'a> {
     Separator(char),
     DoubleColon,
@@ -45,8 +52,8 @@ pub enum Token<'a> {
     DoubleParen(char),
     Number {
         value: &'a str,
-        ty: char,
-        width: &'a str,
+        ty: NumberType,
+        width: Option<Bytes>,
     },
     String(&'a str),
     Word(&'a str),
@@ -65,8 +72,8 @@ pub enum ExpectedToken<'a> {
     Token(Token<'a>),
     Identifier,
     Number {
-        ty: Option<char>,
-        width: Option<&'a str>,
+        ty: Option<NumberType>,
+        width: Option<Bytes>,
     },
     Constant,
     /// Expected: constant, parenthesized expression, identifier
@@ -107,7 +114,7 @@ pub enum Error<'a> {
     NegativeInt(Span),
     BadFloat(Span, BadFloatError),
     BadU32Constant(Span),
-    BadScalarWidth(Span, &'a str),
+    BadScalarWidth(Span, Bytes),
     BadAccessor(Span),
     BadTexture(Span),
     BadTypeCast {
@@ -172,17 +179,15 @@ impl<'a> Error<'a> {
                         ExpectedToken::Identifier => "identifier".to_string(),
                         ExpectedToken::Number { ty, width } => {
                             let literal_ty_str = ty.map(|ty| match ty {
-                                    'f' => "floating-point",
-                                    'u' => "unsigned integer",
-                                    'i' => "signed integer",
-                                    // TODO: possibly use an enum for Token.ty for cleaner code
-                                    _ => unreachable!("f, u, i are the only possible number types"),
+                                    NumberType::Float => "floating-point",
+                                    NumberType::Uint => "unsigned integer",
+                                    NumberType::Sint => "signed integer",
                                 }).unwrap_or("arbitrary number");
                             if let Some(width) = width {
                                 format!(
                                     "{} literal of {}-bit width",
                                     literal_ty_str,
-                                    width,
+                                    width as u32 * 8,
                                 )
                             } else {
                                 format!(
@@ -257,9 +262,9 @@ impl<'a> Error<'a> {
             },
 
             Error::BadScalarWidth(ref bad_span, width) => ParseError {
-                message: format!("invalid width of `{}` for literal", width,),
+                message: format!("invalid width of `{}` bits for literal", width as u32 * 8,),
                 labels: vec![(bad_span.clone(), "invalid width".into())],
-                notes: vec!["valid widths are 8, 16, 32, 64".to_string()],
+                notes: vec!["the only valid width is 32 for now".to_string()],
             },
             Error::BadAccessor(ref accessor_span) => ParseError {
                 message: format!(
@@ -1001,10 +1006,10 @@ fn get_f32_literal(word: &str, span: Span) -> Result<f32, Error<'_>> {
     parsed_val.map_err(|e| Error::BadFloat(span, e))
 }
 
-fn parse_sint_literal<'a>(lexer: &mut Lexer<'a>, width: &'a str) -> Result<i32, Error<'a>> {
+fn parse_sint_literal<'a>(lexer: &mut Lexer<'a>, width: Bytes) -> Result<i32, Error<'a>> {
     let token_span = lexer.next();
 
-    if !width.is_empty() && width != "32" {
+    if width != 4 {
         // Only 32-bit literals supported by the spec and naga for now!
         return Err(Error::BadScalarWidth(token_span.1, width));
     }
@@ -1013,27 +1018,25 @@ fn parse_sint_literal<'a>(lexer: &mut Lexer<'a>, width: &'a str) -> Result<i32, 
         (
             Token::Number {
                 value,
-                ty: 'i',
+                ty: NumberType::Sint,
                 width: token_width,
             },
             span,
-        ) if token_width == "" && width == "32" || token_width == width => {
-            get_i32_literal(value, span)
-        }
+        ) if token_width.unwrap_or(4) == width => get_i32_literal(value, span),
         other => Err(Error::Unexpected(
             other,
             ExpectedToken::Number {
-                ty: Some('i'),
+                ty: Some(NumberType::Sint),
                 width: Some(width),
             },
         )),
     }
 }
 
-fn _parse_uint_literal<'a>(lexer: &mut Lexer<'a>, width: &'a str) -> Result<u32, Error<'a>> {
+fn _parse_uint_literal<'a>(lexer: &mut Lexer<'a>, width: Bytes) -> Result<u32, Error<'a>> {
     let token_span = lexer.next();
 
-    if !width.is_empty() && width != "32" {
+    if width != 4 {
         // Only 32-bit literals supported by the spec and naga for now!
         return Err(Error::BadScalarWidth(token_span.1, width));
     }
@@ -1042,17 +1045,15 @@ fn _parse_uint_literal<'a>(lexer: &mut Lexer<'a>, width: &'a str) -> Result<u32,
         (
             Token::Number {
                 value,
-                ty: 'u',
+                ty: NumberType::Uint,
                 width: token_width,
             },
             span,
-        ) if token_width == "" && width == "32" || token_width == width => {
-            get_u32_literal(value, span)
-        }
+        ) if token_width.unwrap_or(4) == width => get_u32_literal(value, span),
         other => Err(Error::Unexpected(
             other,
             ExpectedToken::Number {
-                ty: Some('u'),
+                ty: Some(NumberType::Uint),
                 width: Some(width),
             },
         )),
@@ -1063,11 +1064,11 @@ fn _parse_uint_literal<'a>(lexer: &mut Lexer<'a>, width: &'a str) -> Result<u32,
 /// This is for attributes like `size`, `location` and others.
 fn parse_non_negative_sint_literal<'a>(
     lexer: &mut Lexer<'a>,
-    width: &'a str,
+    width: Bytes,
 ) -> Result<u32, Error<'a>> {
     let token_span = lexer.next();
 
-    if !width.is_empty() && width != "32" {
+    if width != 4 {
         // Only 32-bit literals supported by the spec and naga for now!
         return Err(Error::BadScalarWidth(token_span.1, width));
     }
@@ -1076,18 +1077,18 @@ fn parse_non_negative_sint_literal<'a>(
         (
             Token::Number {
                 value,
-                ty: 'i',
+                ty: NumberType::Sint,
                 width: token_width,
             },
             span,
-        ) if token_width == "" && width == "32" || token_width == width => {
+        ) if token_width.unwrap_or(4) == width => {
             let i32_val = get_i32_literal(value, span.clone())?;
             u32::try_from(i32_val).map_err(|_| Error::NegativeInt(span))
         }
         other => Err(Error::Unexpected(
             other,
             ExpectedToken::Number {
-                ty: Some('i'),
+                ty: Some(NumberType::Sint),
                 width: Some(width),
             },
         )),
@@ -1099,11 +1100,11 @@ fn parse_non_negative_sint_literal<'a>(
 /// Note: these values should be no larger than [`i32::MAX`], but this is not checked here.
 fn parse_generic_non_negative_int_literal<'a>(
     lexer: &mut Lexer<'a>,
-    width: &'a str,
+    width: Bytes,
 ) -> Result<u32, Error<'a>> {
     let token_span = lexer.next();
 
-    if !width.is_empty() && width != "32" {
+    if width != 4 {
         // Only 32-bit literals supported by the spec and naga for now!
         return Err(Error::BadScalarWidth(token_span.1, width));
     }
@@ -1112,38 +1113,36 @@ fn parse_generic_non_negative_int_literal<'a>(
         (
             Token::Number {
                 value,
-                ty: 'i',
+                ty: NumberType::Sint,
                 width: token_width,
             },
             span,
-        ) if token_width == "" && width == "32" || token_width == width => {
+        ) if token_width.unwrap_or(4) == width => {
             let i32_val = get_i32_literal(value, span.clone())?;
             u32::try_from(i32_val).map_err(|_| Error::NegativeInt(span))
         }
         (
             Token::Number {
                 value,
-                ty: 'u',
+                ty: NumberType::Uint,
                 width: token_width,
             },
             span,
-        ) if token_width == "" && width == "32" || token_width == width => {
-            get_u32_literal(value, span)
-        }
+        ) if token_width.unwrap_or(4) == width => get_u32_literal(value, span),
         other => Err(Error::Unexpected(
             other,
             ExpectedToken::Number {
-                ty: Some('i'),
+                ty: Some(NumberType::Sint),
                 width: Some(width),
             },
         )),
     }
 }
 
-fn _parse_float_literal<'a>(lexer: &mut Lexer<'a>, width: &'a str) -> Result<f32, Error<'a>> {
+fn _parse_float_literal<'a>(lexer: &mut Lexer<'a>, width: Bytes) -> Result<f32, Error<'a>> {
     let token_span = lexer.next();
 
-    if !width.is_empty() && width != "32" {
+    if width != 4 {
         // Only 32-bit literals supported by the spec and naga for now!
         return Err(Error::BadScalarWidth(token_span.1, width));
     }
@@ -1152,17 +1151,15 @@ fn _parse_float_literal<'a>(lexer: &mut Lexer<'a>, width: &'a str) -> Result<f32
         (
             Token::Number {
                 value,
-                ty: 'f',
+                ty: NumberType::Float,
                 width: token_width,
             },
             span,
-        ) if token_width == "" && width == "32" || token_width == width => {
-            get_f32_literal(value, span)
-        }
+        ) if token_width.unwrap_or(4) == width => get_f32_literal(value, span),
         other => Err(Error::Unexpected(
             other,
             ExpectedToken::Number {
-                ty: Some('f'),
+                ty: Some(NumberType::Float),
                 width: Some(width),
             },
         )),
@@ -1187,7 +1184,7 @@ impl BindingParser {
         match name {
             "location" => {
                 lexer.expect(Token::Paren('('))?;
-                self.location = Some(parse_non_negative_sint_literal(lexer, "32")?);
+                self.location = Some(parse_non_negative_sint_literal(lexer, 4)?);
                 lexer.expect(Token::Paren(')'))?;
             }
             "builtin" => {
@@ -1349,25 +1346,35 @@ impl Parser {
 
     fn get_constant_inner<'a>(
         word: &'a str,
-        ty: char,
-        width: &'a str,
+        ty: NumberType,
+        width: Option<Bytes>,
         token_span: TokenSpan<'a>,
     ) -> Result<ConstantInner, Error<'a>> {
         let span = token_span.1;
 
-        if !width.is_empty() && width != "32" {
-            // Only 32-bit literals supported by the spec and naga for now!
-            return Err(Error::BadScalarWidth(span, width));
+        if let Some(width) = width {
+            if width != 4 {
+                // Only 32-bit literals supported by the spec and naga for now!
+                return Err(Error::BadScalarWidth(span, width));
+            }
         }
 
         let value = match ty {
-            'i' => get_i32_literal(word, span).map(|val| crate::ScalarValue::Sint(val as i64))?,
-            'u' => get_u32_literal(word, span).map(|val| crate::ScalarValue::Uint(val as u64))?,
-            'f' => get_f32_literal(word, span).map(|val| crate::ScalarValue::Float(val as f64))?,
-            _ => unreachable!(),
+            NumberType::Sint => {
+                get_i32_literal(word, span).map(|val| crate::ScalarValue::Sint(val as i64))?
+            }
+            NumberType::Uint => {
+                get_u32_literal(word, span).map(|val| crate::ScalarValue::Uint(val as u64))?
+            }
+            NumberType::Float => {
+                get_f32_literal(word, span).map(|val| crate::ScalarValue::Float(val as f64))?
+            }
         };
 
-        Ok(crate::ConstantInner::Scalar { value, width: 4 })
+        Ok(crate::ConstantInner::Scalar {
+            value,
+            width: width.unwrap_or(4),
+        })
     }
 
     fn parse_atomic_pointer<'a>(
@@ -2659,7 +2666,7 @@ impl Parser {
                                 "size" => {
                                     lexer.expect(Token::Paren('('))?;
                                     let (value, span) = lexer.capture_span(|lexer| {
-                                        parse_non_negative_sint_literal(lexer, "32")
+                                        parse_non_negative_sint_literal(lexer, 4)
                                     })?;
                                     lexer.expect(Token::Paren(')'))?;
                                     size = Some(
@@ -2670,7 +2677,7 @@ impl Parser {
                                 "align" => {
                                     lexer.expect(Token::Paren('('))?;
                                     let (value, span) = lexer.capture_span(|lexer| {
-                                        parse_non_negative_sint_literal(lexer, "32")
+                                        parse_non_negative_sint_literal(lexer, 4)
                                     })?;
                                     lexer.expect(Token::Paren(')'))?;
                                     align = Some(
@@ -3078,7 +3085,7 @@ impl Parser {
                     (Token::Word("stride"), _) => {
                         lexer.expect(Token::Paren('('))?;
                         let (stride, span) = lexer
-                            .capture_span(|lexer| parse_non_negative_sint_literal(lexer, "32"))?;
+                            .capture_span(|lexer| parse_non_negative_sint_literal(lexer, 4))?;
                         attribute.stride =
                             Some(NonZeroU32::new(stride).ok_or(Error::ZeroStride(span))?);
                         lexer.expect(Token::Paren(')'))?;
@@ -3450,7 +3457,7 @@ impl Parser {
                                     // parse a list of values
                                     let value = loop {
                                         // TODO: Switch statements also allow for floats, bools and unsigned integers. See https://www.w3.org/TR/WGSL/#switch-statement
-                                        let value = parse_sint_literal(lexer, "32")?;
+                                        let value = parse_sint_literal(lexer, 4)?;
                                         if lexer.skip(Token::Separator(',')) {
                                             if lexer.skip(Token::Separator(':')) {
                                                 break value;
@@ -3880,7 +3887,7 @@ impl Parser {
                 match lexer.next_ident_with_span()? {
                     ("binding", _) => {
                         lexer.expect(Token::Paren('('))?;
-                        bind_index = Some(parse_non_negative_sint_literal(lexer, "32")?);
+                        bind_index = Some(parse_non_negative_sint_literal(lexer, 4)?);
                         lexer.expect(Token::Paren(')'))?;
                     }
                     ("block", _) => {
@@ -3888,7 +3895,7 @@ impl Parser {
                     }
                     ("group", _) => {
                         lexer.expect(Token::Paren('('))?;
-                        bind_group = Some(parse_non_negative_sint_literal(lexer, "32")?);
+                        bind_group = Some(parse_non_negative_sint_literal(lexer, 4)?);
                         lexer.expect(Token::Paren(')'))?;
                     }
                     ("stage", _) => {
@@ -3900,7 +3907,7 @@ impl Parser {
                     ("workgroup_size", _) => {
                         lexer.expect(Token::Paren('('))?;
                         for (i, size) in workgroup_size.iter_mut().enumerate() {
-                            *size = parse_generic_non_negative_int_literal(lexer, "32")?;
+                            *size = parse_generic_non_negative_int_literal(lexer, 4)?;
                             match lexer.next() {
                                 (Token::Paren(')'), _) => break,
                                 (Token::Separator(','), _) if i != 2 => (),
