@@ -1237,12 +1237,10 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         )?;
                     }
 
-                    if !case.fall_through {
-                        writeln!(self.out, "{}break;", &indent_str_2)?;
-                    }
-
                     if case.fall_through {
                         writeln!(self.out, "{}}}", &indent_str_2)?;
+                    } else {
+                        writeln!(self.out, "{}break;", &indent_str_2)?;
                     }
 
                     writeln!(self.out, "{}}}", &indent_str_1)?;
