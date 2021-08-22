@@ -53,6 +53,7 @@ fn parse_decimal_ints() {
     parse_str("let a : i32 = -9923;").unwrap();
 
     assert!(parse_str("let a : i32 = -0;").is_err());
+    assert!(parse_str("let a : i32 = 01;").is_err());
     assert!(parse_str("let a : i32 = 1.0;").is_err());
     assert!(parse_str("let a : i32 = 1i;").is_err());
     assert!(parse_str("let a : i32 = 1i32;").is_err());
@@ -62,6 +63,7 @@ fn parse_decimal_ints() {
     parse_str("let a : u32 = 1092u;").unwrap();
 
     assert!(parse_str("let a : u32 = -0u;").is_err());
+    assert!(parse_str("let a : u32 = 01u;").is_err());
     assert!(parse_str("let a : u32 = 1.0u;").is_err());
     assert!(parse_str("let a : u32 = 1u32;").is_err());
 }
