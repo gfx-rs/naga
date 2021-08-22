@@ -19,14 +19,9 @@ cbuffer params : register(b0) { SimParams params; }
 ByteAddressBuffer particlesSrc : register(t1);
 RWByteAddressBuffer particlesDst : register(u2);
 
-struct ComputeInput_main {
-    uint3 global_invocation_id1 : SV_DispatchThreadID;
-};
-
 [numthreads(64, 1, 1)]
-void main(ComputeInput_main computeinput_main)
+void main(uint3 global_invocation_id : SV_DispatchThreadID)
 {
-    uint3 global_invocation_id = computeinput_main.global_invocation_id1;
     float2 vPos = (float2)0;
     float2 vVel = (float2)0;
     float2 cMass = (float2)0;

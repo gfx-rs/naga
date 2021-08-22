@@ -6,8 +6,8 @@ struct NagaConstants {
 ConstantBuffer<NagaConstants> _NagaConstants: register(b1);
 
 struct VertexOutput {
-    linear float3 uv : LOC0;
     float4 position : SV_Position;
+    linear float3 uv : LOC0;
 };
 
 struct Data {
@@ -19,8 +19,9 @@ cbuffer r_data : register(b0) { Data r_data; }
 TextureCube<float4> r_texture : register(t0);
 SamplerState r_sampler : register(s0, space1);
 
-struct VertexInput_vs_main {
-    uint vertex_index1 : SV_VertexID;
+struct VertexOutput_vs_main {
+    float3 uv : LOC0;
+    float4 position : SV_Position;
 };
 
 struct FragmentInput_fs_main {
@@ -28,9 +29,8 @@ struct FragmentInput_fs_main {
     float4 position : SV_Position;
 };
 
-VertexOutput vs_main(VertexInput_vs_main vertexinput_vs_main)
+VertexOutput_vs_main vs_main(uint vertex_index : SV_VertexID)
 {
-    uint vertex_index = vertexinput_vs_main.vertex_index1;
     int tmp1_ = (int)0;
     int tmp2_ = (int)0;
 
@@ -45,13 +45,14 @@ VertexOutput vs_main(VertexInput_vs_main vertexinput_vs_main)
     float3x3 inv_model_view = transpose(float3x3(_expr27.xyz, _expr31.xyz, _expr35.xyz));
     float4x4 _expr40 = r_data.proj_inv;
     float4 unprojected = mul(pos, _expr40);
-    const VertexOutput vertexoutput1 = { mul(unprojected.xyz, inv_model_view), pos };
+    const VertexOutput vertexoutput = { pos, mul(unprojected.xyz, inv_model_view) };
+    const VertexOutput_vs_main vertexoutput1 = { vertexoutput.uv, vertexoutput.position };
     return vertexoutput1;
 }
 
 float4 fs_main(FragmentInput_fs_main fragmentinput_fs_main) : SV_Target0
 {
-    VertexOutput in1 = { fragmentinput_fs_main.uv, fragmentinput_fs_main.position };
+    VertexOutput in1 = { fragmentinput_fs_main.position, fragmentinput_fs_main.uv };
     float4 _expr5 = r_texture.Sample(r_sampler, in1.uv);
     return _expr5;
 }

@@ -16,10 +16,6 @@ SamplerState sampler_reg : register(s0, space1);
 SamplerComparisonState sampler_cmp : register(s1, space1);
 Texture2D<float> image_2d_depth : register(t2, space1);
 
-struct ComputeInput_main {
-    uint3 local_id1 : SV_GroupThreadID;
-};
-
 int2 NagaRWDimensions2D(RWTexture2D<uint4> texture)
 {
     uint4 ret;
@@ -28,9 +24,8 @@ int2 NagaRWDimensions2D(RWTexture2D<uint4> texture)
 }
 
 [numthreads(16, 1, 1)]
-void main(ComputeInput_main computeinput_main)
+void main(uint3 local_id : SV_GroupThreadID)
 {
-    uint3 local_id = computeinput_main.local_id1;
     int2 dim = NagaRWDimensions2D(image_storage_src);
     int2 itc = ((dim * int2(local_id.xy)) % int2(10, 20));
     uint4 value1_ = image_mipmapped_src.Load(int3(itc, int(local_id.z)));

@@ -8,20 +8,19 @@ struct VertexOutput {
 Texture2D<float4> u_texture : register(t0);
 SamplerState u_sampler : register(s1);
 
-struct VertexInput_main {
-    float2 pos1 : LOC0;
-    float2 uv2 : LOC1;
+struct VertexOutput_main {
+    float2 uv2 : LOC0;
+    float4 position : SV_Position;
 };
 
 struct FragmentInput_main {
     float2 uv3 : LOC0;
 };
 
-VertexOutput main(VertexInput_main vertexinput_main)
+VertexOutput_main main(float2 pos : LOC0, float2 uv : LOC1)
 {
-    float2 pos = vertexinput_main.pos1;
-    float2 uv = vertexinput_main.uv2;
-    const VertexOutput vertexoutput1 = { uv, float4((c_scale * pos), 0.0, 1.0) };
+    const VertexOutput vertexoutput = { uv, float4((c_scale * pos), 0.0, 1.0) };
+    const VertexOutput_main vertexoutput1 = { vertexoutput.uv, vertexoutput.position };
     return vertexoutput1;
 }
 
