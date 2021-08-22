@@ -25,6 +25,7 @@ use codespan_reporting::{
         termcolor::{ColorChoice, ColorSpec, StandardStream, WriteColor},
     },
 };
+use hexf_parse::{parse_hexf32, ParseHexfError};
 use std::{
     borrow::Cow,
     convert::TryFrom,
@@ -110,8 +111,8 @@ pub enum BadIntError {
 pub enum BadFloatError {
     #[error(transparent)]
     ParseFloatError(#[from] ParseFloatError),
-    #[error("hex float literals are not yet implemented")]
-    HexFloat,
+    #[error(transparent)]
+    ParseHexfError(#[from] ParseHexfError),
 }
 
 #[derive(Clone, Debug)]
@@ -1028,7 +1029,7 @@ fn get_f32_literal(word: &str, span: Span) -> Result<f32, Error<'_>> {
     let hex = word.starts_with("0x") || word.starts_with("-0x");
 
     let parsed_val = if hex {
-        Err(BadFloatError::HexFloat)
+        parse_hexf32(word, false).map_err(BadFloatError::ParseHexfError)
     } else {
         word.parse::<f32>().map_err(BadFloatError::ParseFloatError)
     };
