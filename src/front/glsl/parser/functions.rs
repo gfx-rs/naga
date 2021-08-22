@@ -511,7 +511,17 @@ impl<'source> ParsingContext<'source> {
                 self.expect(parser, TokenValue::Semicolon)?.meta
             }
             TokenValue::Semicolon => self.bump(parser)?.meta,
-            _ => meta,
+            _ => {
+                let Token { value, meta } = self.bump(parser)?;
+                return Err(Error {
+                    kind: ErrorKind::InvalidToken(
+                        value,
+                        // TODO: Add all tokens that can start a statement?
+                        vec![TokenValue::RightBrace.into()],
+                    ),
+                    meta,
+                });
+            }
         };
 
         Ok(Some(meta.union(&meta_rest)))
