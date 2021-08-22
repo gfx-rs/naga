@@ -35,8 +35,10 @@ void main1()
 
 type10 main(VertexInput_main vertexinput_main)
 {
-    a_uv1 = vertexinput_main.a_uv2;
-    a_pos1 = vertexinput_main.a_pos2;
+    float2 a_uv = vertexinput_main.a_uv2;
+    float2 a_pos = vertexinput_main.a_pos2;
+    a_uv1 = a_uv;
+    a_pos1 = a_pos;
     main1();
     float2 _expr10 = v_uv;
     float4 _expr11 = perVertexStruct.gl_Position;

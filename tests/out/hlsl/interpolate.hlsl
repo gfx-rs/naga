@@ -1,6 +1,5 @@
 
 struct FragmentInput {
-    float4 position : SV_Position;
     nointerpolation uint flat : LOC0;
     noperspective float linear1 : LOC1;
     noperspective centroid float2 linear_centroid : LOC2;
@@ -8,10 +7,18 @@ struct FragmentInput {
     linear float4 perspective : LOC4;
     linear centroid float perspective_centroid : LOC5;
     linear sample float perspective_sample : LOC6;
+    float4 position : SV_Position;
 };
 
 struct FragmentInput_main {
-    FragmentInput val1;
+    uint flat : LOC0;
+    float linear1 : LOC1;
+    float2 linear_centroid : LOC2;
+    float3 linear_sample : LOC3;
+    float4 perspective : LOC4;
+    float perspective_centroid : LOC5;
+    float perspective_sample : LOC6;
+    float4 position : SV_Position;
 };
 
 FragmentInput main()
@@ -33,5 +40,6 @@ FragmentInput main()
 
 void main1(FragmentInput_main fragmentinput_main)
 {
+    FragmentInput val = { fragmentinput_main.flat, fragmentinput_main.linear1, fragmentinput_main.linear_centroid, fragmentinput_main.linear_sample, fragmentinput_main.perspective, fragmentinput_main.perspective_centroid, fragmentinput_main.perspective_sample, fragmentinput_main.position };
     return;
 }

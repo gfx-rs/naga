@@ -34,8 +34,9 @@ uint collatz_iterations(uint n_base)
 [numthreads(1, 1, 1)]
 void main(ComputeInput_main computeinput_main)
 {
-    uint _expr8 = asuint(v_indices.Load(computeinput_main.global_id1.x*4+0));
+    uint3 global_id = computeinput_main.global_id1;
+    uint _expr8 = asuint(v_indices.Load(global_id.x*4+0));
     const uint _e9 = collatz_iterations(_expr8);
-    v_indices.Store(computeinput_main.global_id1.x*4+0, asuint(_e9));
+    v_indices.Store(global_id.x*4+0, asuint(_e9));
     return;
 }

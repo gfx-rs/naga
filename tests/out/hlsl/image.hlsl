@@ -30,13 +30,14 @@ int2 NagaRWDimensions2D(RWTexture2D<uint4> texture)
 [numthreads(16, 1, 1)]
 void main(ComputeInput_main computeinput_main)
 {
+    uint3 local_id = computeinput_main.local_id1;
     int2 dim = NagaRWDimensions2D(image_storage_src);
-    int2 itc = ((dim * int2(computeinput_main.local_id1.xy)) % int2(10, 20));
-    uint4 value1_ = image_mipmapped_src.Load(int3(itc, int(computeinput_main.local_id1.z)));
-    uint4 value2_ = image_multisampled_src.Load(itc, int(computeinput_main.local_id1.z));
-    float value3_ = image_depth_multisampled_src.Load(itc, int(computeinput_main.local_id1.z)).x;
+    int2 itc = ((dim * int2(local_id.xy)) % int2(10, 20));
+    uint4 value1_ = image_mipmapped_src.Load(int3(itc, int(local_id.z)));
+    uint4 value2_ = image_multisampled_src.Load(itc, int(local_id.z));
+    float value3_ = image_depth_multisampled_src.Load(itc, int(local_id.z)).x;
     uint4 value4_ = image_storage_src.Load(itc);
-    uint4 value5_ = image_array_src.Load(int4(itc, int(computeinput_main.local_id1.z), (int(computeinput_main.local_id1.z) + 1)));
+    uint4 value5_ = image_array_src.Load(int4(itc, int(local_id.z), (int(local_id.z) + 1)));
     image_dst[itc.x] = ((((value1_ + value2_) + uint4(uint(value3_).xxxx)) + value4_) + value5_);
     return;
 }

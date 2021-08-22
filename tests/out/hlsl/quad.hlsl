@@ -19,13 +19,16 @@ struct FragmentInput_main {
 
 VertexOutput main(VertexInput_main vertexinput_main)
 {
-    const VertexOutput vertexoutput1 = { vertexinput_main.uv2, float4((c_scale * vertexinput_main.pos1), 0.0, 1.0) };
+    float2 pos = vertexinput_main.pos1;
+    float2 uv = vertexinput_main.uv2;
+    const VertexOutput vertexoutput1 = { uv, float4((c_scale * pos), 0.0, 1.0) };
     return vertexoutput1;
 }
 
 float4 main1(FragmentInput_main fragmentinput_main) : SV_Target0
 {
-    float4 color = u_texture.Sample(u_sampler, fragmentinput_main.uv3);
+    float2 uv1 = fragmentinput_main.uv3;
+    float4 color = u_texture.Sample(u_sampler, uv1);
     if ((color.w == 0.0)) {
         discard;
     }

@@ -20,8 +20,11 @@ const SPECIAL_OTHER: &str = "other";
 /// Structure contains information required for generating
 /// wrapped structure of all entry points arguments
 pub(super) struct EntryPointBinding {
+    /// Name of the fake EP argument that contains the struct
+    /// with all the flattened input data.
+    arg_name: String,
     /// Generated structure name
-    name: String,
+    ty_name: String,
     /// Members of generated structure
     members: Vec<EpStructMember>,
 }
@@ -30,7 +33,7 @@ struct EpStructMember {
     name: String,
     ty: Handle<crate::Type>,
     binding: Option<crate::Binding>,
-    index: usize,
+    index: u32,
 }
 
 #[derive(Clone, Eq, PartialEq, PartialOrd, Ord)]
@@ -56,11 +59,25 @@ impl InterfaceKey {
 // interfaces to match with regards to order.
 fn needs_permutation(members: &[crate::StructMember]) -> bool {
     //Note: this is a bit of a hack. We need to re-order the output fields, but we can only do this
-    // for non-layouted structures. It may be possible for an WGSL program can use the same struct
-    // for both host sharing and the interface. This case isn't supported here.
-    let has_layout = members.iter().any(|m| m.offset != 0);
+    // for structures that are not host-shared. It may be possible for an WGSL program can use the
+    // same struct for both host sharing and the interface. This case isn't supported here.
+    let _has_layout = members.iter().any(|m| m.offset != 0);
     let has_binding = members.iter().any(|m| m.binding.is_some());
-    has_binding && !has_layout
+    has_binding
+}
+
+fn make_permutation(members: &[crate::StructMember]) -> Option<Vec<(usize, InterfaceKey)>> {
+    if !needs_permutation(members) {
+        return None;
+    }
+    //TODO: avoid heap allocation. We can pre-compute this at the module leve.
+    let mut permutation = members
+        .iter()
+        .enumerate()
+        .map(|(index, m)| (index, InterfaceKey::new(m.binding.as_ref())))
+        .collect::<Vec<_>>();
+    permutation.sort_by_key(|&(_, ref key)| key.clone());
+    Some(permutation)
 }
 
 #[derive(Copy, Clone, PartialEq)]
@@ -328,6 +345,9 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         Ok(())
     }
 
+    /// Flatten all entry point arguments into a single struct.
+    /// This is needed since we need to re-order them: first placing user locations,
+    /// then built-ins.
     fn write_ep_input_struct(
         &mut self,
         module: &Module,
@@ -335,58 +355,132 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         stage: ShaderStage,
         entry_point_name: &str,
     ) -> Result<Option<EntryPointBinding>, Error> {
-        Ok(if !func.arguments.is_empty() {
-            let struct_name_prefix = match stage {
-                ShaderStage::Vertex => "VertexInput",
-                ShaderStage::Fragment => "FragmentInput",
-                ShaderStage::Compute => "ComputeInput",
-            };
-            let struct_name = format!("{}_{}", struct_name_prefix, entry_point_name);
+        if func.arguments.is_empty() {
+            return Ok(None);
+        }
 
-            let mut members = Vec::with_capacity(func.arguments.len());
-            for (index, arg) in func.arguments.iter().enumerate() {
-                let member_name = if let Some(ref name) = arg.name {
-                    name
-                } else {
-                    "member"
-                };
-                members.push(EpStructMember {
-                    name: self.namer.call_unique(member_name),
-                    ty: arg.ty,
-                    binding: arg.binding.clone(),
-                    index,
-                });
-            }
+        let struct_name_prefix = match stage {
+            ShaderStage::Vertex => "VertexInput",
+            ShaderStage::Fragment => "FragmentInput",
+            ShaderStage::Compute => "ComputeInput",
+        };
+        let struct_name = format!("{}_{}", struct_name_prefix, entry_point_name);
 
-            // Sort the members so that first come the user-defined varyings
-            // in ascending locations, and then built-ins. This allows VS and FS
-            // interfaces to match with regards to order.
-            members.sort_by_key(|m| InterfaceKey::new(m.binding.as_ref()));
-
-            write!(self.out, "struct {}", &struct_name)?;
-            writeln!(self.out, " {{")?;
-            for m in members.iter() {
-                write!(self.out, "{}", back::INDENT)?;
-                self.write_type(module, m.ty)?;
-                write!(self.out, " {}", &m.name)?;
-                if let Some(ref binding) = m.binding {
-                    self.write_semantic(binding, Some((stage, Io::Input)))?;
+        let mut fake_members = Vec::new();
+        for arg in func.arguments.iter() {
+            match module.types[arg.ty].inner {
+                TypeInner::Struct { ref members, .. } => {
+                    for member in members.iter() {
+                        let member_name = if let Some(ref name) = member.name {
+                            name
+                        } else {
+                            "member"
+                        };
+                        let index = fake_members.len() as u32;
+                        fake_members.push(EpStructMember {
+                            name: self.namer.call_unique(member_name),
+                            ty: member.ty,
+                            binding: member.binding.clone(),
+                            index,
+                        });
+                    }
                 }
-                writeln!(self.out, ";")?;
+                _ => {
+                    let member_name = if let Some(ref name) = arg.name {
+                        name
+                    } else {
+                        "member"
+                    };
+                    let index = fake_members.len() as u32;
+                    fake_members.push(EpStructMember {
+                        name: self.namer.call_unique(member_name),
+                        ty: arg.ty,
+                        binding: arg.binding.clone(),
+                        index,
+                    });
+                }
             }
-            writeln!(self.out, "}};")?;
-            writeln!(self.out)?;
+        }
 
-            // now bring back the old order
-            members.sort_by_key(|m| m.index);
+        // Sort the members so that first come the user-defined varyings
+        // in ascending locations, and then built-ins. This allows VS and FS
+        // interfaces to match with regards to order.
+        fake_members.sort_by_key(|m| InterfaceKey::new(m.binding.as_ref()));
 
-            Some(EntryPointBinding {
-                name: struct_name,
-                members,
-            })
-        } else {
-            None
-        })
+        write!(self.out, "struct {}", &struct_name)?;
+        writeln!(self.out, " {{")?;
+        for m in fake_members.iter() {
+            write!(self.out, "{}", back::INDENT)?;
+            self.write_type(module, m.ty)?;
+            write!(self.out, " {}", &m.name)?;
+            if let Some(ref binding) = m.binding {
+                self.write_semantic(binding, Some((stage, Io::Input)))?;
+            }
+            writeln!(self.out, ";")?;
+        }
+        writeln!(self.out, "}};")?;
+        writeln!(self.out)?;
+
+        // now bring back the old order
+        fake_members.sort_by_key(|m| m.index);
+
+        Ok(Some(EntryPointBinding {
+            arg_name: self.namer.call_unique(struct_name.to_lowercase().as_str()),
+            ty_name: struct_name,
+            members: fake_members,
+        }))
+    }
+
+    /// Write an entry point preface that initializes the arguments as specified in IR.
+    fn write_ep_arguments_initialization(
+        &mut self,
+        module: &Module,
+        func: &crate::Function,
+        ep_index: u16,
+    ) -> BackendResult {
+        let ep_input = match self.ep_inputs[ep_index as usize].take() {
+            Some(ep_input) => ep_input,
+            None => return Ok(()),
+        };
+        let mut fake_index = 0;
+        for (arg_index, arg) in func.arguments.iter().enumerate() {
+            write!(self.out, "{}", back::INDENT)?;
+            self.write_type(module, arg.ty)?;
+            let arg_name = &self.names[&NameKey::EntryPointArgument(ep_index, arg_index as u32)];
+            write!(self.out, " {}", arg_name)?;
+            match module.types[arg.ty].inner {
+                TypeInner::Array { size, .. } => {
+                    self.write_array_size(module, size)?;
+                    let fake_member = &ep_input.members[fake_index];
+                    writeln!(self.out, " = {}.{};", ep_input.arg_name, fake_member.name)?;
+                    fake_index += 1;
+                }
+                TypeInner::Struct { ref members, .. } => {
+                    let permutation = make_permutation(members);
+                    write!(self.out, " = {{ ")?;
+                    for index in 0..members.len() {
+                        if index != 0 {
+                            write!(self.out, ", ")?;
+                        }
+                        let comp_index = match permutation {
+                            Some(ref perm) => perm[index].0,
+                            None => index,
+                        };
+                        let fake_member = &ep_input.members[fake_index + comp_index];
+                        write!(self.out, "{}.{}", ep_input.arg_name, fake_member.name)?;
+                    }
+                    writeln!(self.out, " }};")?;
+                    fake_index += members.len();
+                }
+                _ => {
+                    let fake_member = &ep_input.members[fake_index];
+                    writeln!(self.out, " = {}.{};", ep_input.arg_name, fake_member.name)?;
+                    fake_index += 1;
+                }
+            }
+        }
+        assert_eq!(fake_index, ep_input.members.len());
+        Ok(())
     }
 
     /// Helper method used to write global variables
@@ -575,8 +669,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         shader_stage: Option<(ShaderStage, Io)>,
     ) -> BackendResult {
         // Write struct name
-        write!(self.out, "struct {}", self.names[&NameKey::Type(handle)])?;
-        writeln!(self.out, " {{")?;
+        let struct_name = &self.names[&NameKey::Type(handle)];
+        writeln!(self.out, "struct {} {{", struct_name)?;
 
         //TODO: avoid heap allocation
         let mut members = original_members
@@ -810,13 +904,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         .is_empty()
                 {
                     if let Some(ref ep_input) = self.ep_inputs[index as usize] {
-                        write!(
-                            self.out,
-                            "{} {}",
-                            ep_input.name,
-                            self.namer
-                                .call_unique(ep_input.name.to_lowercase().as_str())
-                        )?;
+                        write!(self.out, "{} {}", ep_input.ty_name, ep_input.arg_name,)?;
                     }
                 }
             }
@@ -840,6 +928,11 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         // Function body start
         writeln!(self.out)?;
         writeln!(self.out, "{{")?;
+
+        if let back::FunctionType::EntryPoint(index) = func_ctx.ty {
+            self.write_ep_arguments_initialization(module, func, index)?;
+        }
+
         // Write function local variables
         for (handle, local) in func.local_variables.iter() {
             // Write indentation (only for readability)
@@ -1273,21 +1366,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             Expression::Constant(constant) => self.write_constant(module, constant)?,
             Expression::Compose { ty, ref components } => {
                 let (braces_init, permutation) = match module.types[ty].inner {
-                    TypeInner::Struct { ref members, .. } => {
-                        let permutation = if needs_permutation(members) {
-                            //TODO: avoid heap allocation. We can pre-compute this at the module leve.
-                            let mut permutation = members
-                                .iter()
-                                .enumerate()
-                                .map(|(index, m)| (index, InterfaceKey::new(m.binding.as_ref())))
-                                .collect::<Vec<_>>();
-                            permutation.sort_by_key(|&(_, ref key)| key.clone());
-                            Some(permutation)
-                        } else {
-                            None
-                        };
-                        (true, permutation)
-                    }
+                    TypeInner::Struct { ref members, .. } => (true, make_permutation(members)),
                     TypeInner::Array { .. } => (true, None),
                     _ => (false, None),
                 };
@@ -1403,24 +1482,14 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 }
             }
             Expression::FunctionArgument(pos) => {
-                match func_ctx.ty {
-                    back::FunctionType::Function(handle) => {
-                        let name = &self.names[&NameKey::FunctionArgument(handle, pos)];
-                        write!(self.out, "{}", name)?;
-                    }
+                let key = match func_ctx.ty {
+                    back::FunctionType::Function(handle) => NameKey::FunctionArgument(handle, pos),
                     back::FunctionType::EntryPoint(index) => {
-                        // EntryPoint arguments wrapped into structure
-                        // We can safery unwrap here, because if we write function arguments it means, that ep_input struct already exists
-                        let ep_input = self.ep_inputs[index as usize].as_ref().unwrap();
-                        let member_name = &ep_input.members[pos as usize].name;
-                        write!(
-                            self.out,
-                            "{}.{}",
-                            &ep_input.name.to_lowercase(),
-                            member_name
-                        )?
+                        NameKey::EntryPointArgument(index, pos)
                     }
                 };
+                let name = &self.names[&key];
+                write!(self.out, "{}", name)?;
             }
             Expression::ImageSample {
                 image,

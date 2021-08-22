@@ -26,6 +26,7 @@ struct ComputeInput_main {
 [numthreads(64, 1, 1)]
 void main(ComputeInput_main computeinput_main)
 {
+    uint3 global_invocation_id = computeinput_main.global_invocation_id1;
     float2 vPos = (float2)0;
     float2 vVel = (float2)0;
     float2 cMass = (float2)0;
@@ -37,7 +38,7 @@ void main(ComputeInput_main computeinput_main)
     float2 vel = (float2)0;
     uint i = 0u;
 
-    uint index = computeinput_main.global_invocation_id1.x;
+    uint index = global_invocation_id.x;
     if ((index >= NUM_PARTICLES)) {
         return;
     }
