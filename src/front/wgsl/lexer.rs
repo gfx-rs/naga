@@ -105,21 +105,17 @@ fn consume_number(input: &str) -> (Token, &str) {
                 '0' => {
                     state.digit_state = NLDigitState::LeadingZero;
                     state.leading_zeros += 1;
-                    true
                 }
                 '1'..='9' => {
                     state.digit_state = NLDigitState::DigitBeforeDot;
-                    true
                 }
                 'a'..='f' | 'A'..='F' if hex => {
                     state.digit_state = NLDigitState::DigitBeforeDot;
-                    true
                 }
                 '.' => {
                     state.digit_state = NLDigitState::OnlyDot;
-                    true
                 }
-                _ => false,
+                _ => return false,
             },
 
             NumberLexerState {
@@ -129,36 +125,29 @@ fn consume_number(input: &str) -> (Token, &str) {
                 ..
             } => match c {
                 '0' => {
-                    state.digit_state = NLDigitState::LeadingZero;
+                    // We stay in NLDigitState::LeadingZero.
                     state.leading_zeros += 1;
-                    true
                 }
                 '1'..='9' => {
                     state.digit_state = NLDigitState::DigitBeforeDot;
-                    true
                 }
                 'a'..='f' | 'A'..='F' if hex => {
                     state.digit_state = NLDigitState::DigitBeforeDot;
-                    true
                 }
                 '.' => {
                     state.digit_state = NLDigitState::DigitsThenDot;
-                    true
                 }
                 'e' | 'E' if !hex => {
                     state.digit_state = NLDigitState::Exponent;
-                    true
                 }
                 'p' | 'P' if hex => {
                     state.digit_state = NLDigitState::Exponent;
-                    true
                 }
                 'u' => {
                     // We stay in NLDigitState::LeadingZero.
                     state.uint_suffix = true;
-                    true
                 }
-                _ => false,
+                _ => return false,
             },
 
             NumberLexerState {
@@ -168,31 +157,25 @@ fn consume_number(input: &str) -> (Token, &str) {
                 ..
             } => match c {
                 '0'..='9' => {
-                    state.digit_state = NLDigitState::DigitBeforeDot;
-                    true
+                    // We stay in NLDigitState::DigitBeforeDot.
                 }
                 'a'..='f' | 'A'..='F' if hex => {
-                    state.digit_state = NLDigitState::DigitBeforeDot;
-                    true
+                    // We stay in NLDigitState::DigitBeforeDot.
                 }
                 '.' => {
                     state.digit_state = NLDigitState::DigitsThenDot;
-                    true
                 }
                 'e' | 'E' if !hex => {
                     state.digit_state = NLDigitState::Exponent;
-                    true
                 }
                 'p' | 'P' if hex => {
                     state.digit_state = NLDigitState::Exponent;
-                    true
                 }
                 'u' => {
-                    // We stay in NLDigitState::LeadingZero.
+                    // We stay in NLDigitState::DigitBeforeDot.
                     state.uint_suffix = true;
-                    true
                 }
-                _ => false,
+                _ => return false,
             },
 
             NumberLexerState {
@@ -203,13 +186,11 @@ fn consume_number(input: &str) -> (Token, &str) {
             } => match c {
                 '0'..='9' => {
                     state.digit_state = NLDigitState::DigitAfterDot;
-                    true
                 }
                 'a'..='f' | 'A'..='F' if hex => {
                     state.digit_state = NLDigitState::DigitAfterDot;
-                    true
                 }
-                _ => false,
+                _ => return false,
             },
 
             NumberLexerState {
@@ -226,21 +207,17 @@ fn consume_number(input: &str) -> (Token, &str) {
             } => match c {
                 '0'..='9' => {
                     state.digit_state = NLDigitState::DigitAfterDot;
-                    true
                 }
                 'a'..='f' | 'A'..='F' if hex => {
                     state.digit_state = NLDigitState::DigitAfterDot;
-                    true
                 }
                 'e' | 'E' if !hex => {
                     state.digit_state = NLDigitState::Exponent;
-                    true
                 }
                 'p' | 'P' if hex => {
                     state.digit_state = NLDigitState::Exponent;
-                    true
                 }
-                _ => false,
+                _ => return false,
             },
 
             NumberLexerState {
@@ -250,13 +227,11 @@ fn consume_number(input: &str) -> (Token, &str) {
             } => match c {
                 '0'..='9' => {
                     state.digit_state = NLDigitState::DigitAfterExponent;
-                    true
                 }
                 '-' | '+' => {
                     state.digit_state = NLDigitState::SignAfterExponent;
-                    true
                 }
-                _ => false,
+                _ => return false,
             },
 
             NumberLexerState {
@@ -271,15 +246,17 @@ fn consume_number(input: &str) -> (Token, &str) {
             } => match c {
                 '0'..='9' => {
                     state.digit_state = NLDigitState::DigitAfterExponent;
-                    true
                 }
-                _ => false,
+                _ => return false,
             },
 
             NumberLexerState {
                 uint_suffix: true, ..
-            } => false, // Scanning is done once we've reached a type suffix.
+            } => return false, // Scanning is done once we've reached a type suffix.
         }
+
+        // No match branch has rejected this yet, so we are still in a number literal
+        true
     };
 
     let pos = working_substr
