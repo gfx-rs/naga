@@ -189,11 +189,12 @@ impl<'a> Error<'a> {
                         }
                         ExpectedToken::Identifier => "identifier".to_string(),
                         ExpectedToken::Number { ty, width } => {
-                            let literal_ty_str = ty.map(|ty| match ty {
-                                    NumberType::Float => "floating-point",
-                                    NumberType::Uint => "unsigned integer",
-                                    NumberType::Sint => "signed integer",
-                                }).unwrap_or("arbitrary number");
+                            let literal_ty_str = match ty {
+                                Some(NumberType::Float) => "floating-point",
+                                Some(NumberType::Uint) => "unsigned integer",
+                                Some(NumberType::Sint) => "signed integer",
+                                None => "arbitrary number",
+                            };
                             if let Some(width) = width {
                                 format!(
                                     "{} literal of {}-bit width",
