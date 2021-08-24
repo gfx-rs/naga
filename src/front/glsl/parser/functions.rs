@@ -493,34 +493,15 @@ impl<'source> ParsingContext<'source> {
 
                 meta
             }
-            TokenValue::Plus
-            | TokenValue::Dash
-            | TokenValue::Bang
-            | TokenValue::Tilde
-            | TokenValue::LeftParen
-            | TokenValue::Increment
-            | TokenValue::Decrement
-            | TokenValue::Identifier(_)
-            | TokenValue::TypeName(_)
-            | TokenValue::IntConstant(_)
-            | TokenValue::BoolConstant(_)
-            | TokenValue::FloatConstant(_) => {
+            TokenValue::Semicolon => self.bump(parser)?.meta,
+            _ => {
+                // Attempt to force expression parsing for remainder of the
+                // tokens. Unknown or invalid tokens will be caught there and
+                // turned into an error.
                 let mut stmt = ctx.stmt_ctx();
                 let expr = self.parse_expression(parser, ctx, &mut stmt, body)?;
                 ctx.lower(stmt, parser, expr, ExprPos::Rhs, body)?;
                 self.expect(parser, TokenValue::Semicolon)?.meta
-            }
-            TokenValue::Semicolon => self.bump(parser)?.meta,
-            _ => {
-                let Token { value, meta } = self.bump(parser)?;
-                return Err(Error {
-                    kind: ErrorKind::InvalidToken(
-                        value,
-                        // TODO: Add all tokens that can start a statement?
-                        vec![TokenValue::RightBrace.into()],
-                    ),
-                    meta,
-                });
             }
         };
 
