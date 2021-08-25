@@ -2,7 +2,7 @@
 name: lazy
 on:
   push:
-    branches: [master]
+    branches: [master,spv-in-rework]
 
 jobs:
   coverage:

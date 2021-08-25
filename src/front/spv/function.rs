@@ -1,6 +1,9 @@
-use crate::arena::{Arena, Handle};
+use crate::{
+    arena::{Arena, Handle},
+    front::spv::BlockContext,
+};
 
-use super::{flow::*, Error, Instruction, LookupExpression, LookupHelper as _};
+use super::{Error, Instruction, LookupExpression, LookupHelper as _};
 use crate::front::Emitter;
 
 pub type BlockId = u32;
@@ -141,9 +144,12 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
 
         // Read body
         self.function_call_graph.add_node(fun_id);
-        let mut flow_graph = FlowGraph::new();
         let mut parameters_sampling =
             vec![super::image::SamplingFlags::empty(); fun.arguments.len()];
+
+        let mut block_ctx = BlockContext::default();
+        // Push the main body
+        block_ctx.bodies.push(Vec::new());
 
         // Scan the blocks and add them as nodes
         loop {
@@ -155,7 +161,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                     fun_inst.expect(2)?;
                     let block_id = self.next()?;
 
-                    let node = self.next_block(
+                    self.next_block(
                         block_id,
                         fun_id,
                         &mut fun.expressions,
@@ -165,9 +171,8 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                         &module.global_variables,
                         &fun.arguments,
                         &mut parameters_sampling,
+                        &mut block_ctx,
                     )?;
-
-                    flow_graph.add_node(node);
                 }
                 spirv::Op::FunctionEnd => {
                     fun_inst.expect(1)?;
@@ -179,22 +184,34 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
             }
         }
 
-        flow_graph.classify();
-        flow_graph.remove_phi_instructions(&self.lookup_expression);
-
-        if let Some(ref prefix) = self.options.flow_graph_dump_prefix {
-            let dump = flow_graph.to_graphviz().unwrap_or_default();
+        if let Some(ref prefix) = self.options.block_ctx_dump_prefix {
             let dump_suffix = match self.lookup_entry_point.get(&fun_id) {
-                Some(ep) => format!("flow.{:?}-{}.dot", ep.stage, ep.name),
-                None => format!("flow.Fun-{}.dot", module.functions.len()),
+                Some(ep) => format!("block_ctx.{:?}-{}.txt", ep.stage, ep.name),
+                None => format!("block_ctx.Fun-{}.txt", module.functions.len()),
             };
             let dest = prefix.join(dump_suffix);
+            let dump = format!("{:#?}", block_ctx);
             if let Err(e) = std::fs::write(&dest, dump) {
-                log::error!("Unable to dump the flow graph into {:?}: {}", dest, e);
+                log::error!("Unable to dump the block context into {:?}: {}", dest, e);
             }
         }
 
-        fun.body = flow_graph.convert_to_naga()?;
+        for phi in block_ctx.phis.iter() {
+            let pointer = fun.expressions.append(
+                crate::Expression::LocalVariable(phi.local),
+                crate::Span::Unknown,
+            );
+
+            for &(expr, block) in phi.expressions.iter() {
+                let value = self.lookup_expression[&expr].handle;
+                block_ctx.blocks.get_mut(&block).unwrap().push(
+                    crate::Statement::Store { pointer, value },
+                    crate::Span::Unknown,
+                )
+            }
+        }
+
+        fun.body = lower(&mut block_ctx.blocks, &block_ctx.bodies, 0);
 
         // done
         let fun_handle = module.functions.append(fun, self.span_from_with_op(start));
@@ -437,4 +454,80 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
 
         Ok(())
     }
+}
+
+fn lower(
+    blocks: &mut crate::FastHashMap<u32, crate::Block>,
+    bodies: &[Vec<super::Body>],
+    body_idx: usize,
+) -> crate::Block {
+    let mut block = crate::Block::new();
+
+    for item in bodies[body_idx].iter() {
+        match *item {
+            super::Body::BlockId(id) => {
+                if let Some(b) = blocks.get_mut(&id) {
+                    block.append(b)
+                }
+            }
+            super::Body::Conditional {
+                condition,
+                accept,
+                reject,
+            } => {
+                let accept = lower(blocks, bodies, accept);
+                let reject = lower(blocks, bodies, reject);
+
+                block.push(
+                    crate::Statement::If {
+                        condition,
+                        accept,
+                        reject,
+                    },
+                    crate::Span::Unknown,
+                )
+            }
+            super::Body::Loop { body, continuing } => {
+                let body = lower(blocks, bodies, body);
+                let continuing = lower(blocks, bodies, continuing);
+
+                block.push(
+                    crate::Statement::Loop { body, continuing },
+                    crate::Span::Unknown,
+                )
+            }
+            super::Body::Switch {
+                selector,
+                ref cases,
+                default,
+            } => {
+                let default = lower(blocks, bodies, default);
+
+                block.push(
+                    crate::Statement::Switch {
+                        selector,
+                        cases: cases
+                            .iter()
+                            .map(|&(value, body_idx)| {
+                                let body = lower(blocks, bodies, body_idx);
+
+                                crate::SwitchCase {
+                                    value,
+                                    body,
+                                    // TODO
+                                    fall_through: true,
+                                }
+                            })
+                            .collect(),
+                        default,
+                    },
+                    crate::Span::Unknown,
+                )
+            }
+            super::Body::Break => block.push(crate::Statement::Break, crate::Span::Unknown),
+            super::Body::Continue => block.push(crate::Statement::Continue, crate::Span::Unknown),
+        }
+    }
+
+    block
 }
