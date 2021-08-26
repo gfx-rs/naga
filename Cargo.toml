@@ -30,9 +30,6 @@ rose_tree = { version ="0.3", optional = true }
 pp-rs = { version = "0.2.1", optional = true }
 hexf-parse = { version = "0.2.1", optional = true }
 
-# For random GLSL Options for fuzzing
-arbitrary = { version = "1.0.2", optional = true, features = ["derive"] }
-
 [features]
 default = []
 dot-out = []

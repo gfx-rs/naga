@@ -227,7 +227,6 @@ pub enum ConservativeDepth {
 #[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
-#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[allow(missing_docs)] // The names are self evident
 pub enum ShaderStage {
     Vertex,
