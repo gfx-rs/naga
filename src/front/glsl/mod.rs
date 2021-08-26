@@ -41,6 +41,7 @@ type Result<T> = std::result::Result<T, Error>;
 /// Options::from(ShaderStage::Vertex);
 /// ```
 #[derive(Debug)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct Options {
     /// The shader stage in the pipeline.
     pub stage: ShaderStage,
