@@ -193,7 +193,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
             }
         }
 
-        if let Some(ref prefix) = self.options.block_ctx_dump_prefix {
+        if let Some(ref prefix) = self.options.flow_graph_dump_prefix {
             let dump_suffix = match self.lookup_entry_point.get(&fun_id) {
                 Some(ep) => format!("block_ctx.{:?}-{}.txt", ep.stage, ep.name),
                 None => format!("block_ctx.Fun-{}.txt", module.functions.len()),
