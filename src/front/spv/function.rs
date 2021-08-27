@@ -212,7 +212,53 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
             );
 
             for &(expr, block) in phi.expressions.iter() {
-                let value = self.lookup_expression[&expr].handle;
+                let lexp = &self.lookup_expression[&expr];
+                let block_body_idx = block_ctx.info[&block];
+                // If the expression is a global/argument it will have a 0 block
+                // id so we must use a default value instead of panicking
+                let lexp_body_idx = block_ctx.info.get(&lexp.block_id).copied().unwrap_or(0);
+
+                let value = if block_body_idx != lexp_body_idx && lexp_body_idx != 0 {
+                    let ty = self.lookup_type[&lexp.type_id].handle;
+                    let local = fun.local_variables.append(
+                        crate::LocalVariable {
+                            name: None,
+                            ty,
+                            init: None,
+                        },
+                        crate::Span::Unknown,
+                    );
+
+                    let pointer = fun.expressions.append(
+                        crate::Expression::LocalVariable(local),
+                        crate::Span::Unknown,
+                    );
+
+                    let start = fun.expressions.len();
+                    let expr = fun
+                        .expressions
+                        .append(crate::Expression::Load { pointer }, crate::Span::Unknown);
+                    let range = fun.expressions.range_from(start);
+
+                    block_ctx
+                        .blocks
+                        .get_mut(&block)
+                        .unwrap()
+                        .push(crate::Statement::Emit(range), crate::Span::Unknown);
+
+                    block_ctx.blocks.get_mut(&lexp.block_id).unwrap().push(
+                        crate::Statement::Store {
+                            pointer,
+                            value: lexp.handle,
+                        },
+                        crate::Span::Unknown,
+                    );
+
+                    expr
+                } else {
+                    lexp.handle
+                };
+
                 block_ctx.blocks.get_mut(&block).unwrap().push(
                     crate::Statement::Store { pointer, value },
                     crate::Span::Unknown,
