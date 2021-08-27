@@ -427,6 +427,7 @@ enum MergeBlockInformation {
     LoopMerge,
     LoopContinue,
     SelectionMerge,
+    SwitchMerge,
 }
 
 #[derive(Default, Debug)]
@@ -1067,19 +1068,11 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         parmeter_sampling: &mut [image::SamplingFlags],
         block_ctx: &mut BlockContext,
     ) -> Result<(), Error> {
-        #[derive(Clone, Copy)]
-        struct LoopMerge {
-            /// Loop body index
-            loop_body_idx: usize,
-            /// Continue body index
-            continue_idx: usize,
-        }
-
         let mut emitter = super::Emitter::default();
         emitter.start(expressions);
         let mut body_idx = *block_ctx.info.entry(block_id).or_default();
         let mut block = crate::Block::new();
-        let mut loop_merge: Option<LoopMerge> = None;
+        let mut merge_block = None;
 
         macro_rules! get_expr_handle {
             ($id:expr, $lexp:expr) => {
@@ -2539,26 +2532,6 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     inst.expect(2)?;
                     let target_id = self.next()?;
 
-                    if let Some(merge) = loop_merge {
-                        block.extend(emitter.finish(expressions));
-                        block_ctx.blocks.insert(block_id, block);
-
-                        let parent_body = &mut block_ctx.bodies[body_idx];
-                        parent_body.push(Body::Loop {
-                            body: merge.loop_body_idx,
-                            continuing: merge.continue_idx,
-                        });
-
-                        block_ctx
-                            .info
-                            .entry(target_id)
-                            .or_insert(merge.loop_body_idx);
-                        let body = &mut block_ctx.bodies[merge.loop_body_idx];
-                        body.push(Body::BlockId(block_id));
-
-                        return Ok(());
-                    }
-
                     if let Some(info) = block_ctx.mergers.get(&target_id) {
                         block.extend(emitter.finish(expressions));
                         block_ctx.blocks.insert(block_id, block);
@@ -2566,8 +2539,9 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         body.push(Body::BlockId(block_id));
 
                         match info {
-                            MergeBlockInformation::LoopMerge => body.push(Body::Break),
                             MergeBlockInformation::LoopContinue => body.push(Body::Continue),
+                            MergeBlockInformation::LoopMerge
+                            | MergeBlockInformation::SwitchMerge => body.push(Body::Break),
                             MergeBlockInformation::SelectionMerge => {}
                         }
 
@@ -2581,8 +2555,9 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 Op::BranchConditional => {
                     fn merger(body: &mut Vec<Body>, info: &MergeBlockInformation) {
                         match info {
-                            MergeBlockInformation::LoopMerge => body.push(Body::Break),
                             MergeBlockInformation::LoopContinue => body.push(Body::Continue),
+                            MergeBlockInformation::LoopMerge
+                            | MergeBlockInformation::SwitchMerge => body.push(Body::Break),
                             MergeBlockInformation::SelectionMerge => {}
                         }
                     }
@@ -2597,16 +2572,6 @@ impl<I: Iterator<Item = u32>> Parser<I> {
 
                     let true_id = self.next()?;
                     let false_id = self.next()?;
-
-                    if let Some(merge) = loop_merge {
-                        let parent_body = &mut block_ctx.bodies[body_idx];
-                        parent_body.push(Body::Loop {
-                            body: merge.loop_body_idx,
-                            continuing: merge.continue_idx,
-                        });
-
-                        body_idx = merge.loop_body_idx;
-                    }
 
                     let accept = block_ctx.bodies.len();
                     let mut accept_block = Vec::new();
@@ -2644,6 +2609,12 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     inst.expect_at_least(3)?;
                     let selector = self.next()?;
                     let default_id = self.next()?;
+
+                    if let Some(merge) = merge_block {
+                        block_ctx
+                            .mergers
+                            .insert(merge, MergeBlockInformation::SwitchMerge);
+                    }
 
                     let default = block_ctx.bodies.len();
                     block_ctx.bodies.push(Vec::new());
@@ -2683,7 +2654,8 @@ impl<I: Iterator<Item = u32>> Parser<I> {
 
                         let body = match block_ctx.mergers.get(&target) {
                             Some(&MergeBlockInformation::LoopContinue) => vec![Body::Continue],
-                            Some(&MergeBlockInformation::LoopMerge) => vec![Body::Break],
+                            Some(&MergeBlockInformation::LoopMerge)
+                            | Some(&MergeBlockInformation::SwitchMerge) => vec![Body::Break],
                             Some(&MergeBlockInformation::SelectionMerge) | None => Vec::new(),
                         };
 
@@ -2716,6 +2688,8 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     block_ctx
                         .mergers
                         .insert(merge_block_id, MergeBlockInformation::SelectionMerge);
+
+                    merge_block = Some(merge_block_id);
                 }
                 Op::LoopMerge => {
                     inst.expect_at_least(4)?;
@@ -2747,10 +2721,12 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     // The loop header always belongs to the loop body
                     block_ctx.info.insert(block_id, loop_body_idx);
 
-                    loop_merge = Some(LoopMerge {
-                        continue_idx,
-                        loop_body_idx,
+                    let parent_body = &mut block_ctx.bodies[body_idx];
+                    parent_body.push(Body::Loop {
+                        body: loop_body_idx,
+                        continuing: continue_idx,
                     });
+                    body_idx = loop_body_idx;
                 }
                 Op::DPdx | Op::DPdxFine | Op::DPdxCoarse => {
                     parse_expr_op!(crate::DerivativeAxis::X, DERIVATIVE)?;
@@ -2970,34 +2946,18 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     ref mut accept,
                     ref mut reject,
                 } => {
-                    if let [S::Break] = reject[..] {
-                        // uplift "accept" into the parent
-                        // let extracted = mem::take(accept);
-                        // statements.splice(i + 1..i + 1, extracted);
-                    } else {
-                        self.patch_statements(reject, expressions, fun_parameter_sampling)?;
-                        self.patch_statements(accept, expressions, fun_parameter_sampling)?;
-                    }
+                    self.patch_statements(reject, expressions, fun_parameter_sampling)?;
+                    self.patch_statements(accept, expressions, fun_parameter_sampling)?;
                 }
                 S::Switch {
                     selector: _,
                     ref mut cases,
                     ref mut default,
                 } => {
-                    if cases.is_empty() {
-                        // uplift "default" into the parent
-                        let extracted = mem::take(default);
-                        statements.splice(i + 1..i + 1, extracted);
-                    } else {
-                        for case in cases.iter_mut() {
-                            self.patch_statements(
-                                &mut case.body,
-                                expressions,
-                                fun_parameter_sampling,
-                            )?;
-                        }
-                        self.patch_statements(default, expressions, fun_parameter_sampling)?;
+                    for case in cases.iter_mut() {
+                        self.patch_statements(&mut case.body, expressions, fun_parameter_sampling)?;
                     }
+                    self.patch_statements(default, expressions, fun_parameter_sampling)?;
                 }
                 S::Loop {
                     ref mut body,
