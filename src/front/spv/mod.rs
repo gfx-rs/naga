@@ -380,7 +380,7 @@ pub struct Options {
     pub adjust_coordinate_space: bool,
     /// Only allow shaders with the known set of capabilities.
     pub strict_capabilities: bool,
-    pub block_ctx_dump_prefix: Option<PathBuf>,
+    pub flow_graph_dump_prefix: Option<PathBuf>,
 }
 
 impl Default for Options {
@@ -388,7 +388,7 @@ impl Default for Options {
         Options {
             adjust_coordinate_space: true,
             strict_capabilities: false,
-            block_ctx_dump_prefix: None,
+            flow_graph_dump_prefix: None,
         }
     }
 }
@@ -435,8 +435,8 @@ struct BlockContext {
     phis: Vec<PhiExpression>,
     /// Map from block id to IR block
     blocks: FastHashMap<spirv::Word, crate::Block>,
-    /// Map from block id to respective depth and body
-    info: FastHashMap<spirv::Word, (u32, usize)>,
+    /// Map from block id to body index
+    info: FastHashMap<spirv::Word, usize>,
     /// Map from merge/continue blocks into information about them
     mergers: FastHashMap<spirv::Word, MergeBlockInformation>,
     /// Intermediate representation for a body made from spirv blocks
@@ -654,7 +654,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         local_arena: &mut Arena<crate::LocalVariable>,
         body_idx: usize,
     ) -> Handle<crate::Expression> {
-        let expr_body_idx = block_ctx.info.get(&lookup.block_id).unwrap_or(&(0, 0)).1;
+        let expr_body_idx = block_ctx.info.get(&lookup.block_id).copied().unwrap_or(0);
 
         // Don't need to do a load/store if the expression is in the main body
         // or if the expression is in the same body as where the query was
@@ -1069,19 +1069,15 @@ impl<I: Iterator<Item = u32>> Parser<I> {
     ) -> Result<(), Error> {
         #[derive(Clone, Copy)]
         struct LoopMerge {
-            /// Block associated with the continue target
-            continuing: spirv::Word,
             /// Loop body index
             loop_body_idx: usize,
             /// Continue body index
             continue_idx: usize,
-            /// Is the loop continue target pointing to itself
-            single_block: bool,
         }
 
         let mut emitter = super::Emitter::default();
         emitter.start(expressions);
-        let (mut depth, mut body_idx) = *block_ctx.info.entry(block_id).or_default();
+        let mut body_idx = *block_ctx.info.entry(block_id).or_default();
         let mut block = crate::Block::new();
         let mut loop_merge: Option<LoopMerge> = None;
 
@@ -2556,41 +2552,35 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         block_ctx
                             .info
                             .entry(target_id)
-                            .or_insert((depth, merge.loop_body_idx));
+                            .or_insert(merge.loop_body_idx);
                         let body = &mut block_ctx.bodies[merge.loop_body_idx];
                         body.push(Body::BlockId(block_id));
 
                         return Ok(());
                     }
 
-                    if let Some(&(target_depth, _)) = block_ctx.info.get(&target_id) {
-                        if target_depth < depth {
-                            block.extend(emitter.finish(expressions));
-                            block_ctx.blocks.insert(block_id, block);
-                            let body = &mut block_ctx.bodies[body_idx];
-                            body.push(Body::BlockId(block_id));
+                    if let Some(info) = block_ctx.mergers.get(&target_id) {
+                        block.extend(emitter.finish(expressions));
+                        block_ctx.blocks.insert(block_id, block);
+                        let body = &mut block_ctx.bodies[body_idx];
+                        body.push(Body::BlockId(block_id));
 
-                            match *block_ctx
-                                .mergers
-                                .get(&target_id)
-                                .expect("Transfer to non merger")
-                            {
-                                MergeBlockInformation::LoopMerge => body.push(Body::Break),
-                                MergeBlockInformation::LoopContinue => body.push(Body::Continue),
-                                MergeBlockInformation::SelectionMerge => {}
-                            }
-
-                            return Ok(());
+                        match info {
+                            MergeBlockInformation::LoopMerge => body.push(Body::Break),
+                            MergeBlockInformation::LoopContinue => body.push(Body::Continue),
+                            MergeBlockInformation::SelectionMerge => {}
                         }
+
+                        return Ok(());
                     }
 
-                    block_ctx.info.entry(target_id).or_insert((depth, body_idx));
+                    block_ctx.info.entry(target_id).or_insert(body_idx);
 
                     break None;
                 }
                 Op::BranchConditional => {
-                    fn merger(id: spirv::Word, body: &mut Vec<Body>, block_ctx: &BlockContext) {
-                        match *block_ctx.mergers.get(&id).expect("Transfer to non merger") {
+                    fn merger(body: &mut Vec<Body>, info: &MergeBlockInformation) {
+                        match info {
                             MergeBlockInformation::LoopMerge => body.push(Body::Break),
                             MergeBlockInformation::LoopContinue => body.push(Body::Continue),
                             MergeBlockInformation::SelectionMerge => {}
@@ -2621,26 +2611,22 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     let accept = block_ctx.bodies.len();
                     let mut accept_block = Vec::new();
 
-                    if let Some(&(target_depth, _)) = block_ctx.info.get(&true_id) {
-                        if target_depth < depth {
-                            merger(true_id, &mut accept_block, block_ctx)
-                        }
+                    if let Some(info) = block_ctx.mergers.get(&true_id) {
+                        merger(&mut accept_block, info)
                     }
 
                     block_ctx.bodies.push(accept_block);
-                    block_ctx.info.entry(true_id).or_insert((depth, accept));
+                    block_ctx.info.entry(true_id).or_insert(accept);
 
                     let reject = block_ctx.bodies.len();
                     let mut reject_block = Vec::new();
 
-                    if let Some(&(target_depth, _)) = block_ctx.info.get(&false_id) {
-                        if target_depth < depth {
-                            merger(false_id, &mut reject_block, block_ctx)
-                        }
+                    if let Some(info) = block_ctx.mergers.get(&false_id) {
+                        merger(&mut reject_block, info)
                     }
 
                     block_ctx.bodies.push(reject_block);
-                    block_ctx.info.entry(false_id).or_insert((depth, reject));
+                    block_ctx.info.entry(false_id).or_insert(reject);
 
                     block.extend(emitter.finish(expressions));
                     block_ctx.blocks.insert(block_id, block);
@@ -2661,7 +2647,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
 
                     let default = block_ctx.bodies.len();
                     block_ctx.bodies.push(Vec::new());
-                    block_ctx.info.entry(default_id).or_insert((depth, default));
+                    block_ctx.info.entry(default_id).or_insert(default);
 
                     let selector_lexp = &self.lookup_expression[&selector];
                     let selector_lty = self.lookup_type.lookup(selector_lexp.type_id)?;
@@ -2694,8 +2680,15 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         let target = self.next()?;
 
                         let body_id = block_ctx.bodies.len();
-                        block_ctx.bodies.push(Vec::new());
-                        block_ctx.info.entry(target).or_insert((depth, body_id));
+
+                        let body = match block_ctx.mergers.get(&target) {
+                            Some(&MergeBlockInformation::LoopContinue) => vec![Body::Continue],
+                            Some(&MergeBlockInformation::LoopMerge) => vec![Body::Break],
+                            Some(&MergeBlockInformation::SelectionMerge) | None => Vec::new(),
+                        };
+
+                        block_ctx.bodies.push(body);
+                        block_ctx.info.entry(target).or_insert(body_id);
 
                         cases.push((literal as i32, body_id));
                     }
@@ -2719,15 +2712,10 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     // TODO: Selection Control Mask
                     let _selection_control = self.next()?;
 
-                    block_ctx
-                        .info
-                        .entry(merge_block_id)
-                        .or_insert((depth, body_idx));
+                    block_ctx.info.entry(merge_block_id).or_insert(body_idx);
                     block_ctx
                         .mergers
                         .insert(merge_block_id, MergeBlockInformation::SelectionMerge);
-
-                    depth += 1;
                 }
                 Op::LoopMerge => {
                     inst.expect_at_least(4)?;
@@ -2739,41 +2727,29 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         self.next()?;
                     }
 
-                    block_ctx
-                        .info
-                        .entry(merge_block_id)
-                        .or_insert((depth, body_idx));
+                    block_ctx.info.entry(merge_block_id).or_insert(body_idx);
                     block_ctx
                         .mergers
                         .insert(merge_block_id, MergeBlockInformation::LoopMerge);
 
                     let continue_idx = block_ctx.bodies.len();
                     block_ctx.bodies.push(Vec::new());
-                    block_ctx
-                        .info
-                        .entry(continuing)
-                        .or_insert((depth, continue_idx));
+                    block_ctx.info.entry(continuing).or_insert(continue_idx);
                     block_ctx
                         .mergers
                         .insert(continuing, MergeBlockInformation::LoopContinue);
 
-                    depth += 1;
-
                     let loop_body_idx = block_ctx.bodies.len();
                     block_ctx.bodies.push(Vec::new());
 
-                    block_ctx
-                        .info
-                        .entry(continuing)
-                        .or_insert((depth, loop_body_idx));
+                    block_ctx.info.entry(continuing).or_insert(loop_body_idx);
 
-                    block_ctx.info.insert(block_id, (depth, loop_body_idx));
+                    // The loop header always belongs to the loop body
+                    block_ctx.info.insert(block_id, loop_body_idx);
 
                     loop_merge = Some(LoopMerge {
-                        continuing,
                         continue_idx,
                         loop_body_idx,
-                        single_block: continuing == block_id,
                     });
                 }
                 Op::DPdx | Op::DPdxFine | Op::DPdxCoarse => {
