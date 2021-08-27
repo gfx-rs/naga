@@ -28,7 +28,6 @@ This value then gets used instead of `OpLoad` result later on.
 
 mod convert;
 mod error;
-mod flow;
 mod function;
 mod image;
 mod null;
@@ -120,17 +119,6 @@ impl crate::TypeInner {
     }
 }
 
-/// OpPhi instruction.
-#[derive(Debug)]
-struct PhiInstruction {
-    /// SPIR-V's ID.
-    id: u32,
-
-    pointer: Handle<crate::Expression>,
-
-    /// Tuples of (variable, parent).
-    variables: Vec<(u32, u32)>,
-}
 #[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
 pub enum ModuleState {
     Empty,
@@ -644,6 +632,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
 
     /// Gets an expression handle potentially performing a load/store to perform
     /// a scope transfer.
+    #[allow(clippy::too_many_arguments)]
     fn get_expr_handle(
         &self,
         id: spirv::Word,
@@ -699,6 +688,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn parse_expr_unary_op(
         &mut self,
         block_ctx: &mut BlockContext,
@@ -739,6 +729,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn parse_expr_binary_op(
         &mut self,
         block_ctx: &mut BlockContext,
@@ -878,6 +869,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn parse_expr_shift_op(
         &mut self,
         block_ctx: &mut BlockContext,
@@ -941,6 +933,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn parse_expr_derivative(
         &mut self,
         block_ctx: &mut BlockContext,
@@ -1755,7 +1748,6 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 }
                 Op::Store => {
                     inst.expect_at_least(3)?;
-                    block.extend(emitter.finish(expressions));
 
                     let pointer_id = self.next()?;
                     let value_id = self.next()?;
@@ -1767,6 +1759,8 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     let base_handle = get_expr_handle!(pointer_id, base_expr);
                     let value_expr = self.lookup_expression.lookup(value_id)?;
                     let value_handle = get_expr_handle!(value_id, value_expr);
+
+                    block.extend(emitter.finish(expressions));
                     block.push(
                         crate::Statement::Store {
                             pointer: base_handle,
@@ -2538,7 +2532,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         let body = &mut block_ctx.bodies[body_idx];
                         body.push(Body::BlockId(block_id));
 
-                        match info {
+                        match *info {
                             MergeBlockInformation::LoopContinue => body.push(Body::Continue),
                             MergeBlockInformation::LoopMerge
                             | MergeBlockInformation::SwitchMerge => body.push(Body::Break),
@@ -2554,7 +2548,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 }
                 Op::BranchConditional => {
                     fn merger(body: &mut Vec<Body>, info: &MergeBlockInformation) {
-                        match info {
+                        match *info {
                             MergeBlockInformation::LoopContinue => body.push(Body::Continue),
                             MergeBlockInformation::LoopMerge
                             | MergeBlockInformation::SwitchMerge => body.push(Body::Break),
@@ -2925,8 +2919,6 @@ impl<I: Iterator<Item = u32>> Parser<I> {
 
     /// Walk the statement tree and patch it in the following cases:
     /// 1. Function call targets are replaced by `deferred_function_calls` map
-    /// 2. Lift the contents of "If" that only breaks on rejection, onto the parent after it.
-    /// 3. Lift the contents of "Switch" that only has a default, onto the parent after it.
     fn patch_statements(
         &mut self,
         statements: &mut crate::Block,

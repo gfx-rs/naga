@@ -620,7 +620,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                     } else {
                         ExtraCoordinate::Garbage
                     },
-                    coord_lexp.handle,
+                    coord_handle,
                     coord_type_handle,
                     type_arena,
                     expressions,
@@ -634,7 +634,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                                 let required_size = dim.required_coordinate_size();
                                 let right = expressions.append(
                                     crate::Expression::AccessIndex {
-                                        base: coord_lexp.handle,
+                                        base: coord_handle,
                                         index: required_size.map_or(1, |size| size as u32),
                                     },
                                     crate::Span::Unknown,
@@ -677,6 +677,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn parse_image_query_size(
         &mut self,
         at_level: bool,
