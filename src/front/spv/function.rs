@@ -118,8 +118,17 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                         crate::Expression::FunctionArgument(i as u32),
                         self.span_from(start),
                     );
-                    self.lookup_expression
-                        .insert(id, LookupExpression { handle, type_id });
+                    self.lookup_expression.insert(
+                        id,
+                        LookupExpression {
+                            handle,
+                            type_id,
+                            // Setting this to an invalid id will cause get_expr_handle
+                            // to default to the main body making sure no load/stores
+                            // are added.
+                            block_id: 0,
+                        },
+                    );
                     //Note: we redo the lookup in order to work around `self` borrowing
 
                     if type_id
