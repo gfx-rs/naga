@@ -57,6 +57,7 @@ impl Parser {
         name: &str,
         data: BuiltInData,
         meta: SourceMetadata,
+        finished: bool,
     ) -> Option<VariableReference> {
         let ty = self.module.types.fetch_or_append(
             Type {
@@ -94,7 +95,7 @@ impl Parser {
             },
         ));
 
-        let expr = ctx.add_expression(Expression::GlobalVariable(handle), meta, body);
+        let expr = ctx.add_expression(Expression::GlobalVariable(handle), meta, body, finished);
         ctx.lookup_global_var_exps.insert(
             name.into(),
             VariableReference {
@@ -114,6 +115,7 @@ impl Parser {
         body: &mut Block,
         name: &str,
         meta: SourceMetadata,
+        finished: bool,
     ) -> Option<VariableReference> {
         if let Some(local_var) = ctx.lookup_local_var(name) {
             return Some(local_var);
@@ -237,7 +239,7 @@ impl Parser {
             }
         };
 
-        self.add_builtin(ctx, body, name, data, meta)
+        self.add_builtin(ctx, body, name, data, meta, finished)
     }
 
     pub(crate) fn field_selection(
@@ -269,6 +271,7 @@ impl Parser {
                     },
                     meta,
                     body,
+                    false,
                 ))
             }
             // swizzles (xyzw, rgba, stpq)
@@ -342,6 +345,7 @@ impl Parser {
                                 },
                                 meta,
                                 body,
+                                false,
                             ));
                         }
                         2 => VectorSize::Bi,
@@ -369,6 +373,7 @@ impl Parser {
                             },
                             meta,
                             body,
+                            false,
                         );
                     }
 
@@ -380,6 +385,7 @@ impl Parser {
                         },
                         meta,
                         body,
+                        false,
                     ))
                 } else {
                     Err(Error {
@@ -653,6 +659,7 @@ impl Parser {
         &mut self,
         ctx: &mut Context,
         body: &mut Block,
+        finished: bool,
         #[cfg_attr(not(feature = "glsl-validate"), allow(unused_variables))]
         VarDeclaration {
             qualifiers,
@@ -712,7 +719,7 @@ impl Parser {
             },
             meta.as_span(),
         );
-        let expr = ctx.add_expression(Expression::LocalVariable(handle), meta, body);
+        let expr = ctx.add_expression(Expression::LocalVariable(handle), meta, body, finished);
 
         if let Some(name) = name {
             ctx.add_local_var(name, expr, mutable);

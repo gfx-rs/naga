@@ -98,7 +98,7 @@ impl Context {
         }: GlobalLookup,
         body: &mut Block,
     ) {
-        self.emit_flush(body);
+        self.emit_flush(body, false);
         let (expr, load) = match kind {
             GlobalLookupKind::Variable(v) => {
                 let span = parser.module.global_variables.get_span(v).clone();
@@ -164,8 +164,12 @@ impl Context {
         self.emitter.start(&self.expressions)
     }
 
-    pub fn emit_flush(&mut self, body: &mut Block) {
-        body.extend(self.emitter.finish(&self.expressions))
+    pub fn emit_flush(&mut self, body: &mut Block, finished: bool) {
+        if let Some((stmt, meta)) = self.emitter.finish(&self.expressions) {
+            if !finished {
+                body.push(stmt, meta)
+            }
+        }
     }
 
     pub fn add_expression(
@@ -173,10 +177,11 @@ impl Context {
         expr: Expression,
         meta: SourceMetadata,
         body: &mut Block,
+        finished: bool,
     ) -> Handle<Expression> {
         let needs_pre_emit = expr.needs_pre_emit();
         if needs_pre_emit {
-            self.emit_flush(body);
+            self.emit_flush(body, finished);
         }
         let handle = self.expressions.append(expr, meta.as_span());
         if needs_pre_emit {
@@ -266,7 +271,12 @@ impl Context {
         });
 
         if let Some((name, meta)) = name_meta {
-            let expr = self.add_expression(Expression::FunctionArgument(index as u32), meta, body);
+            let expr = self.add_expression(
+                Expression::FunctionArgument(index as u32),
+                meta,
+                body,
+                false,
+            );
             let mutable = qualifier != ParameterQualifier::Const && !opaque;
             let load = qualifier.is_lhs();
 
@@ -279,9 +289,10 @@ impl Context {
                     },
                     meta.as_span(),
                 );
-                let local_expr = self.add_expression(Expression::LocalVariable(handle), meta, body);
+                let local_expr =
+                    self.add_expression(Expression::LocalVariable(handle), meta, body, false);
 
-                self.emit_flush(body);
+                self.emit_flush(body, false);
                 self.emit_start();
 
                 body.push(
@@ -347,8 +358,9 @@ impl Context {
         expr: Handle<HirExpr>,
         pos: ExprPos,
         body: &mut Block,
+        finished: bool,
     ) -> Result<(Option<Handle<Expression>>, SourceMetadata)> {
-        let res = self.lower_inner(&stmt, parser, expr, pos, body);
+        let res = self.lower_inner(&stmt, parser, expr, pos, body, finished);
 
         stmt.hir_exprs.clear();
         self.stmt_ctx = Some(stmt);
@@ -368,8 +380,9 @@ impl Context {
         expr: Handle<HirExpr>,
         pos: ExprPos,
         body: &mut Block,
+        finished: bool,
     ) -> Result<(Handle<Expression>, SourceMetadata)> {
-        let res = self.lower_expect_inner(&stmt, parser, expr, pos, body);
+        let res = self.lower_expect_inner(&stmt, parser, expr, pos, body, finished);
 
         stmt.hir_exprs.clear();
         self.stmt_ctx = Some(stmt);
@@ -389,8 +402,9 @@ impl Context {
         expr: Handle<HirExpr>,
         pos: ExprPos,
         body: &mut Block,
+        finished: bool,
     ) -> Result<(Handle<Expression>, SourceMetadata)> {
-        let (maybe_expr, meta) = self.lower_inner(stmt, parser, expr, pos, body)?;
+        let (maybe_expr, meta) = self.lower_inner(stmt, parser, expr, pos, body, finished)?;
 
         let expr = match maybe_expr {
             Some(e) => e,
@@ -413,16 +427,17 @@ impl Context {
         expr: Handle<HirExpr>,
         pos: ExprPos,
         body: &mut Block,
+        finished: bool,
     ) -> Result<(Option<Handle<Expression>>, SourceMetadata)> {
         let HirExpr { ref kind, meta } = stmt.hir_exprs[expr];
 
         let handle = match *kind {
             HirExprKind::Access { base, index } => {
                 let base = self
-                    .lower_expect_inner(stmt, parser, base, pos.maybe_array_base(), body)?
+                    .lower_expect_inner(stmt, parser, base, pos.maybe_array_base(), body, finished)?
                     .0;
                 let (index, index_meta) =
-                    self.lower_expect_inner(stmt, parser, index, ExprPos::Rhs, body)?;
+                    self.lower_expect_inner(stmt, parser, index, ExprPos::Rhs, body, finished)?;
 
                 let pointer = parser
                     .solve_constant(self, index, index_meta)
@@ -445,17 +460,28 @@ impl Context {
                             },
                             meta,
                             body,
+                            finished,
                         ))
                     })
                     .unwrap_or_else(|| {
-                        self.add_expression(Expression::Access { base, index }, meta, body)
+                        self.add_expression(
+                            Expression::Access { base, index },
+                            meta,
+                            body,
+                            finished,
+                        )
                     });
 
                 if ExprPos::Rhs == pos {
                     let resolved = parser.resolve_type(self, pointer, meta)?;
                     if resolved.pointer_class().is_some() {
                         return Ok((
-                            Some(self.add_expression(Expression::Load { pointer }, meta, body)),
+                            Some(self.add_expression(
+                                Expression::Load { pointer },
+                                meta,
+                                body,
+                                finished,
+                            )),
                             meta,
                         ));
                     }
@@ -464,18 +490,20 @@ impl Context {
                 pointer
             }
             HirExprKind::Select { base, ref field } => {
-                let base = self.lower_expect_inner(stmt, parser, base, pos, body)?.0;
+                let base = self
+                    .lower_expect_inner(stmt, parser, base, pos, body, finished)?
+                    .0;
 
                 parser.field_selection(self, ExprPos::Lhs == pos, body, base, field, meta)?
             }
             HirExprKind::Constant(constant) if pos == ExprPos::Rhs => {
-                self.add_expression(Expression::Constant(constant), meta, body)
+                self.add_expression(Expression::Constant(constant), meta, body, finished)
             }
             HirExprKind::Binary { left, op, right } if pos == ExprPos::Rhs => {
                 let (mut left, left_meta) =
-                    self.lower_expect_inner(stmt, parser, left, pos, body)?;
+                    self.lower_expect_inner(stmt, parser, left, pos, body, finished)?;
                 let (mut right, right_meta) =
-                    self.lower_expect_inner(stmt, parser, right, pos, body)?;
+                    self.lower_expect_inner(stmt, parser, right, pos, body, finished)?;
 
                 match op {
                     BinaryOperator::ShiftLeft | BinaryOperator::ShiftRight => self
@@ -510,11 +538,15 @@ impl Context {
                                 Expression::Relational { fun, argument },
                                 meta,
                                 body,
+                                finished,
                             )
                         }
-                        _ => {
-                            self.add_expression(Expression::Binary { left, op, right }, meta, body)
-                        }
+                        _ => self.add_expression(
+                            Expression::Binary { left, op, right },
+                            meta,
+                            body,
+                            finished,
+                        ),
                     },
                     (&TypeInner::Vector { size, .. }, &TypeInner::Scalar { .. }) => match op {
                         BinaryOperator::Add
@@ -526,6 +558,7 @@ impl Context {
                                 Expression::Splat { size, value: right },
                                 meta,
                                 body,
+                                finished,
                             );
 
                             self.add_expression(
@@ -536,11 +569,15 @@ impl Context {
                                 },
                                 meta,
                                 body,
+                                finished,
                             )
                         }
-                        _ => {
-                            self.add_expression(Expression::Binary { left, op, right }, meta, body)
-                        }
+                        _ => self.add_expression(
+                            Expression::Binary { left, op, right },
+                            meta,
+                            body,
+                            finished,
+                        ),
                     },
                     (&TypeInner::Scalar { .. }, &TypeInner::Vector { size, .. }) => match op {
                         BinaryOperator::Add | BinaryOperator::Subtract | BinaryOperator::Divide => {
@@ -548,6 +585,7 @@ impl Context {
                                 Expression::Splat { size, value: left },
                                 meta,
                                 body,
+                                finished,
                             );
 
                             self.add_expression(
@@ -558,19 +596,30 @@ impl Context {
                                 },
                                 meta,
                                 body,
+                                finished,
                             )
                         }
-                        _ => {
-                            self.add_expression(Expression::Binary { left, op, right }, meta, body)
-                        }
+                        _ => self.add_expression(
+                            Expression::Binary { left, op, right },
+                            meta,
+                            body,
+                            finished,
+                        ),
                     },
-                    _ => self.add_expression(Expression::Binary { left, op, right }, meta, body),
+                    _ => self.add_expression(
+                        Expression::Binary { left, op, right },
+                        meta,
+                        body,
+                        finished,
+                    ),
                 }
             }
             HirExprKind::Unary { op, expr } if pos == ExprPos::Rhs => {
-                let expr = self.lower_expect_inner(stmt, parser, expr, pos, body)?.0;
+                let expr = self
+                    .lower_expect_inner(stmt, parser, expr, pos, body, finished)?
+                    .0;
 
-                self.add_expression(Expression::Unary { op, expr }, meta, body)
+                self.add_expression(Expression::Unary { op, expr }, meta, body, finished)
             }
             HirExprKind::Variable(ref var) => {
                 if pos != ExprPos::Rhs {
@@ -585,7 +634,12 @@ impl Context {
 
                     var.expr
                 } else if var.load {
-                    self.add_expression(Expression::Load { pointer: var.expr }, meta, body)
+                    self.add_expression(
+                        Expression::Load { pointer: var.expr },
+                        meta,
+                        body,
+                        finished,
+                    )
                 } else {
                     var.expr
                 }
@@ -598,6 +652,7 @@ impl Context {
                     call.kind.clone(),
                     &call.args,
                     meta,
+                    finished,
                 )?;
                 return Ok((maybe_expr, meta));
             }
@@ -607,12 +662,12 @@ impl Context {
                 reject,
             } if ExprPos::Lhs != pos => {
                 let condition = self
-                    .lower_expect_inner(stmt, parser, condition, ExprPos::Rhs, body)?
+                    .lower_expect_inner(stmt, parser, condition, ExprPos::Rhs, body, finished)?
                     .0;
                 let (mut accept, accept_meta) =
-                    self.lower_expect_inner(stmt, parser, accept, pos, body)?;
+                    self.lower_expect_inner(stmt, parser, accept, pos, body, finished)?;
                 let (mut reject, reject_meta) =
-                    self.lower_expect_inner(stmt, parser, reject, pos, body)?;
+                    self.lower_expect_inner(stmt, parser, reject, pos, body, finished)?;
 
                 self.binary_implicit_conversion(
                     parser,
@@ -630,13 +685,14 @@ impl Context {
                     },
                     meta,
                     body,
+                    finished,
                 )
             }
             HirExprKind::Assign { tgt, value } if ExprPos::Lhs != pos => {
                 let (pointer, ptr_meta) =
-                    self.lower_expect_inner(stmt, parser, tgt, ExprPos::Lhs, body)?;
+                    self.lower_expect_inner(stmt, parser, tgt, ExprPos::Lhs, body, finished)?;
                 let (mut value, value_meta) =
-                    self.lower_expect_inner(stmt, parser, value, ExprPos::Rhs, body)?;
+                    self.lower_expect_inner(stmt, parser, value, ExprPos::Rhs, body, finished)?;
 
                 let scalar_components = self.expr_scalar_components(parser, pointer, ptr_meta)?;
 
@@ -671,6 +727,7 @@ impl Context {
                             },
                             meta,
                             body,
+                            finished,
                         );
                         let src = self.add_expression(
                             Expression::AccessIndex {
@@ -679,24 +736,29 @@ impl Context {
                             },
                             meta,
                             body,
+                            finished,
                         );
 
-                        self.emit_flush(body);
+                        self.emit_flush(body, finished);
                         self.emit_start();
 
-                        body.push(
-                            Statement::Store {
-                                pointer: dst,
-                                value: src,
-                            },
-                            meta.as_span(),
-                        );
+                        if !finished {
+                            body.push(
+                                Statement::Store {
+                                    pointer: dst,
+                                    value: src,
+                                },
+                                meta.as_span(),
+                            );
+                        }
                     }
                 } else {
-                    self.emit_flush(body);
+                    self.emit_flush(body, finished);
                     self.emit_start();
 
-                    body.push(Statement::Store { pointer, value }, meta.as_span());
+                    if !finished {
+                        body.push(Statement::Store { pointer, value }, meta.as_span());
+                    }
                 }
 
                 value
@@ -712,9 +774,9 @@ impl Context {
                 };
 
                 let pointer = self
-                    .lower_expect_inner(stmt, parser, expr, ExprPos::Lhs, body)?
+                    .lower_expect_inner(stmt, parser, expr, ExprPos::Lhs, body, finished)?
                     .0;
-                let left = self.add_expression(Expression::Load { pointer }, meta, body);
+                let left = self.add_expression(Expression::Load { pointer }, meta, body, finished);
 
                 let uint = match parser.resolve_type(self, left, meta)?.scalar_kind() {
                     Some(ScalarKind::Sint) => false,
@@ -744,9 +806,14 @@ impl Context {
                     },
                     Default::default(),
                 );
-                let right = self.add_expression(Expression::Constant(one), meta, body);
+                let right = self.add_expression(Expression::Constant(one), meta, body, finished);
 
-                let value = self.add_expression(Expression::Binary { op, left, right }, meta, body);
+                let value = self.add_expression(
+                    Expression::Binary { op, left, right },
+                    meta,
+                    body,
+                    finished,
+                );
 
                 if postfix {
                     let local = self.locals.append(
@@ -770,10 +837,16 @@ impl Context {
                         meta.as_span(),
                     );
 
-                    let expr = self.add_expression(Expression::LocalVariable(local), meta, body);
-                    let load = self.add_expression(Expression::Load { pointer: expr }, meta, body);
+                    let expr =
+                        self.add_expression(Expression::LocalVariable(local), meta, body, finished);
+                    let load = self.add_expression(
+                        Expression::Load { pointer: expr },
+                        meta,
+                        body,
+                        finished,
+                    );
 
-                    self.emit_flush(body);
+                    self.emit_flush(body, finished);
                     self.emit_start();
 
                     body.push(
@@ -784,17 +857,21 @@ impl Context {
                         meta.as_span(),
                     );
 
-                    self.emit_flush(body);
+                    self.emit_flush(body, finished);
                     self.emit_start();
 
-                    body.push(Statement::Store { pointer, value }, meta.as_span());
+                    if !finished {
+                        body.push(Statement::Store { pointer, value }, meta.as_span());
+                    }
 
                     load
                 } else {
-                    self.emit_flush(body);
+                    self.emit_flush(body, finished);
                     self.emit_start();
 
-                    body.push(Statement::Store { pointer, value }, meta.as_span());
+                    if !finished {
+                        body.push(Statement::Store { pointer, value }, meta.as_span());
+                    }
 
                     left
                 }
@@ -941,6 +1018,8 @@ impl Context {
             },
             meta,
             body,
+            // Doesn't matter since a swizzle won't trigger an emit
+            false,
         )
     }
 }
