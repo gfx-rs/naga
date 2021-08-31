@@ -17,7 +17,6 @@ void switch_case_break() {
     switch(0) {
         case 0:
             break;
-            break;
     }
     return;
 }
@@ -27,7 +26,6 @@ void loop_switch_continue(int x) {
         switch(x) {
             case 1:
                 continue;
-                break;
         }
     }
     return;
@@ -47,16 +45,30 @@ void main() {
         case 1:
             pos = 0;
             break;
+        case 2:
+            pos = 1;
+            break;
+        case 3:
+            pos = 2;
+            /* fallthrough */
+        case 4:
+            break;
+        default:
+            pos = 3;
+    }
+    int _e9 = pos;
+    switch(_e9) {
+        case 1:
+            pos = 0;
             break;
         case 2:
             pos = 1;
             return;
-            break;
         case 3:
             pos = 2;
+            /* fallthrough */
         case 4:
             return;
-            break;
         default:
             pos = 3;
             return;
