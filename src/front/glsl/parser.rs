@@ -198,10 +198,8 @@ impl<'source> ParsingContext<'source> {
         let mut ctx = Context::new(parser, &mut block);
 
         let mut stmt_ctx = ctx.stmt_ctx();
-        let expr =
-            self.parse_conditional(parser, &mut ctx, &mut stmt_ctx, &mut block, None, false)?;
-        let (root, meta) =
-            ctx.lower_expect(stmt_ctx, parser, expr, ExprPos::Rhs, &mut block, false)?;
+        let expr = self.parse_conditional(parser, &mut ctx, &mut stmt_ctx, &mut block, None)?;
+        let (root, meta) = ctx.lower_expect(stmt_ctx, parser, expr, ExprPos::Rhs, &mut block)?;
 
         Ok((parser.solve_constant(&ctx, root, meta)?, meta))
     }
@@ -371,7 +369,6 @@ impl Parser {
 pub struct DeclarationContext<'ctx> {
     qualifiers: Vec<(TypeQualifier, SourceMetadata)>,
     external: bool,
-    finished: bool,
 
     ctx: &'ctx mut Context,
     body: &'ctx mut Block,
@@ -401,16 +398,14 @@ impl<'ctx> DeclarationContext<'ctx> {
                     GlobalOrConstant::Global(handle) => Expression::GlobalVariable(handle),
                     GlobalOrConstant::Constant(handle) => Expression::Constant(handle),
                 };
-                Ok(self
-                    .ctx
-                    .add_expression(expr, meta, self.body, self.finished))
+                Ok(self.ctx.add_expression(expr, meta, self.body))
             }
-            false => parser.add_local_var(self.ctx, self.body, self.finished, decl),
+            false => parser.add_local_var(self.ctx, self.body, decl),
         }
     }
 
     fn flush_expressions(&mut self) {
-        self.ctx.emit_flush(self.body, self.finished);
+        self.ctx.emit_flush(self.body);
         self.ctx.emit_start()
     }
 }

@@ -26,7 +26,7 @@ impl<'source> ParsingContext<'source> {
         global_body: &mut Block,
     ) -> Result<()> {
         if self
-            .parse_declaration(parser, global_ctx, global_body, true, false)?
+            .parse_declaration(parser, global_ctx, global_body, true)?
             .is_none()
         {
             let token = self.bump(parser)?;
@@ -54,7 +54,6 @@ impl<'source> ParsingContext<'source> {
         ty: Handle<Type>,
         ctx: &mut Context,
         body: &mut Block,
-        finished: bool,
     ) -> Result<(Handle<Expression>, SourceMetadata)> {
         // initializer:
         //     assignment_expression
@@ -69,7 +68,7 @@ impl<'source> ParsingContext<'source> {
             let mut components = Vec::new();
             loop {
                 // TODO: Change type
-                components.push(self.parse_initializer(parser, ty, ctx, body, finished)?.0);
+                components.push(self.parse_initializer(parser, ty, ctx, body)?.0);
 
                 let token = self.bump(parser)?;
                 match token.value {
@@ -98,14 +97,13 @@ impl<'source> ParsingContext<'source> {
             }
 
             Ok((
-                ctx.add_expression(Expression::Compose { ty, components }, meta, body, finished),
+                ctx.add_expression(Expression::Compose { ty, components }, meta, body),
                 meta,
             ))
         } else {
             let mut stmt = ctx.stmt_ctx();
-            let expr = self.parse_assignment(parser, ctx, &mut stmt, body, finished)?;
-            let (mut init, init_meta) =
-                ctx.lower_expect(stmt, parser, expr, ExprPos::Rhs, body, finished)?;
+            let expr = self.parse_assignment(parser, ctx, &mut stmt, body)?;
+            let (mut init, init_meta) = ctx.lower_expect(stmt, parser, expr, ExprPos::Rhs, body)?;
 
             let scalar_components = scalar_components(&parser.module.types[ty].inner);
             if let Some((kind, width)) = scalar_components {
@@ -125,7 +123,6 @@ impl<'source> ParsingContext<'source> {
         ty: Handle<Type>,
         mut fallthrough: Option<Token>,
         ctx: &mut DeclarationContext,
-        finished: bool,
     ) -> Result<()> {
         // init_declarator_list:
         //     single_declaration
@@ -185,7 +182,7 @@ impl<'source> ParsingContext<'source> {
                 .bump_if(parser, TokenValue::Assign)
                 .map::<Result<_>, _>(|_| {
                     let (mut expr, init_meta) =
-                        self.parse_initializer(parser, ty, ctx.ctx, ctx.body, finished)?;
+                        self.parse_initializer(parser, ty, ctx.ctx, ctx.body)?;
 
                     let scalar_components = scalar_components(&parser.module.types[ty].inner);
                     if let Some((kind, width)) = scalar_components {
@@ -209,8 +206,10 @@ impl<'source> ParsingContext<'source> {
 
             if let Some((value, _)) = init.filter(|_| maybe_constant.is_none()) {
                 ctx.flush_expressions();
-                ctx.body
-                    .push(Statement::Store { pointer, value }, meta.as_span());
+                if !ctx.ctx.finished {
+                    ctx.body
+                        .push(Statement::Store { pointer, value }, meta.as_span());
+                }
             }
 
             let token = self.bump(parser)?;
@@ -239,7 +238,6 @@ impl<'source> ParsingContext<'source> {
         ctx: &mut Context,
         body: &mut Block,
         external: bool,
-        finished: bool,
     ) -> Result<Option<SourceMetadata>> {
         //declaration:
         //    function_prototype  SEMICOLON
@@ -339,18 +337,11 @@ impl<'source> ParsingContext<'source> {
                     let mut ctx = DeclarationContext {
                         qualifiers,
                         external,
-                        finished,
                         ctx,
                         body,
                     };
 
-                    self.parse_init_declarator_list(
-                        parser,
-                        ty,
-                        Some(token_fallthrough),
-                        &mut ctx,
-                        finished,
-                    )?;
+                    self.parse_init_declarator_list(parser, ty, Some(token_fallthrough), &mut ctx)?;
                 } else {
                     parser.errors.push(Error {
                         kind: ErrorKind::SemanticError("Declaration cannot have void type".into()),

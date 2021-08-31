@@ -1418,7 +1418,6 @@ impl MacroCall {
         body: &mut Block,
         args: &mut [Handle<Expression>],
         meta: SourceMetadata,
-        finished: bool,
     ) -> Result<Handle<Expression>> {
         match *self {
             MacroCall::Sampler => {
@@ -1483,14 +1482,12 @@ impl MacroCall {
                     },
                     SourceMetadata::none(),
                     body,
-                    finished,
                 );
                 let left = if let VectorSize::Bi = size {
                     ctx.add_expression(
                         Expression::AccessIndex { base, index: 0 },
                         SourceMetadata::none(),
                         body,
-                        finished,
                     )
                 } else {
                     let size = match size {
@@ -1501,7 +1498,6 @@ impl MacroCall {
                         Expression::Splat { size, value: right },
                         SourceMetadata::none(),
                         body,
-                        finished,
                     );
                     ctx.vector_resize(size, base, SourceMetadata::none(), body)
                 };
@@ -1513,7 +1509,6 @@ impl MacroCall {
                     },
                     SourceMetadata::none(),
                     body,
-                    finished,
                 );
                 let comps = parser.coordinate_components(ctx, args[0], coords, meta, body)?;
                 texture_call(ctx, args[0], level, comps, body, meta)
@@ -1527,7 +1522,6 @@ impl MacroCall {
                 },
                 SourceMetadata::none(),
                 body,
-                finished,
             )),
             MacroCall::TexelFetch => {
                 let comps = parser.coordinate_components(ctx, args[0], args[1], meta, body)?;
@@ -1540,7 +1534,6 @@ impl MacroCall {
                     },
                     SourceMetadata::none(),
                     body,
-                    finished,
                 ))
             }
             MacroCall::MathFunction(fun) => Ok(ctx.add_expression(
@@ -1552,7 +1545,6 @@ impl MacroCall {
                 },
                 SourceMetadata::none(),
                 body,
-                finished,
             )),
             MacroCall::Relational(fun) => Ok(ctx.add_expression(
                 Expression::Relational {
@@ -1561,7 +1553,6 @@ impl MacroCall {
                 },
                 SourceMetadata::none(),
                 body,
-                finished,
             )),
             MacroCall::Binary(op) => Ok(ctx.add_expression(
                 Expression::Binary {
@@ -1571,7 +1562,6 @@ impl MacroCall {
                 },
                 SourceMetadata::none(),
                 body,
-                finished,
             )),
             MacroCall::Mod(size) => {
                 ctx.implicit_splat(parser, &mut args[1], meta, size)?;
@@ -1584,7 +1574,6 @@ impl MacroCall {
                     },
                     SourceMetadata::none(),
                     body,
-                    finished,
                 ))
             }
             MacroCall::Splatted(fun, size, i) => {
@@ -1599,7 +1588,6 @@ impl MacroCall {
                     },
                     SourceMetadata::none(),
                     body,
-                    finished,
                 ))
             }
             MacroCall::MixBoolean => Ok(ctx.add_expression(
@@ -1610,7 +1598,6 @@ impl MacroCall {
                 },
                 SourceMetadata::none(),
                 body,
-                finished,
             )),
             MacroCall::Clamp(size) => {
                 ctx.implicit_splat(parser, &mut args[1], meta, size)?;
@@ -1625,7 +1612,6 @@ impl MacroCall {
                     },
                     SourceMetadata::none(),
                     body,
-                    finished,
                 ))
             }
             MacroCall::ConstMultiply(value) => {
@@ -1644,7 +1630,6 @@ impl MacroCall {
                     Expression::Constant(constant),
                     SourceMetadata::none(),
                     body,
-                    finished,
                 );
                 Ok(ctx.add_expression(
                     Expression::Binary {
@@ -1654,7 +1639,6 @@ impl MacroCall {
                     },
                     SourceMetadata::none(),
                     body,
-                    finished,
                 ))
             }
             MacroCall::BitCast(kind) => Ok(ctx.add_expression(
@@ -1665,7 +1649,6 @@ impl MacroCall {
                 },
                 SourceMetadata::none(),
                 body,
-                finished,
             )),
             MacroCall::Derivate(axis) => Ok(ctx.add_expression(
                 Expression::Derivative {
@@ -1674,7 +1657,6 @@ impl MacroCall {
                 },
                 SourceMetadata::none(),
                 body,
-                finished,
             )),
         }
     }
@@ -1701,7 +1683,6 @@ fn texture_call(
             },
             meta,
             body,
-            false,
         ))
     } else {
         Err(Error {
@@ -1762,7 +1743,6 @@ impl Parser {
                     },
                     SourceMetadata::none(),
                     body,
-                    false,
                 ),
                 _ => coord,
             };
@@ -1777,7 +1757,6 @@ impl Parser {
                         Expression::AccessIndex { base: coord, index },
                         SourceMetadata::none(),
                         body,
-                        false,
                     ))
                 }
                 _ => None,
@@ -1790,7 +1769,6 @@ impl Parser {
                         Expression::AccessIndex { base: coord, index },
                         SourceMetadata::none(),
                         body,
-                        false,
                     ))
                 }
                 false => None,

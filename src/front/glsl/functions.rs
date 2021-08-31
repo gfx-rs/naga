@@ -37,7 +37,6 @@ impl Parser {
         )
     }
 
-    #[allow(clippy::too_many_arguments)]
     pub(crate) fn function_or_constructor_call(
         &mut self,
         ctx: &mut Context,
@@ -46,11 +45,10 @@ impl Parser {
         fc: FunctionCallKind,
         raw_args: &[Handle<HirExpr>],
         meta: SourceMetadata,
-        finished: bool,
     ) -> Result<Option<Handle<Expression>>> {
         let args: Vec<_> = raw_args
             .iter()
-            .map(|e| ctx.lower_expect_inner(stmt, self, *e, ExprPos::Rhs, body, finished))
+            .map(|e| ctx.lower_expect_inner(stmt, self, *e, ExprPos::Rhs, body))
             .collect::<Result<_>>()?;
 
         match fc {
@@ -72,18 +70,10 @@ impl Parser {
                             let (condition, expr_meta) = args[0];
                             let c0 = self.add_constant_value(result_scalar_kind, 0u64, meta);
                             let c1 = self.add_constant_value(result_scalar_kind, 1u64, meta);
-                            let mut reject = ctx.add_expression(
-                                Expression::Constant(c0),
-                                expr_meta,
-                                body,
-                                finished,
-                            );
-                            let mut accept = ctx.add_expression(
-                                Expression::Constant(c1),
-                                expr_meta,
-                                body,
-                                finished,
-                            );
+                            let mut reject =
+                                ctx.add_expression(Expression::Constant(c0), expr_meta, body);
+                            let mut accept =
+                                ctx.add_expression(Expression::Constant(c1), expr_meta, body);
 
                             ctx.implicit_splat(self, &mut reject, meta, vector_size)?;
                             ctx.implicit_splat(self, &mut accept, meta, vector_size)?;
@@ -96,7 +86,6 @@ impl Parser {
                                 },
                                 expr_meta,
                                 body,
-                                finished,
                             );
 
                             return Ok(Some(h));
@@ -109,12 +98,7 @@ impl Parser {
                             let (mut value, meta) = args[0];
                             ctx.implicit_conversion(self, &mut value, meta, kind, width)?;
 
-                            ctx.add_expression(
-                                Expression::Splat { size, value },
-                                meta,
-                                body,
-                                finished,
-                            )
+                            ctx.add_expression(Expression::Splat { size, value }, meta, body)
                         }
                         TypeInner::Scalar { kind, width } => ctx.add_expression(
                             Expression::As {
@@ -124,7 +108,6 @@ impl Parser {
                             },
                             args[0].1,
                             body,
-                            finished,
                         ),
                         TypeInner::Vector { size, kind, width } => {
                             let mut expr = args[0].0;
@@ -141,7 +124,6 @@ impl Parser {
                                 },
                                 args[0].1,
                                 body,
-                                finished,
                             )
                         }
                         TypeInner::Matrix {
@@ -193,7 +175,6 @@ impl Parser {
                                         Expression::Constant(zero_constant),
                                         meta,
                                         body,
-                                        finished,
                                     );
 
                                     for i in 0..columns as u32 {
@@ -211,7 +192,6 @@ impl Parser {
                                                 },
                                                 meta,
                                                 body,
-                                                finished,
                                             ),
                                         )
                                     }
@@ -220,7 +200,6 @@ impl Parser {
                                         Expression::Compose { ty, components },
                                         meta,
                                         body,
-                                        finished,
                                     )
                                 }
                                 TypeInner::Matrix { rows: ori_rows, .. } => {
@@ -234,7 +213,6 @@ impl Parser {
                                             },
                                             meta,
                                             body,
-                                            finished,
                                         );
 
                                         if ori_rows != rows {
@@ -248,7 +226,6 @@ impl Parser {
                                         Expression::Compose { ty, components },
                                         meta,
                                         body,
-                                        finished,
                                     )
                                 }
                                 _ => {
@@ -262,7 +239,6 @@ impl Parser {
                                         },
                                         meta,
                                         body,
-                                        finished,
                                     )
                                 }
                             }
@@ -274,7 +250,6 @@ impl Parser {
                             },
                             meta,
                             body,
-                            finished,
                         ),
                         _ => {
                             self.errors.push(Error {
@@ -314,7 +289,6 @@ impl Parser {
                                                 },
                                                 meta,
                                                 body,
-                                                finished,
                                             ))
                                         }
                                     }
@@ -342,7 +316,6 @@ impl Parser {
                                     },
                                     meta,
                                     body,
-                                    finished,
                                 ))
                             }
                         }
@@ -359,13 +332,13 @@ impl Parser {
                         }
                     }
 
-                    ctx.add_expression(Expression::Compose { ty, components }, meta, body, finished)
+                    ctx.add_expression(Expression::Compose { ty, components }, meta, body)
                 };
 
                 Ok(Some(h))
             }
             FunctionCallKind::Function(name) => {
-                self.function_call(ctx, stmt, body, name, args, raw_args, meta, finished)
+                self.function_call(ctx, stmt, body, name, args, raw_args, meta)
             }
         }
     }
@@ -380,7 +353,6 @@ impl Parser {
         args: Vec<(Handle<Expression>, SourceMetadata)>,
         raw_args: &[Handle<HirExpr>],
         meta: SourceMetadata,
-        finished: bool,
     ) -> Result<Option<Handle<Expression>>> {
         // If the name for the function hasn't yet been initialized check if any
         // builtin can be injected.
@@ -592,14 +564,8 @@ impl Parser {
             .iter()
             .zip(raw_args.iter().zip(parameters.iter()))
         {
-            let (mut handle, meta) = ctx.lower_expect_inner(
-                stmt,
-                self,
-                *expr,
-                parameter_info.qualifier.as_pos(),
-                body,
-                finished,
-            )?;
+            let (mut handle, meta) =
+                ctx.lower_expect_inner(stmt, self, *expr, parameter_info.qualifier.as_pos(), body)?;
 
             if let TypeInner::Vector { size, kind, width } =
                 *self.resolve_type(ctx, handle, meta)?
@@ -626,10 +592,9 @@ impl Parser {
                         Expression::LocalVariable(temp_var),
                         SourceMetadata::none(),
                         body,
-                        finished,
                     );
 
-                    if !finished {
+                    if !ctx.finished {
                         body.push(
                             Statement::Store {
                                 pointer: temp_expr,
@@ -655,15 +620,15 @@ impl Parser {
 
         match kind {
             FunctionKind::Call(function) => {
-                ctx.emit_flush(body, finished);
+                ctx.emit_flush(body);
 
                 let result = if !is_void {
-                    Some(ctx.add_expression(Expression::CallResult(function), meta, body, finished))
+                    Some(ctx.add_expression(Expression::CallResult(function), meta, body))
                 } else {
                     None
                 };
 
-                if !finished {
+                if !ctx.finished {
                     body.push(
                         crate::Statement::Call {
                             function,
@@ -676,27 +641,29 @@ impl Parser {
 
                 ctx.emit_start();
                 for (tgt, pointer) in proxy_writes {
-                    let value =
-                        ctx.add_expression(Expression::Load { pointer }, meta, body, finished);
+                    let value = ctx.add_expression(Expression::Load { pointer }, meta, body);
                     let target = ctx
-                        .lower_expect_inner(stmt, self, tgt, ExprPos::Rhs, body, finished)?
+                        .lower_expect_inner(stmt, self, tgt, ExprPos::Rhs, body)?
                         .0;
 
-                    ctx.emit_flush(body, finished);
-                    body.push(
-                        Statement::Store {
-                            pointer: target,
-                            value,
-                        },
-                        meta.as_span(),
-                    );
+                    ctx.emit_flush(body);
                     ctx.emit_start();
+
+                    if !ctx.finished {
+                        body.push(
+                            Statement::Store {
+                                pointer: target,
+                                value,
+                            },
+                            meta.as_span(),
+                        );
+                    }
                 }
 
                 Ok(result)
             }
             FunctionKind::Macro(builtin) => builtin
-                .call(self, ctx, body, arguments.as_mut_slice(), meta, finished)
+                .call(self, ctx, body, arguments.as_mut_slice(), meta)
                 .map(Some),
         }
     }
