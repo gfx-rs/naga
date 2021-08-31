@@ -54,8 +54,6 @@ pub struct Context {
     pub typifier: Typifier,
     emitter: Emitter,
     stmt_ctx: Option<StmtContext>,
-
-    pub finished: bool,
 }
 
 impl Context {
@@ -78,8 +76,6 @@ impl Context {
             typifier: Typifier::new(),
             emitter: Emitter::default(),
             stmt_ctx: Some(StmtContext::new()),
-
-            finished: false,
         };
 
         this.emit_start();
@@ -169,11 +165,7 @@ impl Context {
     }
 
     pub fn emit_flush(&mut self, body: &mut Block) {
-        if let Some((stmt, meta)) = self.emitter.finish(&self.expressions) {
-            if !self.finished {
-                body.push(stmt, meta)
-            }
-        }
+        body.extend(self.emitter.finish(&self.expressions))
     }
 
     pub fn add_expression(
@@ -692,23 +684,19 @@ impl Context {
                         self.emit_flush(body);
                         self.emit_start();
 
-                        if !self.finished {
-                            body.push(
-                                Statement::Store {
-                                    pointer: dst,
-                                    value: src,
-                                },
-                                meta.as_span(),
-                            );
-                        }
+                        body.push(
+                            Statement::Store {
+                                pointer: dst,
+                                value: src,
+                            },
+                            meta.as_span(),
+                        );
                     }
                 } else {
                     self.emit_flush(body);
                     self.emit_start();
 
-                    if !self.finished {
-                        body.push(Statement::Store { pointer, value }, meta.as_span());
-                    }
+                    body.push(Statement::Store { pointer, value }, meta.as_span());
                 }
 
                 value
@@ -788,29 +776,25 @@ impl Context {
                     self.emit_flush(body);
                     self.emit_start();
 
-                    if !self.finished {
-                        body.push(
-                            Statement::Store {
-                                pointer: expr,
-                                value: left,
-                            },
-                            meta.as_span(),
-                        );
+                    body.push(
+                        Statement::Store {
+                            pointer: expr,
+                            value: left,
+                        },
+                        meta.as_span(),
+                    );
 
-                        self.emit_flush(body);
-                        self.emit_start();
+                    self.emit_flush(body);
+                    self.emit_start();
 
-                        body.push(Statement::Store { pointer, value }, meta.as_span());
-                    }
+                    body.push(Statement::Store { pointer, value }, meta.as_span());
 
                     load
                 } else {
                     self.emit_flush(body);
                     self.emit_start();
 
-                    if !self.finished {
-                        body.push(Statement::Store { pointer, value }, meta.as_span());
-                    }
+                    body.push(Statement::Store { pointer, value }, meta.as_span());
 
                     left
                 }

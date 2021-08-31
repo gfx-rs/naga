@@ -206,10 +206,8 @@ impl<'source> ParsingContext<'source> {
 
             if let Some((value, _)) = init.filter(|_| maybe_constant.is_none()) {
                 ctx.flush_expressions();
-                if !ctx.ctx.finished {
-                    ctx.body
-                        .push(Statement::Store { pointer, value }, meta.as_span());
-                }
+                ctx.body
+                    .push(Statement::Store { pointer, value }, meta.as_span());
             }
 
             let token = self.bump(parser)?;

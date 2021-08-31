@@ -594,15 +594,13 @@ impl Parser {
                         body,
                     );
 
-                    if !ctx.finished {
-                        body.push(
-                            Statement::Store {
-                                pointer: temp_expr,
-                                value: handle,
-                            },
-                            Span::Unknown,
-                        );
-                    }
+                    body.push(
+                        Statement::Store {
+                            pointer: temp_expr,
+                            value: handle,
+                        },
+                        Span::Unknown,
+                    );
 
                     arguments.push(temp_expr);
                     proxy_writes.push((*expr, temp_expr));
@@ -628,16 +626,14 @@ impl Parser {
                     None
                 };
 
-                if !ctx.finished {
-                    body.push(
-                        crate::Statement::Call {
-                            function,
-                            arguments,
-                            result,
-                        },
-                        meta.as_span(),
-                    );
-                }
+                body.push(
+                    crate::Statement::Call {
+                        function,
+                        arguments,
+                        result,
+                    },
+                    meta.as_span(),
+                );
 
                 ctx.emit_start();
                 for (tgt, pointer) in proxy_writes {
@@ -649,15 +645,13 @@ impl Parser {
                     ctx.emit_flush(body);
                     ctx.emit_start();
 
-                    if !ctx.finished {
-                        body.push(
-                            Statement::Store {
-                                pointer: target,
-                                value,
-                            },
-                            meta.as_span(),
-                        );
-                    }
+                    body.push(
+                        Statement::Store {
+                            pointer: target,
+                            value,
+                        },
+                        meta.as_span(),
+                    );
                 }
 
                 Ok(result)
