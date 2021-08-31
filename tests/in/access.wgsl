@@ -25,6 +25,9 @@ fn foo([[builtin(vertex_index)]] vi: u32) -> [[builtin(position)]] vec4<f32> {
 	let b = bar.matrix[index].x;
 	let a = bar.data[arrayLength(&bar.data) - 2u];
 
+	// test pointer types
+	let pointer: ptr<storage, i32, read_write> = &bar.data[0];
+
 	// test storage stores
 	bar.matrix[1].z = 1.0;
 	bar.matrix = mat4x4<f32>(vec4<f32>(0.0), vec4<f32>(1.0), vec4<f32>(2.0), vec4<f32>(3.0));
