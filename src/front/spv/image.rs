@@ -630,7 +630,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                                         base: coord_handle,
                                         index: required_size.map_or(1, |size| size as u32),
                                     },
-                                    crate::Span::Unknown,
+                                    crate::Span::default(),
                                 );
                                 expr = expressions.append(
                                     crate::Expression::Binary {
@@ -638,7 +638,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                                         left: expr,
                                         right,
                                     },
-                                    crate::Span::Unknown,
+                                    crate::Span::default(),
                                 )
                             };
                             Some(expr)

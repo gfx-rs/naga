@@ -742,17 +742,17 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     ty,
                     init: None,
                 },
-                crate::Span::Unknown,
+                crate::Span::default(),
             );
 
             block.extend(emitter.finish(expressions));
             let pointer = expressions.append(
                 crate::Expression::LocalVariable(local),
-                crate::Span::Unknown,
+                crate::Span::default(),
             );
             emitter.start(expressions);
             let expr =
-                expressions.append(crate::Expression::Load { pointer }, crate::Span::Unknown);
+                expressions.append(crate::Expression::Load { pointer }, crate::Span::default());
 
             // Add a slightly odd entry to the phi table, so that while `id`'s
             // `Expression` is still in scope, the usual phi processing will
@@ -2991,7 +2991,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
 
         block.extend(emitter.finish(expressions));
         if let Some(stmt) = terminator {
-            block.push(stmt, crate::Span::Unknown);
+            block.push(stmt, crate::Span::default());
         }
 
         // Save this block fragment in `block_ctx.blocks`, and mark it to be

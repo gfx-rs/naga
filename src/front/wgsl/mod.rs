@@ -829,15 +829,15 @@ impl<'a> ExpressionContext<'a, '_, '_> {
             ExpressionContext<'a, '_, '_>,
         ) -> Result<Handle<crate::Expression>, Error<'a>>,
     ) -> Result<Handle<crate::Expression>, Error<'a>> {
-        let start = lexer.current_byte_offset();
+        let start = lexer.current_byte_offset() as u32;
         let mut left = parser(lexer, self.reborrow())?;
         while let Some(op) = classifier(lexer.peek().0) {
             let _ = lexer.next();
             let right = parser(lexer, self.reborrow())?;
-            let end = lexer.current_byte_offset();
+            let end = lexer.current_byte_offset() as u32;
             left = self.expressions.append(
                 crate::Expression::Binary { op, left, right },
-                NagaSpan::ByteRange { start, end },
+                NagaSpan::new(start, end),
             );
         }
         Ok(left)
@@ -852,12 +852,12 @@ impl<'a> ExpressionContext<'a, '_, '_> {
             ExpressionContext<'a, '_, '_>,
         ) -> Result<Handle<crate::Expression>, Error<'a>>,
     ) -> Result<Handle<crate::Expression>, Error<'a>> {
-        let start = lexer.current_byte_offset();
+        let start = lexer.current_byte_offset() as u32;
         let mut left = parser(lexer, self.reborrow())?;
         while let Some(op) = classifier(lexer.peek().0) {
             let _ = lexer.next();
             let mut right = parser(lexer, self.reborrow())?;
-            let end = lexer.current_byte_offset();
+            let end = lexer.current_byte_offset() as u32;
             // insert splats, if needed by the non-'*' operations
             if op != crate::BinaryOperator::Multiply {
                 let left_size = match *self.resolve_type(left)? {
@@ -882,7 +882,7 @@ impl<'a> ExpressionContext<'a, '_, '_> {
             }
             left = self.expressions.append(
                 crate::Expression::Binary { op, left, right },
-                NagaSpan::ByteRange { start, end },
+                NagaSpan::new(start, end),
             );
         }
         Ok(left)
@@ -3383,7 +3383,7 @@ impl Parser {
                                 Ok(condition)
                             })?;
                             let mut reject = crate::Block::new();
-                            reject.push(crate::Statement::Break, NagaSpan::Unknown);
+                            reject.push(crate::Statement::Break, NagaSpan::default());
                             body.push(
                                 crate::Statement::If {
                                     condition,

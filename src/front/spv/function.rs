@@ -176,7 +176,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
             // Get a pointer to the local variable for the phi's value.
             let phi_pointer = fun.expressions.append(
                 crate::Expression::LocalVariable(phi.local),
-                crate::Span::Unknown,
+                crate::Span::default(),
             );
 
             // At the end of each of `phi`'s predecessor blocks, store the corresponding
@@ -219,26 +219,26 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                             ty,
                             init: None,
                         },
-                        crate::Span::Unknown,
+                        crate::Span::default(),
                     );
 
                     let pointer = fun.expressions.append(
                         crate::Expression::LocalVariable(local),
-                        crate::Span::Unknown,
+                        crate::Span::default(),
                     );
 
                     // Get the spilled value of the source expression.
                     let start = fun.expressions.len();
                     let expr = fun
                         .expressions
-                        .append(crate::Expression::Load { pointer }, crate::Span::Unknown);
+                        .append(crate::Expression::Load { pointer }, crate::Span::default());
                     let range = fun.expressions.range_from(start);
 
                     block_ctx
                         .blocks
                         .get_mut(&predecessor)
                         .unwrap()
-                        .push(crate::Statement::Emit(range), crate::Span::Unknown);
+                        .push(crate::Statement::Emit(range), crate::Span::default());
 
                     // At the end of the block that defines it, spill the source
                     // expression's value.
@@ -251,7 +251,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                                 pointer,
                                 value: source_lexp.handle,
                             },
-                            crate::Span::Unknown,
+                            crate::Span::default(),
                         );
 
                     expr
@@ -264,7 +264,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                         pointer: phi_pointer,
                         value,
                     },
-                    crate::Span::Unknown,
+                    crate::Span::default(),
                 )
             }
         }
@@ -353,7 +353,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                     arguments: Vec::new(),
                     result: None,
                 },
-                crate::Span::Unknown,
+                crate::Span::default(),
             );
 
             // 3. copy the outputs from privates to the result
@@ -540,7 +540,7 @@ impl BlockContext {
                                 accept,
                                 reject,
                             },
-                            crate::Span::Unknown,
+                            crate::Span::default(),
                         )
                     }
                     super::BodyFragment::Loop { body, continuing } => {
@@ -549,7 +549,7 @@ impl BlockContext {
 
                         block.push(
                             crate::Statement::Loop { body, continuing },
-                            crate::Span::Unknown,
+                            crate::Span::default(),
                         )
                     }
                     super::BodyFragment::Switch {
@@ -577,14 +577,14 @@ impl BlockContext {
                                     .collect(),
                                 default,
                             },
-                            crate::Span::Unknown,
+                            crate::Span::default(),
                         )
                     }
                     super::BodyFragment::Break => {
-                        block.push(crate::Statement::Break, crate::Span::Unknown)
+                        block.push(crate::Statement::Break, crate::Span::default())
                     }
                     super::BodyFragment::Continue => {
-                        block.push(crate::Statement::Continue, crate::Span::Unknown)
+                        block.push(crate::Statement::Continue, crate::Span::default())
                     }
                 }
             }
