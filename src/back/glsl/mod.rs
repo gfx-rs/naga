@@ -1337,7 +1337,10 @@ impl<'a, W: Write> Writer<'a, W> {
                     let info = &ctx.info[handle];
                     let ptr_class = info.ty.inner_with(&self.module.types).pointer_class();
                     let expr_name = if ptr_class.is_some() {
-                        None // Don't emit pointers, for now
+                        // GLSL can't save a pointer-valued expression in a variable,
+                        // but we shouldn't ever need to: they should never be named expressions,
+                        // and none of the expression types flagged by bake_ref_count can be pointer-valued.
+                        None
                     } else if let Some(name) = ctx.named_expressions.get(&handle) {
                         // Front end provides names for all variables at the start of writing.
                         // But we write them to step by step. We need to recache them

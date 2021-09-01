@@ -525,10 +525,13 @@ impl<W: Write> Writer<W> {
                         "storage_",
                         "",
                         storage_format_str(format),
-                        if access.contains(crate::StorageAccess::STORE) {
-                            ",write"
+                        if access.contains(crate::StorageAccess::LOAD | crate::StorageAccess::STORE)
+                        {
+                            ",read_write"
+                        } else if access.contains(crate::StorageAccess::LOAD) {
+                            ",read"
                         } else {
-                            ""
+                            ",write"
                         },
                     ),
                 };
@@ -710,11 +713,6 @@ impl<W: Write> Writer<W> {
                     if let Some(name) = expr_name {
                         write!(self.out, "{}", level)?;
                         self.start_named_expr(module, handle, func_ctx, &name)?;
-                        if info.ty.inner_with(&module.types).pointer_class().is_some()
-                            && !func_ctx.expressions[handle].should_deref()
-                        {
-                            write!(self.out, "&")?;
-                        }
                         self.write_expr(module, handle, func_ctx)?;
                         self.named_expressions.insert(handle, name);
                         writeln!(self.out, ";")?;
@@ -816,13 +814,6 @@ impl<W: Write> Writer<W> {
                 let func_name = &self.names[&NameKey::Function(function)];
                 write!(self.out, "{}(", func_name)?;
                 for (index, &argument) in arguments.iter().enumerate() {
-                    let info = &func_ctx.info[argument];
-                    // support passing down pointers as arguments
-                    if info.ty.inner_with(&module.types).pointer_class().is_some()
-                        && !func_ctx.expressions[argument].should_deref()
-                    {
-                        write!(self.out, "&")?;
-                    }
                     self.write_expr(module, argument, func_ctx)?;
                     // Only write a comma if isn't the last element
                     if index != arguments.len().saturating_sub(1) {

@@ -563,7 +563,7 @@ impl<'a> Lexer<'a> {
         match ident {
             "read" => Ok(crate::StorageAccess::LOAD),
             "write" => Ok(crate::StorageAccess::STORE),
-            "read_write" => Ok(crate::StorageAccess::all()),
+            "read_write" => Ok(crate::StorageAccess::LOAD | crate::StorageAccess::STORE),
             _ => Err(Error::UnknownAccess(span)),
         }
     }
@@ -574,11 +574,8 @@ impl<'a> Lexer<'a> {
         self.expect(Token::Paren('<'))?;
         let (ident, ident_span) = self.next_ident_with_span()?;
         let format = conv::map_storage_format(ident, ident_span)?;
-        let access = if self.skip(Token::Separator(',')) {
-            self.next_storage_access()?
-        } else {
-            crate::StorageAccess::LOAD
-        };
+        self.expect(Token::Separator(','))?;
+        let access = self.next_storage_access()?;
         self.expect(Token::Paren('>'))?;
         Ok((format, access))
     }

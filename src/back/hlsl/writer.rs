@@ -1060,7 +1060,10 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     let info = &func_ctx.info[handle];
                     let ptr_class = info.ty.inner_with(&module.types).pointer_class();
                     let expr_name = if ptr_class.is_some() {
-                        None // don't emit pointer expressions for now
+                        // HLSL can't save a pointer-valued expression in a variable,
+                        // but we shouldn't ever need to: they should never be named expressions,
+                        // and none of the expression types flagged by bake_ref_count can be pointer-valued.
+                        None
                     } else if let Some(name) = func_ctx.named_expressions.get(&handle) {
                         // Front end provides names for all variables at the start of writing.
                         // But we write them to step by step. We need to recache them
