@@ -260,15 +260,15 @@ impl<T> Arena<T> {
         self.data.clear()
     }
 
-    pub fn get_span(&self, handle: Handle<T>) -> &Span {
+    pub fn get_span(&self, handle: Handle<T>) -> Span {
         #[cfg(feature = "span")]
         {
-            return self.span_info.get(handle.index()).unwrap_or(&Span::Unknown);
+            return *self.span_info.get(handle.index()).unwrap_or(&Span::Unknown);
         }
         #[cfg(not(feature = "span"))]
         {
             let _ = handle;
-            &Span::Unknown
+            Span::Unknown
         }
     }
 }

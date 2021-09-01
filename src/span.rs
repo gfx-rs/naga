@@ -1,12 +1,12 @@
 use std::ops::Range;
 
-// A source code span, used for error reporting.
-#[derive(Clone, Debug, PartialEq)]
+/// A source code span, used for error reporting.
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Span {
-    // Span is unknown - no source information.
+    /// Span is unknown - no source information.
     Unknown,
-    // Byte range.
-    ByteRange(Range<usize>),
+    /// Byte range.
+    ByteRange { start: usize, end: usize },
 }
 
 impl Default for Span {
@@ -16,23 +16,39 @@ impl Default for Span {
 }
 
 impl Span {
-    pub fn subsume(&mut self, other: &Self) {
+    pub fn subsume(&mut self, other: Self) {
         match *self {
-            Self::Unknown => self.clone_from(other),
-            Self::ByteRange(ref mut self_range) => {
-                if let Self::ByteRange(ref other_range) = *other {
-                    self_range.start = self_range.start.min(other_range.start);
-                    self_range.end = self_range.end.max(other_range.end);
+            Self::Unknown => *self = other,
+            Self::ByteRange {
+                ref mut start,
+                ref mut end,
+            } => {
+                if let Self::ByteRange {
+                    start: other_start,
+                    end: other_end,
+                } = other
+                {
+                    *start = (*start).min(other_start);
+                    *end = (*end).max(other_end);
                 }
             }
         }
     }
 
-    pub fn total_span<'a, T: Iterator<Item = &'a Self>>(from: T) -> Self {
+    pub fn total_span<T: Iterator<Item = Self>>(from: T) -> Self {
         let mut span: Self = Default::default();
         for other in from {
             span.subsume(other);
         }
         span
+    }
+}
+
+impl From<Range<usize>> for Span {
+    fn from(range: Range<usize>) -> Self {
+        Span::ByteRange {
+            start: range.start,
+            end: range.end,
+        }
     }
 }
