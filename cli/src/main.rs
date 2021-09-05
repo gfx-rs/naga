@@ -235,7 +235,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             let options = naga::front::spv::Options {
                 adjust_coordinate_space: params.spv_adjust_coordinate_space,
                 strict_capabilities: false,
-                flow_graph_dump_prefix: params
+                block_ctx_dump_prefix: params
                     .spv_block_ctx_dump_prefix
                     .map(std::path::PathBuf::from),
             };

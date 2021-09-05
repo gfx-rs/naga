@@ -368,7 +368,7 @@ pub struct Options {
     pub adjust_coordinate_space: bool,
     /// Only allow shaders with the known set of capabilities.
     pub strict_capabilities: bool,
-    pub flow_graph_dump_prefix: Option<PathBuf>,
+    pub block_ctx_dump_prefix: Option<PathBuf>,
 }
 
 impl Default for Options {
@@ -376,7 +376,7 @@ impl Default for Options {
         Options {
             adjust_coordinate_space: true,
             strict_capabilities: false,
-            flow_graph_dump_prefix: None,
+            block_ctx_dump_prefix: None,
         }
     }
 }
