@@ -1442,6 +1442,9 @@ pub struct Function {
     /// Local variables defined and used in the function.
     pub local_variables: Arena<LocalVariable>,
     /// Expressions used inside this function.
+    ///
+    /// An `Expression` must occur before all other `Expression`s that use its
+    /// value.
     pub expressions: Arena<Expression>,
     /// Map of expressions that have associated variable names
     pub named_expressions: NamedExpressions,
@@ -1494,6 +1497,8 @@ pub struct Function {
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 pub struct EntryPoint {
     /// Name of this entry point, visible externally.
+    ///
+    /// Entry point names for a given `stage` must be distinct within a module.
     pub name: String,
     /// Shader stage.
     pub stage: ShaderStage,
@@ -1527,6 +1532,9 @@ pub struct Module {
     /// Storage for the global variables defined in this module.
     pub global_variables: Arena<GlobalVariable>,
     /// Storage for the functions defined in this module.
+    ///
+    /// Each function must appear in this arena strictly before all its callers.
+    /// Recursion is not supported.
     pub functions: Arena<Function>,
     /// Entry points.
     pub entry_points: Vec<EntryPoint>,
