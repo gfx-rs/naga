@@ -1,6 +1,6 @@
 use crate::{
     arena::{Arena, Handle},
-    front::spv::BlockContext,
+    front::spv::{BlockContext, BodyIndex},
 };
 
 use super::{Error, Instruction, LookupExpression, LookupHelper as _};
@@ -171,23 +171,52 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
             }
         }
 
+        // Emit `Store` statements to properly initialize all the local variables we
+        // created for `phi` expressions.
+        //
+        // Note that get_expr_handle also contributes slightly odd entries to this table,
+        // to get the spill.
         for phi in block_ctx.phis.iter() {
-            let pointer = fun.expressions.append(
+            // Get a pointer to the local variable for the phi's value.
+            let phi_pointer = fun.expressions.append(
                 crate::Expression::LocalVariable(phi.local),
                 crate::Span::Unknown,
             );
 
-            for &(expr, block) in phi.expressions.iter() {
-                let lexp = &self.lookup_expression[&expr];
-                let block_body_idx = block_ctx.info[&block];
+            // At the end of each of `phi`'s predecessor blocks, store the corresponding
+            // source value in the phi's local variable.
+            for &(source, predecessor) in phi.expressions.iter() {
+                let source_lexp = &self.lookup_expression[&source];
+                let predecessor_body_idx = block_ctx.body_for_label[&predecessor];
                 // If the expression is a global/argument it will have a 0 block
                 // id so we must use a default value instead of panicking
-                let lexp_body_idx = block_ctx.info.get(&lexp.block_id).copied().unwrap_or(0);
+                let source_body_idx = block_ctx
+                    .body_for_label
+                    .get(&source_lexp.block_id)
+                    .copied()
+                    .unwrap_or(0);
 
-                let value = if super::is_parent(block_body_idx, lexp_body_idx, &block_ctx) {
-                    lexp.handle
+                // If the Naga `Expression` generated for `source` is in scope, then we
+                // can simply store that in the phi's local variable.
+                //
+                // Otherwise, spill the source value to a local variable in the block that
+                // defines it. (We know this store dominates the predecessor; otherwise,
+                // the phi wouldn't have been able to refer to that source expression in
+                // the first place.) Then, the predecessor block can count on finding the
+                // source's value in that local variable.
+                let value = if super::is_parent(predecessor_body_idx, source_body_idx, &block_ctx) {
+                    source_lexp.handle
                 } else {
-                    let ty = self.lookup_type[&lexp.type_id].handle;
+                    // The source SPIR-V expression is not defined in the phi's
+                    // predecessor block, nor is it a globally available expression. So it
+                    // must be defined off in some other block that merely dominates the
+                    // predecessor. This means that the corresponding Naga `Expression`
+                    // may not be in scope in the predecessor block.
+                    //
+                    // In the block that defines `source`, spill it to a fresh local
+                    // variable, to ensure we can still use it at the end of the
+                    // predecessor.
+                    let ty = self.lookup_type[&source_lexp.type_id].handle;
                     let local = fun.local_variables.append(
                         crate::LocalVariable {
                             name: None,
@@ -202,6 +231,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                         crate::Span::Unknown,
                     );
 
+                    // Get the spilled value of the source expression.
                     let start = fun.expressions.len();
                     let expr = fun
                         .expressions
@@ -210,23 +240,34 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
 
                     block_ctx
                         .blocks
-                        .get_mut(&block)
+                        .get_mut(&predecessor)
                         .unwrap()
                         .push(crate::Statement::Emit(range), crate::Span::Unknown);
 
-                    block_ctx.blocks.get_mut(&lexp.block_id).unwrap().push(
-                        crate::Statement::Store {
-                            pointer,
-                            value: lexp.handle,
-                        },
-                        crate::Span::Unknown,
-                    );
+                    // At the end of the block that defines it, spill the source
+                    // expression's value.
+                    block_ctx
+                        .blocks
+                        .get_mut(&source_lexp.block_id)
+                        .unwrap()
+                        .push(
+                            crate::Statement::Store {
+                                pointer,
+                                value: source_lexp.handle,
+                            },
+                            crate::Span::Unknown,
+                        );
 
                     expr
                 };
 
-                block_ctx.blocks.get_mut(&block).unwrap().push(
-                    crate::Statement::Store { pointer, value },
+                // At the end of the phi predecessor block, store the source
+                // value in the phi's value.
+                block_ctx.blocks.get_mut(&predecessor).unwrap().push(
+                    crate::Statement::Store {
+                        pointer: phi_pointer,
+                        value,
+                    },
                     crate::Span::Unknown,
                 )
             }
@@ -477,10 +518,11 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
     }
 }
 
+/// Produce a Naga `Statement` tree from a `BlockContext`'s `Body` tree.
 fn lower(
     blocks: &mut crate::FastHashMap<spirv::Word, crate::Block>,
     bodies: &[super::Body],
-    body_idx: usize,
+    body_idx: BodyIndex,
 ) -> crate::Block {
     let mut block = crate::Block::new();
 

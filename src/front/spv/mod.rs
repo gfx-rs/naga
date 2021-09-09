@@ -298,11 +298,23 @@ struct LookupVariable {
     type_id: spirv::Word,
 }
 
+/// Information about SPIR-V result ids, stored in `Parser::lookup_expression`.
 #[derive(Clone, Debug)]
 struct LookupExpression {
+    /// The `Expression` constructed for this result.
+    ///
+    /// Note that, while a SPIR-V result id can be used in any block dominated
+    /// by its definition, a Naga `Expression` is only in scope for the rest of
+    /// its subtree. `Parser::get_expr_handle` takes care of
     handle: Handle<crate::Expression>,
+
+    /// The SPIR-V type of this result.
     type_id: spirv::Word,
-    /// The block id this expression belongs to
+
+    /// The label id of the block that defines this expression.
+    ///
+    /// This is zero for globals, constants, and function parameters, since they
+    /// originate outside any function's block.
     block_id: spirv::Word,
 }
 
@@ -355,28 +367,44 @@ impl Default for Options {
     }
 }
 
-/// Part of the `data` in a [`Body`](Body)
+/// An index into the `BlockContext::bodies` table.
+type BodyIndex = usize;
+
+/// An intermediate representation of a Naga [`Statement`].
+///
+/// `Body` and `BodyFragment` values form a tree: the `BodyIndex` fields of the
+/// variants are indices of the child `Body` values in [`BlockContext::bodies`].
+/// The `lower` function assembles the final `Statement` tree from this `Body`
+/// tree. See [`BlockContext`] for details.
+///
+/// [`Statement`]: crate::Statement
 #[derive(Debug)]
 enum BodyFragment {
     BlockId(spirv::Word),
     Conditional {
         condition: Handle<crate::Expression>,
-        accept: usize,
-        reject: usize,
+        accept: BodyIndex,
+        reject: BodyIndex,
     },
     Loop {
-        body: usize,
-        continuing: usize,
+        body: BodyIndex,
+        continuing: BodyIndex,
     },
     Switch {
         selector: Handle<crate::Expression>,
-        cases: Vec<(i32, usize)>,
-        default: usize,
+        cases: Vec<(i32, BodyIndex)>,
+        default: BodyIndex,
     },
     Break,
     Continue,
 }
 
+/// An intermediate representation of a Naga [`Block`].
+///
+/// This will be assembled into a `Block` once we've added spills for phi nodes
+/// and out-of-scope expressions. See [`BlockContext`] for details.
+///
+/// [`Block`]: crate::Block
 #[derive(Debug)]
 struct Body {
     /// The index of the direct parent of this body
@@ -400,17 +428,58 @@ enum MergeBlockInformation {
     SwitchMerge,
 }
 
+/// Fragments of Naga IR, to be assembled into `Statements` once data flow is
+/// resolved.
+///
+/// We can't build a Naga `Statement` tree directly from SPIR-V blocks for two
+/// main reasons:
+///
+/// - A SPIR-V expression can be used in any SPIR-V block dominated by its
+///   definition, whereas Naga expressions are scoped to the rest of their
+///   subtree. This means that discovering an expression use later in the
+///   function retroactively requires us to have spilled that expression into a
+///   local variable back before we left its scope.
+///
+/// - We translate SPIR-V OpPhi expressions as Naga local variables in which we
+///   store the appropriate value before jumping to the OpPhi's block.
+///
+/// Both cases require us to go back and amend previously generated Naga IR
+/// based on things we discover later. But modifying old blocks in arbitrary
+/// spots in a `Statement` tree is awkward.
+///
+/// Instead, as we iterate through the function's body, we accumulate
+/// control-flow-free fragments of Naga IR in the [`blocks`] table, while
+/// building a skeleton of the Naga `Statement` tree in [`bodies`]. We note any
+/// spills and temporaries we must introduce in [`phis`].
+///
+/// Finally, once we've processed the entire function, we add temporaries and
+/// spills to the fragmentary `Blocks` as directed by `phis`, and assemble them
+/// into the final Naga `Statement` tree as directed by `bodies`.
+///
+/// [`blocks`]: BlockContext::blocks
+/// [`bodies`]: BlockContext::bodies
+/// [`phis`]: BlockContext::phis
+/// [`lower`]: function::lower
 #[derive(Default, Debug)]
 struct BlockContext {
-    /// Phi nodes encountered when parsing the function
+    /// Phi nodes encountered when parsing the function, used to generate spills
+    /// to local variables.
     phis: Vec<PhiExpression>,
-    /// Map from block id to IR block
+
+    /// Fragments of control-flow-free Naga IR.
+    ///
+    /// These will be stitched together into a proper `Statement` tree according
+    /// to `bodies`, once parsing is complete.
     blocks: FastHashMap<spirv::Word, crate::Block>,
-    /// Map from block id to body index
-    info: FastHashMap<spirv::Word, usize>,
-    /// Map from merge/continue blocks into information about them
+
+    /// Map from block label ids to the index of the corresponding `Body` in
+    /// `bodies`.
+    body_for_label: FastHashMap<spirv::Word, BodyIndex>,
+
+    /// SPIR-V metadata about merge/continue blocks.
     mergers: FastHashMap<spirv::Word, MergeBlockInformation>,
-    /// Intermediate representation for a body made from spirv blocks
+
+    /// A table of `Body` values, each representing a block in the final IR.
     bodies: Vec<Body>,
 }
 
@@ -612,8 +681,20 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         Ok(())
     }
 
-    /// Gets an expression handle potentially performing a load/store to perform
-    /// a scope transfer.
+    /// Return the Naga `Expression` for a given SPIR-V result `id`.
+    ///
+    /// `lookup` must be the `LookupExpression` for `id`.
+    ///
+    /// SPIR-V result ids can be used by any block dominated by the id's
+    /// definition, but Naga `Expressions` are only in scope for the remainder
+    /// of their `Statement` subtree. This means that the `Expression` generated
+    /// for `id` may no longer be in scope. In such cases, this function takes
+    /// care of spilling the value of `id` to a `LocalVariable` which can then
+    /// be used anywhere. The SPIR-V domination rule ensures that the
+    /// `LocalVariable` has been initialized before it is used.
+    ///
+    /// The `body_idx` argument should be the index of the `Body` that hopes to
+    /// use `id`'s `Expression`.
     #[allow(clippy::too_many_arguments)]
     fn get_expr_handle(
         &self,
@@ -624,9 +705,14 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         block: &mut crate::Block,
         expressions: &mut Arena<crate::Expression>,
         local_arena: &mut Arena<crate::LocalVariable>,
-        body_idx: usize,
+        body_idx: BodyIndex,
     ) -> Handle<crate::Expression> {
-        let expr_body_idx = block_ctx.info.get(&lookup.block_id).copied().unwrap_or(0);
+        // What `Body` was `id` defined in?
+        let expr_body_idx = block_ctx
+            .body_for_label
+            .get(&lookup.block_id)
+            .copied()
+            .unwrap_or(0);
 
         // Don't need to do a load/store if the expression is in the main body
         // or if the expression is in the same body as where the query was
@@ -658,9 +744,14 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             let expr =
                 expressions.append(crate::Expression::Load { pointer }, crate::Span::Unknown);
 
-            // Treat the expression as a phi expression this will result in the
-            // store being added at the end of the block where the expression is
-            // defined while processing the other phi expressions.
+            // Add a slightly odd entry to the phi table, so that while `id`'s
+            // `Expression` is still in scope, the usual phi processing will
+            // spill its value to `local`, where we can find it later.
+            //
+            // This pretends that the block in which `id` is defined is the
+            // predecessor of some other block with a phi in it that cites id as
+            // one of its sources, and uses `local` as its variable. There is no
+            // such phi, but nobody needs to know that.
             block_ctx.phis.push(PhiExpression {
                 local,
                 expressions: vec![(id, lookup.block_id)],
@@ -1029,6 +1120,11 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         ))
     }
 
+    /// Add the next SPIR-V block's contents to `block_ctx`.
+    ///
+    /// Except for the function's entry block, `block_id` should be the label of
+    /// a block we've seen mentioned before, with an entry in
+    /// `block_ctx.body_for_label` to tell us which `Body` it contributes to.
     #[allow(clippy::too_many_arguments)]
     fn next_block(
         &mut self,
@@ -1043,20 +1139,26 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         parmeter_sampling: &mut [image::SamplingFlags],
         block_ctx: &mut BlockContext,
     ) -> Result<(), Error> {
-        // Helper function for dealing with merges
-        fn merger(body: &mut Body, info: &MergeBlockInformation) {
-            body.data.push(match *info {
+        // Extend `body` with the correct form for a branch to `target`.
+        fn merger(body: &mut Body, target: &MergeBlockInformation) {
+            body.data.push(match *target {
                 MergeBlockInformation::LoopContinue => BodyFragment::Continue,
                 MergeBlockInformation::LoopMerge | MergeBlockInformation::SwitchMerge => {
                     BodyFragment::Break
                 }
+
+                // Finishing a selection merge means just falling off the end of
+                // the `accept` or `reject` block of the `If` statement.
                 MergeBlockInformation::SelectionMerge => return,
             })
         }
 
         let mut emitter = super::Emitter::default();
         emitter.start(expressions);
-        let mut body_idx = *block_ctx.info.entry(block_id).or_default();
+
+        // Find the `Body` that this block belongs to. Index zero is the
+        // function's root `Body`, corresponding to `Function::body`.
+        let mut body_idx = *block_ctx.body_for_label.entry(block_id).or_default();
         let mut block = crate::Block::new();
         let mut merge_block = None;
 
@@ -2519,6 +2621,8 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     inst.expect(2)?;
                     let target_id = self.next()?;
 
+                    // If this is a branch to a merge or continue block,
+                    // then that ends the current body.
                     if let Some(info) = block_ctx.mergers.get(&target_id) {
                         block.extend(emitter.finish(expressions));
                         block_ctx.blocks.insert(block_id, block);
@@ -2530,7 +2634,13 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         return Ok(());
                     }
 
-                    block_ctx.info.entry(target_id).or_insert(body_idx);
+                    // Since the target of the branch has no merge information,
+                    // this must be the only branch to that block. This means
+                    // we can treat it as an extension of the current `Body`.
+                    block_ctx
+                        .body_for_label
+                        .entry(target_id)
+                        .or_insert(body_idx);
 
                     break None;
                 }
@@ -2546,19 +2656,29 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     let true_id = self.next()?;
                     let false_id = self.next()?;
 
+                    // Start a body block for the `accept` branch.
                     let accept = block_ctx.bodies.len();
                     let mut accept_block = Body {
                         parent: body_idx,
                         data: Vec::new(),
                     };
 
+                    // If the `OpBranchConditional`target is somebody else's
+                    // merge or continue block, then put a `Break` or `Continue`
+                    // statement in this new body block.
                     if let Some(info) = block_ctx.mergers.get(&true_id) {
                         merger(&mut accept_block, info)
                     }
 
                     block_ctx.bodies.push(accept_block);
-                    block_ctx.info.entry(true_id).or_insert(accept);
 
+                    // Note the body index for the block we're branching to. If
+                    // there's already an entry, then it must be someone else's
+                    // merge or continue block, and our block is just a `Break`
+                    // or `Continue`, so don't disturb it.
+                    block_ctx.body_for_label.entry(true_id).or_insert(accept);
+
+                    // Handle the `reject` branch just like the `accept` block.
                     let reject = block_ctx.bodies.len();
                     let mut reject_block = Body {
                         parent: body_idx,
@@ -2570,7 +2690,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     }
 
                     block_ctx.bodies.push(reject_block);
-                    block_ctx.info.entry(false_id).or_insert(reject);
+                    block_ctx.body_for_label.entry(false_id).or_insert(reject);
 
                     block.extend(emitter.finish(expressions));
                     block_ctx.blocks.insert(block_id, block);
@@ -2602,7 +2722,10 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         parent: body_idx,
                         data: Vec::new(),
                     });
-                    block_ctx.info.entry(default_id).or_insert(default);
+                    block_ctx
+                        .body_for_label
+                        .entry(default_id)
+                        .or_insert(default);
 
                     let selector_lexp = &self.lookup_expression[&selector];
                     let selector_lty = self.lookup_type.lookup(selector_lexp.type_id)?;
@@ -2645,7 +2768,10 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         }
 
                         block_ctx.bodies.push(body);
-                        block_ctx.info.entry(target).or_insert(case_body_idx);
+                        block_ctx
+                            .body_for_label
+                            .entry(target)
+                            .or_insert(case_body_idx);
 
                         cases.push((literal as i32, case_body_idx));
                     }
@@ -2671,7 +2797,15 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     // TODO: Selection Control Mask
                     let _selection_control = self.next()?;
 
-                    block_ctx.info.entry(merge_block_id).or_insert(body_idx);
+                    // Indicate that the merge block is a continuation of the
+                    // current `Body`.
+                    block_ctx
+                        .body_for_label
+                        .entry(merge_block_id)
+                        .or_insert(body_idx);
+
+                    // Let subsequent branches to the merge block know that
+                    // they've reached the end of the selection construct.
                     block_ctx
                         .mergers
                         .insert(merge_block_id, MergeBlockInformation::SelectionMerge);
@@ -2688,7 +2822,14 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         self.next()?;
                     }
 
-                    block_ctx.info.entry(merge_block_id).or_insert(body_idx);
+                    // Indicate that the merge block is a continuation of the
+                    // current `Body`.
+                    block_ctx
+                        .body_for_label
+                        .entry(merge_block_id)
+                        .or_insert(body_idx);
+                    // Let subsequent branches to the merge block know that
+                    // they're `Break` statements.
                     block_ctx
                         .mergers
                         .insert(merge_block_id, MergeBlockInformation::LoopMerge);
@@ -2705,13 +2846,18 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         parent: loop_body_idx,
                         data: Vec::new(),
                     });
-                    block_ctx.info.entry(continuing).or_insert(continue_idx);
+                    block_ctx
+                        .body_for_label
+                        .entry(continuing)
+                        .or_insert(continue_idx);
+                    // Let subsequent branches to the continue block know that
+                    // they're `Continue` statements.
                     block_ctx
                         .mergers
                         .insert(continuing, MergeBlockInformation::LoopContinue);
 
                     // The loop header always belongs to the loop body
-                    block_ctx.info.insert(block_id, loop_body_idx);
+                    block_ctx.body_for_label.insert(block_id, loop_body_idx);
 
                     let parent_body = &mut block_ctx.bodies[body_idx];
                     parent_body.data.push(BodyFragment::Loop {
@@ -2847,6 +2993,9 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         if let Some(stmt) = terminator {
             block.push(stmt, crate::Span::Unknown);
         }
+
+        // Save this block fragment in `block_ctx.blocks`, and mark it to be
+        // incorporated into the current body at `Statement` assembly time.
         block_ctx.blocks.insert(block_id, block);
         let body = &mut block_ctx.bodies[body_idx];
         body.data.push(BodyFragment::BlockId(block_id));
