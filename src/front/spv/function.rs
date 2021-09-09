@@ -13,44 +13,6 @@ pub struct MergeInstruction {
     pub merge_block_id: BlockId,
     pub continue_block_id: Option<BlockId>,
 }
-/// Terminator instruction of a SPIR-V's block.
-#[derive(Clone, Debug)]
-#[allow(dead_code)]
-pub enum Terminator {
-    ///
-    Return {
-        value: Option<Handle<crate::Expression>>,
-    },
-    ///
-    Branch { target_id: BlockId },
-    ///
-    BranchConditional {
-        condition: Handle<crate::Expression>,
-        true_id: BlockId,
-        false_id: BlockId,
-    },
-    ///
-    /// switch(SELECTOR) {
-    ///  case TARGET_LITERAL#: {
-    ///    TARGET_BLOCK#
-    ///  }
-    ///  default: {
-    ///    DEFAULT
-    ///  }
-    /// }
-    Switch {
-        ///
-        selector: Handle<crate::Expression>,
-        /// Default block of the switch case.
-        default_id: BlockId,
-        /// Tuples of (literal, target block)
-        targets: Vec<(i32, BlockId)>,
-    },
-    /// Fragment shader discard
-    Kill,
-    ///
-    Unreachable,
-}
 
 impl<I: Iterator<Item = u32>> super::Parser<I> {
     // Registers a function call. It will generate a dummy handle to call, which
@@ -512,7 +474,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
 }
 
 fn lower(
-    blocks: &mut crate::FastHashMap<u32, crate::Block>,
+    blocks: &mut crate::FastHashMap<spirv::Word, crate::Block>,
     bodies: &[Vec<super::Body>],
     body_idx: usize,
 ) -> crate::Block {

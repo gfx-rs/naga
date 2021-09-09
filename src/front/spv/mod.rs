@@ -24,8 +24,6 @@ and we generate a parallel expression that loads the value, but transposed.
 This value then gets used instead of `OpLoad` result later on.
 
 !*/
-#![allow(dead_code)]
-
 mod convert;
 mod error;
 mod function;
@@ -145,30 +143,6 @@ impl<T> LookupHelper for FastHashMap<spirv::Word, T> {
     type Target = T;
     fn lookup(&self, key: spirv::Word) -> Result<&T, Error> {
         self.get(&key).ok_or(Error::InvalidId(key))
-    }
-}
-
-fn check_sample_coordinates(
-    ty: &crate::Type,
-    expect_kind: crate::ScalarKind,
-    dim: crate::ImageDimension,
-    is_array: bool,
-) -> bool {
-    let base_count = match dim {
-        crate::ImageDimension::D1 => 1,
-        crate::ImageDimension::D2 => 2,
-        crate::ImageDimension::D3 | crate::ImageDimension::Cube => 3,
-    };
-    let extra_count = if is_array { 1 } else { 0 };
-    let count = base_count + extra_count;
-    match ty.inner {
-        crate::TypeInner::Scalar { kind, width: _ } => count == 1 && kind == expect_kind,
-        crate::TypeInner::Vector {
-            size,
-            kind,
-            width: _,
-        } => size as u8 == count && kind == expect_kind,
-        _ => false,
     }
 }
 
