@@ -381,7 +381,7 @@ type BodyIndex = usize;
 #[derive(Debug)]
 enum BodyFragment {
     BlockId(spirv::Word),
-    Conditional {
+    If {
         condition: Handle<crate::Expression>,
         accept: BodyIndex,
         reject: BodyIndex,
@@ -410,6 +410,16 @@ struct Body {
     /// The index of the direct parent of this body
     parent: usize,
     data: Vec<BodyFragment>,
+}
+
+impl Body {
+    /// Creates a new empty `Body` with the specified `parent`
+    pub fn with_parent(parent: usize) -> Self {
+        Body {
+            parent,
+            data: Vec::new(),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -1160,7 +1170,12 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         // function's root `Body`, corresponding to `Function::body`.
         let mut body_idx = *block_ctx.body_for_label.entry(block_id).or_default();
         let mut block = crate::Block::new();
-        let mut merge_block = None;
+        // Stores the merge block as defined by a `OpSelectionMerge` otherwise is `None`
+        //
+        // This is used in `OpSwitch` to promote the `MergeBlockInformation` from
+        // `SelectionMerge` to `SwitchMerge` to allow `Break`s this isn't desirable for
+        // `LoopMerge`s because otherwise `Continue`s wouldn't be allowed
+        let mut selection_merge_block = None;
 
         macro_rules! get_expr_handle {
             ($id:expr, $lexp:expr) => {
@@ -2637,6 +2652,12 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     // Since the target of the branch has no merge information,
                     // this must be the only branch to that block. This means
                     // we can treat it as an extension of the current `Body`.
+                    //
+                    // NOTE: it's possible that another branch was already made to this block
+                    // setting the body index in which case it SHOULD NOT be overriden.
+                    // For example a switch with falltrough, the OpSwitch will set the body to
+                    // the respective case and the case may branch to another case in which case
+                    // the body index shouldn't be changed
                     block_ctx
                         .body_for_label
                         .entry(target_id)
@@ -2658,39 +2679,31 @@ impl<I: Iterator<Item = u32>> Parser<I> {
 
                     // Start a body block for the `accept` branch.
                     let accept = block_ctx.bodies.len();
-                    let mut accept_block = Body {
-                        parent: body_idx,
-                        data: Vec::new(),
-                    };
+                    let mut accept_block = Body::with_parent(body_idx);
 
                     // If the `OpBranchConditional`target is somebody else's
                     // merge or continue block, then put a `Break` or `Continue`
                     // statement in this new body block.
                     if let Some(info) = block_ctx.mergers.get(&true_id) {
                         merger(&mut accept_block, info)
+                    } else {
+                        // Note the body index for the block we're branching to.
+                        debug_assert!(block_ctx.body_for_label.insert(true_id, accept).is_none());
                     }
 
                     block_ctx.bodies.push(accept_block);
 
-                    // Note the body index for the block we're branching to. If
-                    // there's already an entry, then it must be someone else's
-                    // merge or continue block, and our block is just a `Break`
-                    // or `Continue`, so don't disturb it.
-                    block_ctx.body_for_label.entry(true_id).or_insert(accept);
-
                     // Handle the `reject` branch just like the `accept` block.
                     let reject = block_ctx.bodies.len();
-                    let mut reject_block = Body {
-                        parent: body_idx,
-                        data: Vec::new(),
-                    };
+                    let mut reject_block = Body::with_parent(body_idx);
 
                     if let Some(info) = block_ctx.mergers.get(&false_id) {
                         merger(&mut reject_block, info)
+                    } else {
+                        debug_assert!(block_ctx.body_for_label.insert(false_id, reject).is_none());
                     }
 
                     block_ctx.bodies.push(reject_block);
-                    block_ctx.body_for_label.entry(false_id).or_insert(reject);
 
                     block.extend(emitter.finish(expressions));
                     block_ctx.blocks.insert(block_id, block);
@@ -2698,7 +2711,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     // Make sure the vector has space for at least two more allocations
                     body.data.reserve(2);
                     body.data.push(BodyFragment::BlockId(block_id));
-                    body.data.push(BodyFragment::Conditional {
+                    body.data.push(BodyFragment::If {
                         condition,
                         accept,
                         reject,
@@ -2711,17 +2724,16 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     let selector = self.next()?;
                     let default_id = self.next()?;
 
-                    if let Some(merge) = merge_block {
+                    // If the previous instruction was a `OpSelectionMerge` then we must
+                    // promote the `MergeBlockInformation` to a `SwitchMerge`
+                    if let Some(merge) = selection_merge_block {
                         block_ctx
                             .mergers
                             .insert(merge, MergeBlockInformation::SwitchMerge);
                     }
 
                     let default = block_ctx.bodies.len();
-                    block_ctx.bodies.push(Body {
-                        parent: body_idx,
-                        data: Vec::new(),
-                    });
+                    block_ctx.bodies.push(Body::with_parent(body_idx));
                     block_ctx
                         .body_for_label
                         .entry(default_id)
@@ -2758,10 +2770,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         let target = self.next()?;
 
                         let case_body_idx = block_ctx.bodies.len();
-                        let mut body = Body {
-                            parent: body_idx,
-                            data: Vec::new(),
-                        };
+                        let mut body = Body::with_parent(body_idx);
 
                         if let Some(info) = block_ctx.mergers.get(&target) {
                             merger(&mut body, info);
@@ -2810,7 +2819,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         .mergers
                         .insert(merge_block_id, MergeBlockInformation::SelectionMerge);
 
-                    merge_block = Some(merge_block_id);
+                    selection_merge_block = Some(merge_block_id);
                 }
                 Op::LoopMerge => {
                     inst.expect_at_least(4)?;
@@ -2835,17 +2844,11 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         .insert(merge_block_id, MergeBlockInformation::LoopMerge);
 
                     let loop_body_idx = block_ctx.bodies.len();
-                    block_ctx.bodies.push(Body {
-                        parent: body_idx,
-                        data: Vec::new(),
-                    });
+                    block_ctx.bodies.push(Body::with_parent(body_idx));
 
                     let continue_idx = block_ctx.bodies.len();
-                    block_ctx.bodies.push(Body {
-                        // The continue block inherits the scope of the loop body
-                        parent: loop_body_idx,
-                        data: Vec::new(),
-                    });
+                    // The continue block inherits the scope of the loop body
+                    block_ctx.bodies.push(Body::with_parent(loop_body_idx));
                     block_ctx
                         .body_for_label
                         .entry(continuing)

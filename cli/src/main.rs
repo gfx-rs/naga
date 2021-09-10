@@ -6,7 +6,7 @@ use std::{error::Error, fmt, path::Path, str::FromStr};
 /// Translate shaders to different formats
 #[derive(argh::FromArgs, Debug, Clone)]
 struct Args {
-    /// validate the shader during translation
+    /// bitmask of the ValidationFlags to be used, use 0 to disable validation
     #[argh(option)]
     validate: Option<u8>,
 

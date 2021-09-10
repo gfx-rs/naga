@@ -119,12 +119,8 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
             vec![super::image::SamplingFlags::empty(); fun.arguments.len()];
 
         let mut block_ctx = BlockContext::default();
-        // Push the main body
-        block_ctx.bodies.push(super::Body {
-            // The main body is the parent of itself
-            parent: 0,
-            data: Vec::new(),
-        });
+        // Insert the main body whose parent is also himself
+        block_ctx.bodies.push(super::Body::with_parent(0));
 
         // Scan the blocks and add them as nodes
         loop {
@@ -273,7 +269,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
             }
         }
 
-        fun.body = lower(&mut block_ctx.blocks, &block_ctx.bodies, 0);
+        fun.body = block_ctx.lower();
 
         // done
         let fun_handle = module.functions.append(fun, self.span_from_with_op(start));
@@ -518,81 +514,85 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
     }
 }
 
-/// Produce a Naga `Statement` tree from a `BlockContext`'s `Body` tree.
-fn lower(
-    blocks: &mut crate::FastHashMap<spirv::Word, crate::Block>,
-    bodies: &[super::Body],
-    body_idx: BodyIndex,
-) -> crate::Block {
-    let mut block = crate::Block::new();
+impl BlockContext {
+    /// Consumes the `BlockContext` producing a Ir [`Block`](crate::Block)
+    fn lower(mut self) -> crate::Block {
+        fn lower_impl(
+            blocks: &mut crate::FastHashMap<spirv::Word, crate::Block>,
+            bodies: &[super::Body],
+            body_idx: BodyIndex,
+        ) -> crate::Block {
+            let mut block = crate::Block::new();
 
-    for item in bodies[body_idx].data.iter() {
-        match *item {
-            super::BodyFragment::BlockId(id) => {
-                if let Some(b) = blocks.get_mut(&id) {
-                    block.append(b)
-                }
-            }
-            super::BodyFragment::Conditional {
-                condition,
-                accept,
-                reject,
-            } => {
-                let accept = lower(blocks, bodies, accept);
-                let reject = lower(blocks, bodies, reject);
-
-                block.push(
-                    crate::Statement::If {
+            for item in bodies[body_idx].data.iter() {
+                match *item {
+                    super::BodyFragment::BlockId(id) => block.append(blocks.get_mut(&id).unwrap()),
+                    super::BodyFragment::If {
                         condition,
                         accept,
                         reject,
-                    },
-                    crate::Span::Unknown,
-                )
-            }
-            super::BodyFragment::Loop { body, continuing } => {
-                let body = lower(blocks, bodies, body);
-                let continuing = lower(blocks, bodies, continuing);
+                    } => {
+                        let accept = lower_impl(blocks, bodies, accept);
+                        let reject = lower_impl(blocks, bodies, reject);
 
-                block.push(
-                    crate::Statement::Loop { body, continuing },
-                    crate::Span::Unknown,
-                )
-            }
-            super::BodyFragment::Switch {
-                selector,
-                ref cases,
-                default,
-            } => {
-                let default = lower(blocks, bodies, default);
+                        block.push(
+                            crate::Statement::If {
+                                condition,
+                                accept,
+                                reject,
+                            },
+                            crate::Span::Unknown,
+                        )
+                    }
+                    super::BodyFragment::Loop { body, continuing } => {
+                        let body = lower_impl(blocks, bodies, body);
+                        let continuing = lower_impl(blocks, bodies, continuing);
 
-                block.push(
-                    crate::Statement::Switch {
+                        block.push(
+                            crate::Statement::Loop { body, continuing },
+                            crate::Span::Unknown,
+                        )
+                    }
+                    super::BodyFragment::Switch {
                         selector,
-                        cases: cases
-                            .iter()
-                            .map(|&(value, body_idx)| {
-                                let body = lower(blocks, bodies, body_idx);
-
-                                crate::SwitchCase {
-                                    value,
-                                    body,
-                                    // TODO
-                                    fall_through: true,
-                                }
-                            })
-                            .collect(),
+                        ref cases,
                         default,
-                    },
-                    crate::Span::Unknown,
-                )
-            }
-            super::BodyFragment::Break => block.push(crate::Statement::Break, crate::Span::Unknown),
-            super::BodyFragment::Continue => {
-                block.push(crate::Statement::Continue, crate::Span::Unknown)
-            }
-        }
-    }
+                    } => {
+                        let default = lower_impl(blocks, bodies, default);
 
-    block
+                        block.push(
+                            crate::Statement::Switch {
+                                selector,
+                                cases: cases
+                                    .iter()
+                                    .map(|&(value, body_idx)| {
+                                        let body = lower_impl(blocks, bodies, body_idx);
+
+                                        crate::SwitchCase {
+                                            value,
+                                            body,
+                                            // TODO
+                                            fall_through: true,
+                                        }
+                                    })
+                                    .collect(),
+                                default,
+                            },
+                            crate::Span::Unknown,
+                        )
+                    }
+                    super::BodyFragment::Break => {
+                        block.push(crate::Statement::Break, crate::Span::Unknown)
+                    }
+                    super::BodyFragment::Continue => {
+                        block.push(crate::Statement::Continue, crate::Span::Unknown)
+                    }
+                }
+            }
+
+            block
+        }
+
+        lower_impl(&mut self.blocks, &self.bodies, 0)
+    }
 }
