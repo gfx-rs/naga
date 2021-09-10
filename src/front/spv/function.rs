@@ -120,7 +120,11 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
 
         let mut block_ctx = BlockContext::default();
         // Push the main body
-        block_ctx.bodies.push(Vec::new());
+        block_ctx.bodies.push(super::Body {
+            // The main body is the parent of itself
+            parent: 0,
+            data: Vec::new(),
+        });
 
         // Scan the blocks and add them as nodes
         loop {
@@ -180,7 +184,9 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                 // id so we must use a default value instead of panicking
                 let lexp_body_idx = block_ctx.info.get(&lexp.block_id).copied().unwrap_or(0);
 
-                let value = if block_body_idx != lexp_body_idx && lexp_body_idx != 0 {
+                let value = if super::is_parent(block_body_idx, lexp_body_idx, &block_ctx) {
+                    lexp.handle
+                } else {
                     let ty = self.lookup_type[&lexp.type_id].handle;
                     let local = fun.local_variables.append(
                         crate::LocalVariable {
@@ -217,8 +223,6 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                     );
 
                     expr
-                } else {
-                    lexp.handle
                 };
 
                 block_ctx.blocks.get_mut(&block).unwrap().push(
@@ -475,19 +479,19 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
 
 fn lower(
     blocks: &mut crate::FastHashMap<spirv::Word, crate::Block>,
-    bodies: &[Vec<super::Body>],
+    bodies: &[super::Body],
     body_idx: usize,
 ) -> crate::Block {
     let mut block = crate::Block::new();
 
-    for item in bodies[body_idx].iter() {
+    for item in bodies[body_idx].data.iter() {
         match *item {
-            super::Body::BlockId(id) => {
+            super::BodyFragment::BlockId(id) => {
                 if let Some(b) = blocks.get_mut(&id) {
                     block.append(b)
                 }
             }
-            super::Body::Conditional {
+            super::BodyFragment::Conditional {
                 condition,
                 accept,
                 reject,
@@ -504,7 +508,7 @@ fn lower(
                     crate::Span::Unknown,
                 )
             }
-            super::Body::Loop { body, continuing } => {
+            super::BodyFragment::Loop { body, continuing } => {
                 let body = lower(blocks, bodies, body);
                 let continuing = lower(blocks, bodies, continuing);
 
@@ -513,7 +517,7 @@ fn lower(
                     crate::Span::Unknown,
                 )
             }
-            super::Body::Switch {
+            super::BodyFragment::Switch {
                 selector,
                 ref cases,
                 default,
@@ -541,8 +545,10 @@ fn lower(
                     crate::Span::Unknown,
                 )
             }
-            super::Body::Break => block.push(crate::Statement::Break, crate::Span::Unknown),
-            super::Body::Continue => block.push(crate::Statement::Continue, crate::Span::Unknown),
+            super::BodyFragment::Break => block.push(crate::Statement::Break, crate::Span::Unknown),
+            super::BodyFragment::Continue => {
+                block.push(crate::Statement::Continue, crate::Span::Unknown)
+            }
         }
     }
 

@@ -355,8 +355,9 @@ impl Default for Options {
     }
 }
 
+/// Part of the `data` in a [`Body`](Body)
 #[derive(Debug)]
-enum Body {
+enum BodyFragment {
     BlockId(spirv::Word),
     Conditional {
         condition: Handle<crate::Expression>,
@@ -374,6 +375,13 @@ enum Body {
     },
     Break,
     Continue,
+}
+
+#[derive(Debug)]
+struct Body {
+    /// The index of the direct parent of this body
+    parent: usize,
+    data: Vec<BodyFragment>,
 }
 
 #[derive(Debug)]
@@ -403,7 +411,7 @@ struct BlockContext {
     /// Map from merge/continue blocks into information about them
     mergers: FastHashMap<spirv::Word, MergeBlockInformation>,
     /// Intermediate representation for a body made from spirv blocks
-    bodies: Vec<Vec<Body>>,
+    bodies: Vec<Body>,
 }
 
 pub struct Parser<I> {
@@ -626,7 +634,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         // or conditional occurs but in those cases we know that the new body
         // will be a subscope of the body that was passed so we can still reuse
         // the handle and not issue a load/store.
-        if expr_body_idx == 0 || expr_body_idx == body_idx {
+        if is_parent(body_idx, expr_body_idx, block_ctx) {
             lookup.handle
         } else {
             // Add a temporary variable of the same type which will be used to
@@ -1035,6 +1043,17 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         parmeter_sampling: &mut [image::SamplingFlags],
         block_ctx: &mut BlockContext,
     ) -> Result<(), Error> {
+        // Helper function for dealing with merges
+        fn merger(body: &mut Body, info: &MergeBlockInformation) {
+            body.data.push(match *info {
+                MergeBlockInformation::LoopContinue => BodyFragment::Continue,
+                MergeBlockInformation::LoopMerge | MergeBlockInformation::SwitchMerge => {
+                    BodyFragment::Break
+                }
+                MergeBlockInformation::SelectionMerge => return,
+            })
+        }
+
         let mut emitter = super::Emitter::default();
         emitter.start(expressions);
         let mut body_idx = *block_ctx.info.entry(block_id).or_default();
@@ -2504,14 +2523,9 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         block.extend(emitter.finish(expressions));
                         block_ctx.blocks.insert(block_id, block);
                         let body = &mut block_ctx.bodies[body_idx];
-                        body.push(Body::BlockId(block_id));
+                        body.data.push(BodyFragment::BlockId(block_id));
 
-                        match *info {
-                            MergeBlockInformation::LoopContinue => body.push(Body::Continue),
-                            MergeBlockInformation::LoopMerge
-                            | MergeBlockInformation::SwitchMerge => body.push(Body::Break),
-                            MergeBlockInformation::SelectionMerge => {}
-                        }
+                        merger(body, info);
 
                         return Ok(());
                     }
@@ -2521,15 +2535,6 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     break None;
                 }
                 Op::BranchConditional => {
-                    fn merger(body: &mut Vec<Body>, info: &MergeBlockInformation) {
-                        match *info {
-                            MergeBlockInformation::LoopContinue => body.push(Body::Continue),
-                            MergeBlockInformation::LoopMerge
-                            | MergeBlockInformation::SwitchMerge => body.push(Body::Break),
-                            MergeBlockInformation::SelectionMerge => {}
-                        }
-                    }
-
                     inst.expect_at_least(4)?;
 
                     let condition = {
@@ -2542,7 +2547,10 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     let false_id = self.next()?;
 
                     let accept = block_ctx.bodies.len();
-                    let mut accept_block = Vec::new();
+                    let mut accept_block = Body {
+                        parent: body_idx,
+                        data: Vec::new(),
+                    };
 
                     if let Some(info) = block_ctx.mergers.get(&true_id) {
                         merger(&mut accept_block, info)
@@ -2552,7 +2560,10 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     block_ctx.info.entry(true_id).or_insert(accept);
 
                     let reject = block_ctx.bodies.len();
-                    let mut reject_block = Vec::new();
+                    let mut reject_block = Body {
+                        parent: body_idx,
+                        data: Vec::new(),
+                    };
 
                     if let Some(info) = block_ctx.mergers.get(&false_id) {
                         merger(&mut reject_block, info)
@@ -2564,8 +2575,10 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     block.extend(emitter.finish(expressions));
                     block_ctx.blocks.insert(block_id, block);
                     let body = &mut block_ctx.bodies[body_idx];
-                    body.push(Body::BlockId(block_id));
-                    body.push(Body::Conditional {
+                    // Make sure the vector has space for at least two more allocations
+                    body.data.reserve(2);
+                    body.data.push(BodyFragment::BlockId(block_id));
+                    body.data.push(BodyFragment::Conditional {
                         condition,
                         accept,
                         reject,
@@ -2585,7 +2598,10 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     }
 
                     let default = block_ctx.bodies.len();
-                    block_ctx.bodies.push(Vec::new());
+                    block_ctx.bodies.push(Body {
+                        parent: body_idx,
+                        data: Vec::new(),
+                    });
                     block_ctx.info.entry(default_id).or_insert(default);
 
                     let selector_lexp = &self.lookup_expression[&selector];
@@ -2618,27 +2634,30 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         let literal = self.next()?;
                         let target = self.next()?;
 
-                        let body_id = block_ctx.bodies.len();
-
-                        let body = match block_ctx.mergers.get(&target) {
-                            Some(&MergeBlockInformation::LoopContinue) => vec![Body::Continue],
-                            Some(&MergeBlockInformation::LoopMerge)
-                            | Some(&MergeBlockInformation::SwitchMerge) => vec![Body::Break],
-                            Some(&MergeBlockInformation::SelectionMerge) | None => Vec::new(),
+                        let case_body_idx = block_ctx.bodies.len();
+                        let mut body = Body {
+                            parent: body_idx,
+                            data: Vec::new(),
                         };
 
-                        block_ctx.bodies.push(body);
-                        block_ctx.info.entry(target).or_insert(body_id);
+                        if let Some(info) = block_ctx.mergers.get(&target) {
+                            merger(&mut body, info);
+                        }
 
-                        cases.push((literal as i32, body_id));
+                        block_ctx.bodies.push(body);
+                        block_ctx.info.entry(target).or_insert(case_body_idx);
+
+                        cases.push((literal as i32, case_body_idx));
                     }
 
                     block.extend(emitter.finish(expressions));
 
                     let body = &mut block_ctx.bodies[body_idx];
                     block_ctx.blocks.insert(block_id, block);
-                    body.push(Body::BlockId(block_id));
-                    body.push(Body::Switch {
+                    // Make sure the vector has space for at least two more allocations
+                    body.data.reserve(2);
+                    body.data.push(BodyFragment::BlockId(block_id));
+                    body.data.push(BodyFragment::Switch {
                         selector,
                         cases,
                         default,
@@ -2674,23 +2693,28 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         .mergers
                         .insert(merge_block_id, MergeBlockInformation::LoopMerge);
 
+                    let loop_body_idx = block_ctx.bodies.len();
+                    block_ctx.bodies.push(Body {
+                        parent: body_idx,
+                        data: Vec::new(),
+                    });
+
                     let continue_idx = block_ctx.bodies.len();
-                    block_ctx.bodies.push(Vec::new());
+                    block_ctx.bodies.push(Body {
+                        // The continue block inherits the scope of the loop body
+                        parent: loop_body_idx,
+                        data: Vec::new(),
+                    });
                     block_ctx.info.entry(continuing).or_insert(continue_idx);
                     block_ctx
                         .mergers
                         .insert(continuing, MergeBlockInformation::LoopContinue);
 
-                    let loop_body_idx = block_ctx.bodies.len();
-                    block_ctx.bodies.push(Vec::new());
-
-                    block_ctx.info.entry(continuing).or_insert(loop_body_idx);
-
                     // The loop header always belongs to the loop body
                     block_ctx.info.insert(block_id, loop_body_idx);
 
                     let parent_body = &mut block_ctx.bodies[body_idx];
-                    parent_body.push(Body::Loop {
+                    parent_body.data.push(BodyFragment::Loop {
                         body: loop_body_idx,
                         continuing: continue_idx,
                     });
@@ -2825,7 +2849,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         }
         block_ctx.blocks.insert(block_id, block);
         let body = &mut block_ctx.bodies[body_idx];
-        body.push(Body::BlockId(block_id));
+        body.data.push(BodyFragment::BlockId(block_id));
         Ok(())
     }
 
@@ -4359,5 +4383,20 @@ mod test {
             0x01, 0x00, 0x00, 0x00,
         ];
         let _ = super::parse_u8_slice(&bin, &Default::default()).unwrap();
+    }
+}
+
+/// Helper function to check if `child` is in the scope of `parent`
+fn is_parent(mut child: usize, parent: usize, block_ctx: &BlockContext) -> bool {
+    loop {
+        if child == parent {
+            // The child is in the scope parent
+            break true;
+        } else if child == 0 {
+            // Searched finished at the root the child isn't in the parent's body
+            break false;
+        }
+
+        child = block_ctx.bodies[child].parent;
     }
 }
