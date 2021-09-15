@@ -514,6 +514,9 @@ bitflags::bitflags! {
         /// Emit `OpLabel` for input/output locations.
         /// Some drivers treat it as semantic, not allowing any conflicts.
         const LABEL_VARYINGS = 0x4;
+        /// Emit `PointSize` output builtin to vertex shaders, which is
+        /// required for drawing with `PointList` topology.
+        const FORCE_POINT_SIZE = 0x8;
     }
 }
 
