@@ -135,6 +135,32 @@ bitflags::bitflags! {
     }
 }
 
+#[derive(Clone, Copy, PartialEq)]
+enum FinishState {
+    /// The block didn't finish execution
+    None,
+    /// The block finished execution locally
+    Finished,
+    /// The block returned ending execution in function
+    Returned,
+}
+
+impl FinishState {
+    /// Merges two states to determine the combined state
+    pub fn merge(&mut self, other: FinishState) {
+        *self = match (*self, other) {
+            (FinishState::Returned, FinishState::Returned) => FinishState::Returned,
+            (FinishState::None, _) | (_, FinishState::None) => FinishState::None,
+            _ => FinishState::Finished,
+        }
+    }
+}
+
+struct BlockInfo {
+    valid_stages: ShaderStages,
+    finish_state: FinishState,
+}
+
 struct BlockContext<'a> {
     abilities: ControlFlowAbility,
     info: &'a FunctionInfo,
@@ -326,12 +352,12 @@ impl super::Validator {
         &mut self,
         statements: &[crate::Statement],
         context: &BlockContext,
-    ) -> Result<ShaderStages, FunctionError> {
+    ) -> Result<BlockInfo, FunctionError> {
         use crate::{Statement as S, TypeInner as Ti};
-        let mut finished = false;
+        let mut finish_state = FinishState::None;
         let mut stages = ShaderStages::all();
         for statement in statements {
-            if finished {
+            if FinishState::None != finish_state {
                 return Err(FunctionError::InstructionsAfterReturn);
             }
             match *statement {
@@ -345,7 +371,9 @@ impl super::Validator {
                     }
                 }
                 S::Block(ref block) => {
-                    stages &= self.validate_block(block, context)?;
+                    let info = self.validate_block(block, context)?;
+                    stages &= info.valid_stages;
+                    finish_state = info.finish_state;
                 }
                 S::If {
                     condition,
@@ -359,8 +387,12 @@ impl super::Validator {
                         } => {}
                         _ => return Err(FunctionError::InvalidIfType(condition)),
                     }
-                    stages &= self.validate_block(accept, context)?;
-                    stages &= self.validate_block(reject, context)?;
+                    let accept_info = self.validate_block(accept, context)?;
+                    stages &= accept_info.valid_stages;
+                    let reject_info = self.validate_block(reject, context)?;
+                    stages &= reject_info.valid_stages;
+                    finish_state = accept_info.finish_state;
+                    finish_state.merge(reject_info.finish_state);
                 }
                 S::Switch {
                     selector,
@@ -384,10 +416,15 @@ impl super::Validator {
                         & (ControlFlowAbility::RETURN | ControlFlowAbility::CONTINUE);
                     let sub_context =
                         context.with_abilities(pass_through_abilities | ControlFlowAbility::BREAK);
+                    finish_state = FinishState::None;
                     for case in cases {
-                        stages &= self.validate_block(&case.body, &sub_context)?;
+                        let info = self.validate_block(&case.body, &sub_context)?;
+                        stages &= info.valid_stages;
+                        finish_state.merge(info.finish_state);
                     }
-                    stages &= self.validate_block(default, &sub_context)?;
+                    let info = self.validate_block(default, &sub_context)?;
+                    stages &= info.valid_stages;
+                    finish_state.merge(info.finish_state);
                 }
                 S::Loop {
                     ref body,
@@ -397,7 +434,7 @@ impl super::Validator {
                     // because the continuing{} block inherits the scope
                     let base_expression_count = self.valid_expression_list.len();
                     let pass_through_abilities = context.abilities & ControlFlowAbility::RETURN;
-                    stages &= self.validate_block_impl(
+                    let info = self.validate_block_impl(
                         body,
                         &context.with_abilities(
                             pass_through_abilities
@@ -405,10 +442,19 @@ impl super::Validator {
                                 | ControlFlowAbility::CONTINUE,
                         ),
                     )?;
-                    stages &= self.validate_block_impl(
-                        continuing,
-                        &context.with_abilities(ControlFlowAbility::empty()),
-                    )?;
+                    stages &= info.valid_stages;
+                    // Loops only finish the external execution if they return
+                    finish_state = match info.finish_state {
+                        FinishState::Returned => FinishState::Returned,
+                        _ => FinishState::None,
+                    };
+
+                    stages &= self
+                        .validate_block_impl(
+                            continuing,
+                            &context.with_abilities(ControlFlowAbility::empty()),
+                        )?
+                        .valid_stages;
                     for handle in self.valid_expression_list.drain(base_expression_count..) {
                         self.valid_expression_set.remove(handle.index());
                     }
@@ -417,13 +463,13 @@ impl super::Validator {
                     if !context.abilities.contains(ControlFlowAbility::BREAK) {
                         return Err(FunctionError::BreakOutsideOfLoopOrSwitch);
                     }
-                    finished = true;
+                    finish_state = FinishState::Finished;
                 }
                 S::Continue => {
                     if !context.abilities.contains(ControlFlowAbility::CONTINUE) {
                         return Err(FunctionError::ContinueOutsideOfLoop);
                     }
-                    finished = true;
+                    finish_state = FinishState::Finished;
                 }
                 S::Return { value } => {
                     if !context.abilities.contains(ControlFlowAbility::RETURN) {
@@ -441,10 +487,10 @@ impl super::Validator {
                         );
                         return Err(FunctionError::InvalidReturnType(value));
                     }
-                    finished = true;
+                    finish_state = FinishState::Returned;
                 }
                 S::Kill => {
-                    finished = true;
+                    finish_state = FinishState::Returned;
                 }
                 S::Barrier(_) => {
                     stages &= ShaderStages::COMPUTE;
@@ -593,20 +639,23 @@ impl super::Validator {
                 }
             }
         }
-        Ok(stages)
+        Ok(BlockInfo {
+            valid_stages: stages,
+            finish_state,
+        })
     }
 
     fn validate_block(
         &mut self,
         statements: &[crate::Statement],
         context: &BlockContext,
-    ) -> Result<ShaderStages, FunctionError> {
+    ) -> Result<BlockInfo, FunctionError> {
         let base_expression_count = self.valid_expression_list.len();
-        let stages = self.validate_block_impl(statements, context)?;
+        let info = self.validate_block_impl(statements, context)?;
         for handle in self.valid_expression_list.drain(base_expression_count..) {
             self.valid_expression_set.remove(handle.index());
         }
-        Ok(stages)
+        Ok(info)
     }
 
     fn validate_local_var(
@@ -694,11 +743,11 @@ impl super::Validator {
         }
 
         if self.flags.contains(ValidationFlags::BLOCKS) {
-            let stages = self.validate_block(
+            let block_info = self.validate_block(
                 &fun.body,
                 &BlockContext::new(fun, module, &info, &mod_info.functions),
             )?;
-            info.available_stages &= stages;
+            info.available_stages &= block_info.valid_stages;
         }
         Ok(info)
     }
