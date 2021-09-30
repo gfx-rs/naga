@@ -689,8 +689,25 @@ impl<'a> ResolveContext<'a> {
                     Mf::Fract |
                     Mf::Trunc |
                     Mf::Modf |
-                    Mf::Frexp |
-                    Mf::Ldexp |
+                    Mf::Ldexp => res_arg.clone(),
+                    Mf::Frexp => {
+                        fn check_member_is_scalar(member: &crate::StructMember, types: &UniqueArena<crate::Type>, name: &str, kind: crate::ScalarKind) -> bool {
+                            member.name.as_deref() == Some(name) && member.offset == 0 && types[member.ty].inner == crate::TypeInner::Scalar { kind, width: 4 }
+                        }
+                        types.iter().find(|&(_h, t)| t.name.is_none() && match t.inner {
+                            crate::TypeInner::Struct {
+                                top_level: false,
+                                span: 0,
+                                ref members,
+                            } => {
+                                members.len() == 2 && check_member_is_scalar(&members[0], types, "sig", crate::ScalarKind::Float) &&
+                                check_member_is_scalar(&members[1], types, "exp", crate::ScalarKind::Sint)
+                            }
+                            _ => false,
+                        })
+                        .map(|(h, _)| TypeResolution::Handle(h))
+                        .expect("Frontend should have called `make_frexp_result`")
+                    }
                     // exponent
                     Mf::Exp |
                     Mf::Exp2 |

@@ -946,7 +946,9 @@ impl super::Validator {
                     | Mf::Length
                     | Mf::Sign
                     | Mf::Sqrt
-                    | Mf::InverseSqrt => {
+                    | Mf::InverseSqrt
+                    | Mf::Frexp
+                    | Mf::Modf => {
                         if arg1_ty.is_some() | arg2_ty.is_some() {
                             return Err(ExpressionError::WrongArgumentCount(fun));
                         }
@@ -982,32 +984,36 @@ impl super::Validator {
                             ));
                         }
                     }
-                    Mf::Modf | Mf::Frexp | Mf::Ldexp => {
+                    Mf::Ldexp => {
                         let arg1_ty = match (arg1_ty, arg2_ty) {
                             (Some(ty1), None) => ty1,
                             _ => return Err(ExpressionError::WrongArgumentCount(fun)),
                         };
-                        let (size0, width0) = match *arg_ty {
+                        let vector_size = match *arg_ty {
                             Ti::Scalar {
-                                kind: Sk::Float,
-                                width,
-                            } => (None, width),
+                                kind: Sk::Float, ..
+                            } => None,
                             Ti::Vector {
                                 kind: Sk::Float,
                                 size,
-                                width,
-                            } => (Some(size), width),
+                                ..
+                            } => Some(size),
                             _ => return Err(ExpressionError::InvalidArgumentType(fun, 0, arg)),
                         };
                         let good = match *arg1_ty {
-                            Ti::Pointer { base, class: _ } => module.types[base].inner == *arg_ty,
-                            Ti::ValuePointer {
-                                size,
+                            Ti::Scalar { kind: Sk::Sint, .. } => vector_size.is_none(),
+                            Ti::Vector {
                                 kind: Sk::Float,
-                                width,
-                                class: _,
-                            } => size == size0 && width == width0,
-                            _ => false,
+                                size,
+                                ..
+                            } => vector_size == Some(size),
+                            _ => {
+                                return Err(ExpressionError::InvalidArgumentType(
+                                    fun,
+                                    1,
+                                    arg1.unwrap(),
+                                ))
+                            }
                         };
                         if !good {
                             return Err(ExpressionError::InvalidArgumentType(

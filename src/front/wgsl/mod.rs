@@ -1388,6 +1388,24 @@ impl Parser {
             lexer.open_arguments()?;
             let arg_count = fun.argument_count();
             let arg = self.parse_general_expression(lexer, ctx.reborrow())?;
+            // Handle special functions return structures
+            match fun {
+                crate::MathFunction::Frexp => {
+                    let size = match *ctx.resolve_type(arg)? {
+                        crate::TypeInner::Vector { size, .. } => Some(size),
+                        _ => None,
+                    };
+                    ctx.types.make_frexp_result(size);
+                }
+                crate::MathFunction::Modf => {
+                    let size = match *ctx.resolve_type(arg)? {
+                        crate::TypeInner::Vector { size, .. } => Some(size),
+                        _ => None,
+                    };
+                    ctx.types.make_modf_result(size);
+                }
+                _ => {}
+            }
             let arg1 = if arg_count > 1 {
                 lexer.expect(Token::Separator(','))?;
                 Some(self.parse_general_expression(lexer, ctx.reborrow())?)

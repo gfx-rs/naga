@@ -130,6 +130,76 @@ impl ops::Index<Handle<crate::Expression>> for Typifier {
     }
 }
 
+impl UniqueArena<crate::Type> {
+    fn make_simple_type(
+        &mut self,
+        kind: crate::ScalarKind,
+        size: Option<crate::VectorSize>,
+    ) -> Handle<crate::Type> {
+        self.insert(
+            crate::Type {
+                name: None,
+                inner: match size {
+                    Some(size) => crate::TypeInner::Vector {
+                        size,
+                        kind,
+                        width: 4,
+                    },
+                    None => crate::TypeInner::Scalar { kind, width: 4 },
+                },
+            },
+            crate::Span::default(),
+        )
+    }
+
+    pub fn make_frexp_result(&mut self, size: Option<crate::VectorSize>) -> Handle<crate::Type> {
+        let simple_f32 = self.make_simple_type(crate::ScalarKind::Float, size);
+        let simple_i32 = self.make_simple_type(crate::ScalarKind::Sint, size);
+        let inner = crate::TypeInner::Struct {
+            top_level: false,
+            span: 0,
+            members: vec![
+                crate::StructMember {
+                    name: Some("sig".to_string()),
+                    ty: simple_f32,
+                    offset: 0,
+                    binding: None,
+                },
+                crate::StructMember {
+                    name: Some("exp".to_string()),
+                    ty: simple_i32,
+                    offset: 0,
+                    binding: None,
+                },
+            ],
+        };
+        self.insert(crate::Type { name: None, inner }, crate::Span::default())
+    }
+
+    pub fn make_modf_result(&mut self, size: Option<crate::VectorSize>) -> Handle<crate::Type> {
+        let simple_f32 = self.make_simple_type(crate::ScalarKind::Float, size);
+        let inner = crate::TypeInner::Struct {
+            top_level: false,
+            span: 0,
+            members: vec![
+                crate::StructMember {
+                    name: Some("fract".to_string()),
+                    ty: simple_f32,
+                    offset: 0,
+                    binding: None,
+                },
+                crate::StructMember {
+                    name: Some("whole".to_string()),
+                    ty: simple_f32,
+                    offset: 0,
+                    binding: None,
+                },
+            ],
+        };
+        self.insert(crate::Type { name: None, inner }, crate::Span::default())
+    }
+}
+
 /// Helper function used for aligning `value` to the next multiple of `align`
 ///
 /// # Notes:
