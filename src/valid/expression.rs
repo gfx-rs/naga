@@ -863,15 +863,17 @@ impl super::Validator {
                 arg,
                 arg1,
                 arg2,
+                arg3,
             } => {
                 use crate::MathFunction as Mf;
 
                 let arg_ty = resolver.resolve(arg)?;
                 let arg1_ty = arg1.map(|expr| resolver.resolve(expr)).transpose()?;
                 let arg2_ty = arg2.map(|expr| resolver.resolve(expr)).transpose()?;
+                let arg3_ty = arg3.map(|expr| resolver.resolve(expr)).transpose()?;
                 match fun {
                     Mf::Abs => {
-                        if arg1_ty.is_some() | arg2_ty.is_some() {
+                        if arg1_ty.is_some() | arg2_ty.is_some() | arg3_ty.is_some() {
                             return Err(ExpressionError::WrongArgumentCount(fun));
                         }
                         let good = match *arg_ty {
@@ -883,8 +885,8 @@ impl super::Validator {
                         }
                     }
                     Mf::Min | Mf::Max => {
-                        let arg1_ty = match (arg1_ty, arg2_ty) {
-                            (Some(ty1), None) => ty1,
+                        let arg1_ty = match (arg1_ty, arg2_ty, arg3_ty) {
+                            (Some(ty1), None, None) => ty1,
                             _ => return Err(ExpressionError::WrongArgumentCount(fun)),
                         };
                         let good = match *arg_ty {
@@ -903,8 +905,8 @@ impl super::Validator {
                         }
                     }
                     Mf::Clamp => {
-                        let (arg1_ty, arg2_ty) = match (arg1_ty, arg2_ty) {
-                            (Some(ty1), Some(ty2)) => (ty1, ty2),
+                        let (arg1_ty, arg2_ty) = match (arg1_ty, arg2_ty, arg3_ty) {
+                            (Some(ty1), Some(ty2), None) => (ty1, ty2),
                             _ => return Err(ExpressionError::WrongArgumentCount(fun)),
                         };
                         let good = match *arg_ty {
@@ -954,7 +956,7 @@ impl super::Validator {
                     | Mf::Sign
                     | Mf::Sqrt
                     | Mf::InverseSqrt => {
-                        if arg1_ty.is_some() | arg2_ty.is_some() {
+                        if arg1_ty.is_some() | arg2_ty.is_some() | arg3_ty.is_some() {
                             return Err(ExpressionError::WrongArgumentCount(fun));
                         }
                         match *arg_ty {
@@ -968,8 +970,8 @@ impl super::Validator {
                         }
                     }
                     Mf::Atan2 | Mf::Pow | Mf::Distance | Mf::Step => {
-                        let arg1_ty = match (arg1_ty, arg2_ty) {
-                            (Some(ty1), None) => ty1,
+                        let arg1_ty = match (arg1_ty, arg2_ty, arg3_ty) {
+                            (Some(ty1), None, None) => ty1,
                             _ => return Err(ExpressionError::WrongArgumentCount(fun)),
                         };
                         match *arg_ty {
@@ -990,8 +992,8 @@ impl super::Validator {
                         }
                     }
                     Mf::Modf | Mf::Frexp | Mf::Ldexp => {
-                        let arg1_ty = match (arg1_ty, arg2_ty) {
-                            (Some(ty1), None) => ty1,
+                        let arg1_ty = match (arg1_ty, arg2_ty, arg3_ty) {
+                            (Some(ty1), None, None) => ty1,
                             _ => return Err(ExpressionError::WrongArgumentCount(fun)),
                         };
                         let (size0, width0) = match *arg_ty {
@@ -1025,8 +1027,8 @@ impl super::Validator {
                         }
                     }
                     Mf::Dot | Mf::Outer | Mf::Cross | Mf::Reflect => {
-                        let arg1_ty = match (arg1_ty, arg2_ty) {
-                            (Some(ty1), None) => ty1,
+                        let arg1_ty = match (arg1_ty, arg2_ty, arg3_ty) {
+                            (Some(ty1), None, None) => ty1,
                             _ => return Err(ExpressionError::WrongArgumentCount(fun)),
                         };
                         match *arg_ty {
@@ -1044,8 +1046,8 @@ impl super::Validator {
                         }
                     }
                     Mf::Refract => {
-                        let (arg1_ty, arg2_ty) = match (arg1_ty, arg2_ty) {
-                            (Some(ty1), Some(ty2)) => (ty1, ty2),
+                        let (arg1_ty, arg2_ty) = match (arg1_ty, arg2_ty, arg3_ty) {
+                            (Some(ty1), Some(ty2), None) => (ty1, ty2),
                             _ => return Err(ExpressionError::WrongArgumentCount(fun)),
                         };
 
@@ -1085,7 +1087,7 @@ impl super::Validator {
                         }
                     }
                     Mf::Normalize => {
-                        if arg1_ty.is_some() | arg2_ty.is_some() {
+                        if arg1_ty.is_some() | arg2_ty.is_some() | arg3_ty.is_some() {
                             return Err(ExpressionError::WrongArgumentCount(fun));
                         }
                         match *arg_ty {
@@ -1096,8 +1098,8 @@ impl super::Validator {
                         }
                     }
                     Mf::FaceForward | Mf::Fma | Mf::SmoothStep => {
-                        let (arg1_ty, arg2_ty) = match (arg1_ty, arg2_ty) {
-                            (Some(ty1), Some(ty2)) => (ty1, ty2),
+                        let (arg1_ty, arg2_ty) = match (arg1_ty, arg2_ty, arg3_ty) {
+                            (Some(ty1), Some(ty2), None) => (ty1, ty2),
                             _ => return Err(ExpressionError::WrongArgumentCount(fun)),
                         };
                         match *arg_ty {
@@ -1125,8 +1127,8 @@ impl super::Validator {
                         }
                     }
                     Mf::Mix => {
-                        let (arg1_ty, arg2_ty) = match (arg1_ty, arg2_ty) {
-                            (Some(ty1), Some(ty2)) => (ty1, ty2),
+                        let (arg1_ty, arg2_ty) = match (arg1_ty, arg2_ty, arg3_ty) {
+                            (Some(ty1), Some(ty2), None) => (ty1, ty2),
                             _ => return Err(ExpressionError::WrongArgumentCount(fun)),
                         };
                         let arg_width = match *arg_ty {
@@ -1165,7 +1167,7 @@ impl super::Validator {
                         }
                     }
                     Mf::Inverse | Mf::Determinant => {
-                        if arg1_ty.is_some() | arg2_ty.is_some() {
+                        if arg1_ty.is_some() | arg2_ty.is_some() | arg3_ty.is_some() {
                             return Err(ExpressionError::WrongArgumentCount(fun));
                         }
                         let good = match *arg_ty {
@@ -1177,7 +1179,7 @@ impl super::Validator {
                         }
                     }
                     Mf::Transpose => {
-                        if arg1_ty.is_some() | arg2_ty.is_some() {
+                        if arg1_ty.is_some() | arg2_ty.is_some() | arg3_ty.is_some() {
                             return Err(ExpressionError::WrongArgumentCount(fun));
                         }
                         match *arg_ty {
@@ -1186,7 +1188,7 @@ impl super::Validator {
                         }
                     }
                     Mf::CountOneBits | Mf::ReverseBits => {
-                        if arg1_ty.is_some() | arg2_ty.is_some() {
+                        if arg1_ty.is_some() | arg2_ty.is_some() | arg3_ty.is_some() {
                             return Err(ExpressionError::WrongArgumentCount(fun));
                         }
                         match *arg_ty {
@@ -1194,6 +1196,118 @@ impl super::Validator {
                             | Ti::Scalar { kind: Sk::Uint, .. }
                             | Ti::Vector { kind: Sk::Sint, .. }
                             | Ti::Vector { kind: Sk::Uint, .. } => {}
+                            _ => return Err(ExpressionError::InvalidArgumentType(fun, 0, arg)),
+                        }
+                    }
+                    Mf::InsertBits => {
+                        let (arg1_ty, arg2_ty, arg3_ty) = match (arg1_ty, arg2_ty, arg3_ty) {
+                            (Some(ty1), Some(ty2), Some(ty3)) => (ty1, ty2, ty3),
+                            _ => return Err(ExpressionError::WrongArgumentCount(fun)),
+                        };
+                        match *arg_ty {
+                            Ti::Scalar { kind: Sk::Sint, .. }
+                            | Ti::Scalar { kind: Sk::Uint, .. }
+                            | Ti::Vector { kind: Sk::Sint, .. }
+                            | Ti::Vector { kind: Sk::Uint, .. } => {}
+                            _ => return Err(ExpressionError::InvalidArgumentType(fun, 0, arg)),
+                        }
+                        if arg1_ty != arg_ty {
+                            return Err(ExpressionError::InvalidArgumentType(
+                                fun,
+                                1,
+                                arg1.unwrap(),
+                            ));
+                        }
+                        match *arg2_ty {
+                            Ti::Scalar { kind: Sk::Uint, .. } => {}
+                            _ => {
+                                return Err(ExpressionError::InvalidArgumentType(
+                                    fun,
+                                    2,
+                                    arg2.unwrap(),
+                                ))
+                            }
+                        }
+                        match *arg3_ty {
+                            Ti::Scalar { kind: Sk::Uint, .. } => {}
+                            _ => {
+                                return Err(ExpressionError::InvalidArgumentType(
+                                    fun,
+                                    2,
+                                    arg3.unwrap(),
+                                ))
+                            }
+                        }
+                    }
+                    Mf::ExtractBits => {
+                        let (arg1_ty, arg2_ty) = match (arg1_ty, arg2_ty, arg3_ty) {
+                            (Some(ty1), Some(ty2), None) => (ty1, ty2),
+                            _ => return Err(ExpressionError::WrongArgumentCount(fun)),
+                        };
+                        match *arg_ty {
+                            Ti::Scalar { kind: Sk::Sint, .. }
+                            | Ti::Scalar { kind: Sk::Uint, .. }
+                            | Ti::Vector { kind: Sk::Sint, .. }
+                            | Ti::Vector { kind: Sk::Uint, .. } => {}
+                            _ => return Err(ExpressionError::InvalidArgumentType(fun, 0, arg)),
+                        }
+                        match *arg1_ty {
+                            Ti::Scalar { kind: Sk::Uint, .. } => {}
+                            _ => {
+                                return Err(ExpressionError::InvalidArgumentType(
+                                    fun,
+                                    2,
+                                    arg1.unwrap(),
+                                ))
+                            }
+                        }
+                        match *arg2_ty {
+                            Ti::Scalar { kind: Sk::Uint, .. } => {}
+                            _ => {
+                                return Err(ExpressionError::InvalidArgumentType(
+                                    fun,
+                                    2,
+                                    arg2.unwrap(),
+                                ))
+                            }
+                        }
+                    }
+                    Mf::Pack2x16unorm | Mf::Pack2x16snorm | Mf::Pack2x16float => {
+                        if arg1_ty.is_some() | arg2_ty.is_some() | arg3_ty.is_some() {
+                            return Err(ExpressionError::WrongArgumentCount(fun));
+                        }
+                        match *arg_ty {
+                            Ti::Vector {
+                                size: crate::VectorSize::Bi,
+                                kind: Sk::Float,
+                                ..
+                            } => {}
+                            _ => return Err(ExpressionError::InvalidArgumentType(fun, 0, arg)),
+                        }
+                    }
+                    Mf::Pack4x8snorm | Mf::Pack4x8unorm => {
+                        if arg1_ty.is_some() | arg2_ty.is_some() | arg3_ty.is_some() {
+                            return Err(ExpressionError::WrongArgumentCount(fun));
+                        }
+                        match *arg_ty {
+                            Ti::Vector {
+                                size: crate::VectorSize::Quad,
+                                kind: Sk::Float,
+                                ..
+                            } => {}
+                            _ => return Err(ExpressionError::InvalidArgumentType(fun, 0, arg)),
+                        }
+                    }
+                    Mf::Unpack2x16float
+                    | Mf::Unpack2x16snorm
+                    | Mf::Unpack2x16unorm
+                    | Mf::Unpack4x8snorm
+                    | Mf::Unpack4x8unorm => {
+                        if arg1_ty.is_some() | arg2_ty.is_some() | arg3_ty.is_some() {
+                            return Err(ExpressionError::WrongArgumentCount(fun));
+                        }
+                        match *arg_ty {
+                            Ti::Scalar { kind: Sk::Uint, .. } => {}
                             _ => return Err(ExpressionError::InvalidArgumentType(fun, 0, arg)),
                         }
                     }
