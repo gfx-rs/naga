@@ -1,3 +1,7 @@
+use crate::{Arena, Handle, UniqueArena};
+use std::borrow::Cow;
+use std::error::Error;
+use std::fmt::{Display, Formatter};
 use std::ops::Range;
 
 /// A source code span, used for error reporting.
@@ -64,5 +68,249 @@ impl From<Range<usize>> for Span {
             start: range.start as u32,
             end: range.end as u32,
         }
+    }
+}
+
+#[cfg(feature = "span")]
+extern crate smallvec;
+
+pub struct SpanContext(Span, Cow<'static, str>);
+
+impl SpanContext {
+    pub fn new<S>(span: Span, description: S) -> Self
+    where
+        Cow<'static, str>: From<S>,
+    {
+        Self(span, Cow::from(description))
+    }
+}
+
+#[derive(Debug)]
+pub struct WithSpan<E> {
+    inner: E,
+    #[cfg(feature = "span")]
+    spans: smallvec::SmallVec<[(Span, Cow<'static, str>); 8]>,
+}
+
+impl<E> Display for WithSpan<E>
+where
+    E: Display,
+{
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        self.inner.fmt(f)
+    }
+}
+
+#[cfg(test)]
+impl<E> PartialEq for WithSpan<E>
+where
+    E: PartialEq,
+{
+    fn eq(&self, other: &Self) -> bool {
+        self.inner.eq(&other.inner)
+    }
+}
+
+impl<E> Error for WithSpan<E>
+where
+    E: Error,
+{
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        self.inner.source()
+    }
+}
+
+impl<E> WithSpan<E> {
+    pub fn new(inner: E) -> Self {
+        Self {
+            inner,
+            #[cfg(feature = "span")]
+            spans: smallvec::SmallVec::new(),
+        }
+    }
+
+    pub fn into_inner(self) -> E {
+        self.inner
+    }
+
+    #[cfg_attr(not(feature = "span"), allow(unused_variables, unused_mut))]
+    pub fn with_span<S>(mut self, span: Span, description: S) -> Self
+    where
+        Cow<'static, str>: From<S>,
+    {
+        #[cfg(feature = "span")]
+        if span.is_defined() {
+            self.spans.push((span.clone(), Cow::from(description)));
+        }
+        self
+    }
+
+    pub fn with_context(self, span_context: SpanContext) -> Self {
+        let SpanContext(span, description) = span_context;
+        self.with_span(span, description)
+    }
+
+    #[cfg_attr(not(feature = "span"), allow(unused_variables, unused_mut))]
+    pub fn with_contexts<'a, T>(mut self, span_contexts: T) -> Self
+    where
+        T: IntoIterator<Item = SpanContext>,
+    {
+        #[cfg(feature = "span")]
+        self.spans
+            .extend(span_contexts.into_iter().filter_map(|SpanContext(s, msg)| {
+                if s.is_defined() {
+                    Some((s.clone(), msg))
+                } else {
+                    None
+                }
+            }));
+        self
+    }
+
+    pub(crate) fn with_handle<T, A: SpanProvider<T>>(self, handle: Handle<T>, arena: &A) -> Self {
+        self.with_context(arena.get_span_context(handle))
+    }
+
+    pub fn into_other<E2>(self) -> WithSpan<E2>
+    where
+        E2: From<E>,
+    {
+        WithSpan {
+            inner: self.inner.into(),
+            #[cfg(feature = "span")]
+            spans: self.spans,
+        }
+    }
+
+    pub fn and_then<F, E2>(self, func: F) -> WithSpan<E2>
+    where
+        F: FnOnce(E) -> WithSpan<E2>,
+    {
+        #[cfg_attr(not(feature = "span"), allow(unused_mut))]
+        let mut res = func(self.inner);
+        #[cfg(feature = "span")]
+        res.spans.extend(self.spans);
+        res
+    }
+}
+
+impl SpanContext {
+    pub fn with<E>(self, err: E) -> WithSpan<E>
+    where
+        E: Error,
+    {
+        err.with_span_context(self)
+    }
+}
+
+/// Convenience trait for [`Error`] to be able to apply spans to anything
+pub(crate) trait AddSpan: Sized {
+    type Output;
+    fn with_span(self) -> Self::Output;
+    fn with_span_static(self, span: Span, description: &'static str) -> Self::Output;
+    fn with_span_context(self, span_context: SpanContext) -> Self::Output;
+    fn with_span_handle<T, A: SpanProvider<T>>(self, handle: Handle<T>, arena: &A) -> Self::Output;
+}
+
+pub(crate) trait AddSpanResult: Sized {
+    type Output;
+    fn with_span(self) -> Self::Output;
+    fn with_span_static(self, span: Span, description: &'static str) -> Self::Output;
+    fn with_span_context(self, span_context: SpanContext) -> Self::Output;
+    fn with_span_handle<T, A: SpanProvider<T>>(self, handle: Handle<T>, arena: &A) -> Self::Output;
+}
+
+/// Convenience trait for Arena and UniqueArena
+pub(crate) trait SpanProvider<T> {
+    fn get_span(&self, handle: Handle<T>) -> Span;
+    fn get_span_context(&self, handle: Handle<T>) -> SpanContext {
+        match self.get_span(handle) {
+            x if !x.is_defined() => SpanContext::new(Default::default(), ""),
+            known => SpanContext::new(
+                known,
+                format!("{} {:?}", std::any::type_name::<T>(), handle),
+            ),
+        }
+    }
+}
+
+impl<T> SpanProvider<T> for Arena<T> {
+    fn get_span(&self, handle: Handle<T>) -> Span {
+        self.get_span(handle)
+    }
+}
+
+impl<T> SpanProvider<T> for UniqueArena<T> {
+    fn get_span(&self, handle: Handle<T>) -> Span {
+        self.get_span(handle)
+    }
+}
+
+impl<E> AddSpan for E
+where
+    E: Error,
+{
+    type Output = WithSpan<Self>;
+    fn with_span(self) -> WithSpan<Self> {
+        WithSpan::new(self)
+    }
+
+    fn with_span_static(self, span: Span, description: &'static str) -> WithSpan<Self> {
+        WithSpan::new(self).with_span(span, description)
+    }
+
+    fn with_span_context(self, span_context: SpanContext) -> WithSpan<Self> {
+        WithSpan::new(self).with_context(span_context)
+    }
+
+    fn with_span_handle<T, A: SpanProvider<T>>(
+        self,
+        handle: Handle<T>,
+        arena: &A,
+    ) -> WithSpan<Self> {
+        WithSpan::new(self).with_handle(handle, arena)
+    }
+}
+
+impl<T, E> AddSpanResult for Result<T, E>
+where
+    E: Error,
+{
+    type Output = Result<T, WithSpan<E>>;
+
+    fn with_span(self) -> Self::Output {
+        self.map_err(|e| e.with_span())
+    }
+
+    fn with_span_static(self, span: Span, description: &'static str) -> Self::Output {
+        self.map_err(|e| e.with_span_static(span, description))
+    }
+
+    fn with_span_context(self, span_context: SpanContext) -> Self::Output {
+        self.map_err(|e| e.with_span_context(span_context))
+    }
+
+    fn with_span_handle<U, A: SpanProvider<U>>(self, handle: Handle<U>, arena: &A) -> Self::Output {
+        self.map_err(|e| e.with_span_handle(handle, arena))
+    }
+}
+
+/// Convenience trait for Result
+pub trait MapErrWithSpan<E, E2>: Sized {
+    type Output: Sized;
+    fn map_err_inner<F, E3>(self, func: F) -> Self::Output
+    where
+        F: FnOnce(E) -> WithSpan<E3>,
+        E2: From<E3>;
+}
+
+impl<T, E, E2> MapErrWithSpan<E, E2> for Result<T, WithSpan<E>> {
+    type Output = Result<T, WithSpan<E2>>;
+    fn map_err_inner<F, E3>(self, func: F) -> Result<T, WithSpan<E2>>
+    where
+        F: FnOnce(E) -> WithSpan<E3>,
+        E2: From<E3>,
+    {
+        self.map_err(|e| e.and_then(func).into_other::<E2>())
     }
 }
