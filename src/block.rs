@@ -82,7 +82,7 @@ impl Block {
         #[cfg(feature = "span")]
         let span_iter = self.span_info.iter();
         #[cfg(not(feature = "span"))]
-        let span_iter = std::iter::repeat_with(|| &Span::Unknown);
+        let span_iter = std::iter::repeat_with(|| &Span::default());
 
         self.body.iter().zip(span_iter)
     }

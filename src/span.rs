@@ -133,6 +133,13 @@ impl<E> WithSpan<E> {
         self.inner
     }
 
+    pub fn spans(&self) -> impl Iterator<Item = &(Span, Cow<'static, str>)> {
+        #[cfg(feature = "span")]
+        return self.spans.iter();
+        #[cfg(not(feature = "span"))]
+        return std::iter::empty();
+    }
+
     #[cfg_attr(not(feature = "span"), allow(unused_variables, unused_mut))]
     pub fn with_span<S>(mut self, span: Span, description: S) -> Self
     where
