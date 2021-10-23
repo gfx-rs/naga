@@ -19,7 +19,7 @@ use std::ops;
 //TODO: analyze the model at the same time as we validate it,
 // merge the corresponding matches over expressions and statements.
 
-use crate::span::{AddSpan, WithSpan};
+use crate::span::{AddSpan as _, WithSpan};
 pub use analyzer::{ExpressionInfo, FunctionInfo, GlobalUse, Uniformity, UniformityRequirements};
 pub use compose::ComposeError;
 pub use expression::ExpressionError;

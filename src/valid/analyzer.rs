@@ -7,7 +7,7 @@ Figures out the following properties:
 !*/
 
 use super::{CallError, ExpressionError, FunctionError, ModuleInfo, ShaderStages, ValidationFlags};
-use crate::span::{AddSpan, WithSpan};
+use crate::span::{AddSpan as _, WithSpan};
 use crate::{
     arena::{Arena, Handle},
     proc::{ResolveContext, TypeResolution},

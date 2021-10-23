@@ -4,7 +4,7 @@ use super::{
 };
 use crate::arena::{Handle, UniqueArena};
 
-use crate::span::{AddSpan, MapErrWithSpan, SpanProvider, WithSpan};
+use crate::span::{AddSpan as _, MapErrWithSpan as _, SpanProvider as _, WithSpan};
 use bit_set::BitSet;
 
 #[cfg(feature = "validate")]
