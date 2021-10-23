@@ -268,9 +268,9 @@ impl super::Validator {
                 // top-level `Struct`. But such pointers cannot be passed to
                 // functions, stored in variables, etc. So, we mark them as not
                 // `DATA`.
-                let data_flag = if base_info.flags.contains(TypeFlags::SIZED) {
-                    TypeFlags::DATA | TypeFlags::ARGUMENT
-                } else if let crate::TypeInner::Struct { .. } = types[base].inner {
+                let data_flag = if base_info.flags.contains(TypeFlags::SIZED)
+                    || matches!(types[base].inner, crate::TypeInner::Struct { .. })
+                {
                     TypeFlags::DATA | TypeFlags::ARGUMENT
                 } else {
                     TypeFlags::empty()
