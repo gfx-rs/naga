@@ -294,7 +294,7 @@ impl VaryingContext<'_> {
         match binding {
             Some(binding) => self
                 .validate_impl(binding)
-                .map_err(|e| span_context.with(e)),
+                .map_err(|e| e.with_span_context(span_context)),
             None => {
                 match self.types[self.ty].inner {
                     //TODO: check the member types
@@ -314,7 +314,7 @@ impl VaryingContext<'_> {
                                 // TODO: shouldn't this be validate?
                                 Some(ref binding) => self
                                     .validate_impl(binding)
-                                    .map_err(|e| span_context.with(e))?,
+                                    .map_err(|e| e.with_span_context(span_context))?,
                             }
                         }
                     }

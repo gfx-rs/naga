@@ -1,7 +1,6 @@
 use crate::{Arena, Handle, UniqueArena};
-use std::borrow::Cow;
 use std::error::Error;
-use std::fmt::{Display, Formatter};
+use std::fmt;
 use std::ops::Range;
 
 /// A source code span, used for error reporting.
@@ -71,32 +70,20 @@ impl From<Range<usize>> for Span {
     }
 }
 
-#[cfg(feature = "span")]
-extern crate smallvec;
-
-pub struct SpanContext(Span, Cow<'static, str>);
-
-impl SpanContext {
-    pub fn new<S>(span: Span, description: S) -> Self
-    where
-        Cow<'static, str>: From<S>,
-    {
-        Self(span, Cow::from(description))
-    }
-}
+pub type SpanContext = (Span, String);
 
 #[derive(Debug)]
 pub struct WithSpan<E> {
     inner: E,
     #[cfg(feature = "span")]
-    spans: smallvec::SmallVec<[(Span, Cow<'static, str>); 8]>,
+    spans: Vec<SpanContext>,
 }
 
-impl<E> Display for WithSpan<E>
+impl<E> fmt::Display for WithSpan<E>
 where
-    E: Display,
+    E: fmt::Display,
 {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
         self.inner.fmt(f)
     }
 }
@@ -125,7 +112,7 @@ impl<E> WithSpan<E> {
         Self {
             inner,
             #[cfg(feature = "span")]
-            spans: smallvec::SmallVec::new(),
+            spans: Vec::new(),
         }
     }
 
@@ -133,7 +120,7 @@ impl<E> WithSpan<E> {
         self.inner
     }
 
-    pub fn spans(&self) -> impl Iterator<Item = &(Span, Cow<'static, str>)> {
+    pub fn spans(&self) -> impl Iterator<Item = &SpanContext> {
         #[cfg(feature = "span")]
         return self.spans.iter();
         #[cfg(not(feature = "span"))]
@@ -143,34 +130,28 @@ impl<E> WithSpan<E> {
     #[cfg_attr(not(feature = "span"), allow(unused_variables, unused_mut))]
     pub fn with_span<S>(mut self, span: Span, description: S) -> Self
     where
-        Cow<'static, str>: From<S>,
+        S: ToString,
     {
         #[cfg(feature = "span")]
         if span.is_defined() {
-            self.spans.push((span.clone(), Cow::from(description)));
+            self.spans.push((span, description.to_string()));
         }
         self
     }
 
     pub fn with_context(self, span_context: SpanContext) -> Self {
-        let SpanContext(span, description) = span_context;
+        let (span, description) = span_context;
         self.with_span(span, description)
     }
 
     #[cfg_attr(not(feature = "span"), allow(unused_variables, unused_mut))]
-    pub fn with_contexts<'a, T>(mut self, span_contexts: T) -> Self
+    pub fn with_contexts<T>(mut self, span_contexts: T) -> Self
     where
         T: IntoIterator<Item = SpanContext>,
     {
         #[cfg(feature = "span")]
         self.spans
-            .extend(span_contexts.into_iter().filter_map(|SpanContext(s, msg)| {
-                if s.is_defined() {
-                    Some((s.clone(), msg))
-                } else {
-                    None
-                }
-            }));
+            .extend(span_contexts.into_iter().filter(|&(s, _)| s.is_defined()));
         self
     }
 
@@ -201,15 +182,6 @@ impl<E> WithSpan<E> {
     }
 }
 
-impl SpanContext {
-    pub fn with<E>(self, err: E) -> WithSpan<E>
-    where
-        E: Error,
-    {
-        err.with_span_context(self)
-    }
-}
-
 /// Convenience trait for [`Error`] to be able to apply spans to anything
 pub(crate) trait AddSpan: Sized {
     type Output;
@@ -222,9 +194,6 @@ pub(crate) trait AddSpan: Sized {
 pub(crate) trait AddSpanResult: Sized {
     type Output;
     fn with_span(self) -> Self::Output;
-    fn with_span_static(self, span: Span, description: &'static str) -> Self::Output;
-    fn with_span_context(self, span_context: SpanContext) -> Self::Output;
-    fn with_span_handle<T, A: SpanProvider<T>>(self, handle: Handle<T>, arena: &A) -> Self::Output;
 }
 
 /// Convenience trait for Arena and UniqueArena
@@ -232,8 +201,8 @@ pub(crate) trait SpanProvider<T> {
     fn get_span(&self, handle: Handle<T>) -> Span;
     fn get_span_context(&self, handle: Handle<T>) -> SpanContext {
         match self.get_span(handle) {
-            x if !x.is_defined() => SpanContext::new(Default::default(), ""),
-            known => SpanContext::new(
+            x if !x.is_defined() => (Default::default(), "".to_string()),
+            known => (
                 known,
                 format!("{} {:?}", std::any::type_name::<T>(), handle),
             ),
@@ -287,18 +256,6 @@ where
 
     fn with_span(self) -> Self::Output {
         self.map_err(|e| e.with_span())
-    }
-
-    fn with_span_static(self, span: Span, description: &'static str) -> Self::Output {
-        self.map_err(|e| e.with_span_static(span, description))
-    }
-
-    fn with_span_context(self, span_context: SpanContext) -> Self::Output {
-        self.map_err(|e| e.with_span_context(span_context))
-    }
-
-    fn with_span_handle<U, A: SpanProvider<U>>(self, handle: Handle<U>, arena: &A) -> Self::Output {
-        self.map_err(|e| e.with_span_handle(handle, arena))
     }
 }
 
