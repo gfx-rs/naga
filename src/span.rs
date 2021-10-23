@@ -1,7 +1,5 @@
 use crate::{Arena, Handle, UniqueArena};
-use std::error::Error;
-use std::fmt;
-use std::ops::Range;
+use std::{error::Error, fmt, ops::Range};
 
 /// A source code span, used for error reporting.
 #[derive(Clone, Copy, Debug, PartialEq, Default)]
