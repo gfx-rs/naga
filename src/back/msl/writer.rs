@@ -1184,6 +1184,8 @@ impl<W: Write> Writer<W> {
                     Mf::ReverseBits => "reverse_bits",
                     Mf::ExtractBits => "extract_bits",
                     Mf::InsertBits => "insert_bits",
+                    Mf::FindLsb => return Err(Error::UnsupportedCall(format!("{:?}", fun))),
+                    Mf::FindMsb => return Err(Error::UnsupportedCall(format!("{:?}", fun))),
                     // data packing
                     Mf::Pack4x8snorm => "pack_float_to_unorm4x8",
                     Mf::Pack4x8unorm => "pack_float_to_snorm4x8",

@@ -934,6 +934,8 @@ pub enum MathFunction {
     ReverseBits,
     ExtractBits,
     InsertBits,
+    FindLsb,
+    FindMsb,
     // data packing
     Pack4x8snorm,
     Pack4x8unorm,

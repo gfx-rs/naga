@@ -784,7 +784,9 @@ impl<'a> ResolveContext<'a> {
                     Mf::CountOneBits |
                     Mf::ReverseBits |
                     Mf::ExtractBits |
-                    Mf::InsertBits => res_arg.clone(),
+                    Mf::InsertBits |
+                    Mf::FindLsb |
+                    Mf::FindMsb => res_arg.clone(),
                     // data packing
                     Mf::Pack4x8snorm |
                     Mf::Pack4x8unorm |
