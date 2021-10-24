@@ -69,8 +69,10 @@ impl From<Range<usize>> for Span {
     }
 }
 
+/// A source code span together with "context", a user-readable description of what part of the error it refers to.
 pub type SpanContext = (Span, String);
 
+/// Wrapper class for [`Error`], augmenting it with a list of [`SpanContext`]s.
 #[derive(Debug)]
 pub struct WithSpan<E> {
     inner: E,
@@ -107,6 +109,7 @@ where
 }
 
 impl<E> WithSpan<E> {
+    /// Create a new [`WithSpan`] from an [`Error`], containing no spans.
     pub fn new(inner: E) -> Self {
         Self {
             inner,
@@ -115,10 +118,12 @@ impl<E> WithSpan<E> {
         }
     }
 
+    /// Reverse of [`Self::new`], discards span information and returns an inner error.
     pub fn into_inner(self) -> E {
         self.inner
     }
 
+    /// Iterator over stored [`SpanContext`]s.
     pub fn spans(&self) -> impl Iterator<Item = &SpanContext> {
         #[cfg(feature = "span")]
         return self.spans.iter();
@@ -126,6 +131,7 @@ impl<E> WithSpan<E> {
         return std::iter::empty();
     }
 
+    /// Add a new span with description.
     #[cfg_attr(not(feature = "span"), allow(unused_variables, unused_mut))]
     pub fn with_span<S>(mut self, span: Span, description: S) -> Self
     where
@@ -138,26 +144,19 @@ impl<E> WithSpan<E> {
         self
     }
 
+    /// Add a [`SpanContext`].
     pub fn with_context(self, span_context: SpanContext) -> Self {
         let (span, description) = span_context;
         self.with_span(span, description)
     }
 
-    #[cfg_attr(not(feature = "span"), allow(unused_variables, unused_mut))]
-    pub fn with_contexts<T>(mut self, span_contexts: T) -> Self
-    where
-        T: IntoIterator<Item = SpanContext>,
-    {
-        #[cfg(feature = "span")]
-        self.spans
-            .extend(span_contexts.into_iter().filter(|&(s, _)| s.is_defined()));
-        self
-    }
-
+    /// Add a [`Handle`] from either [`Arena`] or [`UniqueArena`], borrowing its span information from there
+    /// and annotating with a type and the handle representation.
     pub(crate) fn with_handle<T, A: SpanProvider<T>>(self, handle: Handle<T>, arena: &A) -> Self {
         self.with_context(arena.get_span_context(handle))
     }
 
+    /// Convert inner error using [`From`].
     pub fn into_other<E2>(self) -> WithSpan<E2>
     where
         E2: From<E>,
@@ -169,6 +168,8 @@ impl<E> WithSpan<E> {
         }
     }
 
+    /// Convert inner error into another type. Joins span information contained in `self`
+    /// with what is returned from `func`.
     pub fn and_then<F, E2>(self, func: F) -> WithSpan<E2>
     where
         F: FnOnce(E) -> WithSpan<E2>,
@@ -181,21 +182,26 @@ impl<E> WithSpan<E> {
     }
 }
 
-/// Convenience trait for [`Error`] to be able to apply spans to anything
+/// Convenience trait for [`Error`] to be able to apply spans to anything.
 pub(crate) trait AddSpan: Sized {
     type Output;
+    /// See [`WithSpan::new`].
     fn with_span(self) -> Self::Output;
+    /// See [`WithSpan::with_span`].
     fn with_span_static(self, span: Span, description: &'static str) -> Self::Output;
+    /// See [`WithSpan::with_context`].
     fn with_span_context(self, span_context: SpanContext) -> Self::Output;
+    /// See [`WithSpan::with_handle`].
     fn with_span_handle<T, A: SpanProvider<T>>(self, handle: Handle<T>, arena: &A) -> Self::Output;
 }
 
+/// Convenience trait for converting `Result<_, E>` into `Result<_, WithSpan<E>>`.
 pub(crate) trait AddSpanResult: Sized {
     type Output;
     fn with_span(self) -> Self::Output;
 }
 
-/// Convenience trait for Arena and UniqueArena
+/// Trait abstracting over getting a span from an [`Arena`] or a [`UniqueArena`].
 pub(crate) trait SpanProvider<T> {
     fn get_span(&self, handle: Handle<T>) -> Span;
     fn get_span_context(&self, handle: Handle<T>) -> SpanContext {
@@ -258,7 +264,8 @@ where
     }
 }
 
-/// Convenience trait for Result
+/// Convenience trait for [`Result`], adding a [`MapErrWithSpan::map_err_inner`]
+/// mapping to [`WithSpan::and_then`].
 pub trait MapErrWithSpan<E, E2>: Sized {
     type Output: Sized;
     fn map_err_inner<F, E3>(self, func: F) -> Self::Output
