@@ -195,12 +195,6 @@ pub(crate) trait AddSpan: Sized {
     fn with_span_handle<T, A: SpanProvider<T>>(self, handle: Handle<T>, arena: &A) -> Self::Output;
 }
 
-/// Convenience trait for converting `Result<_, E>` into `Result<_, WithSpan<E>>`.
-pub(crate) trait AddSpanResult: Sized {
-    type Output;
-    fn with_span(self) -> Self::Output;
-}
-
 /// Trait abstracting over getting a span from an [`Arena`] or a [`UniqueArena`].
 pub(crate) trait SpanProvider<T> {
     fn get_span(&self, handle: Handle<T>) -> Span;
@@ -250,17 +244,6 @@ where
         arena: &A,
     ) -> WithSpan<Self> {
         WithSpan::new(self).with_handle(handle, arena)
-    }
-}
-
-impl<T, E> AddSpanResult for Result<T, E>
-where
-    E: Error,
-{
-    type Output = Result<T, WithSpan<E>>;
-
-    fn with_span(self) -> Self::Output {
-        self.map_err(|e| e.with_span())
     }
 }
 

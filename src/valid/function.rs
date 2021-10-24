@@ -6,7 +6,7 @@ use super::{
     analyzer::{UniformityDisruptor, UniformityRequirements},
     ExpressionError, FunctionInfo, ModuleInfo,
 };
-use crate::span::{AddSpan as _, AddSpanResult as _, MapErrWithSpan as _, WithSpan};
+use crate::span::{AddSpan as _, MapErrWithSpan as _, WithSpan};
 
 #[cfg(feature = "validate")]
 use bit_set::BitSet;
@@ -543,7 +543,9 @@ impl super::Validator {
                 S::Store { pointer, value } => {
                     let mut current = pointer;
                     loop {
-                        let _ = context.resolve_pointer_type(current).with_span()?;
+                        let _ = context
+                            .resolve_pointer_type(current)
+                            .map_err(|e| e.with_span())?;
                         match context.expressions[current] {
                             crate::Expression::Access { base, .. }
                             | crate::Expression::AccessIndex { base, .. } => current = base,
@@ -565,7 +567,10 @@ impl super::Validator {
                         }
                         _ => {}
                     }
-                    let good = match *context.resolve_pointer_type(pointer).with_span()? {
+                    let good = match *context
+                        .resolve_pointer_type(pointer)
+                        .map_err(|e| e.with_span())?
+                    {
                         Ti::Pointer { base, class: _ } => match context.types[base].inner {
                             Ti::Atomic { kind, width } => *value_ty == Ti::Scalar { kind, width },
                             ref other => value_ty == other,
@@ -599,7 +604,7 @@ impl super::Validator {
                 } => {
                     //Note: this code uses a lot of `FunctionError::InvalidImageStore`,
                     // and could probably be refactored.
-                    let var = match *context.get_expression(image).with_span()? {
+                    let var = match *context.get_expression(image).map_err(|e| e.with_span())? {
                         crate::Expression::GlobalVariable(var_handle) => {
                             &context.global_vars[var_handle]
                         }
