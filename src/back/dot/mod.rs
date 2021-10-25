@@ -63,15 +63,12 @@ impl StatementGraph {
                 S::Switch {
                     selector,
                     ref cases,
-                    ref default,
                 } => {
                     self.dependencies.push((id, selector, "selector"));
                     for case in cases {
                         let case_id = self.add(&case.body);
                         self.flow.push((id, case_id, "case"));
                     }
-                    let default_id = self.add(default);
-                    self.flow.push((id, default_id, "default"));
                     "Switch"
                 }
                 S::Loop {

@@ -1151,7 +1151,6 @@ impl<'w> BlockContext<'w> {
                 crate::Statement::Switch {
                     selector,
                     ref cases,
-                    ref default,
                 } => {
                     let selector_id = self.cached[selector];
 
@@ -1164,9 +1163,12 @@ impl<'w> BlockContext<'w> {
                     let default_id = self.gen_id();
                     let raw_cases = cases
                         .iter()
-                        .map(|c| super::instructions::Case {
-                            value: c.value as Word,
-                            label_id: self.gen_id(),
+                        .filter_map(|c| match c.value {
+                            crate::SwitchValue::Integer(value) => Some(super::instructions::Case {
+                                value: value as Word,
+                                label_id: self.gen_id(),
+                            }),
+                            crate::SwitchValue::Default => None,
                         })
                         .collect::<Vec<_>>();
 
@@ -1180,7 +1182,15 @@ impl<'w> BlockContext<'w> {
                         ..loop_context
                     };
 
-                    for (i, (case, raw_case)) in cases.iter().zip(raw_cases.iter()).enumerate() {
+                    for (i, (case, raw_case)) in cases
+                        .iter()
+                        .filter(|c| match c.value {
+                            crate::SwitchValue::Integer(_) => true,
+                            crate::SwitchValue::Default => false,
+                        })
+                        .zip(raw_cases.iter())
+                        .enumerate()
+                    {
                         let case_finish_id = if case.fall_through {
                             match raw_cases.get(i + 1) {
                                 Some(rc) => rc.label_id,
@@ -1197,7 +1207,18 @@ impl<'w> BlockContext<'w> {
                         )?;
                     }
 
-                    self.write_block(default_id, default, Some(merge_id), inner_context)?;
+                    self.write_block(
+                        default_id,
+                        cases
+                            .iter()
+                            .find_map(|c| match c.value {
+                                crate::SwitchValue::Integer(_) => None,
+                                crate::SwitchValue::Default => Some(&*c.body),
+                            })
+                            .unwrap_or(&[]),
+                        Some(merge_id),
+                        inner_context,
+                    )?;
 
                     block = Block::new(merge_id);
                 }
