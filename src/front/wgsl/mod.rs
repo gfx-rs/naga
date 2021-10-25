@@ -1368,6 +1368,7 @@ impl Parser {
         &mut self,
         lexer: &mut Lexer<'a>,
         name: &'a str,
+        require: bool,
         mut ctx: ExpressionContext<'a, '_, '_>,
     ) -> Result<Option<Handle<crate::Expression>>, Error<'a>> {
         assert!(self.scopes.last().is_some());
@@ -1869,10 +1870,12 @@ impl Parser {
                         match self.parse_local_function_call(lexer, name, ctx.reborrow())? {
                             Some((function, arguments)) => {
                                 let span = NagaSpan::from(self.peek_scope(lexer));
-                                let result = Some(ctx.interrupt_emitter(
-                                    crate::Expression::CallResult(function),
-                                    span,
-                                ));
+                                let result = ctx.functions[function].result.as_ref().map(|_| {
+                                    ctx.interrupt_emitter(
+                                        crate::Expression::CallResult(function),
+                                        span,
+                                    )
+                                });
                                 ctx.block.push(
                                     crate::Statement::Call {
                                         function,
@@ -1883,7 +1886,14 @@ impl Parser {
                                 );
                                 result
                             }
-                            None => None,
+                            None => {
+                                if require {
+                                    let (_, span) = lexer.next();
+                                    return Err(Error::UnknownLocalFunction(span));
+                                } else {
+                                    None
+                                }
+                            }
                         };
                     return Ok(handle);
                 }
@@ -2134,7 +2144,7 @@ impl Parser {
                         is_reference,
                     }
                 } else if let Some(expr) =
-                    self.parse_function_call_inner(lexer, word, ctx.reborrow())?
+                    self.parse_function_call_inner(lexer, word, false, ctx.reborrow())?
                 {
                     //TODO: resolve the duplicate call in `parse_singular_expression`
                     self.pop_scope(lexer);
@@ -3154,26 +3164,16 @@ impl Parser {
         &mut self,
         lexer: &mut Lexer<'a>,
         ident: &'a str,
-        ident_span: Span,
         mut context: ExpressionContext<'a, '_, 'out>,
     ) -> Result<(), Error<'a>> {
-        let span_start = ident_span.start;
+        self.push_scope(Scope::SingularExpr, lexer);
         context.emitter.start(context.expressions);
-        let (function, arguments) = self
-            .parse_local_function_call(lexer, ident, context.reborrow())?
-            .ok_or(Error::UnknownLocalFunction(ident_span))?;
-        let span_end = lexer.current_byte_offset();
+        self.parse_function_call_inner(lexer, ident, true, context.reborrow())?;
         context
             .block
             .extend(context.emitter.finish(context.expressions));
-        context.block.push(
-            crate::Statement::Call {
-                function,
-                arguments,
-                result: None,
-            },
-            NagaSpan::from(span_start..span_end),
-        );
+        self.pop_scope(lexer);
+
         Ok(())
     }
 
@@ -3208,7 +3208,7 @@ impl Parser {
                 block.push(crate::Statement::Block(statements), span);
                 return Ok(());
             }
-            (Token::Word(word), word_span) => {
+            (Token::Word(word), _) => {
                 let mut emitter = super::Emitter::default();
                 let statement = match word {
                     "let" => {
@@ -3609,13 +3609,11 @@ impl Parser {
 
                         let mut continuing = crate::Block::new();
                         if !lexer.skip(Token::Paren(')')) {
-                            let (token, span) = lexer.peek();
-                            match token {
+                            match lexer.peek().0 {
                                 Token::Word(ident) if context.lookup_ident.get(ident).is_none() => {
                                     self.parse_function_statement(
                                         lexer,
                                         ident,
-                                        span,
                                         context.as_expression(&mut continuing, &mut emitter),
                                     )?
                                 }
@@ -3720,7 +3718,6 @@ impl Parser {
                             None => self.parse_function_statement(
                                 lexer,
                                 ident,
-                                word_span,
                                 context.as_expression(block, &mut emitter),
                             )?,
                         }
