@@ -164,12 +164,20 @@ impl<'a> ConstantSolver<'a> {
 
                 self.binary_op(op, left_constant, right_constant, span)
             }
-            Expression::Math { fun, arg, arg1, .. } => {
+            Expression::Math {
+                fun,
+                arg,
+                arg1,
+                arg2,
+                ..
+            } => {
                 let arg = self.solve(arg)?;
                 let arg1 = arg1.map(|arg| self.solve(arg)).transpose()?;
+                let arg2 = arg2.map(|arg| self.solve(arg)).transpose()?;
 
                 let const0 = &self.constants[arg].inner;
                 let const1 = arg1.map(|arg| &self.constants[arg].inner);
+                let const2 = arg2.map(|arg| &self.constants[arg].inner);
 
                 match fun {
                     crate::MathFunction::Pow => {
@@ -200,6 +208,48 @@ impl<'a> ConstantSolver<'a> {
 
                         let inner = ConstantInner::Scalar { width, value };
                         Ok(self.register_constant(inner, span))
+                    }
+                    crate::MathFunction::Clamp => {
+                        let (value, width) = match (const0, const1.unwrap(), const2.unwrap()) {
+                            (
+                                &ConstantInner::Scalar {
+                                    width,
+                                    value: value0,
+                                },
+                                &ConstantInner::Scalar { value: value1, .. },
+                                &ConstantInner::Scalar { value: value2, .. },
+                            ) => (
+                                match (value0, value1, value2) {
+                                    (
+                                        ScalarValue::Sint(a),
+                                        ScalarValue::Sint(b),
+                                        ScalarValue::Sint(c),
+                                    ) => ScalarValue::Sint(a.max(b).min(c)),
+                                    (
+                                        ScalarValue::Uint(a),
+                                        ScalarValue::Uint(b),
+                                        ScalarValue::Uint(c),
+                                    ) => ScalarValue::Uint(a.max(b).min(c)),
+                                    (
+                                        ScalarValue::Float(a),
+                                        ScalarValue::Float(b),
+                                        ScalarValue::Float(c),
+                                    ) => ScalarValue::Float(a.max(b).min(c)),
+                                    _ => return Err(ConstantSolvingError::InvalidMathArg),
+                                },
+                                width,
+                            ),
+                            _ => return Err(ConstantSolvingError::InvalidMathArg),
+                        };
+
+                        Ok(self.constants.fetch_or_append(
+                            Constant {
+                                name: None,
+                                specialization: None,
+                                inner: ConstantInner::Scalar { width, value },
+                            },
+                            span,
+                        ))
                     }
                     _ => Err(ConstantSolvingError::NotImplemented(format!("{:?}", fun))),
                 }
