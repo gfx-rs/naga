@@ -239,17 +239,16 @@ impl<'a> ConstantSolver<'a> {
                                 },
                                 width,
                             ),
-                            _ => return Err(ConstantSolvingError::InvalidMathArg),
+                            _ => {
+                                return Err(ConstantSolvingError::NotImplemented(format!(
+                                    "{:?} applied to vector values",
+                                    fun
+                                )))
+                            }
                         };
 
-                        Ok(self.constants.fetch_or_append(
-                            Constant {
-                                name: None,
-                                specialization: None,
-                                inner: ConstantInner::Scalar { width, value },
-                            },
-                            span,
-                        ))
+                        let inner = ConstantInner::Scalar { width, value };
+                        Ok(self.register_constant(inner, span))
                     }
                     _ => Err(ConstantSolvingError::NotImplemented(format!("{:?}", fun))),
                 }
