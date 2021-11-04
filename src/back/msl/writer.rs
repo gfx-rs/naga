@@ -1307,7 +1307,7 @@ impl<W: Write> Writer<W> {
                             let name = &self.names[&NameKey::StructMember(result_ty, index as u32)];
                             // HACK: we are forcefully deduplicating the expression here
                             // to convert from a wrapped struct to a raw array, e.g.
-                            // `float gl_ClipDistance1 [clip_distance] [1];`.
+                            // `float gl_ClipDistance1 [[clip_distance]] [1];`.
                             if let crate::TypeInner::Array {
                                 size: crate::ArraySize::Constant(const_handle),
                                 ..
