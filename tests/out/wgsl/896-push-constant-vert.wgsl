@@ -1,4 +1,4 @@
-[[block]]
+[block]
 struct PushConstants {
     example: f32;
 };
@@ -9,7 +9,7 @@ fn main1() {
     return;
 }
 
-[[stage(vertex)]]
+[stage(vertex)]
 fn main() {
     main1();
     return;

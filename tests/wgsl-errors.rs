@@ -35,11 +35,11 @@ fn function_without_identifier() {
 fn invalid_integer() {
     check(
         "fn foo([location(1.)] x: i32) {}",
-        r###"error: expected identifier, found '['
-  ┌─ wgsl:1:8
+        r###"error: expected signed integer literal of 32-bit width, found '1.'
+  ┌─ wgsl:1:18
   │
 1 │ fn foo([location(1.)] x: i32) {}
-  │        ^ expected identifier
+  │                  ^^ expected signed integer literal of 32-bit width
 
 "###,
     );
@@ -114,10 +114,10 @@ fn negative_index() {
 fn bad_texture() {
     check(
         r#"
-            [[group(0), binding(0)]] var sampler : sampler;
+            [group(0), binding(0)] var sampler : sampler;
 
-            [[stage(fragment)]]
-            fn main() -> [[location(0)]] vec4<f32> {
+            [stage(fragment)]
+            fn main() -> [location(0)] vec4<f32> {
                 let a = 3;
                 return textureSample(a, sampler, vec2<f32>(0.0));
             }
@@ -154,19 +154,19 @@ fn bad_type_cast() {
 fn bad_texture_sample_type() {
     check(
         r#"
-            [[group(0), binding(0)]] var sampler : sampler;
-            [[group(0), binding(1)]] var texture : texture_2d<bool>;
+            [group(0), binding(0)] var sampler : sampler;
+            [group(0), binding(1)] var texture : texture_2d<bool>;
 
-            [[stage(fragment)]]
-            fn main() -> [[location(0)]] vec4<f32> {
+            [stage(fragment)]
+            fn main() -> [location(0)] vec4<f32> {
                 return textureSample(texture, sampler, vec2<f32>(0.0));
             }
         "#,
         r#"error: texture sample type must be one of f32, i32 or u32, but found bool
-  ┌─ wgsl:3:63
+  ┌─ wgsl:3:61
   │
-3 │             [[group(0), binding(1)]] var texture : texture_2d<bool>;
-  │                                                               ^^^^ must be one of f32, i32 or u32
+3 │             [group(0), binding(1)] var texture : texture_2d<bool>;
+  │                                                             ^^^^ must be one of f32, i32 or u32
 
 "#,
     );
@@ -194,13 +194,13 @@ fn bad_for_initializer() {
 fn unknown_storage_class() {
     check(
         r#"
-            [[group(0), binding(0)]] var<bad> texture: texture_2d<f32>;
+            [group(0), binding(0)] var<bad> texture: texture_2d<f32>;
         "#,
         r#"error: unknown storage class: 'bad'
-  ┌─ wgsl:2:42
+  ┌─ wgsl:2:40
   │
-2 │             [[group(0), binding(0)]] var<bad> texture: texture_2d<f32>;
-  │                                          ^^^ unknown storage class
+2 │             [group(0), binding(0)] var<bad> texture: texture_2d<f32>;
+  │                                        ^^^ unknown storage class
 
 "#,
     );
@@ -210,14 +210,14 @@ fn unknown_storage_class() {
 fn unknown_attribute() {
     check(
         r#"
-            [[a]]
+            [a]
             fn x() {}
         "#,
         r#"error: unknown attribute: 'a'
-  ┌─ wgsl:2:15
+  ┌─ wgsl:2:14
   │
-2 │             [[a]]
-  │               ^ unknown attribute
+2 │             [a]
+  │              ^ unknown attribute
 
 "#,
     );
@@ -227,13 +227,13 @@ fn unknown_attribute() {
 fn unknown_built_in() {
     check(
         r#"
-            fn x([[builtin(unknown_built_in)]] y: u32) {}
+            fn x([builtin(unknown_built_in)] y: u32) {}
         "#,
         r#"error: unknown builtin: 'unknown_built_in'
-  ┌─ wgsl:2:28
+  ┌─ wgsl:2:27
   │
-2 │             fn x([[builtin(unknown_built_in)]] y: u32) {}
-  │                            ^^^^^^^^^^^^^^^^ unknown builtin
+2 │             fn x([builtin(unknown_built_in)] y: u32) {}
+  │                           ^^^^^^^^^^^^^^^^ unknown builtin
 
 "#,
     );
@@ -259,13 +259,13 @@ fn unknown_access() {
 fn unknown_shader_stage() {
     check(
         r#"
-            [[stage(geometry)]] fn main() {}
+            [stage(geometry)] fn main() {}
         "#,
         r#"error: unknown shader stage: 'geometry'
-  ┌─ wgsl:2:21
+  ┌─ wgsl:2:20
   │
-2 │             [[stage(geometry)]] fn main() {}
-  │                     ^^^^^^^^ unknown shader stage
+2 │             [stage(geometry)] fn main() {}
+  │                    ^^^^^^^^ unknown shader stage
 
 "#,
     );
@@ -343,13 +343,13 @@ fn unknown_storage_format() {
 fn unknown_conservative_depth() {
     check(
         r#"
-            [[early_depth_test(abc)]] fn main() {}
+            [early_depth_test(abc)] fn main() {}
         "#,
         r#"error: unknown conservative depth: 'abc'
-  ┌─ wgsl:2:32
+  ┌─ wgsl:2:31
   │
-2 │             [[early_depth_test(abc)]] fn main() {}
-  │                                ^^^ unknown conservative depth
+2 │             [early_depth_test(abc)] fn main() {}
+  │                               ^^^ unknown conservative depth
 
 "#,
     );
@@ -359,13 +359,13 @@ fn unknown_conservative_depth() {
 fn zero_array_stride() {
     check(
         r#"
-            type zero = [[stride(0)]] array<f32>;
+            type zero = [stride(0)] array<f32>;
         "#,
         r#"error: array stride must not be zero
-  ┌─ wgsl:2:34
+  ┌─ wgsl:2:33
   │
-2 │             type zero = [[stride(0)]] array<f32>;
-  │                                  ^ array stride must not be zero
+2 │             type zero = [stride(0)] array<f32>;
+  │                                 ^ array stride must not be zero
 
 "#,
     );
@@ -376,14 +376,14 @@ fn struct_member_zero_size() {
     check(
         r#"
             struct Bar {
-                [[size(0)]] data: array<f32>;
+                [size(0)] data: array<f32>;
             };
         "#,
         r#"error: struct member size or alignment must not be 0
-  ┌─ wgsl:3:24
+  ┌─ wgsl:3:23
   │
-3 │                 [[size(0)]] data: array<f32>;
-  │                        ^ struct member size or alignment must not be 0
+3 │                 [size(0)] data: array<f32>;
+  │                       ^ struct member size or alignment must not be 0
 
 "#,
     );
@@ -394,14 +394,14 @@ fn struct_member_zero_align() {
     check(
         r#"
             struct Bar {
-                [[align(0)]] data: array<f32>;
+                [align(0)] data: array<f32>;
             };
         "#,
         r#"error: struct member size or alignment must not be 0
-  ┌─ wgsl:3:25
+  ┌─ wgsl:3:24
   │
-3 │                 [[align(0)]] data: array<f32>;
-  │                         ^ struct member size or alignment must not be 0
+3 │                 [align(0)] data: array<f32>;
+  │                        ^ struct member size or alignment must not be 0
 
 "#,
     );
@@ -411,13 +411,13 @@ fn struct_member_zero_align() {
 fn inconsistent_binding() {
     check(
         r#"
-        fn foo([[builtin(vertex_index), location(0)]] x: u32) {}
+        fn foo([builtin(vertex_index), location(0)] x: u32) {}
         "#,
         r#"error: input/output binding is not consistent
   ┌─ wgsl:2:16
   │
-2 │         fn foo([[builtin(vertex_index), location(0)]] x: u32) {}
-  │                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ input/output binding is not consistent
+2 │         fn foo([builtin(vertex_index), location(0)] x: u32) {}
+  │                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ input/output binding is not consistent
 
 "#,
     );
@@ -597,7 +597,7 @@ fn invalid_arrays() {
 
     check_validation_error! {
         r#"
-            [[block]] struct Block { value: f32; };
+            [block] struct Block { value: f32; };
             type Bad = array<Block, 4>;
         "#:
         Err(naga::valid::ValidationError::Type {
@@ -608,7 +608,7 @@ fn invalid_arrays() {
 
     check_validation_error! {
         r#"
-            type Bad = [[stride(2)]] array<f32, 4>;
+            type Bad = [stride(2)] array<f32, 4>;
         "#:
         Err(naga::valid::ValidationError::Type {
             error: naga::valid::TypeError::InsufficientArrayStride { stride: 2, base_size: 4 },
@@ -726,8 +726,8 @@ fn pointer_type_equivalence() {
 fn missing_bindings() {
     check_validation_error! {
         "
-        [[stage(vertex)]]
-        fn vertex(input: vec4<f32>) -> [[location(0)]] vec4<f32> {
+        [stage(vertex)]
+        fn vertex(input: vec4<f32>) -> [location(0)] vec4<f32> {
            return input;
         }
         ":
@@ -743,8 +743,8 @@ fn missing_bindings() {
 
     check_validation_error! {
         "
-        [[stage(vertex)]]
-        fn vertex([[location(0)]] input: vec4<f32>, more_input: f32) -> [[location(0)]] vec4<f32> {
+        [stage(vertex)]
+        fn vertex([location(0)] input: vec4<f32>, more_input: f32) -> [location(0)] vec4<f32> {
            return input + more_input;
         }
         ":
@@ -760,8 +760,8 @@ fn missing_bindings() {
 
     check_validation_error! {
         "
-        [[stage(vertex)]]
-        fn vertex([[location(0)]] input: vec4<f32>) -> vec4<f32> {
+        [stage(vertex)]
+        fn vertex([location(0)] input: vec4<f32>) -> vec4<f32> {
            return input;
         }
         ":
@@ -777,12 +777,12 @@ fn missing_bindings() {
     check_validation_error! {
         "
         struct VertexIn {
-          [[location(0)]] pos: vec4<f32>;
+          [location(0)] pos: vec4<f32>;
           uv: vec2<f32>;
         };
 
-        [[stage(vertex)]]
-        fn vertex(input: VertexIn) -> [[location(0)]] vec4<f32> {
+        [stage(vertex)]
+        fn vertex(input: VertexIn) -> [location(0)] vec4<f32> {
            return input.pos;
         }
         ":
@@ -926,13 +926,13 @@ fn invalid_runtime_sized_arrays() {
             arr: array<f32>;
         };
 
-        [[block]]
+        [block]
         struct Outer {
             legit: i32;
             unsized: Unsized;
         };
 
-        [[group(0), binding(0)]] var<storage> outer: Outer;
+        [group(0), binding(0)] var<storage> outer: Outer;
 
         fn fetch(i: i32) -> f32 {
            return outer.unsized.arr[i];

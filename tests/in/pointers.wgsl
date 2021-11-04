@@ -4,7 +4,7 @@ fn f() {
    *px = 10;
 }
 
-[[block]]
+[block]
 struct DynamicArray {
     array: array<u32>;
 };

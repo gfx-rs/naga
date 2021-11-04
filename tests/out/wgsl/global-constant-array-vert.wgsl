@@ -6,7 +6,7 @@ fn main1() {
     let e2: u32 = i;
 }
 
-[[stage(vertex)]]
+[stage(vertex)]
 fn main() {
     main1();
     return;

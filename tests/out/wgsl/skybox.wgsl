@@ -1,23 +1,23 @@
 struct VertexOutput {
-    [[builtin(position)]] position: vec4<f32>;
-    [[location(0)]] uv: vec3<f32>;
+    [builtin(position)] position: vec4<f32>;
+    [location(0)] uv: vec3<f32>;
 };
 
-[[block]]
+[block]
 struct Data {
     proj_inv: mat4x4<f32>;
     view: mat4x4<f32>;
 };
 
-[[group(0), binding(0)]]
+[group(0), binding(0)]
 var<uniform> r_data: Data;
-[[group(0), binding(1)]]
+[group(0), binding(1)]
 var r_texture: texture_cube<f32>;
-[[group(0), binding(2)]]
+[group(0), binding(2)]
 var r_sampler: sampler;
 
-[[stage(vertex)]]
-fn vs_main([[builtin(vertex_index)]] vertex_index: u32) -> VertexOutput {
+[stage(vertex)]
+fn vs_main([builtin(vertex_index)] vertex_index: u32) -> VertexOutput {
     var tmp1: i32;
     var tmp2: i32;
 
@@ -35,8 +35,8 @@ fn vs_main([[builtin(vertex_index)]] vertex_index: u32) -> VertexOutput {
     return VertexOutput(pos, (inv_model_view * unprojected.xyz));
 }
 
-[[stage(fragment)]]
-fn fs_main(in: VertexOutput) -> [[location(0)]] vec4<f32> {
+[stage(fragment)]
+fn fs_main(in: VertexOutput) -> [location(0)] vec4<f32> {
     let e5: vec4<f32> = textureSample(r_texture, r_sampler, in.uv);
     return e5;
 }

@@ -321,7 +321,7 @@ impl<W: Write> Writer<W> {
     /// # Notes
     /// Adds an extra space if required
     fn write_attributes(&mut self, attributes: &[Attribute], extra_space: bool) -> BackendResult {
-        write!(self.out, "[[")?;
+        write!(self.out, "[")?;
 
         let mut need_last_comma = true;
         if let Some(last_attrib) = attributes.last() {
@@ -400,7 +400,7 @@ impl<W: Write> Writer<W> {
             }
         }
 
-        write!(self.out, "]]")?;
+        write!(self.out, "]")?;
         if extra_space {
             write!(self.out, " ")?;
         }

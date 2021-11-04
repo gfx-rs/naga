@@ -1,5 +1,5 @@
 struct VertexOutput {
-    [[builtin(position)]] member: vec4<f32>;
+    [builtin(position)] member: vec4<f32>;
 };
 
 var<private> a_pos1: vec2<f32>;
@@ -11,8 +11,8 @@ fn main1() {
     return;
 }
 
-[[stage(vertex)]]
-fn main([[location(0)]] a_pos: vec2<f32>) -> VertexOutput {
+[stage(vertex)]
+fn main([location(0)] a_pos: vec2<f32>) -> VertexOutput {
     a_pos1 = a_pos;
     main1();
     let e5: vec4<f32> = gl_Position;

@@ -4,7 +4,7 @@ fn main1() {
     let e1: f32 = f32(1);
 }
 
-[[stage(vertex)]]
+[stage(vertex)]
 fn main() {
     main1();
     return;

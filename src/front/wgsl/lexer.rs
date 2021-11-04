@@ -329,11 +329,7 @@ fn consume_token(mut input: &str, generic: bool) -> (Token<'_>, &str) {
         }
         '[' | ']' => {
             input = chars.as_str();
-            if chars.next() == Some(cur) {
-                (Token::DoubleParen(cur), chars.as_str())
-            } else {
-                (Token::Paren(cur), input)
-            }
+            (Token::Paren(cur), input)
         }
         '0'..='9' => consume_number(input),
         'a'..='z' | 'A'..='Z' => {
@@ -662,9 +658,9 @@ fn test_tokens() {
 #[test]
 fn test_variable_decl() {
     sub_test(
-        "[[ group(0 )]] var< uniform> texture:   texture_multisampled_2d <f32 >;",
+        "[ group(0 )] var< uniform> texture:   texture_multisampled_2d <f32 >;",
         &[
-            Token::DoubleParen('['),
+            Token::Paren('['),
             Token::Word("group"),
             Token::Paren('('),
             Token::Number {
@@ -673,7 +669,7 @@ fn test_variable_decl() {
                 width: None,
             },
             Token::Paren(')'),
-            Token::DoubleParen(']'),
+            Token::Paren(']'),
             Token::Word("var"),
             Token::Paren('<'),
             Token::Word("uniform"),

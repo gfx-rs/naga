@@ -53,7 +53,7 @@ fn modulo() {
     let d: vec3<f32> = (vec3<f32>(1.0) % vec3<f32>(1.0));
 }
 
-[[stage(compute), workgroup_size(1, 1, 1)]]
+[stage(compute), workgroup_size(1, 1, 1)]
 fn main() {
     let e4: vec4<f32> = builtins();
     let e5: vec4<f32> = splat();

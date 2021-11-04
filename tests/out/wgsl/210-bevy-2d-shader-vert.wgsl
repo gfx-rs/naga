@@ -1,32 +1,32 @@
-[[block]]
+[block]
 struct Camera {
     ViewProj: mat4x4<f32>;
 };
 
-[[block]]
+[block]
 struct Transform {
     Model: mat4x4<f32>;
 };
 
-[[block]]
+[block]
 struct Sprite_size {
     size: vec2<f32>;
 };
 
 struct VertexOutput {
-    [[location(0)]] v_Uv: vec2<f32>;
-    [[builtin(position)]] member: vec4<f32>;
+    [location(0)] v_Uv: vec2<f32>;
+    [builtin(position)] member: vec4<f32>;
 };
 
 var<private> Vertex_Position1: vec3<f32>;
 var<private> Vertex_Normal1: vec3<f32>;
 var<private> Vertex_Uv1: vec2<f32>;
 var<private> v_Uv: vec2<f32>;
-[[group(0), binding(0)]]
+[group(0), binding(0)]
 var<uniform> global: Camera;
-[[group(2), binding(0)]]
+[group(2), binding(0)]
 var<uniform> global1: Transform;
-[[group(2), binding(1)]]
+[group(2), binding(1)]
 var<uniform> global2: Sprite_size;
 var<private> gl_Position: vec4<f32>;
 
@@ -45,8 +45,8 @@ fn main1() {
     return;
 }
 
-[[stage(vertex)]]
-fn main([[location(0)]] Vertex_Position: vec3<f32>, [[location(1)]] Vertex_Normal: vec3<f32>, [[location(2)]] Vertex_Uv: vec2<f32>) -> VertexOutput {
+[stage(vertex)]
+fn main([location(0)] Vertex_Position: vec3<f32>, [location(1)] Vertex_Normal: vec3<f32>, [location(2)] Vertex_Uv: vec2<f32>) -> VertexOutput {
     Vertex_Position1 = Vertex_Position;
     Vertex_Normal1 = Vertex_Normal;
     Vertex_Uv1 = Vertex_Uv;

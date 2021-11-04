@@ -1,5 +1,5 @@
 struct FragmentOutput {
-    [[location(0)]] o_color: vec4<f32>;
+    [location(0)] o_color: vec4<f32>;
 };
 
 var<private> o_color: vec4<f32>;
@@ -37,7 +37,7 @@ fn main1() {
     return;
 }
 
-[[stage(fragment)]]
+[stage(fragment)]
 fn main() -> FragmentOutput {
     main1();
     let e3: vec4<f32> = o_color;

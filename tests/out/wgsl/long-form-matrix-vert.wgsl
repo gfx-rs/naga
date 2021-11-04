@@ -23,7 +23,7 @@ fn main1() {
     let e109: vec4<f32> = vec4<f32>(f32(1));
 }
 
-[[stage(vertex)]]
+[stage(vertex)]
 fn main() {
     main1();
     return;

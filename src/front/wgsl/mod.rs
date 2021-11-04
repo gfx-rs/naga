@@ -57,7 +57,6 @@ pub enum Token<'a> {
     Separator(char),
     DoubleColon,
     Paren(char),
-    DoubleParen(char),
     Number {
         value: &'a str,
         ty: NumberType,
@@ -182,7 +181,6 @@ impl<'a> Error<'a> {
                                 Token::Separator(c) => format!("'{}'", c),
                                 Token::DoubleColon => "'::'".to_string(),
                                 Token::Paren(c) => format!("'{}'", c),
-                                Token::DoubleParen(c) => format!("'{}{}'", c, c),
                                 Token::Number { value, .. } => {
                                     format!("number ({})", value)
                                 }
@@ -2668,11 +2666,11 @@ impl Parser {
             let (mut size, mut align) = (None, None);
             self.push_scope(Scope::Attribute, lexer);
             let mut bind_parser = BindingParser::default();
-            if lexer.skip(Token::DoubleParen('[')) {
+            if lexer.skip(Token::Paren('[')) {
                 let mut ready = true;
                 loop {
                     match lexer.next() {
-                        (Token::DoubleParen(']'), _) => {
+                        (Token::Paren(']'), _) => {
                             break;
                         }
                         (Token::Separator(','), _) if !ready => {
@@ -3106,7 +3104,7 @@ impl Parser {
         self.push_scope(Scope::TypeDecl, lexer);
         let mut attribute = TypeAttributes::default();
 
-        if lexer.skip(Token::DoubleParen('[')) {
+        if lexer.skip(Token::Paren('[')) {
             self.push_scope(Scope::Attribute, lexer);
             loop {
                 match lexer.next() {
@@ -3118,7 +3116,7 @@ impl Parser {
                             Some(NonZeroU32::new(stride).ok_or(Error::ZeroStride(span))?);
                         lexer.expect(Token::Paren(')'))?;
                     }
-                    (Token::DoubleParen(']'), _) => break,
+                    (Token::Paren(']'), _) => break,
                     other => return Err(Error::Unexpected(other, ExpectedToken::TypeAttribute)),
                 }
             }
@@ -3795,7 +3793,7 @@ impl Parser {
     ) -> Result<Option<crate::Binding>, Error<'a>> {
         self.push_scope(Scope::Attribute, lexer);
 
-        if !lexer.skip(Token::DoubleParen('[')) {
+        if !lexer.skip(Token::Paren('[')) {
             self.pop_scope(lexer);
             return Ok(None);
         }
@@ -3805,7 +3803,7 @@ impl Parser {
             let (word, span) = lexer.next_ident_with_span()?;
             bind_parser.parse(lexer, word, span)?;
             match lexer.next() {
-                (Token::DoubleParen(']'), _) => {
+                (Token::Paren(']'), _) => {
                     break;
                 }
                 (Token::Separator(','), _) => {}
@@ -3950,7 +3948,7 @@ impl Parser {
         let mut workgroup_size = [0u32; 3];
         let mut early_depth_test = None;
 
-        if lexer.skip(Token::DoubleParen('[')) {
+        if lexer.skip(Token::Paren('[')) {
             let (mut bind_index, mut bind_group) = (None, None);
             self.push_scope(Scope::Attribute, lexer);
             loop {
@@ -4009,7 +4007,7 @@ impl Parser {
                     (_, word_span) => return Err(Error::UnknownAttribute(word_span)),
                 }
                 match lexer.next() {
-                    (Token::DoubleParen(']'), _) => {
+                    (Token::Paren(']'), _) => {
                         break;
                     }
                     (Token::Separator(','), _) => {}

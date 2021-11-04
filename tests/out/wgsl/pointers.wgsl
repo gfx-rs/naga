@@ -1,6 +1,6 @@
-[[block]]
+[block]
 struct DynamicArray {
-    array1: [[stride(4)]] array<u32>;
+    array1: [stride(4)] array<u32>;
 };
 
 fn f() {
