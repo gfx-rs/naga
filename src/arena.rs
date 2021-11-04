@@ -6,6 +6,7 @@ use std::{cmp::Ordering, fmt, hash, marker::PhantomData, num::NonZeroU32, ops};
 type Index = NonZeroU32;
 
 use crate::Span;
+use bit_set::BitSet;
 use indexmap::set::IndexSet;
 
 /// A strongly typed reference to an arena item.
@@ -573,5 +574,96 @@ where
             #[cfg(feature = "span")]
             span_info,
         })
+    }
+}
+
+/// A set of arena handles, represented as a bit vector.
+///
+/// This represents a set of `Handle`s simply by storing a bit for every
+/// `Handle` index. The underlying bit vector is sized dynamically, so storage
+/// depends on the highest handle index that has been inserted.
+///
+/// A `HandleBitSet<T>` will only hold `Handle<T>` values, so it's a bit more
+/// strictly typed than using `BitSet` directly.
+///
+/// This is a good representation for a handle set if you expect it to typically
+/// contain many of the arena's handles. In that situation, `HandleBitSet` will use
+/// a fraction of the memory of a `HashSet`. But if you expect the set to hold only
+/// a small proportion of the arena's handles, `HashSet` would be a better choice.
+pub struct HandleBitSet<T> {
+    /// Zero-based indices of the member handles.
+    set: BitSet,
+    marker: PhantomData<Handle<T>>,
+}
+
+impl<T> Default for HandleBitSet<T> {
+    fn default() -> Self {
+        HandleBitSet {
+            set: BitSet::new(),
+            marker: PhantomData,
+        }
+    }
+}
+
+impl<T> HandleBitSet<T> {
+    /// Return `true` if `handle` is in the set.
+    #[cfg(feature = "validate")]
+    pub fn contains(&self, handle: Handle<T>) -> bool {
+        self.set.contains(handle.index())
+    }
+
+    /// Insert `handle` into the set.
+    ///
+    /// Return `true` if the handle was not already present in the set.
+    pub fn insert(&mut self, handle: Handle<T>) -> bool {
+        self.set.insert(handle.index())
+    }
+
+    /// Remove `handle` from the set.
+    ///
+    /// Return `true` if the handle was present in the set.
+    ///
+    /// The set's capacity is not affected.
+    #[cfg(feature = "validate")]
+    pub fn remove(&mut self, handle: Handle<T>) -> bool {
+        self.set.remove(handle.index())
+    }
+
+    /// Remove all handles from the set.
+    ///
+    /// This leaves the set's capacity unchanged.
+    pub fn clear(&mut self) {
+        self.set.clear();
+    }
+}
+
+pub struct HandleBitSetIter<'a, T> {
+    set_iter: bit_set::Iter<'a, u32>,
+    marker: PhantomData<Handle<T>>,
+}
+
+impl<'a, T> Iterator for HandleBitSetIter<'a, T> {
+    type Item = Handle<T>;
+    fn next(&mut self) -> Option<Self::Item> {
+        self.set_iter
+            .next()
+            .map(|index| -> Handle<T> { unsafe { Handle::from_usize_unchecked(index) } })
+    }
+}
+
+impl<'a, T> IntoIterator for &'a HandleBitSet<T> {
+    type Item = Handle<T>;
+    type IntoIter = HandleBitSetIter<'a, T>;
+    fn into_iter(self) -> Self::IntoIter {
+        HandleBitSetIter {
+            set_iter: self.set.iter(),
+            marker: PhantomData,
+        }
+    }
+}
+
+impl<T> fmt::Debug for HandleBitSet<T> {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        fmt.debug_set().entries(self).finish()
     }
 }

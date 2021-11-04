@@ -11,7 +11,7 @@ use crate::span::WithSpan;
 use crate::span::{AddSpan as _, MapErrWithSpan as _};
 
 #[cfg(feature = "validate")]
-use bit_set::BitSet;
+use crate::arena::HandleBitSet;
 
 #[derive(Clone, Debug, thiserror::Error)]
 #[cfg_attr(test, derive(PartialEq))]
@@ -209,11 +209,11 @@ impl<'a> BlockContext<'a> {
     fn resolve_type_impl(
         &self,
         handle: Handle<crate::Expression>,
-        valid_expressions: &BitSet,
+        valid_expressions: &HandleBitSet<crate::Expression>,
     ) -> Result<&crate::TypeInner, WithSpan<ExpressionError>> {
         if handle.index() >= self.expressions.len() {
             Err(ExpressionError::DoesntExist.with_span())
-        } else if !valid_expressions.contains(handle.index()) {
+        } else if !valid_expressions.contains(handle) {
             Err(ExpressionError::NotInScope.with_span_handle(handle, self.expressions))
         } else {
             Ok(self.info[handle].ty.inner_with(self.types))
@@ -223,7 +223,7 @@ impl<'a> BlockContext<'a> {
     fn resolve_type(
         &self,
         handle: Handle<crate::Expression>,
-        valid_expressions: &BitSet,
+        valid_expressions: &HandleBitSet<crate::Expression>,
     ) -> Result<&crate::TypeInner, WithSpan<FunctionError>> {
         self.resolve_type_impl(handle, valid_expressions)
             .map_err_inner(|error| FunctionError::Expression { handle, error }.with_span())
@@ -283,7 +283,7 @@ impl super::Validator {
         }
 
         if let Some(expr) = result {
-            if self.valid_expression_set.insert(expr.index()) {
+            if self.valid_expression_set.insert(expr) {
                 self.valid_expression_list.push(expr);
             } else {
                 return Err(CallError::ResultAlreadyInScope(expr)
@@ -353,7 +353,7 @@ impl super::Validator {
             }
         }
 
-        if self.valid_expression_set.insert(result.index()) {
+        if self.valid_expression_set.insert(result) {
             self.valid_expression_list.push(result);
         } else {
             return Err(AtomicError::ResultAlreadyInScope(result)
@@ -393,7 +393,7 @@ impl super::Validator {
             match *statement {
                 S::Emit(ref range) => {
                     for handle in range.clone() {
-                        if self.valid_expression_set.insert(handle.index()) {
+                        if self.valid_expression_set.insert(handle) {
                             self.valid_expression_list.push(handle);
                         } else {
                             return Err(FunctionError::ExpressionAlreadyInScope(handle)
@@ -521,7 +521,7 @@ impl super::Validator {
                         )?
                         .stages;
                     for handle in self.valid_expression_list.drain(base_expression_count..) {
-                        self.valid_expression_set.remove(handle.index());
+                        self.valid_expression_set.remove(handle);
                     }
                 }
                 S::Break => {
@@ -761,7 +761,7 @@ impl super::Validator {
         let base_expression_count = self.valid_expression_list.len();
         let info = self.validate_block_impl(statements, context)?;
         for handle in self.valid_expression_list.drain(base_expression_count..) {
-            self.valid_expression_set.remove(handle.index());
+            self.valid_expression_set.remove(handle);
         }
         Ok(info)
     }
@@ -861,7 +861,7 @@ impl super::Validator {
         self.valid_expression_list.clear();
         for (handle, expr) in fun.expressions.iter() {
             if expr.needs_pre_emit() {
-                self.valid_expression_set.insert(handle.index());
+                self.valid_expression_set.insert(handle);
             }
             #[cfg(feature = "validate")]
             if self.flags.contains(super::ValidationFlags::EXPRESSIONS) {

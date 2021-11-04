@@ -9,7 +9,7 @@ mod r#type;
 use crate::arena::{Arena, UniqueArena};
 
 use crate::{
-    arena::Handle,
+    arena::{Handle, HandleBitSet},
     proc::{InvalidBaseType, Layouter},
     FastHashSet,
 };
@@ -109,7 +109,7 @@ pub struct Validator {
     #[allow(dead_code)]
     select_cases: FastHashSet<i32>,
     valid_expression_list: Vec<Handle<crate::Expression>>,
-    valid_expression_set: BitSet,
+    valid_expression_set: HandleBitSet<crate::Expression>,
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
@@ -221,7 +221,7 @@ impl Validator {
             bind_group_masks: Vec::new(),
             select_cases: FastHashSet::default(),
             valid_expression_list: Vec::new(),
-            valid_expression_set: BitSet::new(),
+            valid_expression_set: HandleBitSet::default(),
         }
     }
 
