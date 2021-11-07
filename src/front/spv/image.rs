@@ -572,7 +572,9 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                 {
                     match dref_id {
                         Some(id) => {
-                            let mut expr = self.lookup_expression.lookup(id)?.handle;
+                            let expr_lexp = self.lookup_expression.lookup(id)?;
+                            let mut expr =
+                                self.get_expr_handle(id, expr_lexp, ctx, emitter, block, body_idx);
 
                             if options.project {
                                 let required_size = dim.required_coordinate_size();
