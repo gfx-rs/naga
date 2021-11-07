@@ -257,10 +257,10 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
     pub(super) fn parse_image_write(
         &mut self,
         words_left: u16,
-        type_arena: &UniqueArena<crate::Type>,
-        global_arena: &Arena<crate::GlobalVariable>,
-        arguments: &[FunctionArgument],
-        expressions: &mut Arena<crate::Expression>,
+        ctx: &mut super::BlockContext,
+        emitter: &mut crate::front::Emitter,
+        block: &mut crate::Block,
+        body_idx: usize,
     ) -> Result<crate::Statement, Error> {
         let image_id = self.next()?;
         let coordinate_id = self.next()?;
@@ -277,11 +277,17 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
         }
 
         let image_lexp = self.lookup_expression.lookup(image_id)?;
-        let image_ty = expressions.get_image_expr_ty(image_lexp.handle, global_arena, arguments)?;
+        let image_ty = ctx.expressions.get_image_expr_ty(
+            image_lexp.handle,
+            ctx.global_arena,
+            ctx.arguments,
+        )?;
 
         let coord_lexp = self.lookup_expression.lookup(coordinate_id)?;
+        let coord_handle =
+            self.get_expr_handle(coordinate_id, coord_lexp, ctx, emitter, block, body_idx);
         let coord_type_handle = self.lookup_type.lookup(coord_lexp.type_id)?.handle;
-        let (coordinate, array_index) = match type_arena[image_ty].inner {
+        let (coordinate, array_index) = match ctx.type_arena[image_ty].inner {
             crate::TypeInner::Image {
                 dim,
                 arrayed,
@@ -293,21 +299,22 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                 } else {
                     ExtraCoordinate::Garbage
                 },
-                coord_lexp.handle,
+                coord_handle,
                 coord_type_handle,
-                type_arena,
-                expressions,
+                ctx.type_arena,
+                ctx.expressions,
             ),
             _ => return Err(Error::InvalidImage(image_ty)),
         };
 
         let value_lexp = self.lookup_expression.lookup(value_id)?;
+        let value = self.get_expr_handle(value_id, value_lexp, ctx, emitter, block, body_idx);
 
         Ok(crate::Statement::ImageStore {
             image: image_lexp.handle,
             coordinate,
             array_index,
-            value: value_lexp.handle,
+            value,
         })
     }
 
@@ -339,7 +346,9 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
             match spirv::ImageOperands::from_bits_truncate(bit) {
                 spirv::ImageOperands::LOD => {
                     let lod_expr = self.next()?;
-                    let lod_handle = self.lookup_expression.lookup(lod_expr)?.handle;
+                    let lod_lexp = self.lookup_expression.lookup(lod_expr)?;
+                    let lod_handle =
+                        self.get_expr_handle(lod_expr, lod_lexp, ctx, emitter, block, body_idx);
                     index = Some(lod_handle);
                     words_left -= 1;
                 }
