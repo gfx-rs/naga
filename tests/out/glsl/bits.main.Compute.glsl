@@ -85,6 +85,38 @@ void main() {
     u3_ = bitfieldExtract(_e112, int(5u), int(10u));
     uvec4 _e116 = u4_;
     u4_ = bitfieldExtract(_e116, int(5u), int(10u));
+    int _e120 = i;
+    i = findLSB(_e120);
+    ivec2 _e122 = i2_;
+    i2_ = findLSB(_e122);
+    ivec3 _e124 = i3_;
+    i3_ = findLSB(_e124);
+    ivec4 _e126 = i4_;
+    i4_ = findLSB(_e126);
+    uint _e128 = u;
+    i = findLSB(_e128);
+    uvec2 _e130 = u2_;
+    i2_ = findLSB(_e130);
+    uvec3 _e132 = u3_;
+    i3_ = findLSB(_e132);
+    uvec4 _e134 = u4_;
+    i4_ = findLSB(_e134);
+    int _e136 = i;
+    i = findMSB(_e136);
+    ivec2 _e138 = i2_;
+    i2_ = findMSB(_e138);
+    ivec3 _e140 = i3_;
+    i3_ = findMSB(_e140);
+    ivec4 _e142 = i4_;
+    i4_ = findMSB(_e142);
+    uint _e144 = u;
+    i = findMSB(_e144);
+    uvec2 _e146 = u2_;
+    i2_ = findMSB(_e146);
+    uvec3 _e148 = u3_;
+    i3_ = findMSB(_e148);
+    uvec4 _e150 = u4_;
+    i4_ = findMSB(_e150);
     return;
 }
 
