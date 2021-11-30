@@ -36,4 +36,20 @@ fn main() {
     u2 = extractBits(u2, 5u, 10u);
     u3 = extractBits(u3, 5u, 10u);
     u4 = extractBits(u4, 5u, 10u);
+    i = findLsb(i);
+    i2 = findLsb(i2);
+    i3 = findLsb(i3);
+    i4 = findLsb(i4);
+    i = findLsb(u);
+    i2 = findLsb(u2);
+    i3 = findLsb(u3);
+    i4 = findLsb(u4);
+    i = findMsb(i);
+    i2 = findMsb(i2);
+    i3 = findMsb(i3);
+    i4 = findMsb(i4);
+    i = findMsb(u);
+    i2 = findMsb(u2);
+    i3 = findMsb(u3);
+    i4 = findMsb(u4);
 }
