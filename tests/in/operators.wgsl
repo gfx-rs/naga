@@ -30,7 +30,8 @@ fn splat() -> vec4<f32> {
 
 fn unary() -> i32 {
     let a = 1;
-    if (!true) { return a; } else { return ~a; };
+    let b = -(-2);
+    if (!true) { return a; } else { return ~b; };
 }
 
 fn bool_cast(x: vec3<f32>) -> vec3<f32> {

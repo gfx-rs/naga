@@ -276,21 +276,22 @@ impl<'a> Display for ConstantContext<'a> {
         match con.inner {
             crate::ConstantInner::Scalar { value, width: _ } => match value {
                 crate::ScalarValue::Sint(value) => {
-                    write!(out, "{}", value)
+                    let space = if value < 0 { " " } else { "" };
+                    write!(out, "{}{}", space, value)
                 }
                 crate::ScalarValue::Uint(value) => {
                     write!(out, "{}u", value)
                 }
                 crate::ScalarValue::Float(value) => {
                     if value.is_infinite() {
-                        let sign = if value.is_sign_negative() { "-" } else { "" };
+                        let sign = if value.is_sign_negative() { " -" } else { "" };
                         write!(out, "{}INFINITY", sign)
                     } else if value.is_nan() {
                         write!(out, "NAN")
                     } else {
+                        let space = if value < 0.0 { " " } else { "" };
                         let suffix = if value.fract() == 0.0 { ".0" } else { "" };
-
-                        write!(out, "{}{}", value, suffix)
+                        write!(out, "{}{}{}", space, value, suffix)
                     }
                 }
                 crate::ScalarValue::Bool(value) => {

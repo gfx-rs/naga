@@ -26,10 +26,11 @@ fn splat() -> vec4<f32> {
 }
 
 fn unary() -> i32 {
+    let b_1 = -(-2);
     if (!(true)) {
         return 1;
     } else {
-        return ~(1);
+        return ~(b_1);
     }
 }
 
@@ -48,7 +49,7 @@ fn constructors() -> f32 {
 
 fn modulo() {
     let a_1 = (1 % 1);
-    let b_1 = (1.0 % 1.0);
+    let b_2 = (1.0 % 1.0);
     let c = (vec3<i32>(1) % vec3<i32>(1));
     let d = (vec3<f32>(1.0) % vec3<f32>(1.0));
 }

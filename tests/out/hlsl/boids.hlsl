@@ -124,20 +124,20 @@ void main(uint3 global_invocation_id : SV_DispatchThreadID)
     float _expr134 = params.deltaT;
     vPos = (_expr131 + (_expr132 * _expr134));
     float _expr138 = vPos.x;
-    if ((_expr138 < -1.0)) {
+    if ((_expr138 <  -1.0)) {
         vPos.x = 1.0;
     }
     float _expr144 = vPos.x;
     if ((_expr144 > 1.0)) {
-        vPos.x = -1.0;
+        vPos.x =  -1.0;
     }
     float _expr150 = vPos.y;
-    if ((_expr150 < -1.0)) {
+    if ((_expr150 <  -1.0)) {
         vPos.y = 1.0;
     }
     float _expr156 = vPos.y;
     if ((_expr156 > 1.0)) {
-        vPos.y = -1.0;
+        vPos.y =  -1.0;
     }
     float2 _expr164 = vPos;
     particlesDst.Store2(0+index*16+0, asuint(_expr164));

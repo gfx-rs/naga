@@ -26,7 +26,7 @@ float fetch_shadow(uint light_id, float4 homogeneous_coords)
     if ((homogeneous_coords.w <= 0.0)) {
         return 1.0;
     }
-    float2 flip_correction = float2(0.5, -0.5);
+    float2 flip_correction = float2(0.5,  -0.5);
     float2 light_local = (((homogeneous_coords.xy * flip_correction) / float2(homogeneous_coords.w.xx)) + float2(0.5, 0.5));
     float _expr26 = t_shadow.SampleCmpLevelZero(sampler_shadow, float3(light_local, int(light_id)), (homogeneous_coords.z / homogeneous_coords.w));
     return _expr26;

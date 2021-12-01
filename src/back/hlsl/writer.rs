@@ -2097,13 +2097,20 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
     /// Adds no trailing or leading whitespace
     fn write_scalar_value(&mut self, value: crate::ScalarValue) -> BackendResult {
         use crate::ScalarValue as Sv;
+        fn space(negative: bool) -> &'static str {
+            if negative {
+                " "
+            } else {
+                ""
+            }
+        }
 
         match value {
-            Sv::Sint(value) => write!(self.out, "{}", value)?,
+            Sv::Sint(value) => write!(self.out, "{}{}", space(value < 0), value)?,
             Sv::Uint(value) => write!(self.out, "{}u", value)?,
             // Floats are written using `Debug` instead of `Display` because it always appends the
             // decimal part even it's zero
-            Sv::Float(value) => write!(self.out, "{:?}", value)?,
+            Sv::Float(value) => write!(self.out, "{}{:?}", space(value < 0.0), value)?,
             Sv::Bool(value) => write!(self.out, "{}", value)?,
         }
 

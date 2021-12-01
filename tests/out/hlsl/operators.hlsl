@@ -30,10 +30,11 @@ float4 splat()
 
 int unary()
 {
+    int b_1 = - -2;
     if (!true) {
         return 1;
     } else {
-        return !1;
+        return !b_1;
     }
 }
 
@@ -62,7 +63,7 @@ float constructors()
 void modulo()
 {
     int a_1 = (1 % 1);
-    float b_1 = (1.0 % 1.0);
+    float b_2 = (1.0 % 1.0);
     int3 c = (int3(1.xxx) % int3(1.xxx));
     float3 d = (float3(1.0.xxx) % float3(1.0.xxx));
 }
