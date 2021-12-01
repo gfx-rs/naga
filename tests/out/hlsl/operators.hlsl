@@ -95,8 +95,8 @@ float constructors()
 
 void logical()
 {
-    bool unnamed_11 = !true;
-    bool2 unnamed_12 = !(true).xx;
+    bool unnamed_11 = !(true);
+    bool2 unnamed_12 = !((true).xx);
     bool unnamed_13 = (true || false);
     bool unnamed_14 = (true && false);
     bool unnamed_15 = (true | false);
@@ -107,8 +107,8 @@ void logical()
 
 void arithmetic()
 {
-    int2 unnamed_19 = -(1).xx;
-    float2 unnamed_20 = -(1.0).xx;
+    int2 unnamed_19 = -((1).xx);
+    float2 unnamed_20 = -((1.0).xx);
     int unnamed_21 = (2 + 1);
     uint unnamed_22 = (2u + 1u);
     float unnamed_23 = (2.0 + 1.0);
@@ -180,10 +180,10 @@ void arithmetic()
 
 void bit()
 {
-    int unnamed_88 = ~1;
-    uint unnamed_89 = ~1u;
-    int2 unnamed_90 = ~(1).xx;
-    uint3 unnamed_91 = ~(1u).xxx;
+    int unnamed_88 = ~(1);
+    uint unnamed_89 = ~(1u);
+    int2 unnamed_90 = ~((1).xx);
+    uint3 unnamed_91 = ~((1u).xxx);
     int unnamed_92 = (2 | 1);
     uint unnamed_93 = (2u | 1u);
     int2 unnamed_94 = ((2).xx | (1).xx);
