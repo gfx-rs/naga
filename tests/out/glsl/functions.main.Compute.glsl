@@ -1,4 +1,5 @@
 #version 310 es
+#extension GL_EXT_gpu_shader5 : require
 
 precision highp float;
 precision highp int;
