@@ -1861,7 +1861,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     Mf::Refract => Function::Regular("refract"),
                     // computational
                     Mf::Sign => Function::Regular("sign"),
-                    Mf::Fma => Function::Regular("fma"),
+                    Mf::Fma => Function::Regular("mad"),
                     Mf::Mix => Function::Regular("lerp"),
                     Mf::Step => Function::Regular("step"),
                     Mf::SmoothStep => Function::Regular("smoothstep"),
