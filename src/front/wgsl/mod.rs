@@ -3474,35 +3474,34 @@ impl Parser {
                         let mut elsif_stack = Vec::new();
                         let mut elseif_span_start = lexer.current_byte_offset();
                         let mut reject = loop {
-                            if lexer.skip(Token::Word("else")) {
-                                if lexer.skip(Token::Word("if")) {
-                                    // ... else if (...) { ... }
-                                    let mut sub_emitter = super::Emitter::default();
-
-                                    lexer.expect(Token::Paren('('))?;
-                                    sub_emitter.start(context.expressions);
-                                    let other_condition = self.parse_general_expression(
-                                        lexer,
-                                        context.as_expression(block, &mut sub_emitter),
-                                    )?;
-                                    let other_emit = sub_emitter.finish(context.expressions);
-                                    lexer.expect(Token::Paren(')'))?;
-                                    let other_block =
-                                        self.parse_block(lexer, context.reborrow(), false)?;
-                                    elsif_stack.push((
-                                        elseif_span_start,
-                                        other_condition,
-                                        other_emit,
-                                        other_block,
-                                    ));
-                                    elseif_span_start = lexer.current_byte_offset();
-                                } else {
-                                    // ... else { ... }
-                                    break self.parse_block(lexer, context.reborrow(), false)?;
-                                }
-                            } else {
+                            if !lexer.skip(Token::Word("else")) {
                                 break crate::Block::new();
                             }
+
+                            if !lexer.skip(Token::Word("if")) {
+                                // ... else { ... }
+                                break self.parse_block(lexer, context.reborrow(), false)?;
+                            }
+
+                            // ... else if (...) { ... }
+                            let mut sub_emitter = super::Emitter::default();
+
+                            lexer.expect(Token::Paren('('))?;
+                            sub_emitter.start(context.expressions);
+                            let other_condition = self.parse_general_expression(
+                                lexer,
+                                context.as_expression(block, &mut sub_emitter),
+                            )?;
+                            let other_emit = sub_emitter.finish(context.expressions);
+                            lexer.expect(Token::Paren(')'))?;
+                            let other_block = self.parse_block(lexer, context.reborrow(), false)?;
+                            elsif_stack.push((
+                                elseif_span_start,
+                                other_condition,
+                                other_emit,
+                                other_block,
+                            ));
+                            elseif_span_start = lexer.current_byte_offset();
                         };
 
                         let span_end = lexer.current_byte_offset();
