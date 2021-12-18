@@ -355,23 +355,27 @@ impl<'a, W> Writer<'a, W> {
             }
         }
 
-        let has_fma = self
-            .module
-            .functions
-            .iter()
-            .flat_map(|(_, f)| f.expressions.iter())
-            .chain(
-                self.module
-                    .entry_points
-                    .iter()
-                    .flat_map(|e| e.function.expressions.iter()),
-            )
-            .any(|(_, e)| match *e {
-                Expression::Math { fun, .. } if fun == MathFunction::Fma => true,
-                _ => false,
-            });
-        if has_fma {
-            self.features.request(Features::FMA);
+        if self.options.version >= Version::Desktop(400)
+            || (self.options.version.is_es() && self.options.version >= Version::Embedded(310))
+        {
+            let has_fma = self
+                .module
+                .functions
+                .iter()
+                .flat_map(|(_, f)| f.expressions.iter())
+                .chain(
+                    self.module
+                        .entry_points
+                        .iter()
+                        .flat_map(|e| e.function.expressions.iter()),
+                )
+                .any(|(_, e)| match *e {
+                    Expression::Math { fun, .. } if fun == MathFunction::Fma => true,
+                    _ => false,
+                });
+            if has_fma {
+                self.features.request(Features::FMA);
+            }
         }
 
         self.features.check_availability(self.options.version)

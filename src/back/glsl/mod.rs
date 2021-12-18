@@ -2433,7 +2433,37 @@ impl<'a, W: Write> Writer<'a, W> {
                     Mf::Refract => "refract",
                     // computational
                     Mf::Sign => "sign",
-                    Mf::Fma => "fma",
+                    Mf::Fma => {
+                        let version = self.options.version;
+                        if version >= Version::Desktop(400)
+                            || (version.is_es() && version >= Version::Embedded(310))
+                        {
+                            // Use the fma function when available
+                            "fma"
+                        } else {
+                            // No fma support. Transform the function call into an arithmetic expression
+                            write!(self.out, "(")?;
+
+                            self.write_expr(arg, ctx)?;
+                            write!(self.out, " * ")?;
+
+                            let arg1 = match arg1 {
+                                Some(arg1) => arg1,
+                                None => return Err(Error::Custom("Missing fma arg1".to_owned())),
+                            };
+                            self.write_expr(arg1, ctx)?;
+                            write!(self.out, " + ")?;
+
+                            let arg2 = match arg2 {
+                                Some(arg2) => arg2,
+                                None => return Err(Error::Custom("Missing fma arg2".to_owned())),
+                            };
+                            self.write_expr(arg2, ctx)?;
+                            write!(self.out, ")")?;
+
+                            return Ok(());
+                        }
+                    }
                     Mf::Mix => "mix",
                     Mf::Step => "step",
                     Mf::SmoothStep => "smoothstep",
