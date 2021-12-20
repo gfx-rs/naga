@@ -2448,17 +2448,13 @@ impl<'a, W: Write> Writer<'a, W> {
                             self.write_expr(arg, ctx)?;
                             write!(self.out, " * ")?;
 
-                            let arg1 = match arg1 {
-                                Some(arg1) => arg1,
-                                None => return Err(Error::Custom("Missing fma arg1".to_owned())),
-                            };
+                            let arg1 =
+                                arg1.ok_or_else(|| Error::Custom("Missing fma arg1".to_owned()))?;
                             self.write_expr(arg1, ctx)?;
                             write!(self.out, " + ")?;
 
-                            let arg2 = match arg2 {
-                                Some(arg2) => arg2,
-                                None => return Err(Error::Custom("Missing fma arg2".to_owned())),
-                            };
+                            let arg2 =
+                                arg2.ok_or_else(|| Error::Custom("Missing fma arg2".to_owned()))?;
                             self.write_expr(arg2, ctx)?;
                             write!(self.out, ")")?;
 
