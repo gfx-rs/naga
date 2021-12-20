@@ -1227,7 +1227,7 @@ impl<W: Write> Writer<W> {
                         "(((1 + int{}({}::ctz(",
                         argument_size_suffix, NAMESPACE
                     )?;
-                    self.put_expression(arg, context, false)?;
+                    self.put_expression(arg, context, true)?;
                     write!(self.out, "))) % 33) - 1)")?;
                 } else if fun == Mf::FindMsb {
                     write!(
@@ -1235,7 +1235,7 @@ impl<W: Write> Writer<W> {
                         "(((1 + int{}({}::clz(",
                         argument_size_suffix, NAMESPACE
                     )?;
-                    self.put_expression(arg, context, false)?;
+                    self.put_expression(arg, context, true)?;
                     write!(self.out, "))) % 33) - 1)")?;
                 } else if fun == Mf::Unpack2x16float {
                     write!(self.out, "float2(as_type<half2>(")?;
