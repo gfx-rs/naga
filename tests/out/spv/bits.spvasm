@@ -1,7 +1,7 @@
 ; SPIR-V
 ; Version: 1.1
 ; Generator: rspirv
-; Bound: 143
+; Bound: 119
 OpCapability Shader
 %1 = OpExtInstImport "GLSL.std.450"
 OpMemoryModel Logical GLSL450
@@ -154,50 +154,14 @@ OpStore %33 %110
 %111 = OpLoad  %4  %19
 %112 = OpExtInst  %4  %1 FindILsb %111
 OpStore %19 %112
-%113 = OpLoad  %11  %21
+%113 = OpLoad  %14  %29
 %114 = OpExtInst  %11  %1 FindILsb %113
 OpStore %21 %114
 %115 = OpLoad  %12  %23
-%116 = OpExtInst  %12  %1 FindILsb %115
+%116 = OpExtInst  %12  %1 FindSMsb %115
 OpStore %23 %116
-%117 = OpLoad  %13  %25
-%118 = OpExtInst  %13  %1 FindILsb %117
-OpStore %25 %118
-%119 = OpLoad  %6  %27
-%120 = OpExtInst  %4  %1 FindILsb %119
-OpStore %19 %120
-%121 = OpLoad  %14  %29
-%122 = OpExtInst  %11  %1 FindILsb %121
-OpStore %21 %122
-%123 = OpLoad  %15  %31
-%124 = OpExtInst  %12  %1 FindILsb %123
-OpStore %23 %124
-%125 = OpLoad  %16  %33
-%126 = OpExtInst  %13  %1 FindILsb %125
-OpStore %25 %126
-%127 = OpLoad  %4  %19
-%128 = OpExtInst  %4  %1 FindSMsb %127
-OpStore %19 %128
-%129 = OpLoad  %11  %21
-%130 = OpExtInst  %11  %1 FindSMsb %129
-OpStore %21 %130
-%131 = OpLoad  %12  %23
-%132 = OpExtInst  %12  %1 FindSMsb %131
-OpStore %23 %132
-%133 = OpLoad  %13  %25
-%134 = OpExtInst  %13  %1 FindSMsb %133
-OpStore %25 %134
-%135 = OpLoad  %6  %27
-%136 = OpExtInst  %4  %1 FindUMsb %135
-OpStore %19 %136
-%137 = OpLoad  %14  %29
-%138 = OpExtInst  %11  %1 FindUMsb %137
-OpStore %21 %138
-%139 = OpLoad  %15  %31
-%140 = OpExtInst  %12  %1 FindUMsb %139
-OpStore %23 %140
-%141 = OpLoad  %16  %33
-%142 = OpExtInst  %13  %1 FindUMsb %141
-OpStore %25 %142
+%117 = OpLoad  %6  %27
+%118 = OpExtInst  %4  %1 FindUMsb %117
+OpStore %19 %118
 OpReturn
 OpFunctionEnd
