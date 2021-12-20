@@ -133,6 +133,10 @@ impl Version {
     fn supports_std430_layout(&self) -> bool {
         *self >= Version::Desktop(430) || *self >= Version::Embedded(310)
     }
+
+    fn supports_fma_function(&self) -> bool {
+        *self >= Version::Desktop(400) || *self >= Version::Embedded(310)
+    }
 }
 
 impl PartialOrd for Version {
@@ -2434,10 +2438,7 @@ impl<'a, W: Write> Writer<'a, W> {
                     // computational
                     Mf::Sign => "sign",
                     Mf::Fma => {
-                        let version = self.options.version;
-                        if version >= Version::Desktop(400)
-                            || (version.is_es() && version >= Version::Embedded(310))
-                        {
+                        if self.options.version.supports_fma_function() {
                             // Use the fma function when available
                             "fma"
                         } else {

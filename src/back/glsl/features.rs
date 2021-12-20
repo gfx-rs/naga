@@ -355,9 +355,7 @@ impl<'a, W> Writer<'a, W> {
             }
         }
 
-        if self.options.version >= Version::Desktop(400)
-            || (self.options.version.is_es() && self.options.version >= Version::Embedded(310))
-        {
+        if self.options.version.supports_fma_function() {
             let has_fma = self
                 .module
                 .functions
