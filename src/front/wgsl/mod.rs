@@ -1175,7 +1175,7 @@ impl ParseError {
     pub fn emit_to_stderr(&self, source: &str) {
         self.emit_to_stderr_with_path(source, "wgsl")
     }
-    
+
     /// Emits a summary of the error to standard error stream.
     pub fn emit_to_stderr_with_path(&self, source: &str, path: &str) {
         let files = SimpleFile::new(path, source);
