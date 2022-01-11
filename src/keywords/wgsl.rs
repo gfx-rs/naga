@@ -3,6 +3,7 @@
 //! [wgsl]: https://gpuweb.github.io/gpuweb/wgsl.html
 
 // https://gpuweb.github.io/gpuweb/wgsl/#keyword-summary
+/// Reserved keywords.
 pub const RESERVED: &[&str] = &[
     // type-defining keywords
     "array",
