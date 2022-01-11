@@ -1,4 +1,4 @@
-//! [`Module`][crate::Module] processing functionality.
+//! [`Module`](super::Module) processing functionality.
 
 pub mod index;
 mod layouter;
