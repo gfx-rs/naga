@@ -1,4 +1,4 @@
-//! Backend functions that export shader modules into binary and text formats.
+//! Backend functions that export shader [`Module`][crate::Module]s into binary and text formats.
 
 #[cfg(feature = "dot-out")]
 pub mod dot;
