@@ -243,7 +243,7 @@ pub(crate) type NamedExpressions = FastHashMap<Handle<Expression>, String>;
 ///   - Calling `discard` in a shader.
 ///   - Writing to the depth buffer, unless ConservativeDepth is enabled.
 ///
-/// To enable feature in shader:
+/// To use in a shader:
 ///   - GLSL: `layout(early_fragment_tests) in;`
 ///   - HLSL: `Attribute earlydepthstencil`
 ///   - SPIR-V: `ExecutionMode EarlyFragmentTests`
@@ -261,7 +261,7 @@ pub struct EarlyDepthTest {
 }
 /// Enables adjusting depth without disabling early Z.
 ///
-/// To enable feature in shader:
+/// To use in a shader:
 ///   - GLSL: `layout (depth_<greater/less/unchanged/any>) out float gl_FragDepth;`
 ///     - `depth_any` option behaves as if the layout qualifier was not present.
 ///   - HLSL: `SV_DepthGreaterEqual`/`SV_DepthLessEqual`/`SV_Depth`
