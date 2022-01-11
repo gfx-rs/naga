@@ -3,8 +3,10 @@
 //! To begin, take a look at the documentation for the [`Parser`](Parser).
 //!
 //! # Supported versions
-//! Currently only the versions 450 and 460 are supported and 440 is partially
-//! supported, furthermore the vulkan flavor is assumed.
+//! ## Vulkan
+//! - 440 (partial)
+//! - 450
+//! - 460
 //! 
 //! [glsl]: https://www.khronos.org/registry/OpenGL/index_gl.php
 
@@ -33,7 +35,7 @@ mod variables;
 
 type Result<T> = std::result::Result<T, Error>;
 
-/// Per shader options passed to [`parse`](Parser::parse)
+/// Per-shader options passed to [`parse`](Parser::parse).
 ///
 /// The [`From`](From) trait is implemented for [`ShaderStage`](ShaderStage) to
 /// provide a quick way to create a Options instance.
@@ -63,16 +65,16 @@ impl From<ShaderStage> for Options {
     }
 }
 
-/// Additional information about the glsl shader
+/// Additional information about the GLSL shader.
 ///
-/// Stores additional information about the glsl shader which might not be
+/// Stores additional information about the GLSL shader which might not be
 /// stored in the shader [`Module`](Module).
 #[derive(Debug)]
 pub struct ShaderMetadata {
-    /// The glsl version specified in the shader trought the use of the
+    /// The GLSL version specified in the shader trought the use of the
     /// `#version` preprocessor directive.
     pub version: u16,
-    /// The glsl profile specified in the shader trought the use of the
+    /// The GLSL profile specified in the shader trought the use of the
     /// `#version` preprocessor directive.
     pub profile: Profile,
     /// The shader stage in the pipeline, passed to the [`parse`](Parser::parse)
@@ -120,7 +122,7 @@ impl Default for ShaderMetadata {
     }
 }
 
-/// The `Parser` is the central structure of the glsl frontend.
+/// The `Parser` is the central structure of the GLSL frontend.
 ///
 /// To instantiate a new `Parser` the [`Default`](Default) trait is used, so a
 /// call to the associated function [`Parser::default`](Parser::default) will

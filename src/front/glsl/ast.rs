@@ -176,7 +176,7 @@ pub enum StructLayout {
 }
 
 // TODO: Encode precision hints in the IR
-/// A precision hint used in glsl declarations
+/// A precision hint used in GLSL declarations.
 ///
 /// Precision hints can be used to either speed up shader execution or control
 /// the precision of arithmetic operations.
@@ -229,7 +229,7 @@ impl ParameterQualifier {
     }
 }
 
-/// The glsl profile used by a shader
+/// The GLSL profile used by a shader.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Profile {
     /// The `core` profile, default when no profile is specified.

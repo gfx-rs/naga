@@ -481,7 +481,7 @@ bitflags::bitflags! {
     }
 }
 
-// Storage image format.
+/// Image storage format.
 #[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
@@ -1340,7 +1340,7 @@ pub enum Expression {
 
 pub use block::Block;
 
-/// The value of the switch case
+/// The value of the switch case.
 // Clone is used only for error reporting and is not intended for end users
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
@@ -1528,6 +1528,7 @@ pub struct FunctionArgument {
     pub binding: Option<Binding>,
 }
 
+/// A function result.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
