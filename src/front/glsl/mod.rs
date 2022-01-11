@@ -1,10 +1,12 @@
-//! Front end for consuming the OpenGl Shading language (GLSL).
+//! Frontend for [GLSL][glsl] (OpenGL Shading Language).
 //!
-//! To begin take a look at the documentation for the [`Parser`](Parser).
+//! To begin, take a look at the documentation for the [`Parser`](Parser).
 //!
 //! # Supported versions
 //! Currently only the versions 450 and 460 are supported and 440 is partially
 //! supported, furthermore the vulkan flavor is assumed.
+//! 
+//! [glsl]: https://www.khronos.org/registry/OpenGL/index_gl.php
 
 pub use ast::{Precision, Profile};
 pub use error::{Error, ErrorKind, ExpectedToken};

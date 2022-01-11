@@ -1,4 +1,4 @@
-//! Parsers which load shaders into memory.
+//! Frontend parsers that consume binary and text shaders and load them into modules.
 
 mod interpolator;
 

@@ -1,4 +1,4 @@
-//! OpenGL shading language backend
+//! Backend for [GLSL][glsl] (OpenGL Shading Language).
 //!
 //! The main structure is [`Writer`](Writer), it maintains internal state that is used
 //! to output a [`Module`](crate::Module) into glsl
@@ -17,6 +17,7 @@
 //! - 300
 //! - 310
 //!
+//! [glsl]: https://www.khronos.org/registry/OpenGL/index_gl.php
 
 // GLSL is mostly a superset of C but it also removes some parts of it this is a list of relevant
 // aspects for this backend.

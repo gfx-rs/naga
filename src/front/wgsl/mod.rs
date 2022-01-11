@@ -1,4 +1,4 @@
-//! Front end for consuming [WebGPU Shading Language][wgsl].
+//! Frontend for [WGSL][wgsl] (WebGPU Shading Language).
 //!
 //! [wgsl]: https://gpuweb.github.io/gpuweb/wgsl.html
 

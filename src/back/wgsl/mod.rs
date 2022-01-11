@@ -1,3 +1,7 @@
+//! Backend for [WGSL][wgsl] (WebGPU Shading Language).
+//! 
+//! [wgsl]: https://gpuweb.github.io/gpuweb/wgsl.html
+
 mod writer;
 
 use thiserror::Error;

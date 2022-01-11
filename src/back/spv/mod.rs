@@ -1,5 +1,6 @@
-/*! Standard Portable Intermediate Representation (SPIR-V) backend
-!*/
+//! Backend for [SPIR-V][spv] (Standard Portable Intermediate Representation).
+//! 
+//! [spv]: https://www.khronos.org/registry/SPIR-V/
 
 mod block;
 mod helpers;

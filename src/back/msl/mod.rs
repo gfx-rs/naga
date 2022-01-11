@@ -1,27 +1,28 @@
-/*! Metal Shading Language (MSL) backend
-
-## Binding model
-
-Metal's bindings are flat per resource. Since there isn't an obvious mapping
-from SPIR-V's descriptor sets, we require a separate mapping provided in the options.
-This mapping may have one or more resource end points for each descriptor set + index
-pair.
-
-## Entry points
-
-Even though MSL and our IR appear to be similar in that the entry points in both can
-accept arguments and return values, the restrictions are different.
-MSL allows the varyings to be either in separate arguments, or inside a single
-`[[stage_in]]` struct. We gather input varyings and form this artificial structure.
-We also add all the (non-Private) globals into the arguments.
-
-At the beginning of the entry point, we assign the local constants and re-compose
-the arguments as they are declared on IR side, so that the rest of the logic can
-pretend that MSL doesn't have all the restrictions it has.
-
-For the result type, if it's a structure, we re-compose it with a temporary value
-holding the result.
-!*/
+//! Backend for [MSL][msl] (Metal Shading Language).
+//!
+//! ## Binding model
+//!
+//! Metal's bindings are flat per resource. Since there isn't an obvious mapping
+//! from SPIR-V's descriptor sets, we require a separate mapping provided in the options.
+//! This mapping may have one or more resource end points for each descriptor set + index
+//! pair.
+//!
+//! ## Entry points
+//!
+//! Even though MSL and our IR appear to be similar in that the entry points in both can
+//! accept arguments and return values, the restrictions are different.
+//! MSL allows the varyings to be either in separate arguments, or inside a single
+//! `[[stage_in]]` struct. We gather input varyings and form this artificial structure.
+//! We also add all the (non-Private) globals into the arguments.
+//!
+//! At the beginning of the entry point, we assign the local constants and re-compose
+//! the arguments as they are declared on IR side, so that the rest of the logic can
+//! pretend that MSL doesn't have all the restrictions it has.
+//!
+//! For the result type, if it's a structure, we re-compose it with a temporary value
+//! holding the result.
+//!
+//! [msl]: https://developer.apple.com/metal/Metal-Shading-Language-Specification.pdf
 
 use crate::{arena::Handle, proc::index, valid::ModuleInfo};
 use std::{
