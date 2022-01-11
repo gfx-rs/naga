@@ -244,9 +244,9 @@ pub(crate) type NamedExpressions = FastHashMap<Handle<Expression>, String>;
 ///   - Writing to the depth buffer, unless ConservativeDepth is enabled.
 ///
 /// To enable feature in shader:
-///   - In GLSL: `layout(early_fragment_tests) in;`
-///   - In HLSL: `Attribute earlydepthstencil`
-///   - In SPIR-V: `ExecutionMode EarlyFragmentTests`
+///   - GLSL: `layout(early_fragment_tests) in;`
+///   - HLSL: `Attribute earlydepthstencil`
+///   - SPIR-V: `ExecutionMode EarlyFragmentTests`
 ///
 /// For more, see:
 ///   - <https://www.khronos.org/opengl/wiki/Early_Fragment_Test#Explicit_specification>
