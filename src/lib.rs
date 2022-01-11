@@ -236,7 +236,7 @@ pub type FastHashSet<K> = rustc_hash::FxHashSet<K>;
 pub(crate) type NamedExpressions = FastHashMap<Handle<Expression>, String>;
 
 /// Early fragment tests.
-/// 
+///
 /// In a standard situation, if a driver determines that it is possible to switch on early depth test, it will.
 ///
 /// Typical situations when early depth test is switched off:

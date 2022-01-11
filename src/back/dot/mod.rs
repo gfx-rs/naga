@@ -2,7 +2,7 @@
 //!
 //! This backend writes a graph in the DOT format, for the ease
 //! of IR inspection and debugging.
-//! 
+//!
 //! [dot]: https://graphviz.org/doc/info/lang.html
 
 use crate::{

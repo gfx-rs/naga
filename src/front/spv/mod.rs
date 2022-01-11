@@ -22,7 +22,7 @@
 //! Instead, we detect when such matrix is accessed in the `OpAccessChain`,
 //! and we generate a parallel expression that loads the value, but transposed.
 //! This value then gets used instead of `OpLoad` result later on.
-//! 
+//!
 //! [spv]: https://www.khronos.org/registry/SPIR-V/
 
 mod convert;

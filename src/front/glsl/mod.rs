@@ -7,7 +7,7 @@
 //! - 440 (partial)
 //! - 450
 //! - 460
-//! 
+//!
 //! [glsl]: https://www.khronos.org/registry/OpenGL/index_gl.php
 
 pub use ast::{Precision, Profile};

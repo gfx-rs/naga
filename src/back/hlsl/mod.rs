@@ -16,7 +16,7 @@
 //! To deal with this, we add `row_major` to all declarations of matrices in Uniforms/Push Constants.
 //!
 //! Finally because all of our matrices are transposed, if you use `mat3x4`, it'll become `float4x3` in HLSL.
-//! 
+//!
 //! [hlsl]: https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl    
 
 mod conv;
