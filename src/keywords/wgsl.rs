@@ -1,3 +1,7 @@
+//! Reserved keywords for [WGSL][wgsl] (WebGPU Shading Language).
+//!
+//! [wgsl]: https://gpuweb.github.io/gpuweb/wgsl.html
+
 // https://gpuweb.github.io/gpuweb/wgsl/#keyword-summary
 pub const RESERVED: &[&str] = &[
     // type-defining keywords
