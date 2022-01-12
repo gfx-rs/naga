@@ -94,7 +94,7 @@ pub enum EntryPointError {
     MissingBinding(crate::ResourceBinding),
 }
 
-/// Structure that contains the configuration used in the [`Writer`](Writer)
+/// Configuration used in the [`Writer`].
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
@@ -137,14 +137,15 @@ impl Options {
     }
 }
 
-/// Structure that contains a reflection info
+/// Reflection info for entry point names.
 #[derive(Default)]
 pub struct ReflectionInfo {
-    /// Mapping of the entry point names. Each item in the array
-    /// corresponds to an entry point index. The real entry point name may be different if one of the
+    /// Mapping of the entry point names.
+    /// 
+    /// Each item in the array corresponds to an entry point index. The real entry point name may be different if one of the
     /// reserved words are used.
     ///
-    ///Note: Some entry points may fail translation because of missing bindings.
+    /// Note: Some entry points may fail translation because of missing bindings.
     pub entry_point_names: Vec<Result<String, EntryPointError>>,
 }
 
