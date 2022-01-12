@@ -1,4 +1,6 @@
-//! Shader validator.
+/*!
+Shader validator.
+*/
 
 mod analyzer;
 mod compose;

@@ -1,6 +1,8 @@
-//! Frontend for [WGSL][wgsl] (WebGPU Shading Language).
-//!
-//! [wgsl]: https://gpuweb.github.io/gpuweb/wgsl.html
+/*!
+Frontend for [WGSL][wgsl] (WebGPU Shading Language).
+
+[wgsl]: https://gpuweb.github.io/gpuweb/wgsl.html
+*/
 
 mod conv;
 mod lexer;

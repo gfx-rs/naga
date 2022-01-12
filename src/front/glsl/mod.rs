@@ -1,14 +1,16 @@
-//! Frontend for [GLSL][glsl] (OpenGL Shading Language).
-//!
-//! To begin, take a look at the documentation for the [`Parser`](Parser).
-//!
-//! # Supported versions
-//! ## Vulkan
-//! - 440 (partial)
-//! - 450
-//! - 460
-//!
-//! [glsl]: https://www.khronos.org/registry/OpenGL/index_gl.php
+/*!
+Frontend for [GLSL][glsl] (OpenGL Shading Language).
+
+To begin, take a look at the documentation for the [`Parser`](Parser).
+
+# Supported versions
+## Vulkan
+- 440 (partial)
+- 450
+- 460
+
+[glsl]: https://www.khronos.org/registry/OpenGL/index_gl.php
+*/
 
 pub use ast::{Precision, Profile};
 pub use error::{Error, ErrorKind, ExpectedToken};

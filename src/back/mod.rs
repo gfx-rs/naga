@@ -1,4 +1,6 @@
-//! Backend functions that export shader [`Module`](super::Module)s into binary and text formats.
+/*!
+Backend functions that export shader [`Module`](super::Module)s into binary and text formats.
+*/
 
 #[cfg(feature = "dot-out")]
 pub mod dot;

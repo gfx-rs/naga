@@ -1,9 +1,11 @@
-//! Backend for [DOT][dot] (Graphviz).
-//!
-//! This backend writes a graph in the DOT language, for the ease
-//! of IR inspection and debugging.
-//!
-//! [dot]: https://graphviz.org/doc/info/lang.html
+/*!
+Backend for [DOT][dot] (Graphviz).
+
+This backend writes a graph in the DOT language, for the ease
+of IR inspection and debugging.
+
+[dot]: https://graphviz.org/doc/info/lang.html
+*/
 
 use crate::{
     arena::Handle,

@@ -1,29 +1,31 @@
-//! Frontend for [SPIR-V][spv] (Standard Portable Intermediate Representation).
-//!
-//! ## ID lookups
-//!
-//! Our IR links to everything with `Handle`, while SPIR-V uses IDs.
-//! In order to keep track of the associations, the parser has many lookup tables.
-//! There map `spv::Word` into a specific IR handle, plus potentially a bit of
-//! extra info, such as the related SPIR-V type ID.
-//! TODO: would be nice to find ways that avoid looking up as much
-//!
-//! ## Inputs/Outputs
-//!
-//! We create a private variable for each input/output. The relevant inputs are
-//! populated at the start of an entry point. The outputs are saved at the end.
-//!
-//! The function associated with an entry point is wrapped in another function,
-//! such that we can handle any `Return` statements without problems.
-//!
-//! ## Row-major matrices
-//!
-//! We don't handle them natively, since the IR only expects column majority.
-//! Instead, we detect when such matrix is accessed in the `OpAccessChain`,
-//! and we generate a parallel expression that loads the value, but transposed.
-//! This value then gets used instead of `OpLoad` result later on.
-//!
-//! [spv]: https://www.khronos.org/registry/SPIR-V/
+/*!
+Frontend for [SPIR-V][spv] (Standard Portable Intermediate Representation).
+
+## ID lookups
+
+Our IR links to everything with `Handle`, while SPIR-V uses IDs.
+In order to keep track of the associations, the parser has many lookup tables.
+There map `spv::Word` into a specific IR handle, plus potentially a bit of
+extra info, such as the related SPIR-V type ID.
+TODO: would be nice to find ways that avoid looking up as much
+
+## Inputs/Outputs
+
+We create a private variable for each input/output. The relevant inputs are
+populated at the start of an entry point. The outputs are saved at the end.
+
+The function associated with an entry point is wrapped in another function,
+such that we can handle any `Return` statements without problems.
+
+## Row-major matrices
+
+We don't handle them natively, since the IR only expects column majority.
+Instead, we detect when such matrix is accessed in the `OpAccessChain`,
+and we generate a parallel expression that loads the value, but transposed.
+This value then gets used instead of `OpLoad` result later on.
+
+[spv]: https://www.khronos.org/registry/SPIR-V/
+*/
 
 mod convert;
 mod error;

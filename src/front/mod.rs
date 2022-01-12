@@ -1,4 +1,6 @@
-//! Frontend parsers that consume binary and text shaders and load them into [`Module`](super::Module)s.
+/*!
+Frontend parsers that consume binary and text shaders and load them into [`Module`](super::Module)s.
+*/
 
 mod interpolator;
 
