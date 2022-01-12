@@ -23,8 +23,8 @@ pub struct GlobalLookup {
 #[derive(Debug, Clone)]
 pub struct ParameterInfo {
     pub qualifier: ParameterQualifier,
-    /// Wether the parameter should be treated as a depth image instead of a
-    /// sampled image
+    /// Whether the parameter should be treated as a depth image instead of a
+    /// sampled image.
     pub depth: bool,
 }
 
@@ -62,10 +62,10 @@ pub struct Overload {
 #[derive(Debug, Default)]
 pub struct FunctionDeclaration {
     pub overloads: Vec<Overload>,
-    /// Wether or not this function has the name of a builtin
+    /// Whether or not this function has the name of a builtin.
     pub builtin: bool,
-    /// In case [`builtin`](Self::builtin) is true, this field indicates wether
-    /// this function already has double overloads added or not, otherwise is unused
+    /// If [`builtin`](Self::builtin) is true, this field indicates whether
+    /// this function already has double overloads added or not. Otherwise, it is unused.
     pub double: bool,
 }
 

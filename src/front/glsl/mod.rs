@@ -84,8 +84,8 @@ pub struct ShaderMetadata {
     /// The workgroup size for compute shaders, defaults to `[1; 3]` for
     /// compute shaders and `[0; 3]` for non compute shaders.
     pub workgroup_size: [u32; 3],
-    /// Wether or not early fragment tests where requested by the shader,
-    /// defaults to `false`.
+    /// Whether or not early fragment tests where requested by the shader.
+    /// Defaults to `false`.
     pub early_fragment_tests: bool,
 
     /// The shader can request extensions via the

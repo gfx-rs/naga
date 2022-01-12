@@ -202,9 +202,9 @@ impl crate::TypeInner {
 }
 
 impl crate::Statement {
-    /// Returns true if the statement directly terminates the current block
+    /// Returns true if the statement directly terminates the current block.
     ///
-    /// Used to decided wether case blocks require a explicit `break`
+    /// Used to decide whether case blocks require a explicit `break`.
     pub fn is_terminator(&self) -> bool {
         match *self {
             crate::Statement::Break

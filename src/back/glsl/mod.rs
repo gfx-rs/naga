@@ -34,7 +34,7 @@
 // `#extension name: behaviour`
 // Extensions provide increased features in a plugin fashion but they aren't required to be
 // supported hence why they are called extensions, that's why `behaviour` is used it specifies
-// wether the extension is strictly required or if it should only be enabled if needed. In our case
+// whether the extension is strictly required or if it should only be enabled if needed. In our case
 // when we use extensions we set behaviour to `require` always.
 //
 // The only thing that glsl removes that makes a difference are pointers.
@@ -1989,7 +1989,7 @@ impl<'a, W: Write> Writer<'a, W> {
             Expression::Load { pointer } => self.write_expr(pointer, ctx)?,
             // `ImageSample` is a bit complicated compared to the rest of the IR.
             //
-            // First there are three variations depending wether the sample level is explicitly set,
+            // First there are three variations depending whether the sample level is explicitly set,
             // if it's automatic or it it's bias:
             // `texture(image, coordinate)` - Automatic sample level
             // `texture(image, coordinate, bias)` - Bias sample level
