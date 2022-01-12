@@ -39,24 +39,24 @@ bitflags::bitflags! {
     }
 }
 
-/// Helper structure used to store the required [`Features`](Features) needed to output a
+/// Helper structure used to store the required [`Features`] needed to output a
 /// [`Module`](crate::Module)
 ///
 /// Provides helper methods to check for availability and writing required extensions
 pub struct FeaturesManager(Features);
 
 impl FeaturesManager {
-    /// Creates a new [`FeaturesManager`](FeaturesManager) instance
+    /// Creates a new [`FeaturesManager`] instance
     pub fn new() -> Self {
         Self(Features::empty())
     }
 
-    /// Adds to the list of required [`Features`](Features)
+    /// Adds to the list of required [`Features`]
     pub fn request(&mut self, features: Features) {
         self.0 |= features
     }
 
-    /// Checks that all required [`Features`](Features) are available for the specified
+    /// Checks that all required [`Features`] are available for the specified
     /// [`Version`](super::Version) otherwise returns an
     /// [`Error::MissingFeatures`](super::Error::MissingFeatures)
     pub fn check_availability(&self, version: Version) -> BackendResult {
@@ -215,10 +215,10 @@ impl FeaturesManager {
 }
 
 impl<'a, W> Writer<'a, W> {
-    /// Helper method that searches the module for all the needed [`Features`](Features)
+    /// Helper method that searches the module for all the needed [`Features`]
     ///
     /// # Errors
-    /// If the version doesn't support any of the needed [`Features`](Features) a
+    /// If the version doesn't support any of the needed [`Features`] a
     /// [`Error::MissingFeatures`](super::Error::MissingFeatures) will be returned
     pub(super) fn collect_required_features(&mut self) -> BackendResult {
         let ep_info = self.info.get_entry_point(self.entry_point_idx as usize);
@@ -387,7 +387,7 @@ impl<'a, W> Writer<'a, W> {
         self.features.check_availability(self.options.version)
     }
 
-    /// Helper method that checks the [`Features`](Features) needed by a scalar
+    /// Helper method that checks the [`Features`] needed by a scalar
     fn scalar_required_features(&mut self, kind: ScalarKind, width: Bytes) {
         if kind == ScalarKind::Float && width == 8 {
             self.features.request(Features::DOUBLE_TYPE);

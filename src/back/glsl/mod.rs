@@ -348,9 +348,9 @@ pub enum Error {
     /// A error occurred while writing to the output.
     #[error("Format error")]
     FmtError(#[from] FmtError),
-    /// The specified [`Version`](Version) doesn't have all required [`Features`](super).
+    /// The specified [`Version`] doesn't have all required [`Features`].
     ///
-    /// Contains the missing [`Features`](Features).
+    /// Contains the missing [`Features`].
     #[error("The selected version doesn't support {0:?}")]
     MissingFeatures(Features),
     /// [`AddressSpace::PushConstant`](crate::AddressSpace::PushConstant) was used more than
