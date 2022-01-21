@@ -39,8 +39,6 @@ void main() {
     uvec3 global_id = gl_GlobalInvocationID;
     int pos = 0;
     memoryBarrierBuffer();
-    memoryBarrierImage();
-    memoryBarrierAtomicCounter();
     barrier();
     memoryBarrierShared();
     barrier();

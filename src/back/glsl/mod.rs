@@ -1776,8 +1776,6 @@ impl<'a, W: Write> Writer<'a, W> {
             Statement::Barrier(flags) => {
                 if flags.contains(crate::Barrier::STORAGE) {
                     writeln!(self.out, "{}memoryBarrierBuffer();", level)?;
-                    writeln!(self.out, "{}memoryBarrierImage();", level)?;
-                    writeln!(self.out, "{}memoryBarrierAtomicCounter();", level)?;
                 }
 
                 if flags.contains(crate::Barrier::WORK_GROUP) {
