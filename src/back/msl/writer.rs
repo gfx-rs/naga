@@ -2820,7 +2820,12 @@ impl<W: Write> Writer<W> {
                     };
                     let resolved = options.resolve_local_binding(binding, in_mode)?;
                     write!(self.out, "{}{} {}", back::INDENT, ty_name, name)?;
-                    resolved.try_fmt_decorated(&mut self.out, "")?;
+                    resolved.try_fmt_decorated(
+                        &mut self.out,
+                        "",
+                        ep.stage,
+                        options.lang_version,
+                    )?;
                     writeln!(self.out, ";")?;
                 }
                 writeln!(self.out, "}};")?;
@@ -2889,7 +2894,12 @@ impl<W: Write> Writer<W> {
                         };
                         let resolved = options.resolve_local_binding(binding, out_mode)?;
                         write!(self.out, "{}{} {}", back::INDENT, ty_name, name)?;
-                        resolved.try_fmt_decorated(&mut self.out, "")?;
+                        resolved.try_fmt_decorated(
+                            &mut self.out,
+                            "",
+                            ep.stage,
+                            options.lang_version,
+                        )?;
                         if let Some(array_len) = array_len {
                             write!(self.out, " [{}]", array_len)?;
                         }
@@ -2944,7 +2954,7 @@ impl<W: Write> Writer<W> {
                     ','
                 };
                 write!(self.out, "{} {} {}", separator, ty_name, name)?;
-                resolved.try_fmt_decorated(&mut self.out, "\n")?;
+                resolved.try_fmt_decorated(&mut self.out, "\n", ep.stage, options.lang_version)?;
             }
             for (handle, var) in module.global_variables.iter() {
                 let usage = fun_info[handle];
@@ -2984,7 +2994,12 @@ impl<W: Write> Writer<W> {
                 write!(self.out, "{} ", separator)?;
                 tyvar.try_fmt(&mut self.out)?;
                 if let Some(resolved) = resolved {
-                    resolved.try_fmt_decorated(&mut self.out, "")?;
+                    resolved.try_fmt_decorated(
+                        &mut self.out,
+                        "",
+                        ep.stage,
+                        options.lang_version,
+                    )?;
                 }
                 if let Some(value) = var.init {
                     let coco = ConstantContext {
@@ -3011,7 +3026,7 @@ impl<W: Write> Writer<W> {
                     "{} constant _mslBufferSizes& _buffer_sizes",
                     separator,
                 )?;
-                resolved.try_fmt_decorated(&mut self.out, "\n")?;
+                resolved.try_fmt_decorated(&mut self.out, "\n", ep.stage, options.lang_version)?;
             }
 
             // end of the entry point argument list
@@ -3235,7 +3250,7 @@ fn test_stack_size() {
         let stack_size = addresses.end - addresses.start;
         // check the size (in debug only)
         // last observed macOS value: 19152 (CI)
-        if !(13000..=20000).contains(&stack_size) {
+        if !(11000..=20000).contains(&stack_size) {
             panic!("`put_block` stack size {} has changed!", stack_size);
         }
     }
