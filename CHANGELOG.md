@@ -1,5 +1,9 @@
 # Change Log
 
+### Unreleased
+  - MSL-out:
+    - Unconditionally output `[[invariant]]` for vertex outputs if it is supported.
+
 ### v0.8.3 (2022-01-20)
   - don't pin `indexmap`
   - MSL-out:
