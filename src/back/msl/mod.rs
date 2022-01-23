@@ -321,12 +321,22 @@ impl ResolvedBinding {
         }
     }
 
-    fn try_fmt<W: Write>(&self, out: &mut W) -> Result<(), Error> {
+    fn try_fmt<W: Write>(
+        &self,
+        out: &mut W,
+        stage: crate::ShaderStage,
+        lang_version: (u8, u8),
+    ) -> Result<(), Error> {
         match *self {
             Self::BuiltIn(built_in) => {
                 use crate::BuiltIn as Bi;
                 let name = match built_in {
-                    Bi::Position => "position",
+                    Bi::Position => match stage {
+                        crate::ShaderStage::Vertex if lang_version >= (2, 3) => {
+                            "position, invariant"
+                        }
+                        _ => "position",
+                    },
                     // vertex
                     Bi::BaseInstance => "base_instance",
                     Bi::BaseVertex => "base_vertex",
@@ -381,9 +391,15 @@ impl ResolvedBinding {
         Ok(())
     }
 
-    fn try_fmt_decorated<W: Write>(&self, out: &mut W, terminator: &str) -> Result<(), Error> {
+    fn try_fmt_decorated<W: Write>(
+        &self,
+        out: &mut W,
+        terminator: &str,
+        stage: crate::ShaderStage,
+        lang_version: (u8, u8),
+    ) -> Result<(), Error> {
         write!(out, " [[")?;
-        self.try_fmt(out)?;
+        self.try_fmt(out, stage, lang_version)?;
         write!(out, "]]")?;
         write!(out, "{}", terminator)?;
         Ok(())
