@@ -2532,7 +2532,63 @@ impl<'a, W: Write> Writer<'a, W> {
                     Mf::Log2 => "log2",
                     Mf::Pow => "pow",
                     // geometry
-                    Mf::Dot => "dot",
+                    Mf::Dot => {
+                        let inner = ctx.info[arg].ty.inner_with(&self.module.types);
+                        match *inner {
+                            TypeInner::Vector { kind, size, .. } => {
+                                use crate::ScalarKind;
+                                match kind {
+                                    ScalarKind::Float => "dot",
+                                    ScalarKind::Sint | ScalarKind::Uint => {
+                                        // No intrinsic function for integer dot product in GLSL,
+                                        // transform the function call into an arithmetic expression
+                                        let arg1 =
+                                            arg1.ok_or_else(|| Error::Custom("Missing dot arg1".to_owned()))?;
+
+                                        write!(self.out, "(")?;
+
+                                        self.write_expr(arg, ctx)?;
+                                        write!(self.out, ".x * ")?;
+
+                                        self.write_expr(arg1, ctx)?;
+                                        write!(self.out, ".x + ")?;
+
+                                        self.write_expr(arg, ctx)?;
+                                        write!(self.out, ".y * ")?;
+
+                                        self.write_expr(arg1, ctx)?;
+                                        write!(self.out, ".y")?;
+
+                                        if size as u8 > 2 {
+                                            write!(self.out, " + ")?;
+
+                                            self.write_expr(arg, ctx)?;
+                                            write!(self.out, ".z * ")?;
+
+                                            self.write_expr(arg1, ctx)?;
+                                            write!(self.out, ".z")?;
+                                        }
+
+                                        if size as u8 > 3 {
+                                            write!(self.out, " + ")?;
+
+                                            self.write_expr(arg, ctx)?;
+                                            write!(self.out, ".w * ")?;
+
+                                            self.write_expr(arg1, ctx)?;
+                                            write!(self.out, ".w")?;
+                                        }
+
+                                        write!(self.out, ")")?;
+
+                                        return Ok(());
+                                    }
+                                    _ => unreachable!("Correct ScalarKind for dot product should be already validated"),
+                                }
+                            }
+                            _ => unreachable!("Correct TypeInner for dot product should be already validated"),
+                        }
+                    }
                     Mf::Outer => "outerProduct",
                     Mf::Cross => "cross",
                     Mf::Distance => "distance",
