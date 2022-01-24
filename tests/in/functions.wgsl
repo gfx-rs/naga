@@ -11,15 +11,15 @@ fn test_fma() -> vec2<f32> {
 fn test_integer_dot_product() {
     let a_2 = vec2<i32>(1);
     let b_2 = vec2<i32>(1);
-    let c_2 = dot(a_2, b_2);
+    let c_2: i32 = dot(a_2, b_2);
 
     let a_3 = vec3<u32>(1u);
     let b_3 = vec3<u32>(1u);
-    let c_3 = dot(a_2, b_2);
+    let c_3: u32 = dot(a_3, b_3);
 
     let a_4 = vec4<i32>(1);
-    let b_4 = vec4<u32>(1u);
-    let c_4 = dot(a_2, b_2);
+    let b_4 = vec4<i32>(1);
+    let c_4: i32 = dot(a_4, b_4);
 }
 
 @stage(compute) @workgroup_size(1)
