@@ -8,8 +8,22 @@ fn test_fma() -> vec2<f32> {
     return fma(a, b, c);
 }
 
+fn test_integer_dot_product() {
+    let a_2 = vec2<i32>(1);
+    let b_2 = vec2<i32>(1);
+    let c_2 = dot(a_2, b_2);
+
+    let a_3 = vec3<u32>(1u);
+    let b_3 = vec3<u32>(1u);
+    let c_3 = dot(a_2, b_2);
+
+    let a_4 = vec4<i32>(1);
+    let b_4 = vec4<u32>(1u);
+    let c_4 = dot(a_2, b_2);
+}
 
 @stage(compute) @workgroup_size(1)
 fn main() {
     let a = test_fma();
+    test_integer_dot_product();
 }
