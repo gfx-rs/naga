@@ -4,6 +4,8 @@ struct Globals {
     a: array<f32, 10>;
     v: vec4<f32>;
     m: mat3x4<f32>;
+    b: atomic<u32>;
+    g: array<atomic<u32>, 10>;
     d: array<f32>;
 };
 
@@ -69,4 +71,12 @@ fn set_in_bounds(v: f32) {
    globals.a[9] = v;
    globals.v[3] = v;
    globals.m[2][3] = v;
+}
+
+fn fetch_add_atomic() -> u32 {
+   return atomicAdd(&globals.b, 1u);
+}
+
+fn fetch_add_atomic_array(i: i32) -> u32 {
+   return atomicAdd(&globals.g[i], 1u);
 }
