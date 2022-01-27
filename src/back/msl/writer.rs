@@ -791,50 +791,34 @@ impl<W: Write> Writer<W> {
         value: Handle<crate::Expression>,
         context: &ExpressionContext,
     ) -> BackendResult {
-        // TODO Why not always put parentheses?
-        let is_scoped = true;
-        // Atomic ops are structured different from a normal load.
+        // Atomic ops are structured differently from a normal load.
         // Rewrite this for the bounds-check case so that the bounds check happens once
-        // when resolving the pointer, and then use an unchecked access within the atomic expression itself.
+        // when resolving the ptr, and then use an unchecked access within the atomic expression itself.
         let policy = context.choose_bounds_check_policy(expr_handle);
-        if policy == index::BoundsCheckPolicy::ReadZeroSkipWrite
-            && self.put_bounds_checks(
-                expr_handle,
-                context,
-                back::Level(0),
-                if is_scoped { "" } else { "(" },
-            )?
-        {
-            write!(self.out, " ? ")?;
 
-            {
-                // True branch of bounds check ternary.
-                write!(
-                    self.out,
-                    "{}::atomic_fetch_{}_explicit({}",
-                    NAMESPACE, key, ATOMIC_REFERENCE
-                )?;
-                self.put_access_chain(expr_handle, policy, context)?;
-                write!(self.out, ", ")?;
-                self.put_expression(value, context, true)?;
-                write!(self.out, ", {}::memory_order_relaxed)", NAMESPACE)?;
-            }
-
-            write!(self.out, " : DefaultConstructible()")?;
-
-            if !is_scoped {
-                write!(self.out, ")")?;
-            }
-        } else {
+        let put_unchecked_atomic_access = |writer: &mut Writer<W>| -> BackendResult {
             write!(
-                self.out,
+                writer.out,
                 "{}::atomic_fetch_{}_explicit({}",
                 NAMESPACE, key, ATOMIC_REFERENCE
             )?;
-            self.put_expression(expr_handle, context, true)?;
-            write!(self.out, ", ")?;
-            self.put_expression(value, context, true)?;
-            write!(self.out, ", {}::memory_order_relaxed)", NAMESPACE)?;
+            writer.put_access_chain(expr_handle, policy, context)?;
+            write!(writer.out, ", ")?;
+            writer.put_expression(value, context, true)?;
+            write!(writer.out, ", {}::memory_order_relaxed)", NAMESPACE)?;
+            Ok(())
+        };
+
+        if policy == index::BoundsCheckPolicy::ReadZeroSkipWrite
+            && self.put_bounds_checks(expr_handle, context, back::Level(0), "")?
+        {
+            // If requested and successfully put bounds checks, finish the ternary expression.
+            write!(self.out, " ? ")?;
+            put_unchecked_atomic_access(self)?;
+            write!(self.out, " : DefaultConstructible()")?;
+        } else {
+            // No bounds check requested.
+            put_unchecked_atomic_access(self)?;
         }
 
         Ok(())
