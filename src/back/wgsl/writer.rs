@@ -136,11 +136,13 @@ impl<W: Write> Writer<W> {
         for (handle, function) in module.functions.iter() {
             let fun_info = &info[handle];
 
+            let baking_set = crate::FastHashSet::default();
             let func_ctx = back::FunctionCtx {
                 ty: back::FunctionType::Function(handle),
                 info: fun_info,
                 expressions: &function.expressions,
                 named_expressions: &function.named_expressions,
+                baking_set: &baking_set,
             };
 
             // Write the function
@@ -163,11 +165,13 @@ impl<W: Write> Writer<W> {
             // Add a newline after attribute
             writeln!(self.out)?;
 
+            let baking_set = crate::FastHashSet::default();
             let func_ctx = back::FunctionCtx {
                 ty: back::FunctionType::EntryPoint(index as u16),
                 info: info.get_entry_point(index),
                 expressions: &ep.function.expressions,
                 named_expressions: &ep.function.named_expressions,
+                baking_set: &baking_set,
             };
             self.write_function(module, &ep.function, &func_ctx)?;
 

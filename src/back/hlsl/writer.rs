@@ -225,11 +225,13 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 }
             }
 
+            let baking_set = crate::FastHashSet::default();
             let ctx = back::FunctionCtx {
                 ty: back::FunctionType::Function(handle),
                 info,
                 expressions: &function.expressions,
                 named_expressions: &function.named_expressions,
+                baking_set: &baking_set,
             };
             let name = self.names[&NameKey::Function(handle)].clone();
 
@@ -267,11 +269,13 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 }
             }
 
+            let baking_set = crate::FastHashSet::default();
             let ctx = back::FunctionCtx {
                 ty: back::FunctionType::EntryPoint(index as u16),
                 info,
                 expressions: &ep.function.expressions,
                 named_expressions: &ep.function.named_expressions,
+                baking_set: &baking_set,
             };
 
             // Write wrapped function for `Expression::ImageQuery` and `Expressions::ArrayLength`

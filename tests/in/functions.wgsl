@@ -17,9 +17,8 @@ fn test_integer_dot_product() {
     let b_3 = vec3<u32>(1u);
     let c_3: u32 = dot(a_3, b_3);
 
-    let a_4 = vec4<i32>(1);
-    let b_4 = vec4<i32>(1);
-    let c_4: i32 = dot(a_4, b_4);
+    // test baking of arguments
+    let c_4: i32 = dot(vec4<i32>(4), vec4<i32>(2));
 }
 
 @stage(compute) @workgroup_size(1)

@@ -1136,12 +1136,44 @@ impl<'a, W: Write> Writer<'a, W> {
         func: &crate::Function,
         info: &valid::FunctionInfo,
     ) -> BackendResult {
+
+        // Do a first pass on all statements and store the handle of the ones
+        // that will need baking
+        use crate::Expression;
+        let mut baking_set = crate::FastHashSet::default();
+        for expr in func.expressions.iter() {
+            let expr_info = &info[expr.0];
+            let min_ref_count = func.expressions[expr.0].bake_ref_count();
+            if min_ref_count <= expr_info.ref_count {
+                baking_set.insert(expr.0);
+            }
+            // if the expression is a Dot product with integer arguments,
+            // then the args needs baking as well
+            if let (fun_handle, &Expression::Math {
+                fun: crate::MathFunction::Dot,
+                arg,
+                arg1,
+                ..
+            }) = expr {
+                let inner = info[fun_handle].ty.inner_with(&self.module.types);
+                if let TypeInner::Scalar { kind, .. } = *inner {
+                    match kind {
+                        crate::ScalarKind::Sint | crate::ScalarKind::Uint => {
+                            baking_set.insert(arg);
+                            baking_set.insert(arg1.unwrap());
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
         // Create a function context for the function being written
         let ctx = back::FunctionCtx {
             ty,
             info,
             expressions: &func.expressions,
             named_expressions: &func.named_expressions,
+            baking_set: &baking_set,
         };
 
         self.named_expressions.clear();
@@ -1484,13 +1516,10 @@ impl<'a, W: Write> Writer<'a, W> {
                         // Otherwise, we could accidentally write variable name instead of full expression.
                         // Also, we use sanitized names! It defense backend from generating variable with name from reserved keywords.
                         Some(self.namer.call(name))
+                    } else if ctx.baking_set.contains(&handle) {
+                        Some(format!("{}{}", super::BAKE_PREFIX, handle.index()))
                     } else {
-                        let min_ref_count = ctx.expressions[handle].bake_ref_count();
-                        if min_ref_count <= info.ref_count {
-                            Some(format!("{}{}", super::BAKE_PREFIX, handle.index()))
-                        } else {
-                            None
-                        }
+                        None
                     };
 
                     if let Some(name) = expr_name {
