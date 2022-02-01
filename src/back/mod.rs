@@ -60,8 +60,6 @@ struct FunctionCtx<'a> {
     expressions: &'a crate::Arena<crate::Expression>,
     /// Map of expressions that have associated variable names
     named_expressions: &'a crate::NamedExpressions,
-    // Set of expressions that should be baked
-    baking_set: &'a crate::ExpressionsToBake,
 }
 
 #[allow(dead_code)]
