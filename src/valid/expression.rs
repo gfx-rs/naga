@@ -1068,12 +1068,8 @@ impl super::Validator {
                             Ti::Vector {
                                 kind: Sk::Float, ..
                             }
-                            | Ti::Vector {
-                                kind: Sk::Sint, ..
-                            }
-                            | Ti::Vector {
-                                kind: Sk::Uint, ..
-                            } => {}
+                            | Ti::Vector { kind: Sk::Sint, .. }
+                            | Ti::Vector { kind: Sk::Uint, .. } => {}
                             _ => return Err(ExpressionError::InvalidArgumentType(fun, 0, arg)),
                         }
                         if arg1_ty != arg_ty {

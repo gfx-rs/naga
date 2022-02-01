@@ -1001,11 +1001,7 @@ impl<'a, W: Write> Writer<'a, W> {
     ///
     /// # Notes
     /// Clears `need_bake_expressions` set before adding to it
-    fn update_expressions_to_bake(
-        &mut self,
-        func: &crate::Function,
-        info: &valid::FunctionInfo,
-    ) {
+    fn update_expressions_to_bake(&mut self, func: &crate::Function, info: &valid::FunctionInfo) {
         use crate::Expression;
         self.need_bake_expressions.clear();
         for expr in func.expressions.iter() {
