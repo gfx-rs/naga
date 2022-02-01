@@ -552,13 +552,175 @@ impl<'w> BlockContext<'w> {
                     Mf::Frexp => MathOp::Ext(spirv::GLOp::Frexp),
                     Mf::Ldexp => MathOp::Ext(spirv::GLOp::Ldexp),
                     // geometry
-                    Mf::Dot => MathOp::Custom(Instruction::binary(
-                        spirv::Op::Dot,
-                        result_type_id,
-                        id,
-                        arg0_id,
-                        arg1_id,
-                    )),
+                    Mf::Dot => {
+                        use crate::TypeInner;
+                        let inner_ty = self.fun_info[arg].ty.inner_with(&self.ir_module.types);
+                        dbg!(inner_ty);
+                        match *inner_ty {
+                            TypeInner::Vector { kind, size, .. } => {
+                                use crate::ScalarKind;
+                                match kind {
+                                    ScalarKind::Float => MathOp::Custom(Instruction::binary(
+                                            spirv::Op::Dot,
+                                            result_type_id,
+                                            id,
+                                            arg0_id,
+                                            arg1_id,
+                                        )),
+                                    ScalarKind::Sint | ScalarKind::Uint => {
+                                        // No intrinsic function for integer dot product in spv;
+                                        // Compute the dot product by hand.
+                                        let a_x = self.gen_id();
+                                        block.body.push(Instruction::composite_extract(
+                                            result_type_id,
+                                            a_x,
+                                            arg0_id,
+                                            &[0],
+                                        ));
+                                        let b_x = self.gen_id();
+                                        block.body.push(Instruction::composite_extract(
+                                            result_type_id,
+                                            b_x,
+                                            arg1_id,
+                                            &[0],
+                                        ));
+                                        let prod_x = self.gen_id();
+                                        block.body.push(Instruction::binary(
+                                                spirv::Op::IMul,
+                                                result_type_id,
+                                                prod_x,
+                                                a_x,
+                                                b_x
+                                        ));
+
+                                        let a_y = self.gen_id();
+                                        block.body.push(Instruction::composite_extract(
+                                            result_type_id,
+                                            a_y,
+                                            arg0_id,
+                                            &[1],
+                                        ));
+                                        let b_y = self.gen_id();
+                                        block.body.push(Instruction::composite_extract(
+                                            result_type_id,
+                                            b_y,
+                                            arg1_id,
+                                            &[1],
+                                        ));
+                                        let prod_y = self.gen_id();
+                                        block.body.push(Instruction::binary(
+                                                spirv::Op::IMul,
+                                                result_type_id,
+                                                prod_y,
+                                                a_y,
+                                                b_y
+                                        ));
+
+                                        // if the vector size is 2, then the last thing to do is
+                                        // add the two products. Otherwise, we need a new id
+                                        // for this intermediate result.
+                                        let sum_2 = if size as u8 == 2 {
+                                            id
+                                        } else {
+                                            self.gen_id()
+                                        };
+                                        block.body.push(Instruction::binary(
+                                                spirv::Op::IAdd,
+                                                result_type_id,
+                                                sum_2,
+                                                prod_x,
+                                                prod_y,
+                                        ));
+                                        if size as u8 == 2 {
+                                            self.cached[expr_handle] = sum_2;
+                                            return Ok(());
+                                        }
+
+                                        let a_z = self.gen_id();
+                                        block.body.push(Instruction::composite_extract(
+                                            result_type_id,
+                                            a_z,
+                                            arg0_id,
+                                            &[2],
+                                        ));
+                                        let b_z = self.gen_id();
+                                        block.body.push(Instruction::composite_extract(
+                                            result_type_id,
+                                            b_z,
+                                            arg1_id,
+                                            &[2],
+                                        ));
+                                        let prod_z = self.gen_id();
+                                        block.body.push(Instruction::binary(
+                                                spirv::Op::IMul,
+                                                result_type_id,
+                                                prod_z,
+                                                a_z,
+                                                b_z
+                                        ));
+
+                                        // if the vector size is 3, then the last thing to do is
+                                        // add the two products. Otherwise, we need one more id.
+                                        let sum_3 = if size as u8 == 3 {
+                                            id
+                                        } else {
+                                            self.gen_id()
+                                        };
+                                        block.body.push(Instruction::binary(
+                                                spirv::Op::IAdd,
+                                                result_type_id,
+                                                sum_3,
+                                                sum_2,
+                                                prod_z,
+                                        ));
+                                        if size as u8 == 3 {
+                                            self.cached[expr_handle] = sum_3;
+                                            return Ok(());
+                                        }
+
+                                        let a_w = self.gen_id();
+                                        block.body.push(Instruction::composite_extract(
+                                            result_type_id,
+                                            a_w,
+                                            arg0_id,
+                                            &[3],
+                                        ));
+                                        let b_w = self.gen_id();
+                                        block.body.push(Instruction::composite_extract(
+                                            result_type_id,
+                                            b_w,
+                                            arg1_id,
+                                            &[3],
+                                        ));
+                                        let prod_w = self.gen_id();
+                                        block.body.push(Instruction::binary(
+                                                spirv::Op::IMul,
+                                                result_type_id,
+                                                prod_w,
+                                                a_w,
+                                                b_w
+                                        ));
+
+                                        // If the vector size is not 2 nor 3, then it is 4, and
+                                        // this is the last op we need to do, for sure.
+                                        block.body.push(Instruction::binary(
+                                                spirv::Op::IAdd,
+                                                result_type_id,
+                                                id,
+                                                sum_3,
+                                                prod_w,
+                                        ));
+                                        self.cached[expr_handle] = id;
+                                        return Ok(());
+                                    }
+                                    _ => unreachable!("Correct ScalarKind for dot product should be already validated"),
+                                }
+                            }
+                            _ => unreachable!(
+                                "Correct TypeInner for dot product should be already validated"
+                            ),
+                        }
+                    }
                     Mf::Outer => MathOp::Custom(Instruction::binary(
                         spirv::Op::OuterProduct,
                         result_type_id,
