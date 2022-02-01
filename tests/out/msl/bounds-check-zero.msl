@@ -15,18 +15,13 @@ struct _mslBufferSizes {
 struct type_1 {
     float inner[10];
 };
-struct type_5 {
-    metal::atomic_uint inner[10];
-};
-typedef float type_6[1];
+typedef float type_4[1];
 struct Globals {
     type_1 a;
     char _pad1[8];
     metal::float4 v;
     metal::float3x4 m;
-    metal::atomic_uint b;
-    type_5 g;
-    type_6 d;
+    type_4 d;
 };
 
 float index_array(
@@ -43,7 +38,7 @@ float index_dynamic_array(
     device Globals& globals,
     constant _mslBufferSizes& _buffer_sizes
 ) {
-    float _e4 = metal::uint(i_1) < 1 + (_buffer_sizes.size0 - 156 - 4) / 4 ? globals.d[i_1] : DefaultConstructible();
+    float _e4 = metal::uint(i_1) < 1 + (_buffer_sizes.size0 - 112 - 4) / 4 ? globals.d[i_1] : DefaultConstructible();
     return _e4;
 }
 
@@ -120,7 +115,7 @@ void set_dynamic_array(
     device Globals& globals,
     constant _mslBufferSizes& _buffer_sizes
 ) {
-    if (metal::uint(i_8) < 1 + (_buffer_sizes.size0 - 156 - 4) / 4) {
+    if (metal::uint(i_8) < 1 + (_buffer_sizes.size0 - 112 - 4) / 4) {
         globals.d[i_8] = v_2;
     }
     return;
@@ -185,21 +180,4 @@ void set_in_bounds(
     globals.v.w = v_7;
     globals.m[2].w = v_7;
     return;
-}
-
-metal::uint fetch_add_atomic(
-    device Globals& globals,
-    constant _mslBufferSizes& _buffer_sizes
-) {
-    metal::uint _e3 = metal::atomic_fetch_add_explicit(&globals.b, 1u, metal::memory_order_relaxed);
-    return _e3;
-}
-
-metal::uint fetch_add_atomic_array(
-    int i_13,
-    device Globals& globals,
-    constant _mslBufferSizes& _buffer_sizes
-) {
-    metal::uint _e5 = (metal::uint(i_13) < 10 ? metal::atomic_fetch_add_explicit(&globals.g.inner[i_13], 1u, metal::memory_order_relaxed) : DefaultConstructible());
-    return _e5;
 }
