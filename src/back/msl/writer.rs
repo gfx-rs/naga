@@ -806,6 +806,29 @@ impl<W: Write> Writer<W> {
         Ok(())
     }
 
+    /// Emit code for the arithmetic expression of the dot product.
+    ///
+    fn put_dot_product(
+        &mut self,
+        arg: Handle<crate::Expression>,
+        arg1: Handle<crate::Expression>,
+        size: usize,
+    ) -> BackendResult {
+        write!(self.out, "(")?;
+
+        let arg0_name = &self.named_expressions[&arg];
+        let arg1_name = &self.named_expressions[&arg1];
+
+        // This will print an extra '+' at the beginning but that is fine in msl
+        for index in 0..size {
+            let component = back::COMPONENTS[index];
+            write!(self.out, " + {}.{} * {}.{}", arg0_name, component, arg1_name, component)?;
+        }
+
+        write!(self.out, ")")?;
+        Ok(())
+    }
+
     /// Emit code for the expression `expr_handle`.
     ///
     /// The `is_scoped` argument is true if the surrounding operators have the
@@ -1195,66 +1218,10 @@ impl<W: Write> Writer<W> {
                     Mf::Log2 => "log2",
                     Mf::Pow => "pow",
                     // geometry
-                    Mf::Dot => {
-                        use crate::TypeInner;
-                        let inner = context.resolve_type(arg);
-                        match *inner {
-                            TypeInner::Vector { kind, size, .. } => {
-                                use crate::ScalarKind;
-                                match kind {
-                                    ScalarKind::Float => "dot",
-                                    ScalarKind::Sint | ScalarKind::Uint => {
-                                        // No intrinsic function for integer dot product in MSL,
-                                        // transform the function call into an arithmetic expression.
-
-                                        // arg1 should be safe to unwrap due to previous validation
-                                        let arg1 = arg1.unwrap();
-
-                                        write!(self.out, "(")?;
-
-                                        self.put_expression(arg, context, false)?;
-                                        write!(self.out, ".x * ")?;
-
-                                        self.put_expression(arg1, context, false)?;
-                                        write!(self.out, ".x + ")?;
-
-                                        self.put_expression(arg, context, false)?;
-                                        write!(self.out, ".y * ")?;
-
-                                        self.put_expression(arg1, context, false)?;
-                                        write!(self.out, ".y")?;
-
-                                        if size as u8 > 2 {
-                                            write!(self.out, " + ")?;
-
-                                            self.put_expression(arg, context, false)?;
-                                            write!(self.out, ".z * ")?;
-
-                                            self.put_expression(arg1, context, false)?;
-                                            write!(self.out, ".z")?;
-                                        }
-
-                                        if size as u8 > 3 {
-                                            write!(self.out, " + ")?;
-
-                                            self.put_expression(arg, context, false)?;
-                                            write!(self.out, ".w * ")?;
-
-                                            self.put_expression(arg1, context, false)?;
-                                            write!(self.out, ".w")?;
-                                        }
-
-                                        write!(self.out, ")")?;
-
-                                        return Ok(());
-                                    }
-                                    _ => unreachable!("Correct ScalarKind for dot product should be already validated"),
-                                }
-                            }
-                            _ => unreachable!(
-                                "Correct TypeInner for dot product should be already validated"
-                            ),
-                        }
+                    Mf::Dot => match *context.resolve_type(arg) {
+                        crate::TypeInner::Vector { kind: crate::ScalarKind::Float, .. } => "dot",
+                        crate::TypeInner::Vector { size, .. } => return self.put_dot_product(arg, arg1.unwrap(), size as usize),
+                        _ => unreachable!("Correct TypeInner for dot product should be already validated"),
                     }
                     Mf::Outer => return Err(Error::UnsupportedCall(format!("{:?}", fun))),
                     Mf::Cross => "cross",

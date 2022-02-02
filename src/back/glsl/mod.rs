@@ -1438,6 +1438,29 @@ impl<'a, W: Write> Writer<'a, W> {
         Ok(())
     }
 
+    /// Helper method used to output a dot product as an arithmetic expression
+    ///
+    fn write_dot_product(
+        &mut self,
+        arg: Handle<crate::Expression>,
+        arg1: Handle<crate::Expression>,
+        size: usize,
+    ) -> BackendResult {
+        write!(self.out, "(")?;
+
+        let arg0_name = &self.named_expressions[&arg];
+        let arg1_name = &self.named_expressions[&arg1];
+
+        // This will print an extra '+' at the beginning but that is fine in glsl
+        for index in 0..size {
+            let component = back::COMPONENTS[index];
+            write!(self.out, " + {}.{} * {}.{}", arg0_name, component, arg1_name, component)?;
+        }
+
+        write!(self.out, ")")?;
+        Ok(())
+    }
+
     /// Helper method used to write structs
     ///
     /// # Notes
@@ -2572,64 +2595,10 @@ impl<'a, W: Write> Writer<'a, W> {
                     Mf::Log2 => "log2",
                     Mf::Pow => "pow",
                     // geometry
-                    Mf::Dot => {
-                        let inner = ctx.info[arg].ty.inner_with(&self.module.types);
-                        match *inner {
-                            TypeInner::Vector { kind, size, .. } => {
-                                use crate::ScalarKind;
-                                match kind {
-                                    ScalarKind::Float => "dot",
-                                    ScalarKind::Sint | ScalarKind::Uint => {
-                                        // No intrinsic function for integer dot product in GLSL,
-                                        // transform the function call into an arithmetic expression
-                                        let arg1 =
-                                            arg1.ok_or_else(|| Error::Custom("Missing dot arg1".to_owned()))?;
-
-                                        write!(self.out, "(")?;
-
-                                        self.write_expr(arg, ctx)?;
-                                        write!(self.out, ".x * ")?;
-
-                                        self.write_expr(arg1, ctx)?;
-                                        write!(self.out, ".x + ")?;
-
-                                        self.write_expr(arg, ctx)?;
-                                        write!(self.out, ".y * ")?;
-
-                                        self.write_expr(arg1, ctx)?;
-                                        write!(self.out, ".y")?;
-
-                                        if size as u8 > 2 {
-                                            write!(self.out, " + ")?;
-
-                                            self.write_expr(arg, ctx)?;
-                                            write!(self.out, ".z * ")?;
-
-                                            self.write_expr(arg1, ctx)?;
-                                            write!(self.out, ".z")?;
-                                        }
-
-                                        if size as u8 > 3 {
-                                            write!(self.out, " + ")?;
-
-                                            self.write_expr(arg, ctx)?;
-                                            write!(self.out, ".w * ")?;
-
-                                            self.write_expr(arg1, ctx)?;
-                                            write!(self.out, ".w")?;
-                                        }
-
-                                        write!(self.out, ")")?;
-
-                                        return Ok(());
-                                    }
-                                    _ => unreachable!("Correct ScalarKind for dot product should be already validated"),
-                                }
-                            }
-                            _ => unreachable!(
-                                "Correct TypeInner for dot product should be already validated"
-                            ),
-                        }
+                    Mf::Dot => match *ctx.info[arg].ty.inner_with(&self.module.types) {
+                        crate::TypeInner::Vector { kind: crate::ScalarKind::Float, .. } => "dot",
+                        crate::TypeInner::Vector { size, .. } => return self.write_dot_product(arg, arg1.unwrap(), size as usize),
+                        _ => unreachable!( "Correct TypeInner for dot product should be already validated"),
                     }
                     Mf::Outer => "outerProduct",
                     Mf::Cross => "cross",
