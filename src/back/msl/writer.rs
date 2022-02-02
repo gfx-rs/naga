@@ -410,10 +410,7 @@ impl crate::AddressSpace {
         match self {
             Self::Handle => None,
             Self::Uniform | Self::PushConstant => Some("constant"),
-            Self::Storage { access } if access.contains(crate::StorageAccess::STORE) => {
-                Some("device")
-            }
-            Self::Storage { .. } => Some("constant"),
+            Self::Storage { .. } => Some("device"),
             Self::Private | Self::Function => Some("thread"),
             Self::WorkGroup => Some("threadgroup"),
         }
