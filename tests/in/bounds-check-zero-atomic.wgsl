@@ -1,4 +1,8 @@
-// Tests for `naga::back::BoundsCheckPolicy::ReadZeroSkipWrite`.
+// Tests for `naga::back::BoundsCheckPolicy::ReadZeroSkipWrite` for atomic types.
+
+// These are separate from `bounds-check-zero.wgsl because SPIR-V does not yet
+// support `ReadZeroSkipWrite` for atomics. Once it does, the test files could
+// be combined.
 
 struct Globals {
     a: atomic<u32>;
