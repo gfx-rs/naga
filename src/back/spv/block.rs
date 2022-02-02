@@ -563,6 +563,7 @@ impl<'w> BlockContext<'w> {
                             arg0_id,
                             arg1_id,
                         )),
+                        // TODO: consider using integer dot product if VK_KHR_shader_integer_dot_product is available
                         crate::TypeInner::Vector { size, .. } => {
                             self.write_dot_product(
                                 id,
