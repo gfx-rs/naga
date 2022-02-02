@@ -552,174 +552,28 @@ impl<'w> BlockContext<'w> {
                     Mf::Frexp => MathOp::Ext(spirv::GLOp::Frexp),
                     Mf::Ldexp => MathOp::Ext(spirv::GLOp::Ldexp),
                     // geometry
-                    Mf::Dot => {
-                        use crate::TypeInner;
-                        let inner_ty = self.fun_info[arg].ty.inner_with(&self.ir_module.types);
-                        dbg!(inner_ty);
-                        match *inner_ty {
-                            TypeInner::Vector { kind, size, .. } => {
-                                use crate::ScalarKind;
-                                match kind {
-                                    ScalarKind::Float => MathOp::Custom(Instruction::binary(
-                                            spirv::Op::Dot,
-                                            result_type_id,
-                                            id,
-                                            arg0_id,
-                                            arg1_id,
-                                        )),
-                                    ScalarKind::Sint | ScalarKind::Uint => {
-                                        // No intrinsic function for integer dot product in spv;
-                                        // Compute the dot product by hand.
-                                        let a_x = self.gen_id();
-                                        block.body.push(Instruction::composite_extract(
-                                            result_type_id,
-                                            a_x,
-                                            arg0_id,
-                                            &[0],
-                                        ));
-                                        let b_x = self.gen_id();
-                                        block.body.push(Instruction::composite_extract(
-                                            result_type_id,
-                                            b_x,
-                                            arg1_id,
-                                            &[0],
-                                        ));
-                                        let prod_x = self.gen_id();
-                                        block.body.push(Instruction::binary(
-                                                spirv::Op::IMul,
-                                                result_type_id,
-                                                prod_x,
-                                                a_x,
-                                                b_x
-                                        ));
-
-                                        let a_y = self.gen_id();
-                                        block.body.push(Instruction::composite_extract(
-                                            result_type_id,
-                                            a_y,
-                                            arg0_id,
-                                            &[1],
-                                        ));
-                                        let b_y = self.gen_id();
-                                        block.body.push(Instruction::composite_extract(
-                                            result_type_id,
-                                            b_y,
-                                            arg1_id,
-                                            &[1],
-                                        ));
-                                        let prod_y = self.gen_id();
-                                        block.body.push(Instruction::binary(
-                                                spirv::Op::IMul,
-                                                result_type_id,
-                                                prod_y,
-                                                a_y,
-                                                b_y
-                                        ));
-
-                                        // if the vector size is 2, then the last thing to do is
-                                        // add the two products. Otherwise, we need a new id
-                                        // for this intermediate result.
-                                        let sum_2 = if size as u8 == 2 {
-                                            id
-                                        } else {
-                                            self.gen_id()
-                                        };
-                                        block.body.push(Instruction::binary(
-                                                spirv::Op::IAdd,
-                                                result_type_id,
-                                                sum_2,
-                                                prod_x,
-                                                prod_y,
-                                        ));
-                                        if size as u8 == 2 {
-                                            self.cached[expr_handle] = sum_2;
-                                            return Ok(());
-                                        }
-
-                                        let a_z = self.gen_id();
-                                        block.body.push(Instruction::composite_extract(
-                                            result_type_id,
-                                            a_z,
-                                            arg0_id,
-                                            &[2],
-                                        ));
-                                        let b_z = self.gen_id();
-                                        block.body.push(Instruction::composite_extract(
-                                            result_type_id,
-                                            b_z,
-                                            arg1_id,
-                                            &[2],
-                                        ));
-                                        let prod_z = self.gen_id();
-                                        block.body.push(Instruction::binary(
-                                                spirv::Op::IMul,
-                                                result_type_id,
-                                                prod_z,
-                                                a_z,
-                                                b_z
-                                        ));
-
-                                        // if the vector size is 3, then the last thing to do is
-                                        // add the two products. Otherwise, we need one more id.
-                                        let sum_3 = if size as u8 == 3 {
-                                            id
-                                        } else {
-                                            self.gen_id()
-                                        };
-                                        block.body.push(Instruction::binary(
-                                                spirv::Op::IAdd,
-                                                result_type_id,
-                                                sum_3,
-                                                sum_2,
-                                                prod_z,
-                                        ));
-                                        if size as u8 == 3 {
-                                            self.cached[expr_handle] = sum_3;
-                                            return Ok(());
-                                        }
-
-                                        let a_w = self.gen_id();
-                                        block.body.push(Instruction::composite_extract(
-                                            result_type_id,
-                                            a_w,
-                                            arg0_id,
-                                            &[3],
-                                        ));
-                                        let b_w = self.gen_id();
-                                        block.body.push(Instruction::composite_extract(
-                                            result_type_id,
-                                            b_w,
-                                            arg1_id,
-                                            &[3],
-                                        ));
-                                        let prod_w = self.gen_id();
-                                        block.body.push(Instruction::binary(
-                                                spirv::Op::IMul,
-                                                result_type_id,
-                                                prod_w,
-                                                a_w,
-                                                b_w
-                                        ));
-
-                                        // If the vector size is not 2 nor 3, then it is 4, and
-                                        // this is the last op we need to do, for sure.
-                                        block.body.push(Instruction::binary(
-                                                spirv::Op::IAdd,
-                                                result_type_id,
-                                                id,
-                                                sum_3,
-                                                prod_w,
-                                        ));
-                                        self.cached[expr_handle] = id;
-                                        return Ok(());
-                                    }
-                                    _ => unreachable!("Correct ScalarKind for dot product should be already validated"),
-                                }
-                            }
-                            _ => unreachable!(
-                                "Correct TypeInner for dot product should be already validated"
-                            ),
+                    Mf::Dot => match *self.fun_info[arg].ty.inner_with(&self.ir_module.types) {
+                        crate::TypeInner::Vector { kind: crate::ScalarKind::Float, .. } => {
+                            MathOp::Custom(Instruction::binary(
+                                spirv::Op::Dot,
+                                result_type_id,
+                                id,
+                                arg0_id,
+                                arg1_id,
+                            ))
                         }
+                        crate::TypeInner::Vector { size, .. } => {
+                            self.write_dot_product(
+                                id,
+                                result_type_id,
+                                arg0_id,
+                                arg1_id,
+                                size,
+                                block)?;
+                            self.cached[expr_handle] = id;
+                            return Ok(());
+                        }
+                        _ => unreachable!("Correct TypeInner for dot product should be already validated"),
                     }
                     Mf::Outer => MathOp::Custom(Instruction::binary(
                         spirv::Op::OuterProduct,
@@ -1280,6 +1134,101 @@ impl<'w> BlockContext<'w> {
         };
 
         Ok(pointer)
+    }
+
+    /// Build the instructions for the arithmetic expression of a dot product
+    fn write_dot_product(
+        &mut self,
+        result_id: Word,
+        result_type_id: Word,
+        arg0_id: Word,
+        arg1_id: Word,
+        size: crate::VectorSize,
+        block: &mut Block,
+    ) -> Result<(), Error> {
+        // Create an iterator over the IDs that will store the partial sums of products.
+        // Last iterator element will always be result_id, while the others will be generated IDs.
+        let sum_2_ids: [Word; 1];
+        let sum_3_ids: [Word; 2];
+        let sum_4_ids: [Word; 3];
+        use crate::VectorSize;
+        let sum_ids = match size {
+            VectorSize::Bi => {
+                sum_2_ids = [result_id];
+                sum_2_ids.iter()
+            }
+            VectorSize::Tri => {
+                sum_3_ids = [self.gen_id(), result_id];
+                sum_3_ids.iter()
+            }
+            VectorSize::Quad => {
+                sum_4_ids = [self.gen_id(), self.gen_id(), result_id];
+                sum_4_ids.iter()
+            }
+        };
+
+        // compute the first product of the x elements
+        let a_x = self.gen_id();
+        block.body.push(Instruction::composite_extract(
+            result_type_id,
+            a_x,
+            arg0_id,
+            &[0],
+        ));
+        let b_x = self.gen_id();
+        block.body.push(Instruction::composite_extract(
+            result_type_id,
+            b_x,
+            arg1_id,
+            &[0],
+        ));
+        let prod_x = self.gen_id();
+        block.body.push(Instruction::binary(
+                spirv::Op::IMul,
+                result_type_id,
+                prod_x,
+                a_x,
+                b_x
+        ));
+
+        let mut partial_sum = prod_x;
+        for (index, &id) in sum_ids.enumerate() {
+            // compute the product of the next component
+            let component = index as u32 + 1;
+            let a_id = self.gen_id();
+            block.body.push(Instruction::composite_extract(
+                result_type_id,
+                a_id,
+                arg0_id,
+                &[component],
+            ));
+            let b_id = self.gen_id();
+            block.body.push(Instruction::composite_extract(
+                result_type_id,
+                b_id,
+                arg1_id,
+                &[component],
+            ));
+            let prod_id = self.gen_id();
+            block.body.push(Instruction::binary(
+                    spirv::Op::IMul,
+                    result_type_id,
+                    prod_id,
+                    a_id,
+                    b_id
+            ));
+            // sum the computed product with the partial sum
+            block.body.push(Instruction::binary(
+                spirv::Op::IAdd,
+                result_type_id,
+                id,
+                partial_sum,
+                prod_id,
+            ));
+            // set the id of the result as the previous partial sum
+            partial_sum = id;
+        }
+        Ok(())
     }
 
     pub(super) fn write_block(
