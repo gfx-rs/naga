@@ -553,15 +553,16 @@ impl<'w> BlockContext<'w> {
                     Mf::Ldexp => MathOp::Ext(spirv::GLOp::Ldexp),
                     // geometry
                     Mf::Dot => match *self.fun_info[arg].ty.inner_with(&self.ir_module.types) {
-                        crate::TypeInner::Vector { kind: crate::ScalarKind::Float, .. } => {
-                            MathOp::Custom(Instruction::binary(
-                                spirv::Op::Dot,
-                                result_type_id,
-                                id,
-                                arg0_id,
-                                arg1_id,
-                            ))
-                        }
+                        crate::TypeInner::Vector {
+                            kind: crate::ScalarKind::Float,
+                            ..
+                        } => MathOp::Custom(Instruction::binary(
+                            spirv::Op::Dot,
+                            result_type_id,
+                            id,
+                            arg0_id,
+                            arg1_id,
+                        )),
                         crate::TypeInner::Vector { size, .. } => {
                             self.write_dot_product(
                                 id,
@@ -569,12 +570,15 @@ impl<'w> BlockContext<'w> {
                                 arg0_id,
                                 arg1_id,
                                 size,
-                                block)?;
+                                block,
+                            )?;
                             self.cached[expr_handle] = id;
                             return Ok(());
                         }
-                        _ => unreachable!("Correct TypeInner for dot product should be already validated"),
-                    }
+                        _ => unreachable!(
+                            "Correct TypeInner for dot product should be already validated"
+                        ),
+                    },
                     Mf::Outer => MathOp::Custom(Instruction::binary(
                         spirv::Op::OuterProduct,
                         result_type_id,
@@ -1184,11 +1188,11 @@ impl<'w> BlockContext<'w> {
         ));
         let prod_x = self.gen_id();
         block.body.push(Instruction::binary(
-                spirv::Op::IMul,
-                result_type_id,
-                prod_x,
-                a_x,
-                b_x
+            spirv::Op::IMul,
+            result_type_id,
+            prod_x,
+            a_x,
+            b_x,
         ));
 
         let mut partial_sum = prod_x;
@@ -1211,11 +1215,11 @@ impl<'w> BlockContext<'w> {
             ));
             let prod_id = self.gen_id();
             block.body.push(Instruction::binary(
-                    spirv::Op::IMul,
-                    result_type_id,
-                    prod_id,
-                    a_id,
-                    b_id
+                spirv::Op::IMul,
+                result_type_id,
+                prod_id,
+                a_id,
+                b_id,
             ));
             // sum the computed product with the partial sum
             block.body.push(Instruction::binary(

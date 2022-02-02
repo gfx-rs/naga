@@ -822,7 +822,11 @@ impl<W: Write> Writer<W> {
         // This will print an extra '+' at the beginning but that is fine in msl
         for index in 0..size {
             let component = back::COMPONENTS[index];
-            write!(self.out, " + {}.{} * {}.{}", arg0_name, component, arg1_name, component)?;
+            write!(
+                self.out,
+                " + {}.{} * {}.{}",
+                arg0_name, component, arg1_name, component
+            )?;
         }
 
         write!(self.out, ")")?;
@@ -1219,10 +1223,17 @@ impl<W: Write> Writer<W> {
                     Mf::Pow => "pow",
                     // geometry
                     Mf::Dot => match *context.resolve_type(arg) {
-                        crate::TypeInner::Vector { kind: crate::ScalarKind::Float, .. } => "dot",
-                        crate::TypeInner::Vector { size, .. } => return self.put_dot_product(arg, arg1.unwrap(), size as usize),
-                        _ => unreachable!("Correct TypeInner for dot product should be already validated"),
-                    }
+                        crate::TypeInner::Vector {
+                            kind: crate::ScalarKind::Float,
+                            ..
+                        } => "dot",
+                        crate::TypeInner::Vector { size, .. } => {
+                            return self.put_dot_product(arg, arg1.unwrap(), size as usize)
+                        }
+                        _ => unreachable!(
+                            "Correct TypeInner for dot product should be already validated"
+                        ),
+                    },
                     Mf::Outer => return Err(Error::UnsupportedCall(format!("{:?}", fun))),
                     Mf::Cross => "cross",
                     Mf::Distance => "distance",

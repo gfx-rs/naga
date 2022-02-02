@@ -1454,7 +1454,11 @@ impl<'a, W: Write> Writer<'a, W> {
         // This will print an extra '+' at the beginning but that is fine in glsl
         for index in 0..size {
             let component = back::COMPONENTS[index];
-            write!(self.out, " + {}.{} * {}.{}", arg0_name, component, arg1_name, component)?;
+            write!(
+                self.out,
+                " + {}.{} * {}.{}",
+                arg0_name, component, arg1_name, component
+            )?;
         }
 
         write!(self.out, ")")?;
@@ -2596,10 +2600,17 @@ impl<'a, W: Write> Writer<'a, W> {
                     Mf::Pow => "pow",
                     // geometry
                     Mf::Dot => match *ctx.info[arg].ty.inner_with(&self.module.types) {
-                        crate::TypeInner::Vector { kind: crate::ScalarKind::Float, .. } => "dot",
-                        crate::TypeInner::Vector { size, .. } => return self.write_dot_product(arg, arg1.unwrap(), size as usize),
-                        _ => unreachable!( "Correct TypeInner for dot product should be already validated"),
-                    }
+                        crate::TypeInner::Vector {
+                            kind: crate::ScalarKind::Float,
+                            ..
+                        } => "dot",
+                        crate::TypeInner::Vector { size, .. } => {
+                            return self.write_dot_product(arg, arg1.unwrap(), size as usize)
+                        }
+                        _ => unreachable!(
+                            "Correct TypeInner for dot product should be already validated"
+                        ),
+                    },
                     Mf::Outer => "outerProduct",
                     Mf::Cross => "cross",
                     Mf::Distance => "distance",
