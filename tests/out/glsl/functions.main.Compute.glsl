@@ -14,7 +14,7 @@ vec2 test_fma() {
     return fma(a, b, c);
 }
 
-void test_integer_dot_product() {
+int test_integer_dot_product() {
     ivec2 a_2_ = ivec2(1);
     ivec2 b_2_ = ivec2(1);
     int c_2_ = ( + a_2_.x * b_2_.x + a_2_.y * b_2_.y);
@@ -24,11 +24,12 @@ void test_integer_dot_product() {
     ivec4 _e11 = ivec4(4);
     ivec4 _e13 = ivec4(2);
     int c_4_ = ( + _e11.x * _e13.x + _e11.y * _e13.y + _e11.z * _e13.z + _e11.w * _e13.w);
+    return c_4_;
 }
 
 void main() {
     vec2 _e0 = test_fma();
-    test_integer_dot_product();
+    int _e1 = test_integer_dot_product();
     return;
 }
 
