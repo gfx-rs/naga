@@ -572,7 +572,7 @@ impl<'w> BlockContext<'w> {
                                 arg1_id,
                                 size as u32,
                                 block,
-                            )?;
+                            );
                             self.cached[expr_handle] = id;
                             return Ok(());
                         }
@@ -1150,7 +1150,7 @@ impl<'w> BlockContext<'w> {
         arg1_id: Word,
         size: u32,
         block: &mut Block,
-    ) -> Result<(), Error> {
+    ) {
         let const_null = self.gen_id();
         block
             .body
@@ -1201,7 +1201,6 @@ impl<'w> BlockContext<'w> {
             // set the id of the result as the previous partial sum
             partial_sum = id;
         }
-        Ok(())
     }
 
     pub(super) fn write_block(
