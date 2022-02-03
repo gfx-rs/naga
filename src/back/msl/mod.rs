@@ -141,6 +141,8 @@ pub enum Error {
     UnsupportedBuiltIn(crate::BuiltIn),
     #[error("capability {0:?} is not supported")]
     CapabilityNotSupported(crate::valid::Capabilities),
+    #[error("address space {0:?} is not supported for target MSL version")]
+    UnsupportedAddressSpace(crate::AddressSpace),
 }
 
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]
