@@ -18,7 +18,7 @@ To deal with this, we add `row_major` to all declarations of matrices in Uniform
 
 Finally because all of our matrices are transposed, if you use `mat3x4`, it'll become `float4x3` in HLSL.
 
-[hlsl]: https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl    
+[hlsl]: https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl
 */
 
 mod conv;
@@ -143,7 +143,7 @@ impl Options {
 #[derive(Default)]
 pub struct ReflectionInfo {
     /// Mapping of the entry point names.
-    /// 
+    ///
     /// Each item in the array corresponds to an entry point index. The real entry point name may be different if one of the
     /// reserved words are used.
     ///

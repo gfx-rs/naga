@@ -23,7 +23,7 @@ bitflags::bitflags! {
         const IMAGE_LOAD_STORE = 1 << 8;
         const CONSERVATIVE_DEPTH = 1 << 9;
         /// Interpolation and auxiliary qualifiers.
-        /// 
+        ///
         /// Perspective, Flat, and Centroid are available in all GLSL versions we support.
         const NOPERSPECTIVE_QUALIFIER = 1 << 11;
         const SAMPLE_QUALIFIER = 1 << 12;
