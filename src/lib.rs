@@ -92,7 +92,7 @@ Naga's rules for when `Expression`s are evaluated are as follows:
         does not.
 
     -   A `GlobalVariable` expression referring to a global in the
-        [`StorageClass::Handle`] storage class produces the value directly, not
+        [`AddressSpace::Handle`] address space produces the value directly, not
         a pointer. Such global variables hold opaque types like shaders or
         images, and cannot be assigned to.
 
