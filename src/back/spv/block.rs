@@ -570,7 +570,7 @@ impl<'w> BlockContext<'w> {
                                 result_type_id,
                                 arg0_id,
                                 arg1_id,
-                                size,
+                                size as u32,
                                 block,
                             )?;
                             self.cached[expr_handle] = id;
@@ -1148,71 +1148,31 @@ impl<'w> BlockContext<'w> {
         result_type_id: Word,
         arg0_id: Word,
         arg1_id: Word,
-        size: crate::VectorSize,
+        size: u32,
         block: &mut Block,
     ) -> Result<(), Error> {
-        // Create an iterator over the IDs that will store the partial sums of products.
-        // Last iterator element will always be result_id, while the others will be generated IDs.
-        let sum_2_ids: [Word; 1];
-        let sum_3_ids: [Word; 2];
-        let sum_4_ids: [Word; 3];
-        use crate::VectorSize;
-        let sum_ids = match size {
-            VectorSize::Bi => {
-                sum_2_ids = [result_id];
-                sum_2_ids.iter()
-            }
-            VectorSize::Tri => {
-                sum_3_ids = [self.gen_id(), result_id];
-                sum_3_ids.iter()
-            }
-            VectorSize::Quad => {
-                sum_4_ids = [self.gen_id(), self.gen_id(), result_id];
-                sum_4_ids.iter()
-            }
-        };
+        let const_null = self.gen_id();
+        block
+            .body
+            .push(Instruction::constant_null(result_type_id, const_null));
 
-        // compute the first product of the x elements
-        let a_x = self.gen_id();
-        block.body.push(Instruction::composite_extract(
-            result_type_id,
-            a_x,
-            arg0_id,
-            &[0],
-        ));
-        let b_x = self.gen_id();
-        block.body.push(Instruction::composite_extract(
-            result_type_id,
-            b_x,
-            arg1_id,
-            &[0],
-        ));
-        let prod_x = self.gen_id();
-        block.body.push(Instruction::binary(
-            spirv::Op::IMul,
-            result_type_id,
-            prod_x,
-            a_x,
-            b_x,
-        ));
-
-        let mut partial_sum = prod_x;
-        for (index, &id) in sum_ids.enumerate() {
-            // compute the product of the next component
-            let component = index as u32 + 1;
+        let mut partial_sum = const_null;
+        let last_component = size - 1;
+        for index in 0..=last_component {
+            // compute the product of the current components
             let a_id = self.gen_id();
             block.body.push(Instruction::composite_extract(
                 result_type_id,
                 a_id,
                 arg0_id,
-                &[component],
+                &[index],
             ));
             let b_id = self.gen_id();
             block.body.push(Instruction::composite_extract(
                 result_type_id,
                 b_id,
                 arg1_id,
-                &[component],
+                &[index],
             ));
             let prod_id = self.gen_id();
             block.body.push(Instruction::binary(
@@ -1222,6 +1182,14 @@ impl<'w> BlockContext<'w> {
                 a_id,
                 b_id,
             ));
+
+            // choose the id for the next sum, depending on current index
+            let id = if index == last_component {
+                result_id
+            } else {
+                self.gen_id()
+            };
+
             // sum the computed product with the partial sum
             block.body.push(Instruction::binary(
                 spirv::Op::IAdd,
