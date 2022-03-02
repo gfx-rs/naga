@@ -283,7 +283,7 @@ impl<'source> ParsingContext<'source> {
                     ctx.lower_expect(stmt, parser, root, ExprPos::Rhs, &mut loop_body)?;
                 let condition = ctx.add_expression(
                     Expression::Unary {
-                        op: UnaryOperator::Not,
+                        op: UnaryOperator::LogicalNot,
                         expr,
                     },
                     expr_meta,
@@ -341,7 +341,7 @@ impl<'source> ParsingContext<'source> {
                     ctx.lower_expect(stmt, parser, root, ExprPos::Rhs, &mut loop_body)?;
                 let condition = ctx.add_expression(
                     Expression::Unary {
-                        op: UnaryOperator::Not,
+                        op: UnaryOperator::LogicalNot,
                         expr,
                     },
                     expr_meta,
@@ -430,7 +430,7 @@ impl<'source> ParsingContext<'source> {
 
                     let condition = ctx.add_expression(
                         Expression::Unary {
-                            op: UnaryOperator::Not,
+                            op: UnaryOperator::LogicalNot,
                             expr,
                         },
                         expr_meta,

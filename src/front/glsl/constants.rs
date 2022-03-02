@@ -361,10 +361,13 @@ impl<'a> ConstantSolver<'a> {
                     ScalarValue::Float(ref mut v) => *v = -*v,
                     _ => return Err(ConstantSolvingError::InvalidUnaryOpArg),
                 },
-                UnaryOperator::Not => match *value {
+                UnaryOperator::LogicalNot => match *value {
+                    ScalarValue::Bool(ref mut v) => *v = !*v,
+                    _ => return Err(ConstantSolvingError::InvalidUnaryOpArg),
+                },
+                UnaryOperator::BitwiseNot => match *value {
                     ScalarValue::Sint(ref mut v) => *v = !*v,
                     ScalarValue::Uint(ref mut v) => *v = !*v,
-                    ScalarValue::Bool(ref mut v) => *v = !*v,
                     _ => return Err(ConstantSolvingError::InvalidUnaryOpArg),
                 },
             },
@@ -584,7 +587,7 @@ mod tests {
 
         let root2 = expressions.append(
             Expression::Unary {
-                op: UnaryOperator::Not,
+                op: UnaryOperator::BitwiseNot,
                 expr,
             },
             Default::default(),
@@ -592,7 +595,7 @@ mod tests {
 
         let root3 = expressions.append(
             Expression::Unary {
-                op: UnaryOperator::Not,
+                op: UnaryOperator::BitwiseNot,
                 expr: expr1,
             },
             Default::default(),

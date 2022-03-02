@@ -2392,23 +2392,15 @@ impl<'a, W: Write> Writer<'a, W> {
             //
             // We also wrap the everything in parentheses to avoid precedence issues
             Expression::Unary { op, expr } => {
-                use crate::{ScalarKind as Sk, UnaryOperator as Uo};
+                use crate::UnaryOperator as Uo;
 
                 write!(
                     self.out,
                     "({} ",
                     match op {
                         Uo::Negate => "-",
-                        Uo::Not => match *ctx.info[expr].ty.inner_with(&self.module.types) {
-                            TypeInner::Scalar { kind: Sk::Sint, .. } => "~",
-                            TypeInner::Scalar { kind: Sk::Uint, .. } => "~",
-                            TypeInner::Scalar { kind: Sk::Bool, .. } => "!",
-                            ref other =>
-                                return Err(Error::Custom(format!(
-                                    "Cannot apply not to type {:?}",
-                                    other
-                                ))),
-                        },
+                        Uo::BitwiseNot => "~",
+                        Uo::LogicalNot => "!",
                     }
                 )?;
 

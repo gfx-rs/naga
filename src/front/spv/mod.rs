@@ -2245,7 +2245,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         &mut block,
                         block_id,
                         body_idx,
-                        crate::UnaryOperator::Not,
+                        crate::UnaryOperator::BitwiseNot,
                     )?;
                 }
                 Op::ShiftRightLogical => {
@@ -2727,7 +2727,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 // Relational and Logical Instructions
                 Op::LogicalNot => {
                     inst.expect(4)?;
-                    parse_expr_op!(crate::UnaryOperator::Not, UNARY)?;
+                    parse_expr_op!(crate::UnaryOperator::LogicalNot, UNARY)?;
                 }
                 Op::LogicalOr => {
                     inst.expect(5)?;

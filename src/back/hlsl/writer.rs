@@ -1754,7 +1754,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 // https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-operators#unary-operators
                 let op_str = match op {
                     crate::UnaryOperator::Negate => "-",
-                    crate::UnaryOperator::Not => "!",
+                    crate::UnaryOperator::LogicalNot => "!",
+                    crate::UnaryOperator::BitwiseNot => "~",
                 };
                 write!(self.out, "{}", op_str)?;
                 self.write_expr(module, expr, func_ctx)?;

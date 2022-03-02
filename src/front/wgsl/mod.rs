@@ -2500,25 +2500,19 @@ impl Parser {
         self.push_scope(Scope::UnaryExpr, lexer);
         //TODO: refactor this to avoid backing up
         let expr = match lexer.peek().0 {
-            Token::Operation('-') => {
+            token @ Token::Operation('-')
+            | token @ Token::Operation('!')
+            | token @ Token::Operation('~') => {
+                let op = match token {
+                    Token::Operation('-') => crate::UnaryOperator::Negate,
+                    Token::Operation('!') => crate::UnaryOperator::LogicalNot,
+                    Token::Operation('~') => crate::UnaryOperator::BitwiseNot,
+                    _ => unreachable!(),
+                };
                 let _ = lexer.next();
                 let unloaded_expr = self.parse_unary_expression(lexer, ctx.reborrow())?;
                 let expr = ctx.apply_load_rule(unloaded_expr);
-                let expr = crate::Expression::Unary {
-                    op: crate::UnaryOperator::Negate,
-                    expr,
-                };
-                let span = NagaSpan::from(self.peek_scope(lexer));
-                TypedExpression::non_reference(ctx.expressions.append(expr, span))
-            }
-            Token::Operation('!') | Token::Operation('~') => {
-                let _ = lexer.next();
-                let unloaded_expr = self.parse_unary_expression(lexer, ctx.reborrow())?;
-                let expr = ctx.apply_load_rule(unloaded_expr);
-                let expr = crate::Expression::Unary {
-                    op: crate::UnaryOperator::Not,
-                    expr,
-                };
+                let expr = crate::Expression::Unary { op, expr };
                 let span = NagaSpan::from(self.peek_scope(lexer));
                 TypedExpression::non_reference(ctx.expressions.append(expr, span))
             }

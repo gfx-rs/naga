@@ -1408,7 +1408,8 @@ impl<W: Write> Writer<W> {
             crate::Expression::Unary { op, expr } => {
                 let op_str = match op {
                     crate::UnaryOperator::Negate => "-",
-                    crate::UnaryOperator::Not => "!",
+                    crate::UnaryOperator::LogicalNot => "!",
+                    crate::UnaryOperator::BitwiseNot => "~",
                 };
                 write!(self.out, "{}", op_str)?;
                 self.put_expression(expr, context, false)?;

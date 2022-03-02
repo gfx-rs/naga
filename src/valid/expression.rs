@@ -633,11 +633,11 @@ impl super::Validator {
                 use crate::UnaryOperator as Uo;
                 let inner = resolver.resolve(expr)?;
                 match (op, inner.scalar_kind()) {
-                    (_, Some(Sk::Sint))
-                    | (_, Some(Sk::Bool))
-                    //TODO: restrict Negate for bools?
+                    (Uo::LogicalNot, Some(Sk::Bool))
+                    | (Uo::Negate, Some(Sk::Sint))
                     | (Uo::Negate, Some(Sk::Float))
-                    | (Uo::Not, Some(Sk::Uint)) => {}
+                    | (Uo::BitwiseNot, Some(Sk::Sint))
+                    | (Uo::BitwiseNot, Some(Sk::Uint)) => {}
                     other => {
                         log::error!("Op {:?} kind {:?}", op, other);
                         return Err(ExpressionError::InvalidUnaryOperandType(op, expr));

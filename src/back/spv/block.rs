@@ -315,10 +315,8 @@ impl<'w> BlockContext<'w> {
                             return Err(Error::FeatureNotImplemented("negation"));
                         }
                     },
-                    crate::UnaryOperator::Not => match expr_ty_inner.scalar_kind() {
-                        Some(crate::ScalarKind::Bool) => spirv::Op::LogicalNot,
-                        _ => spirv::Op::Not,
-                    },
+                    crate::UnaryOperator::LogicalNot => spirv::Op::LogicalNot,
+                    crate::UnaryOperator::BitwiseNot => spirv::Op::Not,
                 };
 
                 block

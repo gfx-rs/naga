@@ -1599,16 +1599,8 @@ impl<W: Write> Writer<W> {
             Expression::Unary { op, expr } => {
                 let unary = match op {
                     crate::UnaryOperator::Negate => "-",
-                    crate::UnaryOperator::Not => {
-                        match *func_ctx.info[expr].ty.inner_with(&module.types) {
-                            TypeInner::Scalar {
-                                kind: crate::ScalarKind::Bool,
-                                ..
-                            }
-                            | TypeInner::Vector { .. } => "!",
-                            _ => "~",
-                        }
-                    }
+                    crate::UnaryOperator::LogicalNot => "!",
+                    crate::UnaryOperator::BitwiseNot => "~",
                 };
 
                 write!(self.out, "{}(", unary)?;
