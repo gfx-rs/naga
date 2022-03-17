@@ -234,7 +234,9 @@ impl<'a> ConstantSolver<'a> {
                                         ScalarValue::Float(a),
                                         ScalarValue::Float(b),
                                         ScalarValue::Float(c),
-                                    ) => ScalarValue::Float(a.max(b).min(c)),
+                                    ) => {
+                                        ScalarValue::Float(glsl_float_min(glsl_float_max(a, b), c))
+                                    }
                                     _ => return Err(ConstantSolvingError::InvalidMathArg),
                                 },
                                 width,
@@ -552,6 +554,48 @@ impl<'a> ConstantSolver<'a> {
             },
             span,
         )
+    }
+}
+
+/// Helper function to implement the glsl `max` function for floats
+///
+/// While rust does provide a `f64::max` method it has a different behavior than the
+/// glsl `max` for `NaN`s, in rust if any of the arguments is a `NaN` then the other
+/// is returned.
+///
+/// This leads to different results in the following example
+/// ```
+/// use std::cmp::max;
+/// std::f64::NAN.max(1.0);
+/// ```
+///
+/// Rust will return 1.0 while glsl should return NaN
+fn glsl_float_max(x: f64, y: f64) -> f64 {
+    if x < y {
+        y
+    } else {
+        x
+    }
+}
+
+/// Helper function to implement the glsl `min` function for floats
+///
+/// While rust does provide a `f64::min` method it has a different behavior than the
+/// glsl `min` for `NaN`s, in rust if any of the arguments is a `NaN` then the other
+/// is returned.
+///
+/// This leads to different results in the following example
+/// ```
+/// use std::cmp::min;
+/// std::f64::NAN.min(1.0);
+/// ```
+///
+/// Rust will return 1.0 while glsl should return NaN
+fn glsl_float_min(x: f64, y: f64) -> f64 {
+    if y < x {
+        y
+    } else {
+        x
     }
 }
 
