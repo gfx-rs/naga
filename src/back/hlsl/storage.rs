@@ -122,8 +122,8 @@ impl<W: fmt::Write> super::Writer<'_, W> {
                     self.out,
                     "{}{}x{}(",
                     crate::ScalarKind::Float.to_hlsl_str(width)?,
-                    rows as u8,
                     columns as u8,
+                    rows as u8,
                 )?;
 
                 // Note: Matrices containing vec3s, due to padding, act like they contain vec4s.
@@ -261,8 +261,8 @@ impl<W: fmt::Write> super::Writer<'_, W> {
                     "{}{}{}x{} {}{} = ",
                     level.next(),
                     crate::ScalarKind::Float.to_hlsl_str(width)?,
-                    rows as u8,
                     columns as u8,
+                    rows as u8,
                     STORE_TEMP_NAME,
                     depth,
                 )?;
@@ -401,8 +401,13 @@ impl<W: fmt::Write> super::Writer<'_, W> {
                     crate::TypeInner::Vector { width, .. } => Parent::Array {
                         stride: width as u32,
                     },
-                    crate::TypeInner::Matrix { rows, width, .. } => Parent::Array {
-                        stride: width as u32 * if rows > crate::VectorSize::Bi { 4 } else { 2 },
+                    crate::TypeInner::Matrix { columns, width, .. } => Parent::Array {
+                        stride: width as u32
+                            * if columns > crate::VectorSize::Bi {
+                                4
+                            } else {
+                                2
+                            },
                     },
                     _ => unreachable!(),
                 },
