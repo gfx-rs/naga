@@ -118,12 +118,15 @@ impl<W: fmt::Write> super::Writer<'_, W> {
                 rows,
                 width,
             } => {
+                // we declared the matrix as transposed in HLSL
+                let (rows, columns) = (columns, rows);
+
                 write!(
                     self.out,
                     "{}{}x{}(",
                     crate::ScalarKind::Float.to_hlsl_str(width)?,
-                    columns as u8,
                     rows as u8,
+                    columns as u8,
                 )?;
 
                 // Note: Matrices containing vec3s, due to padding, act like they contain vec4s.
@@ -253,6 +256,9 @@ impl<W: fmt::Write> super::Writer<'_, W> {
                 rows,
                 width,
             } => {
+                // we declared the matrix as transposed in HLSL
+                let (rows, columns) = (columns, rows);
+
                 // first, assign the value to a temporary
                 writeln!(self.out, "{}{{", level)?;
                 let depth = level.0 + 1;
@@ -261,8 +267,8 @@ impl<W: fmt::Write> super::Writer<'_, W> {
                     "{}{}{}x{} {}{} = ",
                     level.next(),
                     crate::ScalarKind::Float.to_hlsl_str(width)?,
-                    columns as u8,
                     rows as u8,
+                    columns as u8,
                     STORE_TEMP_NAME,
                     depth,
                 )?;
