@@ -118,26 +118,23 @@ impl<W: fmt::Write> super::Writer<'_, W> {
                 rows,
                 width,
             } => {
-                // we declared the matrix as transposed in HLSL
-                let (rows, columns) = (columns, rows);
-
                 write!(
                     self.out,
                     "{}{}x{}(",
                     crate::ScalarKind::Float.to_hlsl_str(width)?,
-                    rows as u8,
                     columns as u8,
+                    rows as u8,
                 )?;
 
                 // Note: Matrices containing vec3s, due to padding, act like they contain vec4s.
-                let padded_columns = match columns {
+                let padded_rows = match rows {
                     crate::VectorSize::Tri => 4,
-                    columns => columns as u32,
+                    rows => rows as u32,
                 };
-                let row_stride = width as u32 * padded_columns;
-                let iter = (0..rows as u32).map(|i| {
+                let row_stride = width as u32 * padded_rows;
+                let iter = (0..columns as u32).map(|i| {
                     let ty_inner = crate::TypeInner::Vector {
-                        size: columns,
+                        size: rows,
                         kind: crate::ScalarKind::Float,
                         width,
                     };
@@ -256,9 +253,6 @@ impl<W: fmt::Write> super::Writer<'_, W> {
                 rows,
                 width,
             } => {
-                // we declared the matrix as transposed in HLSL
-                let (rows, columns) = (columns, rows);
-
                 // first, assign the value to a temporary
                 writeln!(self.out, "{}{{", level)?;
                 let depth = level.0 + 1;
@@ -267,8 +261,8 @@ impl<W: fmt::Write> super::Writer<'_, W> {
                     "{}{}{}x{} {}{} = ",
                     level.next(),
                     crate::ScalarKind::Float.to_hlsl_str(width)?,
-                    rows as u8,
                     columns as u8,
+                    rows as u8,
                     STORE_TEMP_NAME,
                     depth,
                 )?;
@@ -276,18 +270,18 @@ impl<W: fmt::Write> super::Writer<'_, W> {
                 writeln!(self.out, ";")?;
 
                 // Note: Matrices containing vec3s, due to padding, act like they contain vec4s.
-                let padded_columns = match columns {
+                let padded_rows = match rows {
                     crate::VectorSize::Tri => 4,
-                    columns => columns as u32,
+                    rows => rows as u32,
                 };
-                let row_stride = width as u32 * padded_columns;
+                let row_stride = width as u32 * padded_rows;
 
                 // then iterate the stores
-                for i in 0..rows as u32 {
+                for i in 0..columns as u32 {
                     self.temp_access_chain
                         .push(SubAccess::Offset(i * row_stride));
                     let ty_inner = crate::TypeInner::Vector {
-                        size: columns,
+                        size: rows,
                         kind: crate::ScalarKind::Float,
                         width,
                     };
