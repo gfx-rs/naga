@@ -3,7 +3,7 @@ use crate::{
     ScalarKind, ScalarValue, Span as NagaSpan, Type, TypeInner, UniqueArena, VectorSize,
 };
 
-use super::{Error, ExpressionContext, Lexer, Parser, Span, Token};
+use super::{Error, ExpressionContext, Lexer, Parser, Scope, Span, Token};
 
 /// Represents the type of the constructor
 ///
@@ -225,7 +225,7 @@ pub(super) fn parse_construction<'a>(
 ) -> Result<Option<Handle<Expression>>, Error<'a>> {
     assert_eq!(
         parser.scopes.last().map(|&(ref scope, _)| scope.clone()),
-        Some(super::Scope::PrimaryExpr)
+        Some(Scope::PrimaryExpr)
     );
     let dst_ty = match parser.lookup_type.get(type_name) {
         Some(&handle) => ConstructorType::Struct(handle),
