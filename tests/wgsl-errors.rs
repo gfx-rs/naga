@@ -174,11 +174,11 @@ fn type_not_constructible() {
                 var _ = atomic<i32>(0);
             }
         "#,
-        r#"error: type ` atomic<i32>` is not constructible
-  ┌─ wgsl:3:24
+        r#"error: type `atomic` is not constructible
+  ┌─ wgsl:3:25
   │
 3 │                 var _ = atomic<i32>(0);
-  │                        ^^^^^^^^^^^^ type is not constructible
+  │                         ^^^^^^ type is not constructible
 
 "#,
     );
@@ -193,10 +193,10 @@ fn type_not_inferrable() {
             }
         "#,
         r#"error: type can't be inferred
-  ┌─ wgsl:3:24
+  ┌─ wgsl:3:25
   │
 3 │                 var _ = vec2();
-  │                        ^^^^^^^ type can't be inferred
+  │                         ^^^^ type can't be inferred
 
 "#,
     );
