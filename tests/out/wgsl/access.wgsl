@@ -10,12 +10,54 @@ struct Bar {
     data: array<AlignedWrapper>,
 }
 
+struct Baz {
+    m: mat3x2<f32>,
+}
+
 @group(0) @binding(0) 
 var<storage, read_write> bar: Bar;
+@group(0) @binding(1) 
+var<uniform> baz: Baz;
+
+fn test_matrix_within_struct_accesses() {
+    var idx: i32 = 9;
+    var t: Baz;
+
+    let _e4 = idx;
+    idx = (_e4 - 1);
+    let m = baz.m;
+    let vs = baz.m[0];
+    let _e14 = idx;
+    let vd = baz.m[_e14];
+    let sss = baz.m[0][1];
+    let _e26 = idx;
+    let ssd = baz.m[0][_e26];
+    let _e30 = idx;
+    let sds = baz.m[_e30][1];
+    let _e36 = idx;
+    let _e38 = idx;
+    let sdd = baz.m[_e36][_e38];
+    t = Baz(mat3x2<f32>(vec2<f32>(1.0), vec2<f32>(2.0), vec2<f32>(3.0)));
+    let _e50 = idx;
+    idx = (_e50 + 1);
+    t.m = mat3x2<f32>(vec2<f32>(6.0), vec2<f32>(5.0), vec2<f32>(4.0));
+    t.m[0] = vec2<f32>(9.0);
+    let _e67 = idx;
+    t.m[_e67] = vec2<f32>(90.0);
+    t.m[0][1] = 10.0;
+    let _e80 = idx;
+    t.m[0][_e80] = 20.0;
+    let _e84 = idx;
+    t.m[_e84][1] = 30.0;
+    let _e90 = idx;
+    let _e92 = idx;
+    t.m[_e90][_e92] = 40.0;
+    return;
+}
 
 fn read_from_private(foo_1: ptr<function, f32>) -> f32 {
-    let _e2 = (*foo_1);
-    return _e2;
+    let _e3 = (*foo_1);
+    return _e3;
 }
 
 @stage(vertex) 
@@ -23,14 +65,15 @@ fn foo_vert(@builtin(vertex_index) vi: u32) -> @builtin(position) vec4<f32> {
     var foo: f32 = 0.0;
     var c: array<i32,5>;
 
-    let baz = foo;
+    let baz_1 = foo;
     foo = 1.0;
+    test_matrix_within_struct_accesses();
     let matrix = bar.matrix;
     let arr = bar.arr;
     let b = bar.matrix[3][0];
     let a = bar.data[(arrayLength((&bar.data)) - 2u)].value;
     let data_pointer = (&bar.data[0].value);
-    let _e27 = read_from_private((&foo));
+    let _e28 = read_from_private((&foo));
     c = array<i32,5>(a, i32(b), 3, 4, 5);
     c[(vi + 1u)] = 42;
     let value = c[vi];
@@ -51,22 +94,22 @@ fn atomics() {
     var tmp: i32;
 
     let value_1 = atomicLoad((&bar.atom));
-    let _e6 = atomicAdd((&bar.atom), 5);
-    tmp = _e6;
-    let _e9 = atomicSub((&bar.atom), 5);
-    tmp = _e9;
-    let _e12 = atomicAnd((&bar.atom), 5);
-    tmp = _e12;
-    let _e15 = atomicOr((&bar.atom), 5);
-    tmp = _e15;
-    let _e18 = atomicXor((&bar.atom), 5);
-    tmp = _e18;
-    let _e21 = atomicMin((&bar.atom), 5);
-    tmp = _e21;
-    let _e24 = atomicMax((&bar.atom), 5);
-    tmp = _e24;
-    let _e27 = atomicExchange((&bar.atom), 5);
-    tmp = _e27;
+    let _e7 = atomicAdd((&bar.atom), 5);
+    tmp = _e7;
+    let _e10 = atomicSub((&bar.atom), 5);
+    tmp = _e10;
+    let _e13 = atomicAnd((&bar.atom), 5);
+    tmp = _e13;
+    let _e16 = atomicOr((&bar.atom), 5);
+    tmp = _e16;
+    let _e19 = atomicXor((&bar.atom), 5);
+    tmp = _e19;
+    let _e22 = atomicMin((&bar.atom), 5);
+    tmp = _e22;
+    let _e25 = atomicMax((&bar.atom), 5);
+    tmp = _e25;
+    let _e28 = atomicExchange((&bar.atom), 5);
+    tmp = _e28;
     atomicStore((&bar.atom), value_1);
     return;
 }

@@ -169,6 +169,7 @@ struct Wrapped {
     array_lengths: crate::FastHashSet<help::WrappedArrayLength>,
     image_queries: crate::FastHashSet<help::WrappedImageQuery>,
     constructors: crate::FastHashSet<help::WrappedConstructor>,
+    struct_matrix_access: crate::FastHashSet<help::WrappedStructMatrixAccess>,
 }
 
 impl Wrapped {
@@ -176,6 +177,7 @@ impl Wrapped {
         self.array_lengths.clear();
         self.image_queries.clear();
         self.constructors.clear();
+        self.struct_matrix_access.clear();
     }
 }
 
