@@ -28,13 +28,13 @@ fn test_matrix_within_struct_accesses() {
     idx--;
 
 	// loads
-    let m = baz.m;
-    let vs = baz.m[0];
-    let vd = baz.m[idx];
-    let sss = baz.m[0][1];
-    let ssd = baz.m[0][idx];
-    let sds = baz.m[idx][1];
-    let sdd = baz.m[idx][idx];
+    var _ = baz.m;
+    var _ = baz.m[0];
+    var _ = baz.m[idx];
+    var _ = baz.m[0][1];
+    var _ = baz.m[0][idx];
+    var _ = baz.m[idx][1];
+    var _ = baz.m[idx][idx];
 
     var t = Baz(mat3x2<f32>(vec2<f32>(1.0), vec2<f32>(2.0), vec2<f32>(3.0)));
 
