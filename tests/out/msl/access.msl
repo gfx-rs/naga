@@ -99,7 +99,7 @@ struct foo_vertOutput {
 vertex foo_vertOutput foo_vert(
   uint vi [[vertex_id]]
 , device Bar const& bar [[buffer(0)]]
-, constant Baz& baz [[buffer(0)]]
+, constant Baz& baz [[buffer(1)]]
 , constant _mslBufferSizes& _buffer_sizes [[buffer(24)]]
 ) {
     float foo = 0.0;
