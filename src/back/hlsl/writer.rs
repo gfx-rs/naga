@@ -749,8 +749,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     // Write [size]
                     self.write_array_size(module, size)?;
                 }
-                // We treat matrices of the form matCx2 as a sequence of C vec2's due to
-                // differences in alignment between WGSL and HLSL for uniform buffers.
+                // We treat matrices of the form `matCx2` as a sequence of C `vec2`s
+                // (see top level module docs for details).
                 TypeInner::Matrix {
                     rows,
                     columns,
@@ -764,11 +764,11 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     let field_name_key = NameKey::StructMember(handle, index as u32);
 
                     for i in 0..columns as u8 {
-                        self.write_value_type(module, &vec_ty)?;
-                        write!(self.out, " {}_{}", &self.names[&field_name_key], i)?;
-                        if i < columns as u8 - 1 {
+                        if i != 0 {
                             write!(self.out, "; ")?;
                         }
+                        self.write_value_type(module, &vec_ty)?;
+                        write!(self.out, " {}_{}", &self.names[&field_name_key], i)?;
                     }
                 }
                 _ => {
@@ -1237,8 +1237,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     writeln!(self.out, "[_i] = _result[_i];")?;
                     writeln!(self.out, "{}}}", level)?;
                 } else {
-                    // We treat matrices of the form matCx2 as a sequence of C vec2's due to
-                    // differences in alignment between WGSL and HLSL for uniform buffers.
+                    // We treat matrices of the form `matCx2` as a sequence of C `vec2`s
+                    // (see top level module docs for details).
                     //
                     // We handle matrix Stores here directly (including sub accesses for Vectors and Scalars).
                     // Loads are handled by `Expression::AccessIndex` (since sub accesses work fine for Loads).
@@ -1750,8 +1750,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         _ => base_ty_res.handle(),
                     };
 
-                    // We treat matrices of the form matCx2 as a sequence of C vec2's due to
-                    // differences in alignment between WGSL and HLSL for uniform buffers.
+                    // We treat matrices of the form `matCx2` as a sequence of C `vec2`s
+                    // (see top level module docs for details).
                     //
                     // We handle matrix reconstruction here for Loads.
                     // Stores are handled directly by `Statement::Store`.
@@ -1759,9 +1759,10 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         let member = &members[index as usize];
 
                         match module.types[member.ty].inner {
-                            TypeInner::Matrix { rows, .. }
-                                if member.binding.is_none() && rows == crate::VectorSize::Bi =>
-                            {
+                            TypeInner::Matrix {
+                                rows: crate::VectorSize::Bi,
+                                ..
+                            } if member.binding.is_none() => {
                                 let ty = base_ty_handle.unwrap();
                                 self.write_wrapped_struct_matrix_get_function_name(
                                     WrappedStructMatrixAccess { ty, index },

@@ -403,10 +403,12 @@ impl<'a, W: Write> super::Writer<'a, W> {
 
             let field_name = &self.names[&NameKey::StructMember(constructor.ty, i)];
 
-            match &module.types[member.ty].inner {
-                &crate::TypeInner::Matrix { columns, rows, .. }
-                    if member.binding.is_none() && rows == crate::VectorSize::Bi =>
-                {
+            match module.types[member.ty].inner {
+                crate::TypeInner::Matrix {
+                    columns,
+                    rows: crate::VectorSize::Bi,
+                    ..
+                } if member.binding.is_none() => {
                     for j in 0..columns as u8 {
                         writeln!(
                             self.out,
@@ -493,14 +495,14 @@ impl<'a, W: Write> super::Writer<'a, W> {
         match module.types[member.ty].inner {
             crate::TypeInner::Matrix { columns, .. } => {
                 for i in 0..columns as u8 {
+                    if i != 0 {
+                        write!(self.out, ", ")?;
+                    }
                     write!(
                         self.out,
                         "{}.{}_{}",
                         STRUCT_ARGUMENT_VARIABLE_NAME, field_name, i
                     )?;
-                    if i < columns as u8 - 1 {
-                        write!(self.out, ", ")?;
-                    }
                 }
             }
             _ => unreachable!(),
@@ -559,8 +561,8 @@ impl<'a, W: Write> super::Writer<'a, W> {
 
         let field_name = &self.names[&NameKey::StructMember(access.ty, access.index)];
 
-        match &module.types[member.ty].inner {
-            &crate::TypeInner::Matrix { columns, .. } => {
+        match module.types[member.ty].inner {
+            crate::TypeInner::Matrix { columns, .. } => {
                 for i in 0..columns as u8 {
                     writeln!(
                         self.out,
@@ -623,8 +625,8 @@ impl<'a, W: Write> super::Writer<'a, W> {
             crate::TypeInner::Struct { ref members, .. } => &members[access.index as usize],
             _ => unreachable!(),
         };
-        let vec_ty = match &module.types[member.ty].inner {
-            &crate::TypeInner::Matrix { rows, width, .. } => crate::TypeInner::Vector {
+        let vec_ty = match module.types[member.ty].inner {
+            crate::TypeInner::Matrix { rows, width, .. } => crate::TypeInner::Vector {
                 size: rows,
                 kind: crate::ScalarKind::Float,
                 width,
@@ -649,8 +651,8 @@ impl<'a, W: Write> super::Writer<'a, W> {
 
         let field_name = &self.names[&NameKey::StructMember(access.ty, access.index)];
 
-        match &module.types[member.ty].inner {
-            &crate::TypeInner::Matrix { columns, .. } => {
+        match module.types[member.ty].inner {
+            crate::TypeInner::Matrix { columns, .. } => {
                 for i in 0..columns as u8 {
                     writeln!(
                         self.out,
@@ -716,8 +718,8 @@ impl<'a, W: Write> super::Writer<'a, W> {
             crate::TypeInner::Struct { ref members, .. } => &members[access.index as usize],
             _ => unreachable!(),
         };
-        let scalar_ty = match &module.types[member.ty].inner {
-            &crate::TypeInner::Matrix { width, .. } => crate::TypeInner::Scalar {
+        let scalar_ty = match module.types[member.ty].inner {
+            crate::TypeInner::Matrix { width, .. } => crate::TypeInner::Scalar {
                 kind: crate::ScalarKind::Float,
                 width,
             },
@@ -743,8 +745,8 @@ impl<'a, W: Write> super::Writer<'a, W> {
 
         let field_name = &self.names[&NameKey::StructMember(access.ty, access.index)];
 
-        match &module.types[member.ty].inner {
-            &crate::TypeInner::Matrix { columns, .. } => {
+        match module.types[member.ty].inner {
+            crate::TypeInner::Matrix { columns, .. } => {
                 for i in 0..columns as u8 {
                     writeln!(
                         self.out,
@@ -837,8 +839,8 @@ impl<'a, W: Write> super::Writer<'a, W> {
                         self.wrapped.constructors.insert(constructor);
                     }
                 }
-                // We treat matrices of the form matCx2 as a sequence of C vec2's due to
-                // differences in alignment between WGSL and HLSL for uniform buffers.
+                // We treat matrices of the form `matCx2` as a sequence of C `vec2`s
+                // (see top level module docs for details).
                 //
                 // The functions injected here are required to get the matrix accesses working.
                 crate::Expression::AccessIndex { base, index } => {
@@ -855,9 +857,10 @@ impl<'a, W: Write> super::Writer<'a, W> {
                         let member = &members[index as usize];
 
                         match module.types[member.ty].inner {
-                            crate::TypeInner::Matrix { rows, .. }
-                                if member.binding.is_none() && rows == crate::VectorSize::Bi =>
-                            {
+                            crate::TypeInner::Matrix {
+                                rows: crate::VectorSize::Bi,
+                                ..
+                            } if member.binding.is_none() => {
                                 let ty = base_ty_handle.unwrap();
                                 let access = WrappedStructMatrixAccess { ty, index };
 
