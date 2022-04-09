@@ -887,6 +887,30 @@ impl<'a, W: Write> super::Writer<'a, W> {
         Ok(())
     }
 
+    pub(super) fn write_wrapped_constructor_function_for_constant(
+        &mut self,
+        module: &crate::Module,
+        constant: &crate::Constant,
+    ) -> BackendResult {
+        if let crate::ConstantInner::Composite { ty, ref components } = constant.inner {
+            if let crate::TypeInner::Struct { .. } = module.types[ty].inner {
+                let constructor = WrappedConstructor { ty };
+                if !self.wrapped.constructors.contains(&constructor) {
+                    self.write_wrapped_constructor_function(module, constructor)?;
+                    self.wrapped.constructors.insert(constructor);
+                }
+            }
+            for constant in components {
+                self.write_wrapped_constructor_function_for_constant(
+                    module,
+                    &module.constants[*constant],
+                )?;
+            }
+        }
+
+        Ok(())
+    }
+
     pub(super) fn write_texture_coordinates(
         &mut self,
         kind: &str,

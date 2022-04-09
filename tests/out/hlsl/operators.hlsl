@@ -11,6 +11,13 @@ struct Foo {
     int _end_pad_2;
 };
 
+Foo ConstructFoo(float4 arg0, int arg1) {
+    Foo ret;
+    ret.a = arg0;
+    ret.b = arg1;
+    return ret;
+}
+
 float4 builtins()
 {
     int s1_ = (true ? 1 : 0);
@@ -46,13 +53,6 @@ float3 bool_cast(float3 x)
     return float3(y);
 }
 
-Foo ConstructFoo(float4 arg0, int arg1) {
-    Foo ret;
-    ret.a = arg0;
-    ret.b = arg1;
-    return ret;
-}
-
 float constructors()
 {
     Foo foo = (Foo)0;
@@ -62,8 +62,8 @@ float constructors()
     float unnamed_3 = 0.0;
     uint2 unnamed_4 = uint2(0u, 0u);
     float2x2 unnamed_5 = float2x2(float2(0.0, 0.0), float2(0.0, 0.0));
-    Foo unnamed_6[3] = { { float4(0.0, 0.0, 0.0, 0.0), 0 }, { float4(0.0, 0.0, 0.0, 0.0), 0 }, { float4(0.0, 0.0, 0.0, 0.0), 0 } };
-    Foo unnamed_7 = { float4(0.0, 0.0, 0.0, 0.0), 0 };
+    Foo unnamed_6[3] = { ConstructFoo(float4(0.0, 0.0, 0.0, 0.0), 0), ConstructFoo(float4(0.0, 0.0, 0.0, 0.0), 0), ConstructFoo(float4(0.0, 0.0, 0.0, 0.0), 0) };
+    Foo unnamed_7 = ConstructFoo(float4(0.0, 0.0, 0.0, 0.0), 0);
     uint2 unnamed_8 = (uint2)0;
     float2x2 unnamed_9 = (float2x2)0;
     int unnamed_10[4] = {(int)0,(int)0,(int)0,(int)0};

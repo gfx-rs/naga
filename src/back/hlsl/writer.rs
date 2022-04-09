@@ -183,6 +183,11 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             }
         }
 
+        // Write wrapped constructor functions used in constants
+        for (_, constant) in module.constants.iter() {
+            self.write_wrapped_constructor_function_for_constant(module, constant)?;
+        }
+
         // Write all globals
         for (ty, _) in module.global_variables.iter() {
             self.write_global(module, ty)?;
@@ -2338,7 +2343,11 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         components: &[Handle<crate::Constant>],
     ) -> BackendResult {
         let (open_b, close_b) = match module.types[ty].inner {
-            TypeInner::Array { .. } | TypeInner::Struct { .. } => ("{ ", " }"),
+            TypeInner::Struct { .. } => {
+                self.write_wrapped_constructor_function_name(WrappedConstructor { ty })?;
+                ("(", ")")
+            }
+            TypeInner::Array { .. } => ("{ ", " }"),
             _ => {
                 // We should write type only for non struct/array constants
                 self.write_type(module, ty)?;
