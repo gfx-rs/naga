@@ -48,36 +48,36 @@ Baz ConstructBaz(float3x2 arg0) {
 void test_matrix_within_struct_accesses()
 {
     int idx = 9;
-    float3x2 unnamed = (float3x2)0;
-    float2 unnamed_1 = (float2)0;
+    float3x2 unnamed_1 = (float3x2)0;
     float2 unnamed_2 = (float2)0;
-    float unnamed_3 = (float)0;
+    float2 unnamed_3 = (float2)0;
     float unnamed_4 = (float)0;
     float unnamed_5 = (float)0;
     float unnamed_6 = (float)0;
+    float unnamed_7 = (float)0;
     Baz t = (Baz)0;
 
     int _expr4 = idx;
     idx = (_expr4 - 1);
     float3x2 _expr8 = GetMatmOnBaz(baz);
-    unnamed = _expr8;
+    unnamed_1 = _expr8;
     float2 _expr13 = GetMatmOnBaz(baz)[0];
-    unnamed_1 = _expr13;
+    unnamed_2 = _expr13;
     int _expr16 = idx;
     float2 _expr18 = GetMatmOnBaz(baz)[_expr16];
-    unnamed_2 = _expr18;
+    unnamed_3 = _expr18;
     float _expr25 = GetMatmOnBaz(baz)[0][1];
-    unnamed_3 = _expr25;
+    unnamed_4 = _expr25;
     int _expr30 = idx;
     float _expr32 = GetMatmOnBaz(baz)[0][_expr30];
-    unnamed_4 = _expr32;
+    unnamed_5 = _expr32;
     int _expr35 = idx;
     float _expr39 = GetMatmOnBaz(baz)[_expr35][1];
-    unnamed_5 = _expr39;
+    unnamed_6 = _expr39;
     int _expr42 = idx;
     int _expr44 = idx;
     float _expr46 = GetMatmOnBaz(baz)[_expr42][_expr44];
-    unnamed_6 = _expr46;
+    unnamed_7 = _expr46;
     t = ConstructBaz(float3x2(float2(1.0.xx), float2(2.0.xx), float2(3.0.xx)));
     int _expr57 = idx;
     idx = (_expr57 + 1);
@@ -102,6 +102,11 @@ float read_from_private(inout float foo_1)
     return _expr3;
 }
 
+float test_arr_as_arg(float a[1])
+{
+    return a[0];
+}
+
 uint NagaBufferLengthRW(RWByteAddressBuffer buffer)
 {
     uint ret;
@@ -113,6 +118,7 @@ float4 foo_vert(uint vi : SV_VertexID) : SV_Position
 {
     float foo = 0.0;
     int c[5] = {(int)0,(int)0,(int)0,(int)0,(int)0};
+    float unnamed = (float)0;
 
     float baz_1 = foo;
     foo = 1.0;
@@ -120,14 +126,16 @@ float4 foo_vert(uint vi : SV_VertexID) : SV_Position
     float4x3 matrix_ = float4x3(asfloat(bar.Load3(0+0)), asfloat(bar.Load3(0+16)), asfloat(bar.Load3(0+32)), asfloat(bar.Load3(0+48)));
     uint2 arr[2] = {asuint(bar.Load2(104+0)), asuint(bar.Load2(104+8))};
     float b = asfloat(bar.Load(0+48+0));
-    int a = asint(bar.Load(0+(((NagaBufferLengthRW(bar) - 120) / 8) - 2u)*8+120));
+    int a_1 = asint(bar.Load(0+(((NagaBufferLengthRW(bar) - 120) / 8) - 2u)*8+120));
     const float _e28 = read_from_private(foo);
     {
-        int _result[5]={ a, int(b), 3, 4, 5 };
+        int _result[5]={ a_1, int(b), 3, 4, 5 };
         for(int _i=0; _i<5; ++_i) c[_i] = _result[_i];
     }
     c[(vi + 1u)] = 42;
     int value = c[vi];
+    const float _e42 = test_arr_as_arg({ 0.0 });
+    unnamed = _e42;
     return float4(mul(float4(int4(value.xxxx)), matrix_), 2.0);
 }
 
