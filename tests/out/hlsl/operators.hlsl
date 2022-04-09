@@ -6,6 +6,9 @@ static const int4 v_i32_one = int4(1, 1, 1, 1);
 struct Foo {
     float4 a;
     int b;
+    int _end_pad_0;
+    int _end_pad_1;
+    int _end_pad_2;
 };
 
 float4 builtins()

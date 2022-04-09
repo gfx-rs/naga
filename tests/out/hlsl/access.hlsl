@@ -1,6 +1,7 @@
 
 struct AlignedWrapper {
     int value;
+    int _end_pad_0;
 };
 
 struct Baz {

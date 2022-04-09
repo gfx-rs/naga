@@ -152,7 +152,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
 
         // Write all structs
         for (handle, ty) in module.types.iter() {
-            if let TypeInner::Struct { ref members, .. } = ty.inner {
+            if let TypeInner::Struct { ref members, span } = ty.inner {
                 if let Some(member) = members.last() {
                     if let TypeInner::Array {
                         size: crate::ArraySize::Dynamic,
@@ -176,6 +176,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     module,
                     handle,
                     members,
+                    span,
                     ep_result.map(|r| (r.0, Io::Output)),
                 )?;
                 writeln!(self.out)?;
@@ -741,6 +742,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         module: &Module,
         handle: Handle<crate::Type>,
         members: &[crate::StructMember],
+        span: u32,
         shader_stage: Option<(ShaderStage, Io)>,
     ) -> BackendResult {
         // Write struct name
@@ -759,7 +761,10 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 }
             }
             let ty_inner = &module.types[member.ty].inner;
-            last_offset = member.offset + ty_inner.size(&module.constants);
+            last_offset = member.offset
+                + ty_inner
+                    .try_size_hlsl(&module.types, &module.constants)
+                    .unwrap();
 
             // The indentation is only for readability
             write!(self.out, "{}", back::INDENT)?;
@@ -830,6 +835,14 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 self.write_semantic(binding, shader_stage)?;
             };
             writeln!(self.out, ";")?;
+        }
+
+        // add padding at the end since sizes of types don't get rounded up to their alignment in HLSL
+        if members.last().unwrap().binding.is_none() && span > last_offset {
+            let padding = (span - last_offset) / 4;
+            for i in 0..padding {
+                writeln!(self.out, "{}int _end_pad_{};", back::INDENT, i)?;
+            }
         }
 
         writeln!(self.out, "}};")?;
