@@ -24,8 +24,8 @@ float read_from_private(inout float foo_1) {
     return _e3;
 }
 
-float test_arr_as_arg(float a[1]) {
-    return a[0];
+float test_arr_as_arg(float a[5]) {
+    return a[4][9];
 }
 
 void main() {

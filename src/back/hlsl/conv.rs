@@ -67,6 +67,51 @@ impl crate::TypeInner {
             _ => self.try_size(constants)?,
         })
     }
+
+    /// Used to generate the name of the wrapped type constructor
+    pub(super) fn hlsl_type_id(
+        &self,
+        base: crate::Handle<crate::Type>,
+        types: &crate::UniqueArena<crate::Type>,
+        constants: &crate::Arena<crate::Constant>,
+        names: &crate::FastHashMap<crate::proc::NameKey, String>,
+    ) -> Result<String, Error> {
+        Ok(match types[base].inner {
+            crate::TypeInner::Scalar { kind, width } => kind.to_hlsl_str(width)?.to_string(),
+            crate::TypeInner::Vector { size, kind, width } => {
+                format!(
+                    "{}{}",
+                    kind.to_hlsl_str(width)?,
+                    crate::back::vector_size_str(size)
+                )
+            }
+            crate::TypeInner::Matrix {
+                columns,
+                rows,
+                width,
+            } => {
+                format!(
+                    "{}{}x{}",
+                    crate::ScalarKind::Float.to_hlsl_str(width)?,
+                    crate::back::vector_size_str(columns),
+                    crate::back::vector_size_str(rows),
+                )
+            }
+            crate::TypeInner::Array {
+                base,
+                size: crate::ArraySize::Constant(size),
+                ..
+            } => {
+                format!(
+                    "array{}_{}_",
+                    constants[size].to_array_length().unwrap(),
+                    self.hlsl_type_id(base, types, constants, names)?
+                )
+            }
+            crate::TypeInner::Struct { .. } => names[&crate::proc::NameKey::Type(base)].clone(),
+            _ => unreachable!(),
+        })
+    }
 }
 
 impl crate::StorageFormat {

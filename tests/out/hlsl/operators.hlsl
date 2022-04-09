@@ -18,6 +18,11 @@ Foo ConstructFoo(float4 arg0, int arg1) {
     return ret;
 }
 
+Foo Constructarray3_Foo_(Foo arg0, Foo arg1, Foo arg2)[3] {
+    Foo ret[3] = { arg0, arg1, arg2 };
+    return ret;
+}
+
 float4 builtins()
 {
     int s1_ = (true ? 1 : 0);
@@ -53,6 +58,11 @@ float3 bool_cast(float3 x)
     return float3(y);
 }
 
+int Constructarray4_int_(int arg0, int arg1, int arg2, int arg3)[4] {
+    int ret[4] = { arg0, arg1, arg2, arg3 };
+    return ret;
+}
+
 float constructors()
 {
     Foo foo = (Foo)0;
@@ -62,7 +72,7 @@ float constructors()
     float unnamed_3 = 0.0;
     uint2 unnamed_4 = uint2(0u, 0u);
     float2x2 unnamed_5 = float2x2(float2(0.0, 0.0), float2(0.0, 0.0));
-    Foo unnamed_6[3] = { ConstructFoo(float4(0.0, 0.0, 0.0, 0.0), 0), ConstructFoo(float4(0.0, 0.0, 0.0, 0.0), 0), ConstructFoo(float4(0.0, 0.0, 0.0, 0.0), 0) };
+    Foo unnamed_6[3] = Constructarray3_Foo_(ConstructFoo(float4(0.0, 0.0, 0.0, 0.0), 0), ConstructFoo(float4(0.0, 0.0, 0.0, 0.0), 0), ConstructFoo(float4(0.0, 0.0, 0.0, 0.0), 0));
     Foo unnamed_7 = ConstructFoo(float4(0.0, 0.0, 0.0, 0.0), 0);
     uint2 unnamed_8 = (uint2)0;
     float2x2 unnamed_9 = (float2x2)0;
@@ -74,7 +84,7 @@ float constructors()
     unnamed_8 = uint2(0u.xx);
     unnamed_9 = float2x2(float2(0.0.xx), float2(0.0.xx));
     {
-        int _result[4]={ 0, 1, 2, 3 };
+        int _result[4]=Constructarray4_int_(0, 1, 2, 3);
         for(int _i=0; _i<4; ++_i) unnamed_10[_i] = _result[_i];
     }
     float _expr70 = foo.a.x;

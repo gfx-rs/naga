@@ -8,6 +8,16 @@ struct Baz {
     float2 m_0; float2 m_1; float2 m_2;
 };
 
+float Constructarray10_float_(float arg0, float arg1, float arg2, float arg3, float arg4, float arg5, float arg6, float arg7, float arg8, float arg9)[10] {
+    float ret[10] = { arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9 };
+    return ret;
+}
+
+float Constructarray5_array10_float__(float arg0[10], float arg1[10], float arg2[10], float arg3[10], float arg4[10])[5][10] {
+    float ret[5][10] = { arg0, arg1, arg2, arg3, arg4 };
+    return ret;
+}
+
 RWByteAddressBuffer bar : register(u0);
 cbuffer baz : register(b1) { Baz baz; }
 
@@ -102,15 +112,20 @@ float read_from_private(inout float foo_1)
     return _expr3;
 }
 
-float test_arr_as_arg(float a[1])
+float test_arr_as_arg(float a[5][10])
 {
-    return a[0];
+    return a[4][9];
 }
 
 uint NagaBufferLengthRW(RWByteAddressBuffer buffer)
 {
     uint ret;
     buffer.GetDimensions(ret);
+    return ret;
+}
+
+int Constructarray5_int_(int arg0, int arg1, int arg2, int arg3, int arg4)[5] {
+    int ret[5] = { arg0, arg1, arg2, arg3, arg4 };
     return ret;
 }
 
@@ -129,14 +144,19 @@ float4 foo_vert(uint vi : SV_VertexID) : SV_Position
     int a_1 = asint(bar.Load(0+(((NagaBufferLengthRW(bar) - 120) / 8) - 2u)*8+120));
     const float _e28 = read_from_private(foo);
     {
-        int _result[5]={ a_1, int(b), 3, 4, 5 };
+        int _result[5]=Constructarray5_int_(a_1, int(b), 3, 4, 5);
         for(int _i=0; _i<5; ++_i) c[_i] = _result[_i];
     }
     c[(vi + 1u)] = 42;
     int value = c[vi];
-    const float _e42 = test_arr_as_arg({ 0.0 });
+    const float _e42 = test_arr_as_arg(Constructarray5_array10_float__(Constructarray10_float_(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), Constructarray10_float_(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), Constructarray10_float_(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), Constructarray10_float_(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), Constructarray10_float_(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)));
     unnamed = _e42;
     return float4(mul(float4(int4(value.xxxx)), matrix_), 2.0);
+}
+
+uint2 Constructarray2_uint2_(uint2 arg0, uint2 arg1)[2] {
+    uint2 ret[2] = { arg0, arg1 };
+    return ret;
 }
 
 float4 foo_frag() : SV_Target0
@@ -150,7 +170,7 @@ float4 foo_frag() : SV_Target0
         bar.Store3(0+48, asuint(_value2[3]));
     }
     {
-        uint2 _value2[2] = { uint2(0u.xx), uint2(1u.xx) };
+        uint2 _value2[2] = Constructarray2_uint2_(uint2(0u.xx), uint2(1u.xx));
         bar.Store2(104+0, asuint(_value2[0]));
         bar.Store2(104+8, asuint(_value2[1]));
     }

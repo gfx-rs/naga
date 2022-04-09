@@ -74,8 +74,8 @@ fn read_from_private(foo_1: ptr<function, f32>) -> f32 {
     return _e3;
 }
 
-fn test_arr_as_arg(a: array<f32,1>) -> f32 {
-    return a[0];
+fn test_arr_as_arg(a: array<array<f32,10>,5>) -> f32 {
+    return a[4][9];
 }
 
 @stage(vertex) 
@@ -96,7 +96,7 @@ fn foo_vert(@builtin(vertex_index) vi: u32) -> @builtin(position) vec4<f32> {
     c = array<i32,5>(a_1, i32(b), 3, 4, 5);
     c[(vi + 1u)] = 42;
     let value = c[vi];
-    let _e42 = test_arr_as_arg(array<f32,1>(0.0));
+    let _e42 = test_arr_as_arg(array<array<f32,10>,5>(array<f32,10>(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), array<f32,10>(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), array<f32,10>(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), array<f32,10>(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), array<f32,10>(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)));
     unnamed = _e42;
     return vec4<f32>((matrix * vec4<f32>(vec4<i32>(value))), 2.0);
 }
