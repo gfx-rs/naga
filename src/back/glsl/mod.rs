@@ -1298,6 +1298,11 @@ impl<'a, W: Write> Writer<'a, W> {
             // The leading space is important
             write!(this.out, " {}", &this.names[&ctx.argument_key(i as u32)])?;
 
+            // Write array size
+            if let TypeInner::Array { size, .. } = this.module.types[arg.ty].inner {
+                this.write_array_size(size)?;
+            }
+
             Ok(())
         })?;
 
