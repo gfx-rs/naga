@@ -19,6 +19,7 @@ use crate::{
 };
 use bit_set::BitSet;
 use std::ops;
+use r#type::TypeFlags;
 
 //TODO: analyze the model at the same time as we validate it,
 // merge the corresponding matches over expressions and statements.
@@ -29,7 +30,7 @@ pub use compose::ComposeError;
 pub use expression::ExpressionError;
 pub use function::{CallError, FunctionError, LocalVariableError};
 pub use interface::{EntryPointError, GlobalVariableError, VaryingError};
-pub use r#type::{Disalignment, TypeError, TypeFlags};
+pub use r#type::{Disalignment, TypeError};
 
 bitflags::bitflags! {
     /// Validation flags.
