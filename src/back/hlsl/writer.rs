@@ -737,8 +737,13 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
 
         write!(self.out, "]")?;
 
-        if let TypeInner::Array { base, size, .. } = module.types[base].inner {
-            self.write_array_size(module, base, size)?;
+        if let TypeInner::Array {
+            base: next_base,
+            size: next_size,
+            ..
+        } = module.types[base].inner
+        {
+            self.write_array_size(module, next_base, next_size)?;
         }
 
         Ok(())

@@ -756,8 +756,13 @@ impl<'a, W: Write> Writer<'a, W> {
 
         write!(self.out, "]")?;
 
-        if let TypeInner::Array { base, size, .. } = self.module.types[base].inner {
-            self.write_array_size(base, size)?;
+        if let TypeInner::Array {
+            base: next_base,
+            size: next_size,
+            ..
+        } = self.module.types[base].inner
+        {
+            self.write_array_size(next_base, next_size)?;
         }
 
         Ok(())
