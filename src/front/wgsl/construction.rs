@@ -41,7 +41,7 @@ enum ConstructorType {
 }
 
 impl ConstructorType {
-    fn to_type_resolution(&self) -> Option<TypeResolution> {
+    const fn to_type_resolution(&self) -> Option<TypeResolution> {
         Some(match *self {
             ConstructorType::Scalar { kind, width } => {
                 TypeResolution::Value(TypeInner::Scalar { kind, width })

@@ -2,7 +2,7 @@ use super::error::Error;
 use num_traits::cast::FromPrimitive;
 use std::convert::TryInto;
 
-pub(super) fn map_binary_operator(word: spirv::Op) -> Result<crate::BinaryOperator, Error> {
+pub(super) const fn map_binary_operator(word: spirv::Op) -> Result<crate::BinaryOperator, Error> {
     use crate::BinaryOperator;
     use spirv::Op;
 
@@ -42,7 +42,9 @@ pub(super) fn map_binary_operator(word: spirv::Op) -> Result<crate::BinaryOperat
     }
 }
 
-pub(super) fn map_relational_fun(word: spirv::Op) -> Result<crate::RelationalFunction, Error> {
+pub(super) const fn map_relational_fun(
+    word: spirv::Op,
+) -> Result<crate::RelationalFunction, Error> {
     use crate::RelationalFunction as Rf;
     use spirv::Op;
 
@@ -57,7 +59,7 @@ pub(super) fn map_relational_fun(word: spirv::Op) -> Result<crate::RelationalFun
     }
 }
 
-pub(super) fn map_vector_size(word: spirv::Word) -> Result<crate::VectorSize, Error> {
+pub(super) const fn map_vector_size(word: spirv::Word) -> Result<crate::VectorSize, Error> {
     match word {
         2 => Ok(crate::VectorSize::Bi),
         3 => Ok(crate::VectorSize::Tri),

@@ -423,14 +423,14 @@ pub(super) struct Lexer<'a> {
 }
 
 impl<'a> Lexer<'a> {
-    pub(super) fn new(input: &'a str) -> Self {
+    pub(super) const fn new(input: &'a str) -> Self {
         Lexer {
             input,
             source: input,
         }
     }
 
-    pub(super) fn _leftover_span(&self) -> Span {
+    pub(super) const fn _leftover_span(&self) -> Span {
         self.source.len() - self.input.len()..self.source.len()
     }
 
@@ -460,11 +460,11 @@ impl<'a> Lexer<'a> {
         (token, rest)
     }
 
-    pub(super) fn current_byte_offset(&self) -> usize {
+    pub(super) const fn current_byte_offset(&self) -> usize {
         self.source.len() - self.input.len()
     }
 
-    pub(super) fn span_from(&self, offset: usize) -> Span {
+    pub(super) const fn span_from(&self, offset: usize) -> Span {
         offset..self.current_byte_offset()
     }
 

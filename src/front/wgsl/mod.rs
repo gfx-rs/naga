@@ -502,7 +502,7 @@ impl<'a> Error<'a> {
 }
 
 impl crate::StorageFormat {
-    fn to_wgsl(self) -> &'static str {
+    const fn to_wgsl(self) -> &'static str {
         use crate::StorageFormat as Sf;
         match self {
             Sf::R8Unorm => "r8unorm",
@@ -1107,7 +1107,7 @@ struct TypedExpression {
 }
 
 impl TypedExpression {
-    fn non_reference(handle: Handle<crate::Expression>) -> TypedExpression {
+    const fn non_reference(handle: Handle<crate::Expression>) -> TypedExpression {
         TypedExpression {
             handle,
             is_reference: false,
@@ -1233,7 +1233,7 @@ impl BindingParser {
         Ok(())
     }
 
-    fn finish<'a>(self, span: Span) -> Result<Option<crate::Binding>, Error<'a>> {
+    const fn finish<'a>(self, span: Span) -> Result<Option<crate::Binding>, Error<'a>> {
         match (
             self.location,
             self.built_in,
@@ -3172,7 +3172,7 @@ impl Parser {
         }))
     }
 
-    fn check_texture_sample_type(
+    const fn check_texture_sample_type(
         kind: crate::ScalarKind,
         width: u8,
         span: Span,
@@ -4457,7 +4457,7 @@ pub struct StringErrorBuffer {
 }
 
 impl StringErrorBuffer {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self { buf: Vec::new() }
     }
 

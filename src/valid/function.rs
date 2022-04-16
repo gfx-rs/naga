@@ -193,7 +193,7 @@ impl<'a> BlockContext<'a> {
         }
     }
 
-    fn with_abilities(&self, abilities: ControlFlowAbility) -> Self {
+    const fn with_abilities(&self, abilities: ControlFlowAbility) -> Self {
         BlockContext { abilities, ..*self }
     }
 
