@@ -1,13 +1,5 @@
 use super::{conv, Error, ExpectedToken, NumberType, Span, Token, TokenSpan};
 
-fn _consume_str<'a>(input: &'a str, what: &str) -> Option<&'a str> {
-    if input.starts_with(what) {
-        Some(&input[what.len()..])
-    } else {
-        None
-    }
-}
-
 fn consume_any(input: &str, what: impl Fn(char) -> bool) -> (&str, &str) {
     let pos = input.find(|c| !what(c)).unwrap_or(input.len());
     input.split_at(pos)
@@ -17,8 +9,8 @@ fn consume_any(input: &str, what: impl Fn(char) -> bool) -> (&str, &str) {
 /// Returns whether the prefix was present and could therefore be skipped,
 /// the remaining str and the number of *bytes* skipped.
 pub fn try_skip_prefix<'a, 'b>(input: &'a str, prefix: &'b str) -> (bool, &'a str, usize) {
-    if input.starts_with(prefix) {
-        (true, &input[prefix.len()..], prefix.len())
+    if let Some(rem) = input.strip_prefix(prefix) {
+        (true, rem, prefix.len())
     } else {
         (false, input, 0)
     }
