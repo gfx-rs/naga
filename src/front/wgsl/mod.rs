@@ -2284,9 +2284,7 @@ impl Parser {
                 self.pop_scope(lexer);
                 expr
             }
-            token @ (Token::Word("true"), _)
-            | token @ (Token::Word("false"), _)
-            | token @ (Token::Number { .. }, _) => {
+            token @ (Token::Word("true" | "false") | Token::Number { .. }, _) => {
                 let _ = lexer.next();
                 let const_handle =
                     self.parse_const_expression_impl(token, lexer, None, ctx.types, ctx.constants)?;
@@ -2511,7 +2509,7 @@ impl Parser {
                 let span = NagaSpan::from(self.peek_scope(lexer));
                 TypedExpression::non_reference(ctx.expressions.append(expr, span))
             }
-            Token::Operation('!') | Token::Operation('~') => {
+            Token::Operation('!' | '~') => {
                 let _ = lexer.next();
                 let unloaded_expr = self.parse_unary_expression(lexer, ctx.reborrow())?;
                 let expr = ctx.apply_load_rule(unloaded_expr);
@@ -3182,7 +3180,7 @@ impl Parser {
         use crate::ScalarKind::*;
         // Validate according to https://gpuweb.github.io/gpuweb/wgsl/#sampled-texture-type
         match (kind, width) {
-            (Float, 4) | (Sint, 4) | (Uint, 4) => Ok(()),
+            (Float | Sint | Uint, 4) => Ok(()),
             _ => Err(Error::BadTextureSampleType { span, kind, width }),
         }
     }
@@ -3302,7 +3300,7 @@ impl Parser {
                     .expressions
                     .append(crate::Expression::Binary { op, left, right }, span.into())
             }
-            token @ (Token::IncrementOperation, _) | token @ (Token::DecrementOperation, _) => {
+            token @ (Token::IncrementOperation | Token::DecrementOperation, _) => {
                 let op = match token.0 {
                     Token::IncrementOperation => Bo::Add,
                     Token::DecrementOperation => Bo::Subtract,

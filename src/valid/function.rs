@@ -845,9 +845,11 @@ impl super::Validator {
                 FunctionError::from(err).with_span_handle(argument.ty, &module.types)
             })?;
             match ty.inner.pointer_space() {
-                Some(crate::AddressSpace::Private)
-                | Some(crate::AddressSpace::Function)
-                | Some(crate::AddressSpace::WorkGroup)
+                Some(
+                    crate::AddressSpace::Private
+                    | crate::AddressSpace::Function
+                    | crate::AddressSpace::WorkGroup,
+                )
                 | None => {}
                 Some(other) => {
                     return Err(FunctionError::InvalidArgumentPointerSpace {

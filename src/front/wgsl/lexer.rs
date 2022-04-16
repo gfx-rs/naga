@@ -186,12 +186,7 @@ fn consume_number(input: &str) -> (Token, &str) {
 
             NumberLexerState {
                 hex,
-                digit_state: NLDigitState::DigitsThenDot,
-                ..
-            }
-            | NumberLexerState {
-                hex,
-                digit_state: NLDigitState::DigitAfterDot,
+                digit_state: NLDigitState::DigitsThenDot | NLDigitState::DigitAfterDot,
                 ..
             } => match c {
                 '0'..='9' => {
@@ -223,11 +218,7 @@ fn consume_number(input: &str) -> (Token, &str) {
             },
 
             NumberLexerState {
-                digit_state: NLDigitState::SignAfterExponent,
-                ..
-            }
-            | NumberLexerState {
-                digit_state: NLDigitState::DigitAfterExponent,
+                digit_state: NLDigitState::SignAfterExponent | NLDigitState::DigitAfterExponent,
                 ..
             } => match c {
                 '0'..='9' => {
@@ -376,7 +367,7 @@ fn consume_token(mut input: &str, generic: bool) -> (Token<'_>, &str) {
             let sub_input = chars.as_str();
             match chars.next() {
                 Some('>') => (Token::Arrow, chars.as_str()),
-                Some('0'..='9') | Some('.') => consume_number(input),
+                Some('0'..='9' | '.') => consume_number(input),
                 Some('-') => (Token::DecrementOperation, chars.as_str()),
                 Some('=') => (Token::AssignmentOperation(cur), chars.as_str()),
                 _ => (Token::Operation(cur), sub_input),
