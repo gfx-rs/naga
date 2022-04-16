@@ -195,7 +195,8 @@ tree.
     trivial_numeric_casts,
     unused_extern_crates,
     unused_qualifications,
-    clippy::pattern_type_mismatch
+    clippy::pattern_type_mismatch,
+    clippy::missing_const_for_fn
 )]
 #![deny(clippy::panic)]
 
