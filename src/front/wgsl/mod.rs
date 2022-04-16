@@ -1121,8 +1121,7 @@ enum Composition {
 }
 
 impl Composition {
-    //TODO: could be `const fn` once MSRV allows
-    fn letter_component(letter: char) -> Option<crate::SwizzleComponent> {
+    const fn letter_component(letter: char) -> Option<crate::SwizzleComponent> {
         use crate::SwizzleComponent as Sc;
         match letter {
             'x' | 'r' => Some(Sc::X),
