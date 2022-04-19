@@ -377,12 +377,12 @@ impl FunctionInfo {
                 GlobalOrArgument::Global(var) => GlobalOrArgument::Global(var),
                 GlobalOrArgument::Argument(i) => {
                     let handle = arguments[i as usize];
-                    expression_arena[handle]
-                        .to_global_or_argument(expression_arena)
-                        .map_err(|error| {
+                    GlobalOrArgument::from_expression(expression_arena, handle).map_err(
+                        |error| {
                             FunctionError::Expression { handle, error }
                                 .with_span_handle(handle, expression_arena)
-                        })?
+                        },
+                    )?
                 }
             };
 
@@ -579,10 +579,8 @@ impl FunctionInfo {
                 level,
                 depth_ref,
             } => {
-                let image_storage =
-                    expression_arena[image].to_global_or_argument(expression_arena)?;
-                let sampler_storage =
-                    expression_arena[sampler].to_global_or_argument(expression_arena)?;
+                let image_storage = GlobalOrArgument::from_expression(expression_arena, image)?;
+                let sampler_storage = GlobalOrArgument::from_expression(expression_arena, sampler)?;
 
                 match (image_storage, sampler_storage) {
                     (GlobalOrArgument::Global(image), GlobalOrArgument::Global(sampler)) => {

@@ -367,7 +367,7 @@ impl ResolvedBinding {
         }
     }
 
-    fn as_bind_target(&self) -> Option<&BindTarget> {
+    const fn as_bind_target(&self) -> Option<&BindTarget> {
         match *self {
             Self::Resource(ref target) => Some(target),
             _ => None,
