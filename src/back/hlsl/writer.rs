@@ -57,7 +57,7 @@ enum InterfaceKey {
 }
 
 impl InterfaceKey {
-    fn new(binding: Option<&crate::Binding>) -> Self {
+    const fn new(binding: Option<&crate::Binding>) -> Self {
         match binding {
             Some(&crate::Binding::Location { location, .. }) => Self::Location(location),
             Some(&crate::Binding::BuiltIn(built_in)) => Self::BuiltIn(built_in),
@@ -661,6 +661,12 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
 
         if global.space == crate::AddressSpace::Uniform {
             write!(self.out, " {{ ")?;
+            // Even though Naga IR matrices are column-major, we must describe
+            // matrices passed from the CPU as being in row-major order.  See
+            // the module-level comments for details.
+            if let TypeInner::Matrix { .. } = module.types[global.ty].inner {
+                write!(self.out, "row_major ")?;
+            }
             self.write_type(module, global.ty)?;
             let sub_name = &self.names[&NameKey::GlobalVariable(handle)];
             write!(self.out, " {}", sub_name)?;

@@ -535,7 +535,7 @@ impl<'w> BlockContext<'w> {
                         _ => unimplemented!(),
                     },
                     crate::BinaryOperator::Equal => match left_ty_inner.scalar_kind() {
-                        Some(crate::ScalarKind::Sint) | Some(crate::ScalarKind::Uint) => {
+                        Some(crate::ScalarKind::Sint | crate::ScalarKind::Uint) => {
                             spirv::Op::IEqual
                         }
                         Some(crate::ScalarKind::Float) => spirv::Op::FOrdEqual,
@@ -543,7 +543,7 @@ impl<'w> BlockContext<'w> {
                         _ => unimplemented!(),
                     },
                     crate::BinaryOperator::NotEqual => match left_ty_inner.scalar_kind() {
-                        Some(crate::ScalarKind::Sint) | Some(crate::ScalarKind::Uint) => {
+                        Some(crate::ScalarKind::Sint | crate::ScalarKind::Uint) => {
                             spirv::Op::INotEqual
                         }
                         Some(crate::ScalarKind::Float) => spirv::Op::FOrdNotEqual,

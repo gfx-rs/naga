@@ -196,7 +196,7 @@ pub enum ValidationError {
 
 impl crate::TypeInner {
     #[cfg(feature = "validate")]
-    fn is_sized(&self) -> bool {
+    const fn is_sized(&self) -> bool {
         match *self {
             Self::Scalar { .. }
             | Self::Vector { .. }
@@ -218,7 +218,7 @@ impl crate::TypeInner {
 
     /// Return the `ImageDimension` for which `self` is an appropriate coordinate.
     #[cfg(feature = "validate")]
-    fn image_storage_coordinates(&self) -> Option<crate::ImageDimension> {
+    const fn image_storage_coordinates(&self) -> Option<crate::ImageDimension> {
         match *self {
             Self::Scalar {
                 kind: crate::ScalarKind::Sint,
