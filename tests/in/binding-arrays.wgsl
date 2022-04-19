@@ -26,9 +26,9 @@ struct FragmentIn {
 };
 
 @fragment
-fn main(in: FragmentIn) -> @location(0) vec4<f32> {
+fn main(fragment_in: FragmentIn) -> @location(0) vec4<f32> {
     let uniform_index = uni.index;
-    let non_uniform_index = in.index;
+    let non_uniform_index = fragment_in.index;
 
     var i1 = 0;
     var i2 = vec2<i32>(0);

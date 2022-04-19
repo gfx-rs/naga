@@ -26,14 +26,14 @@ var samp_comp: binding_array<sampler_comparison,5>;
 var<uniform> uni: UniformIndex;
 
 @fragment 
-fn main(in: FragmentIn) -> @location(0) vec4<f32> {
+fn main(fragment_in: FragmentIn) -> @location(0) vec4<f32> {
     var i1_: i32 = 0;
     var i2_: vec2<i32>;
     var v1_: f32 = 0.0;
     var v4_: vec4<f32>;
 
     let uniform_index = uni.index;
-    let non_uniform_index = in.index;
+    let non_uniform_index = fragment_in.index;
     i2_ = vec2<i32>(0);
     v4_ = vec4<f32>(0.0);
     let uv = vec2<f32>(0.0);

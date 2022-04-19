@@ -29,13 +29,13 @@ fragment main_Output main_(
 , metal::array<metal::sampler, 5> samp_comp [[user(fake0)]]
 , constant UniformIndex& uni [[user(fake0)]]
 ) {
-    const FragmentIn in = { varyings.index };
+    const FragmentIn fragment_in = { varyings.index };
     int i1_ = 0;
     metal::int2 i2_;
     float v1_ = 0.0;
     metal::float4 v4_;
     uint uniform_index = uni.index;
-    uint non_uniform_index = in.index;
+    uint non_uniform_index = fragment_in.index;
     i2_ = metal::int2(0);
     v4_ = metal::float4(0.0);
     metal::float2 uv = metal::float2(0.0);
