@@ -117,6 +117,10 @@ pub struct BoundsCheckPolicies {
     /// [`ImageStore`]: crate::Statement::ImageStore
     #[cfg_attr(feature = "deserialize", serde(default))]
     pub image: BoundsCheckPolicy,
+
+    /// How should the generated code handle binding array indexes that are out of bounds.
+    #[cfg_attr(feature = "deserialize", serde(default))]
+    pub binding_array: BoundsCheckPolicy,
 }
 
 /// The default `BoundsCheckPolicy` is `Unchecked`.
@@ -140,7 +144,13 @@ impl BoundsCheckPolicies {
         types: &UniqueArena<crate::Type>,
         info: &valid::FunctionInfo,
     ) -> BoundsCheckPolicy {
-        match info[access].ty.inner_with(types).pointer_space() {
+        let ty = info[access].ty.inner_with(types);
+
+        if let crate::TypeInner::BindingArray { .. } = *ty {
+            return self.binding_array;
+        }
+
+        match ty.pointer_space() {
             Some(crate::AddressSpace::Storage { access: _ } | crate::AddressSpace::Uniform) => {
                 self.buffer
             }

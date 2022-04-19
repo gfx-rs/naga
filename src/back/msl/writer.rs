@@ -1270,13 +1270,14 @@ impl<W: Write> Writer<W> {
         let expression = &context.function.expressions[expr_handle];
         log::trace!("expression {:?} = {:?}", expr_handle, expression);
         match *expression {
-            crate::Expression::Access { .. } | crate::Expression::AccessIndex { .. } => {
+            crate::Expression::Access { base, .. }
+            | crate::Expression::AccessIndex { base, .. } => {
                 // This is an acceptable place to generate a `ReadZeroSkipWrite` check.
                 // Since `put_bounds_checks` and `put_access_chain` handle an entire
                 // access chain at a time, recursing back through `put_expression` only
                 // for index expressions and the base object, we will never see intermediate
                 // `Access` or `AccessIndex` expressions here.
-                let policy = context.choose_bounds_check_policy(expr_handle);
+                let policy = context.choose_bounds_check_policy(base);
                 if policy == index::BoundsCheckPolicy::ReadZeroSkipWrite
                     && self.put_bounds_checks(
                         expr_handle,
