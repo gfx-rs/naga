@@ -1108,14 +1108,10 @@ pub enum Expression {
         base: Handle<Expression>,
         index: Handle<Expression>,
     },
-    /// Access the same types as [`Access`] plus [`Struct`] with a known index.
-    /// 
-    /// [`Array`]s must have a [`Constant`] size.
-    /// 
+    /// Access the same types as [`Access`], plus [`Struct`] with a known index.
+    ///
     /// [`Access`]: Expression::Access
     /// [`Struct`]: TypeInner::Struct
-    /// [`Array`]: TypeInner::Array
-    /// [`Constant`]: ArraySize::Constant
     AccessIndex {
         base: Handle<Expression>,
         index: u32,
