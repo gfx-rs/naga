@@ -131,20 +131,21 @@ impl Default for BoundsCheckPolicy {
 }
 
 impl BoundsCheckPolicies {
-    /// Determine which policy applies to `access`.
+    /// Determine which policy applies to `base`.
     ///
-    /// `access` is a subtree of `Access` and `AccessIndex` expressions,
-    /// operating either on a pointer to a value, or on a value directly.
+    /// `base` is the "base" expression (the expression being indexed) of a `Access`
+    /// and `AccessIndex` expression. This is either a pointer, a value, being directly
+    /// indexed, or a binding array.
     ///
     /// See the documentation for [`BoundsCheckPolicy`] for details about
     /// when each policy applies.
     pub fn choose_policy(
         &self,
-        access: Handle<crate::Expression>,
+        base: Handle<crate::Expression>,
         types: &UniqueArena<crate::Type>,
         info: &valid::FunctionInfo,
     ) -> BoundsCheckPolicy {
-        let ty = info[access].ty.inner_with(types);
+        let ty = info[base].ty.inner_with(types);
 
         if let crate::TypeInner::BindingArray { .. } = *ty {
             return self.binding_array;
