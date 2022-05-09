@@ -102,13 +102,13 @@ void main() {
     ivec4 _e134 = i4_;
     i4_ = bitCount(_e134);
     uint _e136 = u;
-    u = bitCount(_e136);
+    u = uint(bitCount(_e136));
     uvec2 _e138 = u2_;
-    u2_ = bitCount(_e138);
+    u2_ = uvec2(bitCount(_e138));
     uvec3 _e140 = u3_;
-    u3_ = bitCount(_e140);
+    u3_ = uvec3(bitCount(_e140));
     uvec4 _e142 = u4_;
-    u4_ = bitCount(_e142);
+    u4_ = uvec4(bitCount(_e142));
     int _e144 = i;
     i = bitfieldReverse(_e144);
     ivec2 _e146 = i2_;
