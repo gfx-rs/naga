@@ -100,7 +100,7 @@ impl FeaturesManager {
         check_feature!(CULL_DISTANCE, 450, 300);
         check_feature!(SAMPLE_VARIABLES, 400, 300);
         check_feature!(DYNAMIC_ARRAY_SIZE, 430, 310);
-        check_feature!(MULTI_VIEW, 140, 310);
+        //check_feature!(MULTI_VIEW, 140, 310);
         check_feature!(FMA, 400, 310);
 
         // Return an error if there are missing features
@@ -201,8 +201,12 @@ impl FeaturesManager {
         }
 
         if self.0.contains(Features::MULTI_VIEW) {
-            // https://github.com/KhronosGroup/GLSL/blob/master/extensions/ext/GL_EXT_multiview.txt
-            writeln!(out, "#extension GL_EXT_multiview : require")?;
+            if !version.is_es() {
+                // https://github.com/KhronosGroup/GLSL/blob/master/extensions/ext/GL_EXT_multiview.txt
+                writeln!(out, "#extension GL_EXT_multiview : require")?;
+            } else {
+                writeln!(out, "#extension GL_OVR_multiview2 : require")?;
+            }
         }
 
         if self.0.contains(Features::FMA) && version.is_es() {
@@ -243,6 +247,10 @@ impl<'a, W> Writer<'a, W> {
 
         if let ShaderStage::Compute = self.entry_point.stage {
             self.features.request(Features::COMPUTE_SHADER)
+        }
+
+        if self.multiview.is_some() {
+            self.features.request(Features::MULTI_VIEW);
         }
 
         for (ty_handle, ty) in self.module.types.iter() {

@@ -230,6 +230,8 @@ pub struct PipelineOptions {
     ///
     /// If no entry point that matches is found while creating a [`Writer`], a error will be thrown.
     pub entry_point: String,
+    /// XYZ
+    pub multiview: Option<std::num::NonZeroU32>,
 }
 
 /// Reflection info for texture mappings and uniforms.
@@ -395,6 +397,8 @@ pub struct Writer<'a, W> {
     named_expressions: crate::NamedExpressions,
     /// Set of expressions that need to be baked to avoid unnecessary repetition in output
     need_bake_expressions: back::NeedBakeExpressions,
+    /// XYZ
+    multiview: Option<std::num::NonZeroU32>,
 }
 
 impl<'a, W: Write> Writer<'a, W> {
@@ -443,7 +447,11 @@ impl<'a, W: Write> Writer<'a, W> {
             reflection_names_globals: crate::FastHashMap::default(),
             entry_point: &module.entry_points[ep_idx],
             entry_point_idx: ep_idx as u16,
-
+            multiview: if pipeline_options.shader_stage == ShaderStage::Vertex {
+                pipeline_options.multiview
+            } else {
+                None
+            },
             block_id: IdGenerator::default(),
             named_expressions: Default::default(),
             need_bake_expressions: Default::default(),
@@ -530,6 +538,11 @@ impl<'a, W: Write> Writer<'a, W> {
                     self.options.version
                 );
             }
+        }
+
+        if let Some(multiview) = self.multiview {
+            writeln!(self.out, "layout(num_views = {}) in;", multiview)?;
+            writeln!(self.out)?;
         }
 
         let ep_info = self.info.get_entry_point(self.entry_point_idx as usize);
