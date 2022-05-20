@@ -68,6 +68,16 @@ fn constructors() -> f32 {
     _ = mat2x2(vec2(0.), vec2(0.));
     _ = array(0, 1, 2, 3);
 
+    // identity constructors
+    _ = bool(bool());
+    _ = i32(i32());
+    _ = u32(u32());
+    _ = f32(f32());
+    _ = vec2<u32>(vec2<u32>());
+    _ = mat2x3<f32>(mat2x3<f32>());
+    _ = vec2(vec2<u32>());
+    _ = mat2x3(mat2x3<f32>());
+
     return foo.a.x;
 }
 
@@ -277,6 +287,10 @@ fn assignment() {
 
     a++;
     a--;
+
+    var vec0: vec3<i32> = vec3<i32>();
+    vec0[1]++;
+    vec0[1]--;
 }
 
 @compute @workgroup_size(1)

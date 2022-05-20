@@ -11,13 +11,14 @@ struct type_9 {
     float4 gl_Position : SV_Position;
 };
 
-float Constructarray1_float_(float arg0)[1] {
+typedef float ret_Constructarray1_float_[1];
+ret_Constructarray1_float_ Constructarray1_float_(float arg0) {
     float ret[1] = { arg0 };
     return ret;
 }
 
 gl_PerVertex Constructgl_PerVertex(float4 arg0, float arg1, float arg2[1], float arg3[1]) {
-    gl_PerVertex ret;
+    gl_PerVertex ret = (gl_PerVertex)0;
     ret.gl_Position = arg0;
     ret.gl_PointSize = arg1;
     ret.gl_ClipDistance = arg2;
@@ -45,7 +46,7 @@ void main_1()
 }
 
 type_9 Constructtype_9(float2 arg0, float4 arg1) {
-    type_9 ret;
+    type_9 ret = (type_9)0;
     ret.member = arg0;
     ret.gl_Position = arg1;
     return ret;

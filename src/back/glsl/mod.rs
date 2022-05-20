@@ -1642,6 +1642,8 @@ impl<'a, W: Write> Writer<'a, W> {
                         Some(self.namer.call(name))
                     } else if self.need_bake_expressions.contains(&handle) {
                         Some(format!("{}{}", back::BAKE_PREFIX, handle.index()))
+                    } else if info.ref_count == 0 {
+                        Some(self.namer.call(""))
                     } else {
                         None
                     };
@@ -2446,7 +2448,6 @@ impl<'a, W: Write> Writer<'a, W> {
                         }
                     }
                     crate::ImageQuery::NumSamples => {
-                        // assumes ARB_shader_texture_image_samples
                         let fun_name = match class {
                             ImageClass::Sampled { .. } | ImageClass::Depth { .. } => {
                                 "textureSamples"
@@ -2594,6 +2595,18 @@ impl<'a, W: Write> Writer<'a, W> {
 
                         write!(self.out, ")")?;
                     }
+                    // TODO: handle undefined behavior of BinaryOperator::Modulo
+                    //
+                    // sint:
+                    // if right == 0 return 0
+                    // if left == min(type_of(left)) && right == -1 return 0
+                    // if sign(left) == -1 || sign(right) == -1 return result as defined by WGSL
+                    //
+                    // uint:
+                    // if right == 0 return 0
+                    //
+                    // float:
+                    // if right == 0 return ? see https://github.com/gpuweb/gpuweb/issues/2798
                     BinaryOperation::Modulo => {
                         write!(self.out, "(")?;
 
@@ -2822,7 +2835,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 // we might need to cast to unsigned integers since
                 // GLSL's findLSB / findMSB always return signed integers
                 let need_extra_paren = {
-                    (fun == Mf::FindLsb || fun == Mf::FindMsb)
+                    (fun == Mf::FindLsb || fun == Mf::FindMsb || fun == Mf::CountOneBits)
                         && match *ctx.info[arg].ty.inner_with(&self.module.types) {
                             crate::TypeInner::Scalar {
                                 kind: crate::ScalarKind::Uint,
@@ -2895,6 +2908,11 @@ impl<'a, W: Write> Writer<'a, W> {
                         // this is similar to `write_type`, but with the target kind
                         let scalar = glsl_scalar(target_kind, width)?;
                         match *inner {
+                            TypeInner::Matrix { columns, rows, .. } => write!(
+                                self.out,
+                                "{}mat{}x{}",
+                                scalar.prefix, columns as u8, rows as u8
+                            )?,
                             TypeInner::Vector { size, .. } => {
                                 write!(self.out, "{}vec{}", scalar.prefix, size as u8)?
                             }
