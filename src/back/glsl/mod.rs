@@ -3250,6 +3250,8 @@ const fn glsl_scalar(
 const fn glsl_built_in(built_in: crate::BuiltIn, output: bool) -> &'static str {
     use crate::BuiltIn as Bi;
 
+    let multiview_ovr = true;
+
     match built_in {
         Bi::Position { .. } => {
             if output {
@@ -3258,6 +3260,7 @@ const fn glsl_built_in(built_in: crate::BuiltIn, output: bool) -> &'static str {
                 "gl_FragCoord"
             }
         }
+        Bi::ViewIndex if multiview_ovr => "int(gl_ViewID_OVR)",
         Bi::ViewIndex => "gl_ViewIndex",
         // vertex
         Bi::BaseInstance => "uint(gl_BaseInstance)",

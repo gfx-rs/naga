@@ -443,6 +443,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                         "comp" => naga::ShaderStage::Compute,
                         _ => unreachable!(),
                     },
+                    multiview: None,
                 };
 
                 let mut buffer = String::new();
