@@ -281,6 +281,7 @@ fn write_output_glsl(
     let pipeline_options = glsl::PipelineOptions {
         shader_stage: stage,
         entry_point: ep_name.to_string(),
+        multiview: None,
     };
 
     let mut buffer = String::new();
