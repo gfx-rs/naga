@@ -1425,6 +1425,17 @@ impl<'a, W: Write> Writer<'a, W> {
             writeln!(self.out, ";")?
         }
 
+        // Loop trough all Constant expressions and bake them if needed.
+        for (handle, expr) in ctx.expressions.iter() {
+            if let crate::Expression::Constant(_) = *expr {
+                if self.need_bake_expressions.contains(&handle) {
+                    let name = format!("{}{}", back::BAKE_PREFIX, handle.index());
+                    write!(self.out, "{}", back::Level(1))?;
+                    self.write_named_expr(handle, name, &ctx)?;
+                }
+            }
+        }
+
         // Write the function body (statement list)
         for sta in func.body.iter() {
             // Write a statement, the indentation should always be 1 when writing the function body

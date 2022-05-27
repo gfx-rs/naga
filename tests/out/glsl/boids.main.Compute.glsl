@@ -41,8 +41,9 @@ void main() {
     vec2 pos = vec2(0.0);
     vec2 vel = vec2(0.0);
     uint i = 0u;
+    uint _e0 = 1500u;
     uint index = global_invocation_id.x;
-    if ((index >= 1500u)) {
+    if ((index >= _e0)) {
         return;
     }
     vec2 _e10 = _group_0_binding_1_cs.particles[index].pos;
@@ -60,7 +61,7 @@ void main() {
         }
         loop_init = false;
         uint _e37 = i;
-        if ((_e37 >= 1500u)) {
+        if ((_e37 >= _e0)) {
             break;
         }
         uint _e39 = i;

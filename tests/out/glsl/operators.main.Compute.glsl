@@ -11,14 +11,18 @@ struct Foo {
 };
 
 vec4 builtins() {
-    int s1_ = (true ? 1 : 0);
-    vec4 s2_ = (true ? vec4(1.0, 1.0, 1.0, 1.0) : vec4(0.0, 0.0, 0.0, 0.0));
-    vec4 s3_ = mix(vec4(1.0, 1.0, 1.0, 1.0), vec4(0.0, 0.0, 0.0, 0.0), bvec4(false, false, false, false));
-    vec4 m1_ = mix(vec4(0.0, 0.0, 0.0, 0.0), vec4(1.0, 1.0, 1.0, 1.0), vec4(0.5, 0.5, 0.5, 0.5));
-    vec4 m2_ = mix(vec4(0.0, 0.0, 0.0, 0.0), vec4(1.0, 1.0, 1.0, 1.0), 0.10000000149011612);
-    float b1_ = intBitsToFloat(ivec4(1, 1, 1, 1).x);
-    vec4 b2_ = intBitsToFloat(ivec4(1, 1, 1, 1));
-    ivec4 v_i32_zero = ivec4(vec4(0.0, 0.0, 0.0, 0.0));
+    vec4 _e1 = vec4(1.0, 1.0, 1.0, 1.0);
+    ivec4 _e2 = ivec4(1, 1, 1, 1);
+    vec4 _e3 = vec4(0.0, 0.0, 0.0, 0.0);
+    bool _e4 = true;
+    int s1_ = (_e4 ? 1 : 0);
+    vec4 s2_ = (_e4 ? _e1 : _e3);
+    vec4 s3_ = mix(_e1, _e3, bvec4(false, false, false, false));
+    vec4 m1_ = mix(_e3, _e1, vec4(0.5, 0.5, 0.5, 0.5));
+    vec4 m2_ = mix(_e3, _e1, 0.10000000149011612);
+    float b1_ = intBitsToFloat(_e2.x);
+    vec4 b2_ = intBitsToFloat(_e2);
+    ivec4 v_i32_zero = ivec4(_e3);
     return (((((vec4((ivec4(s1_) + v_i32_zero)) + s2_) + m1_) + m2_) + vec4(b1_)) + b2_);
 }
 
