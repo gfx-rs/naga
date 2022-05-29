@@ -2988,47 +2988,23 @@ impl<'a, W: Write> Writer<'a, W> {
         tex_coord_size + tex_1d_hack as u8 + arrayed as u8
     }
 
-    // Helper method to write the `ImageStore` statement
-    fn write_image_store(
+    /// Helper method to write the coordinate vector for image operations
+    fn write_texture_coord(
         &mut self,
         ctx: &back::FunctionCtx,
-        image: Handle<crate::Expression>,
+        vector_size: u8,
         coordinate: Handle<crate::Expression>,
         array_index: Option<Handle<crate::Expression>>,
-        value: Handle<crate::Expression>,
+        // Emulate 1D images as 2D for profiles that don't support it (glsl es)
+        tex_1d_hack: bool,
     ) -> Result<(), Error> {
-        use crate::ImageDimension as IDim;
-
-        // NOTE: openGL requires that `imageStore`s have no effets when the texel is invalid
-        // so we don't need to generate bounds checks (OpenGL 4.60 section 8.26)
-
-        // This will only panic if the module is invalid
-        let dim = match *ctx.info[image].ty.inner_with(&self.module.types) {
-            TypeInner::Image { dim, .. } => dim,
-            _ => unreachable!(),
-        };
-
-        // Begin our call to `imageStore`
-        write!(self.out, "imageStore(")?;
-        self.write_expr(image, ctx)?;
-        // Separate the image argument from the coordinates
-        write!(self.out, ", ")?;
-
-        // openGL es doesn't have 1D images so we need workaround it
-        let tex_1d_hack = dim == IDim::D1 && self.options.version.is_es();
-        // Write the coordinate vector
         match array_index {
             // If the image needs an array indice we need to add it to the end of our
             // coordinate vector, to do so we will use the `ivec(ivec, scalar)`
             // constructor notation (NOTE: the inner `ivec` can also be a scalar, this
             // is important for 1D arrayed images).
             Some(layer_expr) => {
-                write!(
-                    self.out,
-                    "ivec{}(",
-                    // Get the size of the coordinate vector
-                    self.get_coordinate_vector_size(dim, array_index.is_some())
-                )?;
+                write!(self.out, "ivec{}(", vector_size)?;
                 self.write_expr(coordinate, ctx)?;
                 write!(self.out, ", ")?;
                 // If we are replacing sampler1D with sampler2D we also need
@@ -3046,10 +3022,51 @@ impl<'a, W: Write> Writer<'a, W> {
                 }
                 self.write_expr(coordinate, ctx)?;
                 if tex_1d_hack {
-                    write!(self.out, ", 0.0)")?;
+                    write!(self.out, ", 0)")?;
                 }
             }
         }
+
+        Ok(())
+    }
+
+    /// Helper method to write the `ImageStore` statement
+    fn write_image_store(
+        &mut self,
+        ctx: &back::FunctionCtx,
+        image: Handle<crate::Expression>,
+        coordinate: Handle<crate::Expression>,
+        array_index: Option<Handle<crate::Expression>>,
+        value: Handle<crate::Expression>,
+    ) -> Result<(), Error> {
+        use crate::ImageDimension as IDim;
+
+        // NOTE: openGL requires that `imageStore`s have no effets when the texel is invalid
+        // so we don't need to generate bounds checks (OpenGL 4.2 Core §3.9.20)
+
+        // This will only panic if the module is invalid
+        let dim = match *ctx.info[image].ty.inner_with(&self.module.types) {
+            TypeInner::Image { dim, .. } => dim,
+            _ => unreachable!(),
+        };
+
+        // Begin our call to `imageStore`
+        write!(self.out, "imageStore(")?;
+        self.write_expr(image, ctx)?;
+        // Separate the image argument from the coordinates
+        write!(self.out, ", ")?;
+
+        // openGL es doesn't have 1D images so we need workaround it
+        let tex_1d_hack = dim == IDim::D1 && self.options.version.is_es();
+        // Write the coordinate vector
+        self.write_texture_coord(
+            ctx,
+            // Get the size of the coordinate vector
+            self.get_coordinate_vector_size(dim, array_index.is_some()),
+            coordinate,
+            array_index,
+            tex_1d_hack,
+        )?;
 
         // Separate the coordinate from the value to write and write the expression
         // of the value to write.
@@ -3080,9 +3097,9 @@ impl<'a, W: Write> Writer<'a, W> {
         // images another for storage images, the former uses `texelFetch` and the
         // latter uses `imageLoad`.
         //
-        // Furthermore we have `index` which is always `Some` for sampled images
+        // Furthermore we have `level` which is always `Some` for sampled images
         // and `None` for storage images, so we end up with two functions:
-        // - `texelFetch(image, coordinate, index)` for sampled images
+        // - `texelFetch(image, coordinate, level)` for sampled images
         // - `imageLoad(image, coordinate)` for storage images
         //
         // Finally we also have to consider bounds checking, for storage images
@@ -3106,13 +3123,15 @@ impl<'a, W: Write> Writer<'a, W> {
             // Sampled images inherit the policy from the user passed policies
             crate::ImageClass::Sampled { .. } => ("texelFetch", self.policies.image),
             crate::ImageClass::Storage { .. } => {
-                // Glsl defines in section 8.26 that out of bounds texels in `imageLoad`s
+                // OpenGL 4.2 Core §3.9.20 defines that out of bounds texels in `imageLoad`s
                 // always return zero values so we don't need to generate bounds checks
                 ("imageLoad", proc::BoundsCheckPolicy::Unchecked)
             }
             // TODO: Is there even a function for this?
             crate::ImageClass::Depth { multi: _ } => {
-                return Err(Error::Custom("TODO: depth sample loads".to_string()))
+                return Err(Error::Custom(
+                    "WGSL `textureLoad` from depth textures is not supported in GLSL".to_string(),
+                ))
             }
         };
 
@@ -3173,24 +3192,8 @@ impl<'a, W: Write> Writer<'a, W> {
                 write!(self.out, "all(lessThan(")?;
             }
 
-            // If the image needs an array indice we need to add it to the end of our
-            // coordinate vector, to do so we will use the `ivec(ivec, scalar)`
-            // constructor notation (NOTE: the inner `ivec` can also be a scalar, this
-            // is important for 1D arrayed images).
-            if array_index.is_some() {
-                write!(self.out, "ivec{}(", vector_size)?;
-            }
-            // Write the coordinates always in the middle of the constructor
-            // as the first argument (in case the constructor is needed)
-            self.write_expr(coordinate, ctx)?;
-            // Write the array index after the coordinates
-            if let Some(array_expr) = array_index {
-                // Separate the coordinates from the index
-                write!(self.out, ", ")?;
-                self.write_expr(array_expr, ctx)?;
-                // Close the vector constructor
-                write!(self.out, ")")?;
-            }
+            // Write the coordinate vector
+            self.write_texture_coord(ctx, vector_size, coordinate, array_index, tex_1d_hack)?;
 
             if vector_size != 1 {
                 // If we used the `lessThan` function we need to separate the
@@ -3236,34 +3239,7 @@ impl<'a, W: Write> Writer<'a, W> {
         }
 
         // Write the coordinate vector
-        match array_index {
-            // If the image needs an array indice we need to add it to the end of our
-            // coordinate vector, to do so we will use the `ivec(ivec, scalar)`
-            // constructor notation (NOTE: the inner `ivec` can also be a scalar, this
-            // is important for 1D arrayed images).
-            Some(layer_expr) => {
-                write!(self.out, "ivec{}(", vector_size)?;
-                self.write_expr(coordinate, ctx)?;
-                write!(self.out, ", ")?;
-                // If we are replacing sampler1D with sampler2D we also need
-                // to add another zero to the coordinates vector for the y component
-                if tex_1d_hack {
-                    write!(self.out, "0, ")?;
-                }
-                self.write_expr(layer_expr, ctx)?;
-                write!(self.out, ")")?;
-            }
-            // Otherwise write just the expression (and the 1D hack if needed)
-            None => {
-                if tex_1d_hack {
-                    write!(self.out, "ivec2(")?;
-                }
-                self.write_expr(coordinate, ctx)?;
-                if tex_1d_hack {
-                    write!(self.out, ", 0.0)")?;
-                }
-            }
-        }
+        self.write_texture_coord(ctx, vector_size, coordinate, array_index, tex_1d_hack)?;
 
         // If we are using `Restrict` bounds checking we need to write the rest of the
         // clamp we initiated before writing the coordinates.
