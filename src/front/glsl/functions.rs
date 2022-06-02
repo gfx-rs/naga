@@ -668,8 +668,16 @@ impl Parser {
                     self.invalidate_expression(ctx, call_argument.0, call_argument.1)?
                 }
 
-                let overload_param_ty = &self.module.types[*overload_parameter].inner;
+                let mut overload_param_ty = &self.module.types[*overload_parameter].inner;
                 let call_arg_ty = self.resolve_type(ctx, call_argument.0, call_argument.1)?;
+
+                // If the argument is to be passed as a pointer, unwrap that pointer before matching.
+                if parameter_info.qualifier.is_lhs() {
+                    overload_param_ty = match overload_param_ty {
+                        &TypeInner::Pointer { base, .. } => &self.module.types[base].inner,
+                        ty => ty,
+                    };
+                }
 
                 // Storage images cannot be directly compared since while the access is part of the
                 // type in naga's IR, in glsl they are a qualifier and don't enter in the match as
@@ -730,12 +738,6 @@ impl Parser {
                     // If the types match there's no need to check for conversions so continue
                     new_conversions[i] = Conversion::Exact;
                     continue;
-                }
-
-                // If the argument is to be passed as a pointer (i.e. either `out` or
-                // `inout` where used as qualifiers) no conversion shall be performed
-                if parameter_info.qualifier.is_lhs() {
-                    continue 'outer;
                 }
 
                 // Try to get the type of conversion needed otherwise this overload can't be used
@@ -1033,8 +1035,11 @@ impl Parser {
         } = self;
 
         // Check if the passed arguments require any special variations
-        let mut variations =
-            builtin_required_variations(ctx.parameters.iter().map(|&arg| &module.types[arg].inner));
+        let mut variations = builtin_required_variations(
+            ctx.arguments.iter().map(|arg| &module.types[arg.ty].inner),
+        );
+
+        let parameters: Vec<Handle<Type>> = ctx.arguments.iter().map(|arg| arg.ty).collect();
 
         // Initiate the declaration if it wasn't previously initialized and inject builtins
         let declaration = lookup_function.entry(name.clone()).or_insert_with(|| {
@@ -1047,7 +1052,6 @@ impl Parser {
             expressions,
             locals,
             arguments,
-            parameters,
             parameters_info,
             ..
         } = ctx;
@@ -1122,8 +1126,11 @@ impl Parser {
         } = self;
 
         // Check if the passed arguments require any special variations
-        let mut variations =
-            builtin_required_variations(ctx.parameters.iter().map(|&arg| &module.types[arg].inner));
+        let mut variations = builtin_required_variations(
+            ctx.arguments.iter().map(|arg| &module.types[arg.ty].inner),
+        );
+
+        let parameters: Vec<Handle<Type>> = ctx.arguments.iter().map(|arg| arg.ty).collect();
 
         // Initiate the declaration if it wasn't previously initialized and inject builtins
         let declaration = lookup_function.entry(name.clone()).or_insert_with(|| {
@@ -1134,7 +1141,6 @@ impl Parser {
 
         let Context {
             arguments,
-            parameters,
             parameters_info,
             ..
         } = ctx;

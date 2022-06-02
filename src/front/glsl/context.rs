@@ -46,7 +46,6 @@ pub struct Context {
     pub locals: Arena<LocalVariable>,
     pub arguments: Vec<FunctionArgument>,
 
-    pub parameters: Vec<Handle<Type>>,
     pub parameters_info: Vec<ParameterInfo>,
 
     //TODO: Find less allocation heavy representation
@@ -66,7 +65,6 @@ impl Context {
             locals: Arena::new(),
             arguments: Vec::new(),
 
-            parameters: Vec::new(),
             parameters_info: Vec::new(),
 
             scopes: vec![FastHashMap::default()],
@@ -273,7 +271,6 @@ impl Context {
             ty,
             binding: None,
         };
-        self.parameters.push(ty);
 
         let opaque = match parser.module.types[ty].inner {
             TypeInner::Image { .. } | TypeInner::Sampler { .. } => true,
