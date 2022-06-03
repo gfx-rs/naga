@@ -133,7 +133,7 @@ impl FromStr for GlslProfileArg {
         Ok(Self(if s.starts_with("core") {
             Version::Desktop(s[4..].parse().unwrap_or(330))
         } else if s.starts_with("es") {
-            Version::Embedded(s[2..].parse().unwrap_or(310))
+            Version::embedded(s[2..].parse().unwrap_or(310))
         } else {
             return Err(format!("Unknown profile: {}", s));
         }))

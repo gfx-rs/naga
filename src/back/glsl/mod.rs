@@ -116,15 +116,23 @@ pub enum Version {
     /// `core` GLSL.
     Desktop(u16),
     /// `es` GLSL.
-    Embedded(u16),
+    Embedded { version: u16, is_webgl: bool },
 }
 
 impl Version {
+    /// Create a new embedded version.
+    pub fn embedded(version: u16) -> Self {
+        Self::Embedded {
+            version,
+            is_webgl: false,
+        }
+    }
+
     /// Returns true if self is `Version::Embedded` (i.e. is a es version)
     const fn is_es(&self) -> bool {
         match *self {
             Version::Desktop(_) => false,
-            Version::Embedded(_) => true,
+            Version::Embedded { .. } => true,
         }
     }
 
@@ -137,7 +145,7 @@ impl Version {
     fn is_supported(&self) -> bool {
         match *self {
             Version::Desktop(v) => SUPPORTED_CORE_VERSIONS.contains(&v),
-            Version::Embedded(v) => SUPPORTED_ES_VERSIONS.contains(&v),
+            Version::Embedded { version: v, .. } => SUPPORTED_ES_VERSIONS.contains(&v),
         }
     }
 
@@ -148,19 +156,19 @@ impl Version {
     /// Note: `location=` for vertex inputs and fragment outputs is supported
     /// unconditionally for GLES 300.
     fn supports_explicit_locations(&self) -> bool {
-        *self >= Version::Embedded(310) || *self >= Version::Desktop(410)
+        *self >= Version::embedded(310) || *self >= Version::Desktop(410)
     }
 
     fn supports_early_depth_test(&self) -> bool {
-        *self >= Version::Desktop(130) || *self >= Version::Embedded(310)
+        *self >= Version::Desktop(130) || *self >= Version::embedded(310)
     }
 
     fn supports_std430_layout(&self) -> bool {
-        *self >= Version::Desktop(430) || *self >= Version::Embedded(310)
+        *self >= Version::Desktop(430) || *self >= Version::embedded(310)
     }
 
     fn supports_fma_function(&self) -> bool {
-        *self >= Version::Desktop(400) || *self >= Version::Embedded(310)
+        *self >= Version::Desktop(400) || *self >= Version::embedded(310)
     }
 }
 
@@ -168,7 +176,9 @@ impl PartialOrd for Version {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         match (*self, *other) {
             (Version::Desktop(x), Version::Desktop(y)) => Some(x.cmp(&y)),
-            (Version::Embedded(x), Version::Embedded(y)) => Some(x.cmp(&y)),
+            (Version::Embedded { version: x, .. }, Version::Embedded { version: y, .. }) => {
+                Some(x.cmp(&y))
+            }
             _ => None,
         }
     }
@@ -178,7 +188,7 @@ impl fmt::Display for Version {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
             Version::Desktop(v) => write!(f, "{} core", v),
-            Version::Embedded(v) => write!(f, "{} es", v),
+            Version::Embedded { version: v, .. } => write!(f, "{} es", v),
         }
     }
 }
@@ -212,7 +222,7 @@ pub struct Options {
 impl Default for Options {
     fn default() -> Self {
         Options {
-            version: Version::Embedded(310),
+            version: Version::embedded(310),
             writer_flags: WriterFlags::ADJUST_COORDINATE_SPACE,
             binding_map: BindingMap::default(),
         }
@@ -230,7 +240,7 @@ pub struct PipelineOptions {
     ///
     /// If no entry point that matches is found while creating a [`Writer`], a error will be thrown.
     pub entry_point: String,
-    /// XYZ
+    /// How many views to render to.
     pub multiview: Option<std::num::NonZeroU32>,
 }
 
@@ -397,7 +407,7 @@ pub struct Writer<'a, W> {
     named_expressions: crate::NamedExpressions,
     /// Set of expressions that need to be baked to avoid unnecessary repetition in output
     need_bake_expressions: back::NeedBakeExpressions,
-    /// XYZ
+    /// How many views to render to, if a vertex shader.
     multiview: Option<std::num::NonZeroU32>,
 }
 
