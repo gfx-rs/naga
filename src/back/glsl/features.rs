@@ -210,9 +210,10 @@ impl FeaturesManager {
 
         if self.0.contains(Features::MULTI_VIEW) {
             if let Version::Embedded { is_webgl: true, .. } = version {
-                // https://github.com/KhronosGroup/GLSL/blob/master/extensions/ext/GL_EXT_multiview.txt
+                // https://www.khronos.org/registry/OpenGL/extensions/OVR/OVR_multiview2.txt
                 writeln!(out, "#extension GL_OVR_multiview2 : require")?;
             } else {
+                // https://github.com/KhronosGroup/GLSL/blob/master/extensions/ext/GL_EXT_multiview.txt
                 writeln!(out, "#extension GL_EXT_multiview : require")?;
             }
         }
