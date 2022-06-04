@@ -121,7 +121,7 @@ pub enum Version {
 
 impl Version {
     /// Create a new embedded version.
-    pub fn embedded(version: u16) -> Self {
+    pub const fn embedded(version: u16) -> Self {
         Self::Embedded {
             version,
             is_webgl: false,
