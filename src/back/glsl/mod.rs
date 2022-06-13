@@ -2894,7 +2894,7 @@ impl<'a, W: Write> Writer<'a, W> {
 
                         let vector_size = match inner {
                             TypeInner::Vector { size, .. } => Some(size),
-                            _ => None
+                            _ => None,
                         };
 
                         let source_kind = inner.scalar_kind().unwrap();
@@ -2902,22 +2902,22 @@ impl<'a, W: Write> Writer<'a, W> {
                             (Sk::Bool, Sk::Float, Some(size)) => match size {
                                 crate::VectorSize::Bi => "vec2",
                                 crate::VectorSize::Tri => "vec3",
-                                crate::VectorSize::Quad => "vec4"
+                                crate::VectorSize::Quad => "vec4",
                             },
                             (Sk::Sint | Sk::Bool, Sk::Uint, Some(size)) => match size {
                                 crate::VectorSize::Bi => "uvec2",
                                 crate::VectorSize::Tri => "uvec3",
-                                crate::VectorSize::Quad => "uvec4"
+                                crate::VectorSize::Quad => "uvec4",
                             },
                             (Sk::Uint | Sk::Bool, Sk::Sint, Some(size)) => match size {
                                 crate::VectorSize::Bi => "ivec2",
                                 crate::VectorSize::Tri => "ivec3",
-                                crate::VectorSize::Quad => "ivec4"
+                                crate::VectorSize::Quad => "ivec4",
                             },
                             (Sk::Uint | Sk::Sint | Sk::Float, Sk::Bool, Some(size)) => match size {
                                 crate::VectorSize::Bi => "bvec2",
                                 crate::VectorSize::Tri => "bvec3",
-                                crate::VectorSize::Quad => "bvec4"
+                                crate::VectorSize::Quad => "bvec4",
                             },
                             (Sk::Float, Sk::Sint, _) => "floatBitsToInt",
                             (Sk::Float, Sk::Uint, _) => "floatBitsToUint",
