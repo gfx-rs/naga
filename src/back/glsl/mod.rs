@@ -2892,29 +2892,54 @@ impl<'a, W: Write> Writer<'a, W> {
                     None => {
                         use crate::ScalarKind as Sk;
 
+                        let vector_size = match inner {
+                            TypeInner::Vector { size, .. } => Some(size),
+                            _ => None
+                        };
+
                         let source_kind = inner.scalar_kind().unwrap();
-                        let conv_op = match (source_kind, target_kind) {
-                            (Sk::Float, Sk::Sint) => "floatBitsToInt",
-                            (Sk::Float, Sk::Uint) => "floatBitsToUint",
-                            (Sk::Sint, Sk::Float) => "intBitsToFloat",
-                            (Sk::Uint, Sk::Float) => "uintBitsToFloat",
+                        let conv_op = match (source_kind, target_kind, vector_size) {
+                            (Sk::Bool, Sk::Float, Some(size)) => match size {
+                                crate::VectorSize::Bi => "vec2",
+                                crate::VectorSize::Tri => "vec3",
+                                crate::VectorSize::Quad => "vec4"
+                            },
+                            (Sk::Sint | Sk::Bool, Sk::Uint, Some(size)) => match size {
+                                crate::VectorSize::Bi => "uvec2",
+                                crate::VectorSize::Tri => "uvec3",
+                                crate::VectorSize::Quad => "uvec4"
+                            },
+                            (Sk::Uint | Sk::Bool, Sk::Sint, Some(size)) => match size {
+                                crate::VectorSize::Bi => "ivec2",
+                                crate::VectorSize::Tri => "ivec3",
+                                crate::VectorSize::Quad => "ivec4"
+                            },
+                            (Sk::Uint | Sk::Sint | Sk::Float, Sk::Bool, Some(size)) => match size {
+                                crate::VectorSize::Bi => "bvec2",
+                                crate::VectorSize::Tri => "bvec3",
+                                crate::VectorSize::Quad => "bvec4"
+                            },
+                            (Sk::Float, Sk::Sint, _) => "floatBitsToInt",
+                            (Sk::Float, Sk::Uint, _) => "floatBitsToUint",
+                            (Sk::Sint, Sk::Float, _) => "intBitsToFloat",
+                            (Sk::Uint, Sk::Float, _) => "uintBitsToFloat",
                             // There is no way to bitcast between Uint/Sint in glsl. Use constructor conversion
-                            (Sk::Uint, Sk::Sint) => "int",
-                            (Sk::Sint, Sk::Uint) => "uint",
+                            (Sk::Uint, Sk::Sint, None) => "int",
+                            (Sk::Sint, Sk::Uint, None) => "uint",
 
-                            (Sk::Bool, Sk::Sint) => "int",
-                            (Sk::Bool, Sk::Uint) => "uint",
-                            (Sk::Bool, Sk::Float) => "float",
+                            (Sk::Bool, Sk::Sint, None) => "int",
+                            (Sk::Bool, Sk::Uint, None) => "uint",
+                            (Sk::Bool, Sk::Float, None) => "float",
 
-                            (Sk::Sint, Sk::Bool) => "bool",
-                            (Sk::Uint, Sk::Bool) => "bool",
-                            (Sk::Float, Sk::Bool) => "bool",
+                            (Sk::Sint, Sk::Bool, None) => "bool",
+                            (Sk::Uint, Sk::Bool, None) => "bool",
+                            (Sk::Float, Sk::Bool, None) => "bool",
 
                             // No conversion needed
-                            (Sk::Sint, Sk::Sint) => "",
-                            (Sk::Uint, Sk::Uint) => "",
-                            (Sk::Float, Sk::Float) => "",
-                            (Sk::Bool, Sk::Bool) => "",
+                            (Sk::Sint, Sk::Sint, _) => "",
+                            (Sk::Uint, Sk::Uint, _) => "",
+                            (Sk::Float, Sk::Float, _) => "",
+                            (Sk::Bool, Sk::Bool, _) => "",
                         };
                         write!(self.out, "{}", conv_op)?;
                         if !conv_op.is_empty() {

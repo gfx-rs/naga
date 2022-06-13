@@ -2739,12 +2739,10 @@ impl<I: Iterator<Item = u32>> Parser<I> {
 
                     let value_lexp = self.lookup_expression.lookup(value_id)?;
                     let ty_lookup = self.lookup_type.lookup(result_type_id)?;
-                    let (kind, width, is_scalar) = match ctx.type_arena[ty_lookup.handle].inner {
-                        crate::TypeInner::Scalar { kind, width } => (kind, width, true),
-                        crate::TypeInner::Vector { kind, width, .. } => (kind, width, false),
-                        crate::TypeInner::Matrix { width, .. } => {
-                            (crate::ScalarKind::Float, width, false)
-                        }
+                    let (kind, width) = match ctx.type_arena[ty_lookup.handle].inner {
+                        crate::TypeInner::Scalar { kind, width }
+                        | crate::TypeInner::Vector { kind, width, .. } => (kind, width),
+                        crate::TypeInner::Matrix { width, .. } => (crate::ScalarKind::Float, width),
                         _ => return Err(Error::InvalidAsType(ty_lookup.handle)),
                     };
 
@@ -2753,8 +2751,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         kind,
                         convert: if kind == crate::ScalarKind::Bool {
                             Some(crate::BOOL_WIDTH)
-                        // If we're bitcasting scalars then we don't need to set the width.
-                        } else if inst.op == Op::Bitcast && is_scalar {
+                        } else if inst.op == Op::Bitcast {
                             None
                         } else {
                             Some(width)
