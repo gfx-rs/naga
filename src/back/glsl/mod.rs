@@ -2892,7 +2892,7 @@ impl<'a, W: Write> Writer<'a, W> {
                     None => {
                         use crate::ScalarKind as Sk;
 
-                        let vector_size = match inner {
+                        let vector_size = match *inner {
                             TypeInner::Vector { size, .. } => Some(size),
                             _ => None,
                         };
