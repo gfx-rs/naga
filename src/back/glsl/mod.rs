@@ -574,7 +574,7 @@ impl<'a, W: Write> Writer<'a, W> {
         }
 
         if self.shader_stage == ShaderStage::Vertex {
-            if let Some(multiview) = &self.options.multiview {
+            if let Some(multiview) = self.options.multiview.as_ref() {
                 writeln!(self.out, "layout(num_views = {}) in;", multiview.num_views)?;
                 writeln!(self.out)?;
             }
