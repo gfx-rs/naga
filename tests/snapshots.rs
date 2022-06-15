@@ -591,6 +591,16 @@ fn convert_spv_all() {
         Targets::HLSL | Targets::WGSL | Targets::METAL,
     );
     convert_spv("degrees", false, Targets::empty());
+    convert_spv(
+        "multiview",
+        true,
+        Targets::GLSL | Targets::WGSL,
+    );
+    convert_spv(
+        "multiview_webgl",
+        true,
+        Targets::GLSL,
+    );
 }
 
 #[cfg(feature = "glsl-in")]

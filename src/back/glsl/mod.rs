@@ -139,6 +139,13 @@ impl Version {
         }
     }
 
+    const fn is_webgl(&self) -> bool {
+        match *self {
+            Version::Desktop(_) => false,
+            Version::Embedded { is_webgl, .. } => is_webgl,
+        }
+    }
+
     /// Checks the list of currently supported versions and returns true if it contains the
     /// specified version
     ///
@@ -297,6 +304,7 @@ struct VaryingName<'a> {
     binding: &'a crate::Binding,
     stage: ShaderStage,
     output: bool,
+    targetting_webgl: bool,
 }
 impl fmt::Display for VaryingName<'_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -314,7 +322,11 @@ impl fmt::Display for VaryingName<'_> {
                 write!(f, "_{}_location{}", prefix, location,)
             }
             crate::Binding::BuiltIn(built_in) => {
-                write!(f, "{}", glsl_built_in(built_in, self.output))
+                write!(
+                    f,
+                    "{}",
+                    glsl_built_in(built_in, self.output, self.targetting_webgl)
+                )
             }
         }
     }
@@ -1203,7 +1215,11 @@ impl<'a, W: Write> Writer<'a, W> {
             } => (location, interpolation, sampling),
             crate::Binding::BuiltIn(built_in) => {
                 if let crate::BuiltIn::Position { invariant: true } = built_in {
-                    writeln!(self.out, "invariant {};", glsl_built_in(built_in, output))?;
+                    writeln!(
+                        self.out,
+                        "invariant {};",
+                        glsl_built_in(built_in, output, self.options.version.is_webgl())
+                    )?;
                 }
                 return Ok(());
             }
@@ -1261,6 +1277,7 @@ impl<'a, W: Write> Writer<'a, W> {
             },
             stage: self.entry_point.stage,
             output,
+            targetting_webgl: self.options.version.is_webgl(),
         };
         writeln!(self.out, " {};", vname)?;
 
@@ -1401,6 +1418,7 @@ impl<'a, W: Write> Writer<'a, W> {
                                 binding: member.binding.as_ref().unwrap(),
                                 stage,
                                 output: false,
+                                targetting_webgl: self.options.version.is_webgl(),
                             };
                             if index != 0 {
                                 write!(self.out, ", ")?;
@@ -1414,6 +1432,7 @@ impl<'a, W: Write> Writer<'a, W> {
                             binding: arg.binding.as_ref().unwrap(),
                             stage,
                             output: false,
+                            targetting_webgl: self.options.version.is_webgl(),
                         };
                         writeln!(self.out, "{};", varying_name)?;
                     }
@@ -1900,6 +1919,7 @@ impl<'a, W: Write> Writer<'a, W> {
                                             binding: member.binding.as_ref().unwrap(),
                                             stage: ep.stage,
                                             output: true,
+                                            targetting_webgl: self.options.version.is_webgl(),
                                         };
                                         write!(self.out, "{} = ", varying_name)?;
 
@@ -1924,6 +1944,7 @@ impl<'a, W: Write> Writer<'a, W> {
                                         binding: result.binding.as_ref().unwrap(),
                                         stage: ep.stage,
                                         output: true,
+                                        targetting_webgl: self.options.version.is_webgl(),
                                     };
                                     write!(self.out, "{} = ", name)?;
                                     self.write_expr(value, ctx)?;
@@ -3592,10 +3613,12 @@ const fn glsl_scalar(
 }
 
 /// Helper function that returns the glsl variable name for a builtin
-const fn glsl_built_in(built_in: crate::BuiltIn, output: bool) -> &'static str {
+const fn glsl_built_in(
+    built_in: crate::BuiltIn,
+    output: bool,
+    targetting_webgl: bool,
+) -> &'static str {
     use crate::BuiltIn as Bi;
-
-    let multiview_ovr = true;
 
     match built_in {
         Bi::Position { .. } => {
@@ -3605,7 +3628,7 @@ const fn glsl_built_in(built_in: crate::BuiltIn, output: bool) -> &'static str {
                 "gl_FragCoord"
             }
         }
-        Bi::ViewIndex if multiview_ovr => "int(gl_ViewID_OVR)",
+        Bi::ViewIndex if targetting_webgl => "int(gl_ViewID_OVR)",
         Bi::ViewIndex => "gl_ViewIndex",
         // vertex
         Bi::BaseInstance => "uint(gl_BaseInstance)",
