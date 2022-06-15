@@ -5,10 +5,7 @@
 		adjust_coordinate_space: true,
 	),
 	glsl: (
-		version: Embedded(
-			version: 300,
-			is_webgl: false
-		),
+		version: Embedded(300),
 		writer_flags: (bits: 0),
 		binding_map: {},
 	),

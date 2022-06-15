@@ -239,16 +239,16 @@ fn backends(c: &mut Criterion) {
         b.iter(|| {
             let mut string = String::new();
             let options = naga::back::glsl::Options {
-                version: naga::back::glsl::Version::embedded(320),
+                version: naga::back::glsl::Version::Embedded(320),
                 writer_flags: naga::back::glsl::WriterFlags::empty(),
                 binding_map: Default::default(),
+                multiview: Default::default(),
             };
             for &(ref module, ref info) in inputs.iter() {
                 for ep in module.entry_points.iter() {
                     let pipeline_options = naga::back::glsl::PipelineOptions {
                         shader_stage: ep.stage,
                         entry_point: ep.name.clone(),
-                        multiview: None,
                     };
                     match naga::back::glsl::Writer::new(
                         &mut string,

@@ -133,7 +133,7 @@ impl FromStr for GlslProfileArg {
         Ok(Self(if s.starts_with("core") {
             Version::Desktop(s[4..].parse().unwrap_or(330))
         } else if s.starts_with("es") {
-            Version::embedded(s[2..].parse().unwrap_or(310))
+            Version::Embedded(s[2..].parse().unwrap_or(310))
         } else {
             return Err(format!("Unknown profile: {}", s));
         }))
@@ -454,7 +454,6 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                         "comp" => naga::ShaderStage::Compute,
                         _ => unreachable!(),
                     },
-                    multiview: None,
                 };
 
                 let mut buffer = String::new();

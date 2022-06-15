@@ -1,10 +1,7 @@
 (
 	god_mode: true,
 	glsl: (
-		version: Embedded(
-			version: 320,
-			is_webgl: false
-		),
+		version: Embedded(320),
 		writer_flags: (bits: 0),
 		binding_map: {},
 	),

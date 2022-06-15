@@ -1,4 +1,4 @@
-use super::{BackendResult, Error, Version, Writer};
+use super::{BackendResult, Error, MultiviewExtension, Version, Writer};
 use crate::{
     AddressSpace, Binding, Bytes, Expression, Handle, ImageClass, ImageDimension, Interpolation,
     MathFunction, Sampling, ScalarKind, ShaderStage, StorageFormat, Type, TypeInner,
@@ -65,7 +65,11 @@ impl FeaturesManager {
     /// Checks that all required [`Features`] are available for the specified
     /// [`Version`](super::Version) otherwise returns an
     /// [`Error::MissingFeatures`](super::Error::MissingFeatures)
-    pub fn check_availability(&self, version: Version) -> BackendResult {
+    pub fn check_availability(
+        &self,
+        version: Version,
+        multiview_extension: Option<MultiviewExtension>,
+    ) -> BackendResult {
         // Will store all the features that are unavailable
         let mut missing = Features::empty();
 
@@ -82,7 +86,7 @@ impl FeaturesManager {
             // Used when both core and es support the feature
             ($feature:ident, $core:literal, $es:literal) => {
                 if self.0.contains(Features::$feature)
-                    && (version < Version::Desktop($core) || version < Version::embedded($es))
+                    && (version < Version::Desktop($core) || version < Version::Embedded($es))
                 {
                     missing |= Features::$feature;
                 }
@@ -106,8 +110,8 @@ impl FeaturesManager {
         check_feature!(CULL_DISTANCE, 450, 300);
         check_feature!(SAMPLE_VARIABLES, 400, 300);
         check_feature!(DYNAMIC_ARRAY_SIZE, 430, 310);
-        match version {
-            Version::Embedded { is_webgl: true, .. } => check_feature!(MULTI_VIEW, 140, 300),
+        match multiview_extension {
+            Some(MultiviewExtension::OvrMultiview2) => check_feature!(MULTI_VIEW, 140, 300),
             _ => check_feature!(MULTI_VIEW, 140, 310),
         };
         // Only available on glsl core, this means that opengl es can't query the number
@@ -130,7 +134,12 @@ impl FeaturesManager {
     /// # Notes
     /// This won't check for feature availability so it might output extensions that aren't even
     /// supported.[`check_availability`](Self::check_availability) will check feature availability
-    pub fn write(&self, version: Version, mut out: impl Write) -> BackendResult {
+    pub fn write(
+        &self,
+        version: Version,
+        multiview_extension: Option<MultiviewExtension>,
+        mut out: impl Write,
+    ) -> BackendResult {
         if self.0.contains(Features::COMPUTE_SHADER) && !version.is_es() {
             // https://www.khronos.org/registry/OpenGL/extensions/ARB/ARB_compute_shader.txt
             writeln!(out, "#extension GL_ARB_compute_shader : require")?;
@@ -215,7 +224,7 @@ impl FeaturesManager {
         }
 
         if self.0.contains(Features::MULTI_VIEW) {
-            if let Version::Embedded { is_webgl: true, .. } = version {
+            if let Some(MultiviewExtension::OvrMultiview2) = multiview_extension {
                 // https://www.khronos.org/registry/OpenGL/extensions/OVR/OVR_multiview2.txt
                 writeln!(out, "#extension GL_OVR_multiview2 : require")?;
             } else {
@@ -224,7 +233,7 @@ impl FeaturesManager {
             }
         }
 
-        if self.0.contains(Features::FMA) && version >= Version::embedded(310) {
+        if self.0.contains(Features::FMA) && version >= Version::Embedded(310) {
             // https://www.khronos.org/registry/OpenGL/extensions/EXT/EXT_gpu_shader5.txt
             writeln!(out, "#extension GL_EXT_gpu_shader5 : require")?;
         }
@@ -277,7 +286,7 @@ impl<'a, W> Writer<'a, W> {
             self.features.request(Features::COMPUTE_SHADER)
         }
 
-        if self.multiview.is_some() {
+        if self.options.multiview.is_some() {
             self.features.request(Features::MULTI_VIEW);
         }
 
@@ -470,7 +479,8 @@ impl<'a, W> Writer<'a, W> {
             }
         }
 
-        self.features.check_availability(self.options.version)
+        self.features
+            .check_availability(self.options.version, self.multiview_extension())
     }
 
     /// Helper method that checks the [`Features`] needed by a scalar
