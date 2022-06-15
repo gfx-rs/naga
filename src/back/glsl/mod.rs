@@ -1526,20 +1526,30 @@ impl<'a, W: Write> Writer<'a, W> {
         arg: Handle<crate::Expression>,
         arg1: Handle<crate::Expression>,
         size: usize,
+        ctx: &back::FunctionCtx<'_>,
     ) -> BackendResult {
+        // Write parantheses around the dot product expression to prevent operators
+        // with different precedences from applying earlier.
         write!(self.out, "(")?;
 
-        let arg0_name = &self.named_expressions[&arg];
-        let arg1_name = &self.named_expressions[&arg1];
-
-        // This will print an extra '+' at the beginning but that is fine in glsl
+        // Cycle trough all the components of the vector
         for index in 0..size {
             let component = back::COMPONENTS[index];
-            write!(
-                self.out,
-                " + {}.{} * {}.{}",
-                arg0_name, component, arg1_name, component
-            )?;
+            // Write the addition to the previous product
+            // This will print an extra '+' at the beginning but that is fine in glsl
+            write!(self.out, " + ")?;
+            // Write the first vector expression, this expression is marked to be
+            // cached so unless it can't be cached (for example, it's a Constant)
+            // it shouldn't produce large expressions.
+            self.write_expr(arg, ctx)?;
+            // Access the current component on the first vector
+            write!(self.out, ".{} * ", component)?;
+            // Write the second vector expression, this expression is marked to be
+            // cached so unless it can't be cached (for example, it's a Constant)
+            // it shouldn't produce large expressions.
+            self.write_expr(arg1, ctx)?;
+            // Access the current component on the second vector
+            write!(self.out, ".{}", component)?;
         }
 
         write!(self.out, ")")?;
@@ -2726,7 +2736,7 @@ impl<'a, W: Write> Writer<'a, W> {
                             ..
                         } => "dot",
                         crate::TypeInner::Vector { size, .. } => {
-                            return self.write_dot_product(arg, arg1.unwrap(), size as usize)
+                            return self.write_dot_product(arg, arg1.unwrap(), size as usize, ctx)
                         }
                         _ => unreachable!(
                             "Correct TypeInner for dot product should be already validated"
@@ -2798,32 +2808,59 @@ impl<'a, W: Write> Writer<'a, W> {
                 let extract_bits = fun == Mf::ExtractBits;
                 let insert_bits = fun == Mf::InsertBits;
 
-                // we might need to cast to unsigned integers since
-                // GLSL's findLSB / findMSB always return signed integers
-                let need_extra_paren = {
-                    (fun == Mf::FindLsb || fun == Mf::FindMsb || fun == Mf::CountOneBits)
-                        && match *ctx.info[arg].ty.inner_with(&self.module.types) {
-                            crate::TypeInner::Scalar {
-                                kind: crate::ScalarKind::Uint,
-                                ..
-                            } => {
-                                write!(self.out, "uint(")?;
-                                true
-                            }
-                            crate::TypeInner::Vector {
-                                kind: crate::ScalarKind::Uint,
-                                size,
-                                ..
-                            } => {
-                                write!(self.out, "uvec{}(", size as u8)?;
-                                true
-                            }
-                            _ => false,
-                        }
+                // Some GLSL functions always return signed integers (like findMSB),
+                // so they need to be cast to uint if the argument is also an uint.
+                let ret_might_need_int_to_uint =
+                    matches!(fun, Mf::FindLsb | Mf::FindMsb | Mf::CountOneBits | Mf::Abs);
+
+                // Some GLSL functions only accept signed integers (like abs),
+                // so they need their argument cast from uint to int.
+                let arg_might_need_uint_to_int = matches!(fun, Mf::Abs);
+
+                // Check if the argument is an unsigned integer and return the vector size
+                // in case it's a vector
+                let maybe_uint_size = match *ctx.info[arg].ty.inner_with(&self.module.types) {
+                    crate::TypeInner::Scalar {
+                        kind: crate::ScalarKind::Uint,
+                        ..
+                    } => Some(None),
+                    crate::TypeInner::Vector {
+                        kind: crate::ScalarKind::Uint,
+                        size,
+                        ..
+                    } => Some(Some(size)),
+                    _ => None,
                 };
 
+                // Cast to uint if the function needs it
+                if ret_might_need_int_to_uint {
+                    if let Some(maybe_size) = maybe_uint_size {
+                        match maybe_size {
+                            Some(size) => write!(self.out, "uvec{}(", size as u8)?,
+                            None => write!(self.out, "uint(")?,
+                        }
+                    }
+                }
+
                 write!(self.out, "{}(", fun_name)?;
+
+                // Cast to int if the function needs it
+                if arg_might_need_uint_to_int {
+                    if let Some(maybe_size) = maybe_uint_size {
+                        match maybe_size {
+                            Some(size) => write!(self.out, "ivec{}(", size as u8)?,
+                            None => write!(self.out, "int(")?,
+                        }
+                    }
+                }
+
                 self.write_expr(arg, ctx)?;
+
+                // Close the cast from uint to int
+                if arg_might_need_uint_to_int && maybe_uint_size.is_some() {
+                    write!(self.out, ")")?
+                }
+
                 if let Some(arg) = arg1 {
                     write!(self.out, ", ")?;
                     if extract_bits {
@@ -2856,7 +2893,8 @@ impl<'a, W: Write> Writer<'a, W> {
                 }
                 write!(self.out, ")")?;
 
-                if need_extra_paren {
+                // Close the cast from int to uint
+                if ret_might_need_int_to_uint && maybe_uint_size.is_some() {
                     write!(self.out, ")")?
                 }
             }
