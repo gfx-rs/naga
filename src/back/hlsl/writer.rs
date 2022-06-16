@@ -661,19 +661,49 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
 
         if global.space == crate::AddressSpace::Uniform {
             write!(self.out, " {{ ")?;
-            // Even though Naga IR matrices are column-major, we must describe
-            // matrices passed from the CPU as being in row-major order.  See
-            // the module-level comments for details.
-            if let TypeInner::Matrix { .. } = module.types[global.ty].inner {
-                write!(self.out, "row_major ")?;
+
+            // We treat matrices of the form `matCx2` as a sequence of C `vec2`s
+            // (see top level module docs for details).
+            if let TypeInner::Matrix {
+                rows: crate::VectorSize::Bi,
+                columns,
+                width,
+            } = module.types[global.ty].inner
+            {
+                let vec_ty = crate::TypeInner::Vector {
+                    size: crate::VectorSize::Bi,
+                    kind: crate::ScalarKind::Float,
+                    width,
+                };
+                let name = &NameKey::GlobalVariable(handle);
+
+                write!(self.out, "struct {{ ")?;
+
+                for i in 0..columns as u8 {
+                    if i != 0 {
+                        write!(self.out, "; ")?;
+                    }
+                    self.write_value_type(module, &vec_ty)?;
+                    write!(self.out, " _{}", i)?;
+                }
+
+                write!(self.out, "; }} {}", &self.names[name])?;
+            } else {
+                // Even though Naga IR matrices are column-major, we must describe
+                // matrices passed from the CPU as being in row-major order.  See
+                // the module-level comments for details.
+                if let TypeInner::Matrix { .. } = module.types[global.ty].inner {
+                    write!(self.out, "row_major ")?;
+                }
+                self.write_type(module, global.ty)?;
+                let sub_name = &self.names[&NameKey::GlobalVariable(handle)];
+                write!(self.out, " {}", sub_name)?;
+                // need to write the array size if the type was emitted with `write_type`
+                if let TypeInner::Array { base, size, .. } = module.types[global.ty].inner {
+                    self.write_array_size(module, base, size)?;
+                }
             }
-            self.write_type(module, global.ty)?;
-            let sub_name = &self.names[&NameKey::GlobalVariable(handle)];
-            write!(self.out, " {}", sub_name)?;
-            // need to write the array size if the type was emitted with `write_type`
-            if let TypeInner::Array { base, size, .. } = module.types[global.ty].inner {
-                self.write_array_size(module, base, size)?;
-            }
+
             writeln!(self.out, "; }}")?;
         } else {
             writeln!(self.out, ";")?;
@@ -2116,6 +2146,39 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         let var_handle = self.fill_access_chain(module, pointer, func_ctx)?;
                         let result_ty = func_ctx.info[expr].ty.clone();
                         self.write_storage_load(module, var_handle, result_ty, func_ctx)?;
+                    }
+                    // We treat matrices of the form `matCx2` as a sequence of C `vec2`s
+                    // (see top level module docs for details).
+                    Some(crate::AddressSpace::Uniform) => {
+                        if let Expression::GlobalVariable(handle) = func_ctx.expressions[pointer] {
+                            let ty = module.global_variables[handle].ty;
+                            match module.types[ty].inner {
+                                TypeInner::Matrix {
+                                    rows: crate::VectorSize::Bi,
+                                    columns,
+                                    ..
+                                } => {
+                                    self.write_type(module, ty)?;
+                                    write!(self.out, "(")?;
+
+                                    let name = &NameKey::GlobalVariable(handle);
+
+                                    for i in 0..columns as u8 {
+                                        if i != 0 {
+                                            write!(self.out, ", ")?;
+                                        }
+                                        write!(self.out, "{}._{}", &self.names[name], i)?;
+                                    }
+
+                                    write!(self.out, ")")?;
+                                }
+                                _ => {
+                                    self.write_expr(module, pointer, func_ctx)?;
+                                }
+                            }
+                        } else {
+                            self.write_expr(module, pointer, func_ctx)?;
+                        }
                     }
                     _ => {
                         self.write_expr(module, pointer, func_ctx)?;

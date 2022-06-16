@@ -54,15 +54,15 @@ kernel void main_(
 , device Foo& alignment [[user(fake0)]]
 , device type_6 const& dummy [[user(fake0)]]
 , constant type_8& float_vecs [[user(fake0)]]
-, constant metal::float4& global_vec [[user(fake0)]]
-, constant metal::float4x4& global_mat [[user(fake0)]]
+, constant metal::float3& global_vec [[user(fake0)]]
+, constant metal::float3x2& global_mat [[user(fake0)]]
 , constant _mslBufferSizes& _buffer_sizes [[user(fake0)]]
 ) {
     float Foo_1 = 1.0;
     bool at = true;
     test_msl_packed_vec3_(alignment);
-    metal::float4x4 _e10 = global_mat;
-    metal::float4 _e11 = global_vec;
+    metal::float3x2 _e10 = global_mat;
+    metal::float3 _e11 = global_vec;
     wg.inner[6] = (_e10 * _e11).x;
     float _e19 = dummy[1].y;
     wg.inner[5] = _e19;

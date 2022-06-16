@@ -10,8 +10,8 @@ groupshared uint at_1;
 RWByteAddressBuffer alignment : register(u1);
 ByteAddressBuffer dummy : register(t2);
 cbuffer float_vecs : register(b3) { float4 float_vecs[20]; }
-cbuffer global_vec : register(b4) { float4 global_vec; }
-cbuffer global_mat : register(b5) { row_major float4x4 global_mat; }
+cbuffer global_vec : register(b4) { float3 global_vec; }
+cbuffer global_mat : register(b5) { struct { float2 _0; float2 _1; float2 _2; } global_mat; }
 
 void test_msl_packed_vec3_as_arg(float3 arg)
 {
@@ -58,8 +58,8 @@ void main()
     bool at = true;
 
     test_msl_packed_vec3_();
-    float4x4 _expr10 = global_mat;
-    float4 _expr11 = global_vec;
+    float3x2 _expr10 = float3x2(global_mat._0, global_mat._1, global_mat._2);
+    float3 _expr11 = global_vec;
     wg[6] = mul(_expr11, _expr10).x;
     float _expr19 = asfloat(dummy.Load(4+8));
     wg[5] = _expr19;

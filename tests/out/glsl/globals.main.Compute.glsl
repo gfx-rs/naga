@@ -19,9 +19,9 @@ layout(std430) readonly buffer type_6_block_1Compute { vec2 _group_0_binding_2_c
 
 uniform type_8_block_2Compute { vec4 _group_0_binding_3_cs[20]; };
 
-uniform type_7_block_3Compute { vec4 _group_0_binding_4_cs; };
+uniform type_4_block_3Compute { vec3 _group_0_binding_4_cs; };
 
-uniform type_9_block_4Compute { mat4x4 _group_0_binding_5_cs; };
+uniform type_9_block_4Compute { mat3x2 _group_0_binding_5_cs; };
 
 
 void test_msl_packed_vec3_as_arg(vec3 arg) {
@@ -49,8 +49,8 @@ void main() {
     float Foo_1 = 1.0;
     bool at = true;
     test_msl_packed_vec3_();
-    mat4x4 _e10 = _group_0_binding_5_cs;
-    vec4 _e11 = _group_0_binding_4_cs;
+    mat3x2 _e10 = _group_0_binding_5_cs;
+    vec3 _e11 = _group_0_binding_4_cs;
     wg[6] = (_e10 * _e11).x;
     float _e19 = _group_0_binding_2_cs[1].y;
     wg[5] = _e19;
