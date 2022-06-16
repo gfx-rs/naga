@@ -1,11 +1,10 @@
 (
 	glsl: (
-        version: Embedded(300),
+        version: Embedded(
+            version: 300,
+            is_webgl: true
+        ),
 		writer_flags: (bits: 0),
         binding_map: {},
-        multiview: Some((
-            num_views: 2,
-            extension: OvrMultiview2
-        ))
-    )
+    ),
 )

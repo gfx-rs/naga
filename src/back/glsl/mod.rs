@@ -119,15 +119,31 @@ pub enum Version {
     /// `core` GLSL.
     Desktop(u16),
     /// `es` GLSL.
-    Embedded(u16),
+    Embedded { version: u16, is_webgl: bool },
 }
 
 impl Version {
+    /// Create a new non-WebGL embedded version
+    pub const fn new_embedded(version: u16) -> Self {
+        Self::Embedded {
+            version,
+            is_webgl: false,
+        }
+    }
+
     /// Returns true if self is `Version::Embedded` (i.e. is a es version)
     const fn is_es(&self) -> bool {
         match *self {
             Version::Desktop(_) => false,
-            Version::Embedded(_) => true,
+            Version::Embedded { .. } => true,
+        }
+    }
+
+    /// Returns true if targetting WebGL
+    const fn is_webgl(&self) -> bool {
+        match *self {
+            Version::Desktop(_) => false,
+            Version::Embedded { is_webgl, .. } => is_webgl,
         }
     }
 
@@ -140,7 +156,7 @@ impl Version {
     fn is_supported(&self) -> bool {
         match *self {
             Version::Desktop(v) => SUPPORTED_CORE_VERSIONS.contains(&v),
-            Version::Embedded(v) => SUPPORTED_ES_VERSIONS.contains(&v),
+            Version::Embedded { version: v, .. } => SUPPORTED_ES_VERSIONS.contains(&v),
         }
     }
 
@@ -151,19 +167,19 @@ impl Version {
     /// Note: `location=` for vertex inputs and fragment outputs is supported
     /// unconditionally for GLES 300.
     fn supports_explicit_locations(&self) -> bool {
-        *self >= Version::Embedded(310) || *self >= Version::Desktop(410)
+        *self >= Version::Desktop(410) || *self >= Version::new_embedded(310)
     }
 
     fn supports_early_depth_test(&self) -> bool {
-        *self >= Version::Desktop(130) || *self >= Version::Embedded(310)
+        *self >= Version::Desktop(130) || *self >= Version::new_embedded(310)
     }
 
     fn supports_std430_layout(&self) -> bool {
-        *self >= Version::Desktop(430) || *self >= Version::Embedded(310)
+        *self >= Version::Desktop(430) || *self >= Version::new_embedded(310)
     }
 
     fn supports_fma_function(&self) -> bool {
-        *self >= Version::Desktop(400) || *self >= Version::Embedded(310)
+        *self >= Version::Desktop(400) || *self >= Version::new_embedded(310)
     }
 }
 
@@ -171,7 +187,9 @@ impl PartialOrd for Version {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         match (*self, *other) {
             (Version::Desktop(x), Version::Desktop(y)) => Some(x.cmp(&y)),
-            (Version::Embedded(x), Version::Embedded(y)) => Some(x.cmp(&y)),
+            (Version::Embedded { version: x, .. }, Version::Embedded { version: y, .. }) => {
+                Some(x.cmp(&y))
+            }
             _ => None,
         }
     }
@@ -181,7 +199,7 @@ impl fmt::Display for Version {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
             Version::Desktop(v) => write!(f, "{} core", v),
-            Version::Embedded(v) => write!(f, "{} es", v),
+            Version::Embedded { version: v, .. } => write!(f, "{} es", v),
         }
     }
 }
@@ -210,39 +228,16 @@ pub struct Options {
     pub writer_flags: WriterFlags,
     /// Map of resources association to binding locations.
     pub binding_map: BindingMap,
-    /// A set of options to use when rendering multiple views.
-    pub multiview: Option<MultiviewOptions>,
 }
 
 impl Default for Options {
     fn default() -> Self {
         Options {
-            version: Version::Embedded(310),
+            version: Version::new_embedded(310),
             writer_flags: WriterFlags::ADJUST_COORDINATE_SPACE,
             binding_map: BindingMap::default(),
-            multiview: None,
         }
     }
-}
-
-/// Which multiview extension to use.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
-#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
-pub enum MultiviewExtension {
-    // Corresponds to the OpenGL `GL_EXT_multiview` extension.
-    GLExtMultiview,
-    // Corresponds to WebGL `OVR_multiview2` extension.
-    OvrMultiview2,
-}
-
-/// A set of options to use when rendering multiple views.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
-#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
-pub struct MultiviewOptions {
-    pub num_views: std::num::NonZeroU32,
-    pub extension: MultiviewExtension,
 }
 
 /// A subset of options meant to be changed per pipeline.
@@ -256,6 +251,8 @@ pub struct PipelineOptions {
     ///
     /// If no entry point that matches is found while creating a [`Writer`], a error will be thrown.
     pub entry_point: String,
+    /// How many views to render to, if doing multiview rendering.
+    pub multiview: Option<std::num::NonZeroU32>,
 }
 
 /// Reflection info for texture mappings and uniforms.
@@ -308,7 +305,7 @@ struct VaryingName<'a> {
     binding: &'a crate::Binding,
     stage: ShaderStage,
     output: bool,
-    multiview_extension: Option<MultiviewExtension>,
+    targetting_webgl: bool,
 }
 impl fmt::Display for VaryingName<'_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -329,7 +326,7 @@ impl fmt::Display for VaryingName<'_> {
                 write!(
                     f,
                     "{}",
-                    glsl_built_in(built_in, self.output, self.multiview_extension)
+                    glsl_built_in(built_in, self.output, self.targetting_webgl)
                 )
             }
         }
@@ -428,7 +425,8 @@ pub struct Writer<'a, W> {
     named_expressions: crate::NamedExpressions,
     /// Set of expressions that need to be baked to avoid unnecessary repetition in output
     need_bake_expressions: back::NeedBakeExpressions,
-    shader_stage: ShaderStage,
+    /// How many views to render to, if doing multiview rendering.
+    multiview: Option<std::num::NonZeroU32>,
 }
 
 impl<'a, W: Write> Writer<'a, W> {
@@ -480,7 +478,7 @@ impl<'a, W: Write> Writer<'a, W> {
             reflection_names_globals: crate::FastHashMap::default(),
             entry_point: &module.entry_points[ep_idx],
             entry_point_idx: ep_idx as u16,
-            shader_stage: pipeline_options.shader_stage,
+            multiview: pipeline_options.multiview,
             block_id: IdGenerator::default(),
             named_expressions: Default::default(),
             need_bake_expressions: Default::default(),
@@ -513,11 +511,7 @@ impl<'a, W: Write> Writer<'a, W> {
         // writing the module saving some loops but some older versions (420 or less) required the
         // extensions to appear before being used, even though extensions are part of the
         // preprocessor not the processor ¯\_(ツ)_/¯
-        self.features.write(
-            self.options.version,
-            self.multiview_extension(),
-            &mut self.out,
-        )?;
+        self.features.write(self.options.version, &mut self.out)?;
 
         // Write the additional extensions
         if self
@@ -573,9 +567,9 @@ impl<'a, W: Write> Writer<'a, W> {
             }
         }
 
-        if self.shader_stage == ShaderStage::Vertex {
-            if let Some(multiview) = self.options.multiview.as_ref() {
-                writeln!(self.out, "layout(num_views = {}) in;", multiview.num_views)?;
+        if self.entry_point.stage == ShaderStage::Vertex {
+            if let Some(multiview) = self.multiview.as_ref() {
+                writeln!(self.out, "layout(num_views = {}) in;", multiview)?;
                 writeln!(self.out)?;
             }
         }
@@ -1223,7 +1217,7 @@ impl<'a, W: Write> Writer<'a, W> {
                     writeln!(
                         self.out,
                         "invariant {};",
-                        glsl_built_in(built_in, output, self.multiview_extension())
+                        glsl_built_in(built_in, output, self.options.version.is_webgl())
                     )?;
                 }
                 return Ok(());
@@ -1282,7 +1276,7 @@ impl<'a, W: Write> Writer<'a, W> {
             },
             stage: self.entry_point.stage,
             output,
-            multiview_extension: self.multiview_extension(),
+            targetting_webgl: self.options.version.is_webgl(),
         };
         writeln!(self.out, " {};", vname)?;
 
@@ -1423,7 +1417,7 @@ impl<'a, W: Write> Writer<'a, W> {
                                 binding: member.binding.as_ref().unwrap(),
                                 stage,
                                 output: false,
-                                multiview_extension: self.multiview_extension(),
+                                targetting_webgl: self.options.version.is_webgl(),
                             };
                             if index != 0 {
                                 write!(self.out, ", ")?;
@@ -1437,7 +1431,7 @@ impl<'a, W: Write> Writer<'a, W> {
                             binding: arg.binding.as_ref().unwrap(),
                             stage,
                             output: false,
-                            multiview_extension: self.multiview_extension(),
+                            targetting_webgl: self.options.version.is_webgl(),
                         };
                         writeln!(self.out, "{};", varying_name)?;
                     }
@@ -1934,7 +1928,7 @@ impl<'a, W: Write> Writer<'a, W> {
                                             binding: member.binding.as_ref().unwrap(),
                                             stage: ep.stage,
                                             output: true,
-                                            multiview_extension: self.multiview_extension(),
+                                            targetting_webgl: self.options.version.is_webgl(),
                                         };
                                         write!(self.out, "{} = ", varying_name)?;
 
@@ -1959,7 +1953,7 @@ impl<'a, W: Write> Writer<'a, W> {
                                         binding: result.binding.as_ref().unwrap(),
                                         stage: ep.stage,
                                         output: true,
-                                        multiview_extension: self.multiview_extension(),
+                                        targetting_webgl: self.options.version.is_webgl(),
                                     };
                                     write!(self.out, "{} = ", name)?;
                                     self.write_expr(value, ctx)?;
@@ -3606,15 +3600,6 @@ impl<'a, W: Write> Writer<'a, W> {
     }
 }
 
-impl<'a, W> Writer<'a, W> {
-    fn multiview_extension(&self) -> Option<MultiviewExtension> {
-        self.options
-            .multiview
-            .as_ref()
-            .map(|multiview| multiview.extension)
-    }
-}
-
 /// Structure returned by [`glsl_scalar`](glsl_scalar)
 ///
 /// It contains both a prefix used in other types and the full type name
@@ -3665,10 +3650,10 @@ const fn glsl_scalar(
 }
 
 /// Helper function that returns the glsl variable name for a builtin
-fn glsl_built_in(
+const fn glsl_built_in(
     built_in: crate::BuiltIn,
     output: bool,
-    multiview_extension: Option<MultiviewExtension>,
+    targetting_webgl: bool,
 ) -> &'static str {
     use crate::BuiltIn as Bi;
 
@@ -3680,9 +3665,7 @@ fn glsl_built_in(
                 "gl_FragCoord"
             }
         }
-        Bi::ViewIndex if multiview_extension == Some(MultiviewExtension::OvrMultiview2) => {
-            "int(gl_ViewID_OVR)"
-        }
+        Bi::ViewIndex if targetting_webgl => "int(gl_ViewID_OVR)",
         Bi::ViewIndex => "gl_ViewIndex",
         // vertex
         Bi::BaseInstance => "uint(gl_BaseInstance)",
