@@ -662,8 +662,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         if global.space == crate::AddressSpace::Uniform {
             write!(self.out, " {{ ")?;
 
-            // We treat matrices of the form `matCx2` as a sequence of C `vec2`s
-            // (see top level module docs for details).
+            // We treat matrices of the form `matCx2` as a sequence of C `vec2`s.
+            // See the module-level block comment in mod.rs for details.
             if let TypeInner::Matrix {
                 rows: crate::VectorSize::Bi,
                 columns,
@@ -690,11 +690,12 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 write!(self.out, "; }} {}", &self.names[name])?;
             } else {
                 // Even though Naga IR matrices are column-major, we must describe
-                // matrices passed from the CPU as being in row-major order.  See
-                // the module-level comments for details.
+                // matrices passed from the CPU as being in row-major order.
+                // See the module-level block comment in mod.rs for details.
                 if let TypeInner::Matrix { .. } = module.types[global.ty].inner {
                     write!(self.out, "row_major ")?;
                 }
+
                 self.write_type(module, global.ty)?;
                 let sub_name = &self.names[&NameKey::GlobalVariable(handle)];
                 write!(self.out, " {}", sub_name)?;
@@ -837,9 +838,14 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     stride: _,
                 } => {
                     // HLSL arrays are written as `type name[size]`
+
+                    // Even though Naga IR matrices are column-major, we must describe
+                    // matrices passed from the CPU as being in row-major order.
+                    // See the module-level block comment in mod.rs for details.
                     if let TypeInner::Matrix { .. } = module.types[base].inner {
                         write!(self.out, "row_major ")?;
                     }
+
                     self.write_type(module, base)?;
                     // Write `name`
                     write!(
@@ -850,8 +856,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     // Write [size]
                     self.write_array_size(module, base, size)?;
                 }
-                // We treat matrices of the form `matCx2` as a sequence of C `vec2`s
-                // (see top level module docs for details).
+                // We treat matrices of the form `matCx2` as a sequence of C `vec2`s.
+                // See the module-level block comment in mod.rs for details.
                 TypeInner::Matrix {
                     rows,
                     columns,
@@ -878,6 +884,9 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         self.write_modifier(binding)?;
                     }
 
+                    // Even though Naga IR matrices are column-major, we must describe
+                    // matrices passed from the CPU as being in row-major order.
+                    // See the module-level block comment in mod.rs for details.
                     if let TypeInner::Matrix { .. } = module.types[member.ty].inner {
                         write!(self.out, "row_major ")?;
                     }
@@ -1353,8 +1362,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     writeln!(self.out, "[_i] = _result[_i];")?;
                     writeln!(self.out, "{}}}", level)?;
                 } else {
-                    // We treat matrices of the form `matCx2` as a sequence of C `vec2`s
-                    // (see top level module docs for details).
+                    // We treat matrices of the form `matCx2` as a sequence of C `vec2`s.
+                    // See the module-level block comment in mod.rs for details.
                     //
                     // We handle matrix Stores here directly (including sub accesses for Vectors and Scalars).
                     // Loads are handled by `Expression::AccessIndex` (since sub accesses work fine for Loads).
@@ -1926,8 +1935,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         _ => base_ty_res.handle(),
                     };
 
-                    // We treat matrices of the form `matCx2` as a sequence of C `vec2`s
-                    // (see top level module docs for details).
+                    // We treat matrices of the form `matCx2` as a sequence of C `vec2`s.
+                    // See the module-level block comment in mod.rs for details.
                     //
                     // We handle matrix reconstruction here for Loads.
                     // Stores are handled directly by `Statement::Store`.
@@ -2147,8 +2156,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         let result_ty = func_ctx.info[expr].ty.clone();
                         self.write_storage_load(module, var_handle, result_ty, func_ctx)?;
                     }
-                    // We treat matrices of the form `matCx2` as a sequence of C `vec2`s
-                    // (see top level module docs for details).
+                    // We treat matrices of the form `matCx2` as a sequence of C `vec2`s.
+                    // See the module-level block comment in mod.rs for details.
                     Some(crate::AddressSpace::Uniform) => {
                         if let Expression::GlobalVariable(handle) = func_ctx.expressions[pointer] {
                             let ty = module.global_variables[handle].ty;

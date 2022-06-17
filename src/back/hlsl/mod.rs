@@ -92,14 +92,10 @@ float3x2 GetMatmOnBaz(Baz obj) {
 We also emit an analogous `Set` function, as well as functions for
 accessing individual columns by dynamic index.
 
-At present, we do not generate correct HLSL when `matCx2<f32>` us used
-directly as the type of a WGSL `uniform` global ([#1837]).
-
 [hlsl]: https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl
 [ilov]: https://gpuweb.github.io/gpuweb/wgsl/#internal-value-layout
 [16bb]: https://github.com/microsoft/DirectXShaderCompiler/wiki/Buffer-Packing#constant-buffer-packing
 [8bb]: https://gpuweb.github.io/gpuweb/wgsl/#alignment-and-size
-[#1837]: https://github.com/gfx-rs/naga/issues/1837
 */
 
 mod conv;
