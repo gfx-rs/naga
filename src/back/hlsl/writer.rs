@@ -662,14 +662,11 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         if global.space == crate::AddressSpace::Uniform {
             write!(self.out, " {{ ")?;
 
+            let matrix_data = get_inner_matrix_data(module, global.ty);
+
             // We treat matrices of the form `matCx2` as a sequence of C `vec2`s.
             // See the module-level block comment in mod.rs for details.
-            if let TypeInner::Matrix {
-                rows: crate::VectorSize::Bi,
-                columns,
-                width,
-            } = module.types[global.ty].inner
-            {
+            if let Some((columns, crate::VectorSize::Bi, width)) = matrix_data {
                 let vec_ty = crate::TypeInner::Vector {
                     size: crate::VectorSize::Bi,
                     kind: crate::ScalarKind::Float,
@@ -692,18 +689,18 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 // Even though Naga IR matrices are column-major, we must describe
                 // matrices passed from the CPU as being in row-major order.
                 // See the module-level block comment in mod.rs for details.
-                let is_matrix = matches!(module.types[global.ty].inner, TypeInner::Matrix { .. });
-                if is_matrix || is_array_of_matrices(module, global.ty) {
+                if matrix_data.is_some() {
                     write!(self.out, "row_major ")?;
                 }
 
                 self.write_type(module, global.ty)?;
                 let sub_name = &self.names[&NameKey::GlobalVariable(handle)];
                 write!(self.out, " {}", sub_name)?;
-                // need to write the array size if the type was emitted with `write_type`
-                if let TypeInner::Array { base, size, .. } = module.types[global.ty].inner {
-                    self.write_array_size(module, base, size)?;
-                }
+            }
+
+            // need to write the array size if the type was emitted with `write_type`
+            if let TypeInner::Array { base, size, .. } = module.types[global.ty].inner {
+                self.write_array_size(module, base, size)?;
             }
 
             writeln!(self.out, "; }}")?;
@@ -843,7 +840,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     // Even though Naga IR matrices are column-major, we must describe
                     // matrices passed from the CPU as being in row-major order.
                     // See the module-level block comment in mod.rs for details.
-                    if is_array_of_matrices(module, member.ty) {
+                    if get_inner_matrix_data(module, member.ty).is_some() {
                         write!(self.out, "row_major ")?;
                     }
 
@@ -1919,11 +1916,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 }
             }
             Expression::AccessIndex { base, index } => {
-                if let Some(crate::AddressSpace::Storage { .. }) = func_ctx.info[expr]
-                    .ty
-                    .inner_with(&module.types)
-                    .pointer_space()
-                {
+                let res_ty = func_ctx.info[expr].ty.inner_with(&module.types);
+                if let Some(crate::AddressSpace::Storage { .. }) = res_ty.pointer_space() {
                     // do nothing, the chain is written on `Load`/`Store`
                 } else {
                     let base_ty_res = &func_ctx.info[base].ty;
@@ -1962,6 +1956,24 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         }
                     };
 
+                    let mut close_paren = false;
+                    if let TypeInner::Pointer {
+                        base,
+                        space: crate::AddressSpace::Uniform,
+                    } = *res_ty
+                    {
+                        if let TypeInner::Matrix {
+                            rows: crate::VectorSize::Bi,
+                            ..
+                        } = module.types[base].inner
+                        {
+                            write!(self.out, "((")?;
+                            self.write_type(module, base)?;
+                            write!(self.out, ")")?;
+                            close_paren = true;
+                        }
+                    }
+
                     self.write_expr(module, base, func_ctx)?;
 
                     match *resolved {
@@ -1987,6 +1999,10 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         ref other => {
                             return Err(Error::Custom(format!("Cannot index {:?}", other)))
                         }
+                    }
+
+                    if close_paren {
+                        write!(self.out, ")")?;
                     }
                 }
             }
@@ -2160,34 +2176,25 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     // We treat matrices of the form `matCx2` as a sequence of C `vec2`s.
                     // See the module-level block comment in mod.rs for details.
                     Some(crate::AddressSpace::Uniform) => {
+                        let mut close_paren = false;
                         if let Expression::GlobalVariable(handle) = func_ctx.expressions[pointer] {
                             let ty = module.global_variables[handle].ty;
-                            match module.types[ty].inner {
-                                TypeInner::Matrix {
-                                    rows: crate::VectorSize::Bi,
-                                    columns,
-                                    ..
-                                } => {
-                                    self.write_type(module, ty)?;
-                                    write!(self.out, "(")?;
-
-                                    let name = &NameKey::GlobalVariable(handle);
-
-                                    for i in 0..columns as u8 {
-                                        if i != 0 {
-                                            write!(self.out, ", ")?;
-                                        }
-                                        write!(self.out, "{}._{}", &self.names[name], i)?;
-                                    }
-
-                                    write!(self.out, ")")?;
-                                }
-                                _ => {
-                                    self.write_expr(module, pointer, func_ctx)?;
-                                }
+                            if let TypeInner::Matrix {
+                                rows: crate::VectorSize::Bi,
+                                ..
+                            } = module.types[ty].inner
+                            {
+                                write!(self.out, "((")?;
+                                self.write_type(module, ty)?;
+                                write!(self.out, ")")?;
+                                close_paren = true;
                             }
-                        } else {
-                            self.write_expr(module, pointer, func_ctx)?;
+                        }
+
+                        self.write_expr(module, pointer, func_ctx)?;
+
+                        if close_paren {
+                            write!(self.out, ")")?;
                         }
                     }
                     _ => {
@@ -2651,12 +2658,17 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
     }
 }
 
-fn is_array_of_matrices(module: &Module, handle: Handle<crate::Type>) -> bool {
+fn get_inner_matrix_data(
+    module: &Module,
+    handle: Handle<crate::Type>,
+) -> Option<(crate::VectorSize, crate::VectorSize, u8)> {
     match module.types[handle].inner {
-        TypeInner::Array { base, .. } => match module.types[base].inner {
-            TypeInner::Matrix { .. } => true,
-            _ => is_array_of_matrices(module, base),
-        },
-        _ => false,
+        TypeInner::Matrix {
+            columns,
+            rows,
+            width,
+        } => Some((columns, rows, width)),
+        TypeInner::Array { base, .. } => get_inner_matrix_data(module, base),
+        _ => None,
     }
 }
