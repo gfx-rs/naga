@@ -2930,7 +2930,7 @@ impl<'a, W: Write> Writer<'a, W> {
                     None => {
                         use crate::ScalarKind as Sk;
 
-                        let target_vector_kind = match *inner {
+                        let target_vector_type = match *inner {
                             TypeInner::Vector { size, width, .. } => Some(TypeInner::Vector {
                                 size,
                                 width,
@@ -2941,7 +2941,7 @@ impl<'a, W: Write> Writer<'a, W> {
 
                         let source_kind = inner.scalar_kind().unwrap();
 
-                        match (source_kind, target_kind, target_vector_kind) {
+                        match (source_kind, target_kind, target_vector_type) {
                             // No conversion needed
                             (Sk::Sint, Sk::Sint, _)
                             | (Sk::Uint, Sk::Uint, _)
