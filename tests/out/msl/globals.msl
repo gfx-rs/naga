@@ -20,8 +20,14 @@ typedef metal::float2 type_6[1];
 struct type_8 {
     metal::float4 inner[20];
 };
+struct type_11 {
+    metal::float4x3 inner[2];
+};
+struct type_12 {
+    type_11 inner[2];
+};
 constant metal::float3 const_type_4_ = {0.0, 0.0, 0.0};
-constant metal::float3x3 const_type_11_ = {const_type_4_, const_type_4_, const_type_4_};
+constant metal::float3x3 const_type_14_ = {const_type_4_, const_type_4_, const_type_4_};
 
 void test_msl_packed_vec3_as_arg(
     metal::float3 arg
@@ -36,14 +42,14 @@ void test_msl_packed_vec3_(
     alignment.v3_ = metal::float3(1.0);
     alignment.v3_[0] = 1.0;
     alignment.v3_[0] = 2.0;
-    int _e21 = idx;
-    alignment.v3_[_e21] = 3.0;
+    int _e22 = idx;
+    alignment.v3_[_e22] = 3.0;
     Foo data = alignment;
     metal::float3 unnamed = data.v3_;
     metal::float2 unnamed_1 = metal::float3(data.v3_).zx;
     test_msl_packed_vec3_as_arg(data.v3_);
-    metal::float3 unnamed_2 = metal::float3(data.v3_) * const_type_11_;
-    metal::float3 unnamed_3 = const_type_11_ * metal::float3(data.v3_);
+    metal::float3 unnamed_2 = metal::float3(data.v3_) * const_type_14_;
+    metal::float3 unnamed_3 = const_type_14_ * metal::float3(data.v3_);
     metal::float3 unnamed_4 = data.v3_ * 2.0;
     metal::float3 unnamed_5 = 2.0 * data.v3_;
 }
@@ -61,17 +67,17 @@ kernel void main_(
     float Foo_1 = 1.0;
     bool at = true;
     test_msl_packed_vec3_(alignment);
-    metal::float3x2 _e10 = global_mat;
-    metal::float3 _e11 = global_vec;
-    wg.inner[6] = (_e10 * _e11).x;
-    float _e19 = dummy[1].y;
-    wg.inner[5] = _e19;
-    float _e25 = float_vecs.inner[0].w;
-    wg.inner[4] = _e25;
-    float _e29 = alignment.v1_;
-    wg.inner[3] = _e29;
-    float _e34 = alignment.v3_[0];
-    wg.inner[2] = _e34;
+    metal::float3x2 _e11 = global_mat;
+    metal::float3 _e12 = global_vec;
+    wg.inner[6] = (_e11 * _e12).x;
+    float _e20 = dummy[1].y;
+    wg.inner[5] = _e20;
+    float _e26 = float_vecs.inner[0].w;
+    wg.inner[4] = _e26;
+    float _e30 = alignment.v1_;
+    wg.inner[3] = _e30;
+    float _e35 = alignment.v3_[0];
+    wg.inner[2] = _e35;
     alignment.v1_ = 4.0;
     wg.inner[1] = static_cast<float>(1 + (_buffer_sizes.size3 - 0 - 8) / 8);
     metal::atomic_store_explicit(&at_1, 2u, metal::memory_order_relaxed);

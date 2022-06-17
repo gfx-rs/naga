@@ -692,7 +692,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 // Even though Naga IR matrices are column-major, we must describe
                 // matrices passed from the CPU as being in row-major order.
                 // See the module-level block comment in mod.rs for details.
-                if let TypeInner::Matrix { .. } = module.types[global.ty].inner {
+                let is_matrix = matches!(module.types[global.ty].inner, TypeInner::Matrix { .. });
+                if is_matrix || is_array_of_matrices(module, global.ty) {
                     write!(self.out, "row_major ")?;
                 }
 
@@ -842,7 +843,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     // Even though Naga IR matrices are column-major, we must describe
                     // matrices passed from the CPU as being in row-major order.
                     // See the module-level block comment in mod.rs for details.
-                    if let TypeInner::Matrix { .. } = module.types[base].inner {
+                    if is_array_of_matrices(module, member.ty) {
                         write!(self.out, "row_major ")?;
                     }
 
@@ -2647,5 +2648,15 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             }
         }
         Ok(())
+    }
+}
+
+fn is_array_of_matrices(module: &Module, handle: Handle<crate::Type>) -> bool {
+    match module.types[handle].inner {
+        TypeInner::Array { base, .. } => match module.types[base].inner {
+            TypeInner::Matrix { .. } => true,
+            _ => is_array_of_matrices(module, base),
+        },
+        _ => false,
     }
 }

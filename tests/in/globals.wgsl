@@ -25,6 +25,9 @@ var<uniform> global_vec: vec3<f32>;
 @group(0) @binding(5)
 var<uniform> global_mat: mat3x2<f32>;
 
+@group(0) @binding(6)
+var<uniform> global_nested_arrays_of_matrices: array<array<mat4x3<f32>, 2>, 2>;
+
 fn test_msl_packed_vec3_as_arg(arg: vec3<f32>) {}
 
 fn test_msl_packed_vec3() {
