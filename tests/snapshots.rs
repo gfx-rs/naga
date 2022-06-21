@@ -79,6 +79,9 @@ struct Parameters {
     hlsl: naga::back::hlsl::Options,
     #[serde(default)]
     wgsl: WgslOutParameters,
+    #[cfg(all(feature = "deserialize", feature = "glsl-out"))]
+    #[serde(default)]
+    glsl_multiview: Option<std::num::NonZeroU32>,
 }
 
 #[allow(unused_variables)]
@@ -162,6 +165,7 @@ fn check_targets(module: &naga::Module, name: &str, targets: Targets) {
                     &ep.name,
                     &params.glsl,
                     params.bounds_check_policies,
+                    params.glsl_multiview,
                 );
             }
         }
@@ -283,6 +287,7 @@ fn write_output_glsl(
     ep_name: &str,
     options: &naga::back::glsl::Options,
     bounds_check_policies: naga::proc::BoundsCheckPolicies,
+    multiview: Option<std::num::NonZeroU32>,
 ) {
     use naga::back::glsl;
 
@@ -291,7 +296,7 @@ fn write_output_glsl(
     let pipeline_options = glsl::PipelineOptions {
         shader_stage: stage,
         entry_point: ep_name.to_string(),
-        multiview: None,
+        multiview,
     };
 
     let mut buffer = String::new();
@@ -532,6 +537,11 @@ fn convert_wgsl() {
             "binding-arrays",
             Targets::WGSL | Targets::HLSL | Targets::METAL | Targets::SPIRV,
         ),
+        ("multiview", Targets::SPIRV | Targets::GLSL | Targets::WGSL),
+        (
+            "multiview_webgl",
+            Targets::SPIRV | Targets::GLSL | Targets::WGSL,
+        ),
     ];
 
     for &(name, targets) in inputs.iter() {
@@ -595,8 +605,6 @@ fn convert_spv_all() {
         Targets::HLSL | Targets::WGSL | Targets::METAL,
     );
     convert_spv("degrees", false, Targets::empty());
-    convert_spv("multiview", true, Targets::GLSL | Targets::WGSL);
-    convert_spv("multiview_webgl", true, Targets::GLSL);
 }
 
 #[cfg(feature = "glsl-in")]
