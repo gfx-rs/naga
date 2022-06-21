@@ -82,7 +82,7 @@ impl FeaturesManager {
             // Used when both core and es support the feature
             ($feature:ident, $core:literal, $es:literal) => {
                 if self.0.contains(Features::$feature)
-                    && (version < Version::Desktop($core) || version < Version::new_embedded($es))
+                    && (version < Version::Desktop($core) || version < Version::new_gles($es))
                 {
                     missing |= Features::$feature;
                 }
@@ -224,7 +224,7 @@ impl FeaturesManager {
             }
         }
 
-        if self.0.contains(Features::FMA) && version >= Version::new_embedded(310) {
+        if self.0.contains(Features::FMA) && version >= Version::new_gles(310) {
             // https://www.khronos.org/registry/OpenGL/extensions/EXT/EXT_gpu_shader5.txt
             writeln!(out, "#extension GL_EXT_gpu_shader5 : require")?;
         }

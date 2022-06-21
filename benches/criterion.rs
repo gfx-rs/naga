@@ -239,7 +239,7 @@ fn backends(c: &mut Criterion) {
         b.iter(|| {
             let mut string = String::new();
             let options = naga::back::glsl::Options {
-                version: naga::back::glsl::Version::new_embedded(320),
+                version: naga::back::glsl::Version::new_gles(320),
                 writer_flags: naga::back::glsl::WriterFlags::empty(),
                 binding_map: Default::default(),
             };

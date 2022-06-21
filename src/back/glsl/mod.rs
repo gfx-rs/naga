@@ -123,8 +123,8 @@ pub enum Version {
 }
 
 impl Version {
-    /// Create a new non-WebGL embedded version
-    pub const fn new_embedded(version: u16) -> Self {
+    /// Create a new gles version
+    pub const fn new_gles(version: u16) -> Self {
         Self::Embedded {
             version,
             is_webgl: false,
@@ -167,19 +167,19 @@ impl Version {
     /// Note: `location=` for vertex inputs and fragment outputs is supported
     /// unconditionally for GLES 300.
     fn supports_explicit_locations(&self) -> bool {
-        *self >= Version::Desktop(410) || *self >= Version::new_embedded(310)
+        *self >= Version::Desktop(410) || *self >= Version::new_gles(310)
     }
 
     fn supports_early_depth_test(&self) -> bool {
-        *self >= Version::Desktop(130) || *self >= Version::new_embedded(310)
+        *self >= Version::Desktop(130) || *self >= Version::new_gles(310)
     }
 
     fn supports_std430_layout(&self) -> bool {
-        *self >= Version::Desktop(430) || *self >= Version::new_embedded(310)
+        *self >= Version::Desktop(430) || *self >= Version::new_gles(310)
     }
 
     fn supports_fma_function(&self) -> bool {
-        *self >= Version::Desktop(400) || *self >= Version::new_embedded(310)
+        *self >= Version::Desktop(400) || *self >= Version::new_gles(310)
     }
 }
 
@@ -233,7 +233,7 @@ pub struct Options {
 impl Default for Options {
     fn default() -> Self {
         Options {
-            version: Version::new_embedded(310),
+            version: Version::new_gles(310),
             writer_flags: WriterFlags::ADJUST_COORDINATE_SPACE,
             binding_map: BindingMap::default(),
         }
@@ -567,7 +567,7 @@ impl<'a, W: Write> Writer<'a, W> {
             }
         }
 
-        if self.entry_point.stage == ShaderStage::Vertex {
+        if self.entry_point.stage == ShaderStage::Vertex && self.options.version.is_webgl() {
             if let Some(multiview) = self.multiview.as_ref() {
                 writeln!(self.out, "layout(num_views = {}) in;", multiview)?;
                 writeln!(self.out)?;
