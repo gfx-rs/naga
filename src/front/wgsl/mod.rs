@@ -34,7 +34,6 @@ use std::{
     borrow::Cow,
     convert::TryFrom,
     io::{self, Write},
-    num::NonZeroU32,
     ops,
 };
 use thiserror::Error;
@@ -140,7 +139,9 @@ pub enum Error<'a> {
     UnknownType(Span),
     UnknownStorageFormat(Span),
     UnknownConservativeDepth(Span),
-    ZeroSizeOrAlign(Span),
+    SizeAttributeTooLow(Span, u32),
+    AlignAttributeTooLow(Span, Alignment),
+    NonPowerOfTwoAlignAttribute(Span),
     InconsistentBinding(Span),
     UnknownLocalFunction(Span),
     TypeNotConstructible(Span),
@@ -366,9 +367,19 @@ impl<'a> Error<'a> {
                 labels: vec![(bad_span.clone(), "unknown type".into())],
                 notes: vec![],
             },
-            Error::ZeroSizeOrAlign(ref bad_span) => ParseError {
-                message: "struct member size or alignment must not be 0".to_string(),
-                labels: vec![(bad_span.clone(), "struct member size or alignment must not be 0".into())],
+            Error::SizeAttributeTooLow(ref bad_span, min_size) => ParseError {
+                message: format!("struct member size must be at least {}", min_size),
+                labels: vec![(bad_span.clone(), format!("must be at least {}", min_size).into())],
+                notes: vec![],
+            },
+            Error::AlignAttributeTooLow(ref bad_span, min_align) => ParseError {
+                message: format!("struct member alignment must be at least {}", min_align),
+                labels: vec![(bad_span.clone(), format!("must be at least {}", min_align).into())],
+                notes: vec![],
+            },
+            Error::NonPowerOfTwoAlignAttribute(ref bad_span) => ParseError {
+                message: "struct member alignment must be a power of 2".to_string(),
+                labels: vec![(bad_span.clone(), "must be a power of 2".into())],
                 notes: vec![],
             },
             Error::InconsistentBinding(ref span) => ParseError {
@@ -1558,7 +1569,7 @@ impl Parser {
                 "bitcast" => {
                     let _ = lexer.next();
                     lexer.expect_generic_paren('<')?;
-                    let ((ty, _access), type_span) = lexer.capture_span(|lexer| {
+                    let (ty, type_span) = lexer.capture_span(|lexer| {
                         self.parse_type_decl(lexer, None, ctx.types, ctx.constants)
                     })?;
                     lexer.expect_generic_paren('>')?;
@@ -2727,11 +2738,11 @@ impl Parser {
         lexer: &mut Lexer<'a>,
         type_arena: &mut UniqueArena<crate::Type>,
         const_arena: &mut Arena<crate::Constant>,
-    ) -> Result<(&'a str, Span, Handle<crate::Type>, crate::StorageAccess), Error<'a>> {
+    ) -> Result<(&'a str, Span, Handle<crate::Type>), Error<'a>> {
         let (name, name_span) = lexer.next_ident_with_span()?;
         lexer.expect(Token::Separator(':'))?;
-        let (ty, access) = self.parse_type_decl(lexer, None, type_arena, const_arena)?;
-        Ok((name, name_span, ty, access))
+        let ty = self.parse_type_decl(lexer, None, type_arena, const_arena)?;
+        Ok((name, name_span, ty))
     }
 
     fn parse_variable_decl<'a>(
@@ -2761,7 +2772,7 @@ impl Parser {
         }
         let name = lexer.next_ident()?;
         lexer.expect(Token::Separator(':'))?;
-        let (ty, _access) = self.parse_type_decl(lexer, None, type_arena, const_arena)?;
+        let ty = self.parse_type_decl(lexer, None, type_arena, const_arena)?;
 
         let init = if lexer.skip(Token::Operation('=')) {
             let handle = self.parse_const_expression(lexer, type_arena, const_arena)?;
@@ -2787,7 +2798,7 @@ impl Parser {
         const_arena: &mut Arena<crate::Constant>,
     ) -> Result<(Vec<crate::StructMember>, u32), Error<'a>> {
         let mut offset = 0;
-        let mut alignment = Alignment::new(1).unwrap();
+        let mut struct_alignment = Alignment::ONE;
         let mut members = Vec::new();
 
         lexer.expect(Token::Paren('{'))?;
@@ -2799,7 +2810,7 @@ impl Parser {
                     ExpectedToken::Token(Token::Separator(',')),
                 ));
             }
-            let (mut size, mut align) = (None, None);
+            let (mut size_attr, mut align_attr) = (None, None);
             self.push_scope(Scope::Attribute, lexer);
             let mut bind_parser = BindingParser::default();
             while lexer.skip(Token::Attribute) {
@@ -2809,20 +2820,22 @@ impl Parser {
                         let (value, span) =
                             lexer.capture_span(Self::parse_non_negative_i32_literal)?;
                         lexer.expect(Token::Paren(')'))?;
-                        size = Some(NonZeroU32::new(value).ok_or(Error::ZeroSizeOrAlign(span))?);
+                        size_attr = Some((value, span));
                     }
                     ("align", _) => {
                         lexer.expect(Token::Paren('('))?;
                         let (value, span) =
                             lexer.capture_span(Self::parse_non_negative_i32_literal)?;
                         lexer.expect(Token::Paren(')'))?;
-                        align = Some(NonZeroU32::new(value).ok_or(Error::ZeroSizeOrAlign(span))?);
+                        align_attr = Some((value, span));
                     }
                     (word, word_span) => bind_parser.parse(lexer, word, word_span)?,
                 }
             }
 
             let bind_span = self.pop_scope(lexer);
+            let mut binding = bind_parser.finish(bind_span)?;
+
             let (name, span) = match lexer.next() {
                 (Token::Word(word), span) => (word, span),
                 other => return Err(Error::Unexpected(other, ExpectedToken::FieldName)),
@@ -2831,29 +2844,57 @@ impl Parser {
                 return Err(Error::ReservedKeyword(span));
             }
             lexer.expect(Token::Separator(':'))?;
-            let (ty, _access) = self.parse_type_decl(lexer, None, type_arena, const_arena)?;
+            let ty = self.parse_type_decl(lexer, None, type_arena, const_arena)?;
             ready = lexer.skip(Token::Separator(','));
 
             self.layouter.update(type_arena, const_arena).unwrap();
 
-            let (range, align) = self.layouter.member_placement(offset, ty, align, size);
-            alignment = alignment.max(align);
-            offset = range.end;
+            let member_min_size = self.layouter[ty].size;
+            let member_min_alignment = self.layouter[ty].alignment;
 
-            let mut binding = bind_parser.finish(bind_span)?;
+            let member_size = if let Some((size, span)) = size_attr {
+                if size < member_min_size {
+                    return Err(Error::SizeAttributeTooLow(span, member_min_size));
+                } else {
+                    size
+                }
+            } else {
+                member_min_size
+            };
+
+            let member_alignment = if let Some((align, span)) = align_attr {
+                if let Some(alignment) = Alignment::new(align) {
+                    if alignment < member_min_alignment {
+                        return Err(Error::AlignAttributeTooLow(span, member_min_alignment));
+                    } else {
+                        alignment
+                    }
+                } else {
+                    return Err(Error::NonPowerOfTwoAlignAttribute(span));
+                }
+            } else {
+                member_min_alignment
+            };
+
+            offset = member_alignment.round_up(offset);
+            struct_alignment = struct_alignment.max(member_alignment);
+
             if let Some(ref mut binding) = binding {
                 binding.apply_default_interpolation(&type_arena[ty].inner);
             }
+
             members.push(crate::StructMember {
                 name: Some(name.to_owned()),
                 ty,
                 binding,
-                offset: range.start,
+                offset,
             });
+
+            offset += member_size;
         }
 
-        let span = Layouter::round_up(alignment, offset);
-        Ok((members, span))
+        let struct_size = struct_alignment.round_up(offset);
+        Ok((members, struct_size))
     }
 
     fn parse_matrix_scalar_type<'a>(
@@ -2958,7 +2999,7 @@ impl Parser {
                 let (ident, span) = lexer.next_ident_with_span()?;
                 let mut space = conv::map_address_space(ident, span)?;
                 lexer.expect(Token::Separator(','))?;
-                let (base, _access) = self.parse_type_decl(lexer, None, type_arena, const_arena)?;
+                let base = self.parse_type_decl(lexer, None, type_arena, const_arena)?;
                 if let crate::AddressSpace::Storage { ref mut access } = space {
                     *access = if lexer.skip(Token::Separator(',')) {
                         lexer.next_storage_access()?
@@ -2971,7 +3012,7 @@ impl Parser {
             }
             "array" => {
                 lexer.expect_generic_paren('<')?;
-                let (base, _access) = self.parse_type_decl(lexer, None, type_arena, const_arena)?;
+                let base = self.parse_type_decl(lexer, None, type_arena, const_arena)?;
                 let size = if lexer.skip(Token::Separator(',')) {
                     let const_handle =
                         self.parse_const_expression(lexer, type_arena, const_arena)?;
@@ -2989,7 +3030,7 @@ impl Parser {
             }
             "binding_array" => {
                 lexer.expect_generic_paren('<')?;
-                let (base, _access) = self.parse_type_decl(lexer, None, type_arena, const_arena)?;
+                let base = self.parse_type_decl(lexer, None, type_arena, const_arena)?;
                 let size = if lexer.skip(Token::Separator(',')) {
                     let const_handle =
                         self.parse_const_expression(lexer, type_arena, const_arena)?;
@@ -3204,7 +3245,7 @@ impl Parser {
         debug_name: Option<&'a str>,
         type_arena: &mut UniqueArena<crate::Type>,
         const_arena: &mut Arena<crate::Constant>,
-    ) -> Result<(Handle<crate::Type>, crate::StorageAccess), Error<'a>> {
+    ) -> Result<Handle<crate::Type>, Error<'a>> {
         self.push_scope(Scope::TypeDecl, lexer);
         let attribute = TypeAttributes::default();
 
@@ -3213,7 +3254,6 @@ impl Parser {
             return Err(Error::Unexpected(other, ExpectedToken::TypeAttribute));
         }
 
-        let storage_access = crate::StorageAccess::default();
         let (name, name_span) = lexer.next_ident_with_span()?;
         let handle = self.parse_type_decl_name(
             lexer,
@@ -3228,7 +3268,7 @@ impl Parser {
         // Only set span if it's the first occurrence of the type.
         // Type spans therefore should only be used for errors in type declarations;
         // use variable spans/expression spans/etc. otherwise
-        Ok((handle, storage_access))
+        Ok(handle)
     }
 
     /// Parse an assignment statement (will also parse increment and decrement statements)
@@ -3456,7 +3496,7 @@ impl Parser {
                             return Err(Error::ReservedKeyword(name_span));
                         }
                         let given_ty = if lexer.skip(Token::Separator(':')) {
-                            let (ty, _access) = self.parse_type_decl(
+                            let ty = self.parse_type_decl(
                                 lexer,
                                 None,
                                 context.types,
@@ -3517,7 +3557,7 @@ impl Parser {
                             return Err(Error::ReservedKeyword(name_span));
                         }
                         let given_ty = if lexer.skip(Token::Separator(':')) {
-                            let (ty, _access) = self.parse_type_decl(
+                            let ty = self.parse_type_decl(
                                 lexer,
                                 None,
                                 context.types,
@@ -4092,7 +4132,7 @@ impl Parser {
                 ));
             }
             let mut binding = self.parse_varying_binding(lexer)?;
-            let (param_name, param_name_span, param_type, _access) =
+            let (param_name, param_name_span, param_type) =
                 self.parse_variable_ident_decl(lexer, &mut module.types, &mut module.constants)?;
             if crate::keywords::wgsl::RESERVED.contains(&param_name) {
                 return Err(Error::ReservedKeyword(param_name_span));
@@ -4122,8 +4162,7 @@ impl Parser {
         // read return type
         let result = if lexer.skip(Token::Arrow) && !lexer.skip(Token::Word("void")) {
             let mut binding = self.parse_varying_binding(lexer)?;
-            let (ty, _access) =
-                self.parse_type_decl(lexer, None, &mut module.types, &mut module.constants)?;
+            let ty = self.parse_type_decl(lexer, None, &mut module.types, &mut module.constants)?;
             if let Some(ref mut binding) = binding {
                 binding.apply_default_interpolation(&module.types[ty].inner);
             }
@@ -4276,7 +4315,7 @@ impl Parser {
             (Token::Word("type"), _) => {
                 let name = lexer.next_ident()?;
                 lexer.expect(Token::Operation('='))?;
-                let (ty, _access) = self.parse_type_decl(
+                let ty = self.parse_type_decl(
                     lexer,
                     Some(name),
                     &mut module.types,
@@ -4300,7 +4339,7 @@ impl Parser {
                     });
                 }
                 let given_ty = if lexer.skip(Token::Separator(':')) {
-                    let (ty, _access) = self.parse_type_decl(
+                    let ty = self.parse_type_decl(
                         lexer,
                         None,
                         &mut module.types,

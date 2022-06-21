@@ -1846,11 +1846,12 @@ impl<'a, W: Write> Writer<'a, W> {
                     let gate_name = self.namer.call("loop_init");
                     writeln!(self.out, "{}bool {} = true;", level, gate_name)?;
                     writeln!(self.out, "{}while(true) {{", level)?;
-                    writeln!(self.out, "{}if (!{}) {{", level.next(), gate_name)?;
+                    let l2 = level.next();
+                    writeln!(self.out, "{}if (!{}) {{", l2, gate_name)?;
                     for sta in continuing {
-                        self.write_stmt(sta, ctx, level.next())?;
+                        self.write_stmt(sta, ctx, l2.next())?;
                     }
-                    writeln!(self.out, "{}}}", level.next())?;
+                    writeln!(self.out, "{}}}", l2)?;
                     writeln!(self.out, "{}{} = false;", level.next(), gate_name)?;
                 } else {
                     writeln!(self.out, "{}while(true) {{", level)?;
@@ -2973,38 +2974,50 @@ impl<'a, W: Write> Writer<'a, W> {
                     None => {
                         use crate::ScalarKind as Sk;
 
-                        let source_kind = inner.scalar_kind().unwrap();
-                        let conv_op = match (source_kind, target_kind) {
-                            (Sk::Float, Sk::Sint) => "floatBitsToInt",
-                            (Sk::Float, Sk::Uint) => "floatBitsToUint",
-                            (Sk::Sint, Sk::Float) => "intBitsToFloat",
-                            (Sk::Uint, Sk::Float) => "uintBitsToFloat",
-                            // There is no way to bitcast between Uint/Sint in glsl. Use constructor conversion
-                            (Sk::Uint, Sk::Sint) => "int",
-                            (Sk::Sint, Sk::Uint) => "uint",
-
-                            (Sk::Bool, Sk::Sint) => "int",
-                            (Sk::Bool, Sk::Uint) => "uint",
-                            (Sk::Bool, Sk::Float) => "float",
-
-                            (Sk::Sint, Sk::Bool) => "bool",
-                            (Sk::Uint, Sk::Bool) => "bool",
-                            (Sk::Float, Sk::Bool) => "bool",
-
-                            // No conversion needed
-                            (Sk::Sint, Sk::Sint) => "",
-                            (Sk::Uint, Sk::Uint) => "",
-                            (Sk::Float, Sk::Float) => "",
-                            (Sk::Bool, Sk::Bool) => "",
+                        let target_vector_type = match *inner {
+                            TypeInner::Vector { size, width, .. } => Some(TypeInner::Vector {
+                                size,
+                                width,
+                                kind: target_kind,
+                            }),
+                            _ => None,
                         };
-                        write!(self.out, "{}", conv_op)?;
-                        if !conv_op.is_empty() {
-                            write!(self.out, "(")?;
-                        }
+
+                        let source_kind = inner.scalar_kind().unwrap();
+
+                        match (source_kind, target_kind, target_vector_type) {
+                            // No conversion needed
+                            (Sk::Sint, Sk::Sint, _)
+                            | (Sk::Uint, Sk::Uint, _)
+                            | (Sk::Float, Sk::Float, _)
+                            | (Sk::Bool, Sk::Bool, _) => {
+                                self.write_expr(expr, ctx)?;
+                                return Ok(());
+                            }
+
+                            // Cast to/from floats
+                            (Sk::Float, Sk::Sint, _) => write!(self.out, "floatBitsToInt")?,
+                            (Sk::Float, Sk::Uint, _) => write!(self.out, "floatBitsToUint")?,
+                            (Sk::Sint, Sk::Float, _) => write!(self.out, "intBitsToFloat")?,
+                            (Sk::Uint, Sk::Float, _) => write!(self.out, "uintBitsToFloat")?,
+
+                            // Cast between vector types
+                            (_, _, Some(vector)) => {
+                                self.write_value_type(&vector)?;
+                            }
+
+                            // There is no way to bitcast between Uint/Sint in glsl. Use constructor conversion
+                            (Sk::Uint | Sk::Bool, Sk::Sint, None) => write!(self.out, "int")?,
+                            (Sk::Sint | Sk::Bool, Sk::Uint, None) => write!(self.out, "uint")?,
+                            (Sk::Bool, Sk::Float, None) => write!(self.out, "float")?,
+                            (Sk::Sint | Sk::Uint | Sk::Float, Sk::Bool, None) => {
+                                write!(self.out, "bool")?
+                            }
+                        };
+
+                        write!(self.out, "(")?;
                         self.write_expr(expr, ctx)?;
-                        if !conv_op.is_empty() {
-                            write!(self.out, ")")?
-                        }
+                        write!(self.out, ")")?;
                     }
                 }
             }
