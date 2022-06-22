@@ -21,7 +21,7 @@ struct type_8 {
     metal::float4 inner[20];
 };
 struct type_11 {
-    metal::float4x4 inner[2];
+    metal::float2x4 inner[2];
 };
 struct type_12 {
     type_11 inner[2];
@@ -68,7 +68,7 @@ kernel void main_(
 , constant type_8& float_vecs [[user(fake0)]]
 , constant metal::float3& global_vec [[user(fake0)]]
 , constant metal::float3x2& global_mat [[user(fake0)]]
-, constant type_12& global_nested_arrays_of_matrices_4x4_ [[user(fake0)]]
+, constant type_12& global_nested_arrays_of_matrices_2x4_ [[user(fake0)]]
 , constant type_15& global_nested_arrays_of_matrices_4x2_ [[user(fake0)]]
 , constant _mslBufferSizes& _buffer_sizes [[user(fake0)]]
 ) {
@@ -76,7 +76,7 @@ kernel void main_(
     bool at = true;
     test_msl_packed_vec3_(alignment);
     metal::float4x2 _e16 = global_nested_arrays_of_matrices_4x2_.inner[0].inner[0];
-    metal::float4 _e23 = global_nested_arrays_of_matrices_4x4_.inner[0].inner[0][0];
+    metal::float4 _e23 = global_nested_arrays_of_matrices_2x4_.inner[0].inner[0][0];
     wg.inner[7] = (_e16 * _e23).x;
     metal::float3x2 _e28 = global_mat;
     metal::float3 _e29 = global_vec;

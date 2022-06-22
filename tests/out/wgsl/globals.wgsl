@@ -18,7 +18,7 @@ var<uniform> global_vec: vec3<f32>;
 @group(0) @binding(5) 
 var<uniform> global_mat: mat3x2<f32>;
 @group(0) @binding(6) 
-var<uniform> global_nested_arrays_of_matrices_4x4_: array<array<mat4x4<f32>,2>,2>;
+var<uniform> global_nested_arrays_of_matrices_2x4_: array<array<mat2x4<f32>,2>,2>;
 @group(0) @binding(7) 
 var<uniform> global_nested_arrays_of_matrices_4x2_: array<array<mat4x2<f32>,2>,2>;
 
@@ -51,7 +51,7 @@ fn main() {
 
     test_msl_packed_vec3_();
     let _e16 = global_nested_arrays_of_matrices_4x2_[0][0];
-    let _e23 = global_nested_arrays_of_matrices_4x4_[0][0][0];
+    let _e23 = global_nested_arrays_of_matrices_2x4_[0][0][0];
     wg[7] = (_e16 * _e23).x;
     let _e28 = global_mat;
     let _e29 = global_vec;

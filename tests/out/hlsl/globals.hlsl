@@ -63,7 +63,7 @@ ByteAddressBuffer dummy : register(t2);
 cbuffer float_vecs : register(b3) { float4 float_vecs[20]; }
 cbuffer global_vec : register(b4) { float3 global_vec; }
 cbuffer global_mat : register(b5) { __mat3x2 global_mat; }
-cbuffer global_nested_arrays_of_matrices_4x4_ : register(b6) { row_major float4x4 global_nested_arrays_of_matrices_4x4_[2][2]; }
+cbuffer global_nested_arrays_of_matrices_2x4_ : register(b6) { row_major float2x4 global_nested_arrays_of_matrices_2x4_[2][2]; }
 cbuffer global_nested_arrays_of_matrices_4x2_ : register(b7) { __mat4x2 global_nested_arrays_of_matrices_4x2_[2][2]; }
 
 void test_msl_packed_vec3_as_arg(float3 arg)
@@ -112,7 +112,7 @@ void main()
 
     test_msl_packed_vec3_();
     float4x2 _expr16 = ((float4x2)global_nested_arrays_of_matrices_4x2_[0][0]);
-    float4 _expr23 = global_nested_arrays_of_matrices_4x4_[0][0][0];
+    float4 _expr23 = global_nested_arrays_of_matrices_2x4_[0][0][0];
     wg[7] = mul(_expr23, _expr16).x;
     float3x2 _expr28 = ((float3x2)global_mat);
     float3 _expr29 = global_vec;

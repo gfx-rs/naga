@@ -13,8 +13,8 @@ OpMemberDecorate %27 0 Offset 0
 OpMemberDecorate %27 1 Offset 12
 OpDecorate %29 ArrayStride 8
 OpDecorate %31 ArrayStride 16
-OpDecorate %34 ArrayStride 64
-OpDecorate %35 ArrayStride 128
+OpDecorate %34 ArrayStride 32
+OpDecorate %35 ArrayStride 64
 OpDecorate %37 ArrayStride 32
 OpDecorate %38 ArrayStride 64
 OpDecorate %46 DescriptorSet 0
@@ -79,7 +79,7 @@ OpMemberDecorate %65 0 Offset 0
 %30 = OpTypeVector %11 4
 %31 = OpTypeArray %30 %7
 %32 = OpTypeMatrix %28 3
-%33 = OpTypeMatrix %30 4
+%33 = OpTypeMatrix %30 2
 %34 = OpTypeArray %33 %9
 %35 = OpTypeArray %34 %9
 %36 = OpTypeMatrix %28 4

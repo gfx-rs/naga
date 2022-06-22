@@ -23,7 +23,7 @@ uniform type_4_block_3Compute { vec3 _group_0_binding_4_cs; };
 
 uniform type_9_block_4Compute { mat3x2 _group_0_binding_5_cs; };
 
-uniform type_12_block_5Compute { mat4x4 _group_0_binding_6_cs[2][2]; };
+uniform type_12_block_5Compute { mat2x4 _group_0_binding_6_cs[2][2]; };
 
 uniform type_15_block_6Compute { mat4x2 _group_0_binding_7_cs[2][2]; };
 
