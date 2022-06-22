@@ -1,5 +1,56 @@
 static const bool Foo_2 = true;
 
+typedef struct { float2 _0; float2 _1; float2 _2; } __mat3x2;
+float2 __get_col_of_mat3x2(__mat3x2 mat, uint idx) {
+    switch(idx) {
+    case 0: { return mat._0; }
+    case 1: { return mat._1; }
+    case 2: { return mat._2; }
+    default: { return (float2)0; }
+    }
+}
+void __set_col_of_mat3x2(__mat3x2 mat, uint idx, float2 value) {
+    switch(idx) {
+    case 0: { mat._0 = value; break; }
+    case 1: { mat._1 = value; break; }
+    case 2: { mat._2 = value; break; }
+    }
+}
+void __set_el_of_mat3x2(__mat3x2 mat, uint idx, uint vec_idx, float value) {
+    switch(idx) {
+    case 0: { mat._0[vec_idx] = value; break; }
+    case 1: { mat._1[vec_idx] = value; break; }
+    case 2: { mat._2[vec_idx] = value; break; }
+    }
+}
+
+typedef struct { float2 _0; float2 _1; float2 _2; float2 _3; } __mat4x2;
+float2 __get_col_of_mat4x2(__mat4x2 mat, uint idx) {
+    switch(idx) {
+    case 0: { return mat._0; }
+    case 1: { return mat._1; }
+    case 2: { return mat._2; }
+    case 3: { return mat._3; }
+    default: { return (float2)0; }
+    }
+}
+void __set_col_of_mat4x2(__mat4x2 mat, uint idx, float2 value) {
+    switch(idx) {
+    case 0: { mat._0 = value; break; }
+    case 1: { mat._1 = value; break; }
+    case 2: { mat._2 = value; break; }
+    case 3: { mat._3 = value; break; }
+    }
+}
+void __set_el_of_mat4x2(__mat4x2 mat, uint idx, uint vec_idx, float value) {
+    switch(idx) {
+    case 0: { mat._0[vec_idx] = value; break; }
+    case 1: { mat._1[vec_idx] = value; break; }
+    case 2: { mat._2[vec_idx] = value; break; }
+    case 3: { mat._3[vec_idx] = value; break; }
+    }
+}
+
 struct Foo {
     float3 v3_;
     float v1_;
@@ -11,9 +62,9 @@ RWByteAddressBuffer alignment : register(u1);
 ByteAddressBuffer dummy : register(t2);
 cbuffer float_vecs : register(b3) { float4 float_vecs[20]; }
 cbuffer global_vec : register(b4) { float3 global_vec; }
-cbuffer global_mat : register(b5) { struct { float2 _0; float2 _1; float2 _2; } global_mat; }
+cbuffer global_mat : register(b5) { __mat3x2 global_mat; }
 cbuffer global_nested_arrays_of_matrices_4x4_ : register(b6) { row_major float4x4 global_nested_arrays_of_matrices_4x4_[2][2]; }
-cbuffer global_nested_arrays_of_matrices_4x2_ : register(b7) { struct { float2 _0; float2 _1; float2 _2; float2 _3; } global_nested_arrays_of_matrices_4x2_[2][2]; }
+cbuffer global_nested_arrays_of_matrices_4x2_ : register(b7) { __mat4x2 global_nested_arrays_of_matrices_4x2_[2][2]; }
 
 void test_msl_packed_vec3_as_arg(float3 arg)
 {
