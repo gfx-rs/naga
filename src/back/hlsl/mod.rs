@@ -279,6 +279,25 @@ pub struct Writer<'a, W> {
     /// Set of expressions that have associated temporary variables
     named_expressions: crate::NamedExpressions,
     wrapped: Wrapped,
+
+    /// A simplified representation of a global variable access chain.
+    ///
+    /// See the [`storage`] module's documentation for background on
+    /// why we need this.
+    ///
+    /// Each [`SubAccess`] is a lowering of some [`Access`] or
+    /// [`AccessIndex`] expression to the level of byte strides and
+    /// offsets. See the [`SubAccess`] docs for details.
+    ///
+    /// To access a composite value, we need to generate a series of
+    /// loads or stores of its individual components. For that, we
+    /// temporarily push a new `SubAccess` for each component, perform
+    /// the access, and then pop it back off.
+    ///
+    /// [`Storage`]: crate::AddressSpace::Storage
+    /// [`SubAccess`]: storage::SubAccess
+    /// [`Access`]: crate::Expression::Access
+    /// [`AccessIndex`]: crate::Expression::AccessIndex
     temp_access_chain: Vec<storage::SubAccess>,
     need_bake_expressions: back::NeedBakeExpressions,
 }

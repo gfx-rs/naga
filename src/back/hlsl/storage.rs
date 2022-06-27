@@ -1,7 +1,30 @@
 /*!
-Logic related to `ByteAddressBuffer` operations.
+Generating accesses to `ByteAddressBuffer` contents.
 
-HLSL backend uses byte address buffers for all storage buffers in IR.
+Naga IR globals in the [`Storage`] address space are rendered as
+`ByteAddressBuffer`s or `RWByteAddressBuffer`s in HLSL. This means
+that we can't use HLSL array element indexing or struct member
+references to access their contents. Instead, we must emit `Load` and
+`Store` calls, and manually compute the byte offset of the value we
+need.
+
+To generate code for a [`Storage`] access:
+
+- Call [`Writer::fill_access_chain`] to prepare for access to a given
+  [`Storage`] value. This populates [`Writer::temp_access_chain`] with
+  the appropriate byte offset calculations.
+
+- Call [`Writer::write_storage_address`] to emit an expression that
+  computes a byte offset.
+
+- You can temporarily push additional steps onto
+  [`Writer::temp_access_chain`] to refer to individual
+  elements/members in a composite access.
+
+[`Storage`]: crate::AddressSpace::Storage
+[`Writer::fill_access_chain`]: super::Writer::fill_access_chain
+[`Writer::write_storage_address`]: super::Writer::write_storage_address
+[`Writer::temp_access_chain`]: super::Writer::temp_access_chain
 */
 
 use super::{super::FunctionCtx, BackendResult, Error};
@@ -14,9 +37,25 @@ use std::{fmt, mem};
 
 const STORE_TEMP_NAME: &str = "_value";
 
+/// One step in accessing a [`Storage`] global's component or element.
+///
+/// [`Writer::temp_access_chain`] holds a series of these structures,
+/// describing how to compute the byte offset of a particular element
+/// or member of some global variable in the [`Storage`] address
+/// space.
+///
+/// [`Writer::temp_access_chain`]: super::Writer::temp_access_chain
+/// [`Storage`]: crate::AddressSpace::Storage
 #[derive(Debug)]
 pub(super) enum SubAccess {
+    /// Add the given byte offset. This is used for struct members, or
+    /// known components of a vector or matrix. In all those cases,
+    /// the byte offset is a compile-time constant.
     Offset(u32),
+
+    /// Scale `value` by `stride`, and add that to the current byte
+    /// offset. This is used to compute the offset of an array element
+    /// whose index is computed at runtime.
     Index {
         value: Handle<crate::Expression>,
         stride: u32,
@@ -83,7 +122,16 @@ impl<W: fmt::Write> super::Writer<'_, W> {
         Ok(())
     }
 
-    /// Helper function to write down the Load operation on a `ByteAddressBuffer`.
+    /// Emit code to access a [`Storage`] global's component.
+    ///
+    /// Emit HLSL to access the component of `var_handle`, a global
+    /// variable in the [`Storage`] address space, whose type is
+    /// `result_ty` and whose location within the global is given by
+    /// [`self.temp_access_chain`]. See the [`storage`] module's
+    /// documentation for background.
+    ///
+    /// [`Storage`]: crate::AddressSpace::Storage
+    /// [`self.temp_access_chain`]: super::Writer::temp_access_chain
     pub(super) fn write_storage_load(
         &mut self,
         module: &crate::Module,
@@ -366,6 +414,17 @@ impl<W: fmt::Write> super::Writer<'_, W> {
         Ok(())
     }
 
+    /// Set [`temp_access_chain`] to compute the byte offset of `cur_expr`.
+    ///
+    /// The `cur_expr` expression must be a reference to a global
+    /// variable in the [`Storage`] address space, or a chain of
+    /// [`Access`] and [`AccessIndex`] expressions referring to some
+    /// component of such a global.
+    ///
+    /// [`temp_access_chain`]: super::Writer::temp_access_chain
+    /// [`Storage`]: crate::AddressSpace::Storage
+    /// [`Access`]: crate::Expression::Access
+    /// [`AccessIndex`]: crate::Expression::AccessIndex
     pub(super) fn fill_access_chain(
         &mut self,
         module: &crate::Module,
