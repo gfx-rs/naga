@@ -540,7 +540,11 @@ fn convert_wgsl() {
         ("multiview", Targets::SPIRV | Targets::GLSL | Targets::WGSL),
         (
             "multiview_webgl",
-            Targets::SPIRV | Targets::GLSL | Targets::WGSL,
+            Targets::GLSL,
+        ),
+        (
+            "break-if",
+            Targets::WGSL | Targets::GLSL | Targets::SPIRV | Targets::HLSL | Targets::METAL,
         ),
     ];
 
