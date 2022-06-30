@@ -538,10 +538,7 @@ fn convert_wgsl() {
             Targets::WGSL | Targets::HLSL | Targets::METAL | Targets::SPIRV,
         ),
         ("multiview", Targets::SPIRV | Targets::GLSL | Targets::WGSL),
-        (
-            "multiview_webgl",
-            Targets::GLSL,
-        ),
+        ("multiview_webgl", Targets::GLSL),
         (
             "break-if",
             Targets::WGSL | Targets::GLSL | Targets::SPIRV | Targets::HLSL | Targets::METAL,
