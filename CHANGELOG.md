@@ -1,6 +1,6 @@
 # Change Log
 
-## v0.9 (TBD)
+## v0.9 (2022-06-30)
 
 - Fix minimal-versions of dependencies ([#1840](https://github.com/gfx-rs/naga/pull/1840)) **@teoxoy**
 - Update MSRV to 1.56 ([#1838](https://github.com/gfx-rs/naga/pull/1838)) **@teoxoy**
