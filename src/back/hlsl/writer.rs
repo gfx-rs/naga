@@ -2517,9 +2517,9 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     Function::Unpack2x16float => {
                         write!(self.out, "float2(f16tof32(")?;
                         self.write_expr(module, arg, func_ctx)?;
-                        write!(self.out, "), f16tof32(")?;
+                        write!(self.out, "), f16tof32((")?;
                         self.write_expr(module, arg, func_ctx)?;
-                        write!(self.out, " >> 16))")?;
+                        write!(self.out, ") >> 16))")?;
                     }
                     Function::Regular(fun_name) => {
                         write!(self.out, "{}(", fun_name)?;
