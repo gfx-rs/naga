@@ -1402,7 +1402,12 @@ impl<W: Write> Writer<W> {
             } => {
                 let inner = func_ctx.info[expr].ty.inner_with(&module.types);
                 match *inner {
-                    TypeInner::Matrix { columns, rows, width, .. } => {
+                    TypeInner::Matrix {
+                        columns,
+                        rows,
+                        width,
+                        ..
+                    } => {
                         let scalar_kind_str = scalar_kind_str(kind, convert.unwrap_or(width));
                         write!(
                             self.out,
