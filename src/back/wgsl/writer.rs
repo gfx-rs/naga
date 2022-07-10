@@ -1402,12 +1402,14 @@ impl<W: Write> Writer<W> {
             } => {
                 let inner = func_ctx.info[expr].ty.inner_with(&module.types);
                 match *inner {
-                    TypeInner::Matrix { columns, rows, .. } => {
+                    TypeInner::Matrix { columns, rows, width, .. } => {
+                        let scalar_kind_str = scalar_kind_str(kind, convert.unwrap_or(width));
                         write!(
                             self.out,
-                            "mat{}x{}<f32>",
+                            "mat{}x{}<{}>",
                             back::vector_size_str(columns),
-                            back::vector_size_str(rows)
+                            back::vector_size_str(rows),
+                            scalar_kind_str
                         )?;
                     }
                     TypeInner::Vector { size, width, .. } => {
@@ -1424,19 +1426,11 @@ impl<W: Write> Writer<W> {
                         }
                     }
                     TypeInner::Scalar { width, .. } => {
-                        let scalar = scalar_kind_str(kind, convert.unwrap_or(width));
+                        let scalar_kind_str = scalar_kind_str(kind, convert.unwrap_or(width));
                         if convert.is_some() {
-                            write!(
-                                self.out,
-                                "{}",
-                                scalar
-                            )?
+                            write!(self.out, "{}", scalar_kind_str)?
                         } else {
-                            write!(
-                                self.out,
-                                "bitcast<{}>",
-                                scalar
-                            )?
+                            write!(self.out, "bitcast<{}>", scalar_kind_str)?
                         }
                     }
                     _ => {
