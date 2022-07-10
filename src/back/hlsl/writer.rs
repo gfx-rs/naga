@@ -623,11 +623,64 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 self.write_type(module, global.ty)?;
                 register
             }
-            crate::AddressSpace::PushConstant => unimplemented!("Push constants"),
+            crate::AddressSpace::PushConstant => {
+                // The type of the push constants will be wrapped in `ConstantBuffer`
+                write!(self.out, "ConstantBuffer<")?;
+                "b"
+            }
         };
+
+        // If the global is a push constant write the type now because it will be a
+        // generic argument to `ConstantBuffer`
+        if global.space == crate::AddressSpace::PushConstant {
+            let matrix_data = get_inner_matrix_data(module, global.ty);
+
+            // We treat matrices of the form `matCx2` as a sequence of C `vec2`s.
+            // See the module-level block comment in mod.rs for details.
+            if let Some(MatrixType {
+                columns,
+                rows: crate::VectorSize::Bi,
+                width: 4,
+            }) = matrix_data
+            {
+                write!(self.out, "__mat{}x2", columns as u8)?;
+            } else {
+                // Even though Naga IR matrices are column-major, we must describe
+                // matrices passed from the CPU as being in row-major order.
+                // See the module-level block comment in mod.rs for details.
+                if matrix_data.is_some() {
+                    write!(self.out, "row_major ")?;
+                }
+
+                self.write_type(module, global.ty)?;
+            }
+
+            // need to write the array size if the type was emitted with `write_type`
+            if let TypeInner::Array { base, size, .. } = module.types[global.ty].inner {
+                self.write_array_size(module, base, size)?;
+            }
+
+            // Close the angled brackets for the generic argument
+            write!(self.out, ">")?;
+        }
 
         let name = &self.names[&NameKey::GlobalVariable(handle)];
         write!(self.out, " {}", name)?;
+
+        // Push constants need to be assigned a binding explicitly by the consumer
+        // since naga has no way to know the binding from the shader alone
+        if global.space == crate::AddressSpace::PushConstant {
+            let target = self
+                .options
+                .push_constants_target
+                .as_ref()
+                .expect("No bind target was defined for the push constants block");
+            write!(self.out, ": register(b{}", target.register)?;
+            if target.space != 0 {
+                write!(self.out, ", space{}", target.space)?;
+            }
+            write!(self.out, ")")?;
+        }
 
         if let Some(ref binding) = global.binding {
             // this was already resolved earlier when we started evaluating an entry point.
