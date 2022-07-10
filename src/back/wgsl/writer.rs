@@ -1424,17 +1424,18 @@ impl<W: Write> Writer<W> {
                         }
                     }
                     TypeInner::Scalar { width, .. } => {
+                        let scalar = scalar_kind_str(kind, convert.unwrap_or(width));
                         if convert.is_some() {
                             write!(
                                 self.out,
                                 "{}",
-                                scalar_kind_str(kind, convert.unwrap_or(width))
+                                scalar
                             )?
                         } else {
                             write!(
                                 self.out,
                                 "bitcast<{}>",
-                                scalar_kind_str(kind, convert.unwrap_or(width))
+                                scalar
                             )?
                         }
                     }
