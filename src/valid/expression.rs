@@ -624,7 +624,7 @@ impl super::Validator {
                         if let Some(expr) = array_index {
                             match *resolver.resolve(expr)? {
                                 Ti::Scalar {
-                                    kind: Sk::Sint,
+                                    kind: Sk::Uint | Sk::Sint,
                                     width: _,
                                 } => {}
                                 _ => return Err(ExpressionError::InvalidImageArrayIndexType(expr)),
@@ -634,7 +634,10 @@ impl super::Validator {
                         match (sample, class.is_multisampled()) {
                             (None, false) => {}
                             (Some(sample), true) => {
-                                if resolver.resolve(sample)?.scalar_kind() != Some(Sk::Sint) {
+                                if !matches!(
+                                    resolver.resolve(sample)?.scalar_kind(),
+                                    Some(Sk::Uint | Sk::Sint),
+                                ) {
                                     return Err(ExpressionError::InvalidImageOtherIndexType(
                                         sample,
                                     ));
@@ -648,7 +651,10 @@ impl super::Validator {
                         match (level, class.is_mipmapped()) {
                             (None, false) => {}
                             (Some(level), true) => {
-                                if resolver.resolve(level)?.scalar_kind() != Some(Sk::Sint) {
+                                if !matches!(
+                                    resolver.resolve(level)?.scalar_kind(),
+                                    Some(Sk::Uint | Sk::Sint),
+                                ) {
                                     return Err(ExpressionError::InvalidImageOtherIndexType(level));
                                 }
                             }
