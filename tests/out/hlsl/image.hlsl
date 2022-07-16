@@ -29,13 +29,13 @@ int2 NagaRWDimensions2D(RWTexture2D<uint4> tex)
 [numthreads(16, 1, 1)]
 void main(uint3 local_id : SV_GroupThreadID)
 {
-    int2 dim = NagaRWDimensions2D(image_storage_src);
-    int2 itc = ((dim * int2(local_id.xy)) % int2(10, 20));
-    uint4 value1_ = image_mipmapped_src.Load(int3(itc, int(local_id.z)));
-    uint4 value2_ = image_multisampled_src.Load(itc, int(local_id.z));
+    uint2 dim = uint2(NagaRWDimensions2D(image_storage_src));
+    uint2 itc = ((dim * local_id.xy) % uint2(10u, 20u));
+    uint4 value1_ = image_mipmapped_src.Load(int3(itc, local_id.z));
+    uint4 value2_ = image_multisampled_src.Load(itc, local_id.z);
     uint4 value4_ = image_storage_src.Load(itc);
-    uint4 value5_ = image_array_src.Load(int4(itc, int(local_id.z), (int(local_id.z) + 1)));
-    uint4 value6_ = image_1d_src.Load(int2(int(local_id.x), int(local_id.z)));
+    uint4 value5_ = image_array_src.Load(int4(itc, local_id.z, (local_id.z + 1u)));
+    uint4 value6_ = image_1d_src.Load(int2(local_id.x, local_id.z));
     image_dst[itc.x] = ((((value1_ + value2_) + value4_) + value5_) + value6_);
     return;
 }
@@ -43,9 +43,9 @@ void main(uint3 local_id : SV_GroupThreadID)
 [numthreads(16, 1, 1)]
 void depth_load(uint3 local_id_1 : SV_GroupThreadID)
 {
-    int2 dim_1 = NagaRWDimensions2D(image_storage_src);
-    int2 itc_1 = ((dim_1 * int2(local_id_1.xy)) % int2(10, 20));
-    float val = image_depth_multisampled_src.Load(itc_1, int(local_id_1.z)).x;
+    uint2 dim_1 = uint2(NagaRWDimensions2D(image_storage_src));
+    uint2 itc_1 = ((dim_1 * local_id_1.xy) % uint2(10u, 20u));
+    float val = image_depth_multisampled_src.Load(itc_1, local_id_1.z).x;
     image_dst[itc_1.x] = (uint(val)).xxxx;
     return;
 }
