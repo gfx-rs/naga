@@ -238,27 +238,38 @@ impl<E> WithSpan<E> {
     }
 
     #[cfg(feature = "span")]
-    fn diagnostic(&self) -> codespan_reporting::diagnostic::Diagnostic<()> {
+    fn diagnostic(&self) -> codespan_reporting::diagnostic::Diagnostic<()>
+    where
+        E: std::fmt::Display,
+    {
         use codespan_reporting::diagnostic::{Diagnostic, Label};
-        let diagnostic = Diagnostic::error().with_labels(
-            self.spans()
-                .map(|&(span, ref desc)| {
-                    Label::primary((), span.to_range().unwrap()).with_message(desc.to_owned())
-                })
-                .collect(),
-        );
+        let diagnostic = Diagnostic::error()
+            .with_message(self.inner.to_string())
+            .with_labels(
+                self.spans()
+                    .map(|&(span, ref desc)| {
+                        Label::primary((), span.to_range().unwrap()).with_message(desc.to_owned())
+                    })
+                    .collect(),
+            );
         diagnostic
     }
 
     /// Emits a summary of the error to standard error stream.
     #[cfg(feature = "span")]
-    pub fn emit_to_stderr(&self, source: &str) {
+    pub fn emit_to_stderr(&self, source: &str)
+    where
+        E: std::fmt::Display,
+    {
         self.emit_to_stderr_with_path(source, "wgsl")
     }
 
     /// Emits a summary of the error to standard error stream.
     #[cfg(feature = "span")]
-    pub fn emit_to_stderr_with_path(&self, source: &str, path: &str) {
+    pub fn emit_to_stderr_with_path(&self, source: &str, path: &str)
+    where
+        E: std::fmt::Display,
+    {
         use codespan_reporting::{files, term};
         use term::termcolor::{ColorChoice, StandardStream};
 
@@ -271,13 +282,19 @@ impl<E> WithSpan<E> {
 
     /// Emits a summary of the error to a string.
     #[cfg(feature = "span")]
-    pub fn emit_to_string(&self, source: &str) -> String {
+    pub fn emit_to_string(&self, source: &str) -> String
+    where
+        E: std::fmt::Display,
+    {
         self.emit_to_string_with_path(source, "wgsl")
     }
 
     /// Emits a summary of the error to a string.
     #[cfg(feature = "span")]
-    pub fn emit_to_string_with_path(&self, source: &str, path: &str) -> String {
+    pub fn emit_to_string_with_path(&self, source: &str, path: &str) -> String
+    where
+        E: std::fmt::Display,
+    {
         use codespan_reporting::{files, term};
         use term::termcolor::NoColor;
 
