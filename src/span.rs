@@ -236,6 +236,52 @@ impl<E> WithSpan<E> {
     pub fn location(&self, _source: &str) -> Option<SourceLocation> {
         None
     }
+
+    fn diagnostic(&self) -> codespan_reporting::diagnostic::Diagnostic<()> {
+        use codespan_reporting::diagnostic::{Diagnostic, Label};
+        let diagnostic = Diagnostic::error().with_labels(
+            self.spans()
+                .map(|&(span, ref desc)| {
+                    Label::primary((), span.to_range().unwrap()).with_message(desc.to_owned())
+                })
+                .collect(),
+        );
+        diagnostic
+    }
+
+    /// Emits a summary of the error to standard error stream.
+    pub fn emit_to_stderr(&self, source: &str) {
+        self.emit_to_stderr_with_path(source, "wgsl")
+    }
+
+    /// Emits a summary of the error to standard error stream.
+    pub fn emit_to_stderr_with_path(&self, source: &str, path: &str) {
+        use codespan_reporting::{files, term};
+        use term::termcolor::{ColorChoice, StandardStream};
+
+        let files = files::SimpleFile::new(path, source);
+        let config = term::Config::default();
+        let writer = StandardStream::stderr(ColorChoice::Auto);
+        term::emit(&mut writer.lock(), &config, &files, &self.diagnostic())
+            .expect("cannot write error");
+    }
+
+    /// Emits a summary of the error to a string.
+    pub fn emit_to_string(&self, source: &str) -> String {
+        self.emit_to_string_with_path(source, "wgsl")
+    }
+
+    /// Emits a summary of the error to a string.
+    pub fn emit_to_string_with_path(&self, source: &str, path: &str) -> String {
+        use codespan_reporting::{files, term};
+        use term::termcolor::NoColor;
+
+        let files = files::SimpleFile::new(path, source);
+        let config = codespan_reporting::term::Config::default();
+        let mut writer = NoColor::new(Vec::new());
+        term::emit(&mut writer, &config, &files, &self.diagnostic()).expect("cannot write error");
+        String::from_utf8(writer.into_inner()).unwrap()
+    }
 }
 
 /// Convenience trait for [`Error`] to be able to apply spans to anything.
