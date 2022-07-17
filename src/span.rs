@@ -237,6 +237,7 @@ impl<E> WithSpan<E> {
         None
     }
 
+    #[cfg(feature = "span")]
     fn diagnostic(&self) -> codespan_reporting::diagnostic::Diagnostic<()> {
         use codespan_reporting::diagnostic::{Diagnostic, Label};
         let diagnostic = Diagnostic::error().with_labels(
@@ -250,11 +251,13 @@ impl<E> WithSpan<E> {
     }
 
     /// Emits a summary of the error to standard error stream.
+    #[cfg(feature = "span")]
     pub fn emit_to_stderr(&self, source: &str) {
         self.emit_to_stderr_with_path(source, "wgsl")
     }
 
     /// Emits a summary of the error to standard error stream.
+    #[cfg(feature = "span")]
     pub fn emit_to_stderr_with_path(&self, source: &str, path: &str) {
         use codespan_reporting::{files, term};
         use term::termcolor::{ColorChoice, StandardStream};
@@ -267,11 +270,13 @@ impl<E> WithSpan<E> {
     }
 
     /// Emits a summary of the error to a string.
+    #[cfg(feature = "span")]
     pub fn emit_to_string(&self, source: &str) -> String {
         self.emit_to_string_with_path(source, "wgsl")
     }
 
     /// Emits a summary of the error to a string.
+    #[cfg(feature = "span")]
     pub fn emit_to_string_with_path(&self, source: &str, path: &str) -> String {
         use codespan_reporting::{files, term};
         use term::termcolor::NoColor;
