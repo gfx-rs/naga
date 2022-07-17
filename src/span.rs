@@ -240,7 +240,7 @@ impl<E> WithSpan<E> {
     #[cfg(feature = "span")]
     fn diagnostic(&self) -> codespan_reporting::diagnostic::Diagnostic<()>
     where
-        E: std::fmt::Display,
+        E: Error,
     {
         use codespan_reporting::diagnostic::{Diagnostic, Label};
         let diagnostic = Diagnostic::error()
@@ -251,7 +251,16 @@ impl<E> WithSpan<E> {
                         Label::primary((), span.to_range().unwrap()).with_message(desc.to_owned())
                     })
                     .collect(),
-            );
+            )
+            .with_notes({
+                let mut notes = Vec::new();
+                let mut source: &dyn Error = &self.inner;
+                while let Some(next) = Error::source(source) {
+                    notes.push(next.to_string());
+                    source = next;
+                }
+                notes
+            });
         diagnostic
     }
 
@@ -259,7 +268,7 @@ impl<E> WithSpan<E> {
     #[cfg(feature = "span")]
     pub fn emit_to_stderr(&self, source: &str)
     where
-        E: std::fmt::Display,
+        E: Error,
     {
         self.emit_to_stderr_with_path(source, "wgsl")
     }
@@ -268,7 +277,7 @@ impl<E> WithSpan<E> {
     #[cfg(feature = "span")]
     pub fn emit_to_stderr_with_path(&self, source: &str, path: &str)
     where
-        E: std::fmt::Display,
+        E: Error,
     {
         use codespan_reporting::{files, term};
         use term::termcolor::{ColorChoice, StandardStream};
@@ -284,7 +293,7 @@ impl<E> WithSpan<E> {
     #[cfg(feature = "span")]
     pub fn emit_to_string(&self, source: &str) -> String
     where
-        E: std::fmt::Display,
+        E: Error,
     {
         self.emit_to_string_with_path(source, "wgsl")
     }
@@ -293,7 +302,7 @@ impl<E> WithSpan<E> {
     #[cfg(feature = "span")]
     pub fn emit_to_string_with_path(&self, source: &str, path: &str) -> String
     where
-        E: std::fmt::Display,
+        E: Error,
     {
         use codespan_reporting::{files, term};
         use term::termcolor::NoColor;
