@@ -556,7 +556,7 @@ pub enum ImageClass {
 }
 
 /// A data type declared in the module.
-#[derive(Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 #[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
@@ -568,7 +568,7 @@ pub struct Type {
 }
 
 /// Enum with additional information, depending on the kind of type.
-#[derive(Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 #[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
@@ -744,7 +744,7 @@ pub enum TypeInner {
 }
 
 /// Constant value.
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 #[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
@@ -1582,7 +1582,7 @@ pub struct FunctionResult {
 }
 
 /// A function defined in the module.
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 #[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
@@ -1646,7 +1646,7 @@ pub struct Function {
 /// [`Location`]: Binding::Location
 /// [`function`]: EntryPoint::function
 /// [`stage`]: EntryPoint::stage
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 #[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
@@ -1676,7 +1676,7 @@ pub struct EntryPoint {
 /// Alternatively, you can load an existing shader using one of the [available front ends][front].
 ///
 /// When finished, you can export modules using one of the [available backends][back].
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 #[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
