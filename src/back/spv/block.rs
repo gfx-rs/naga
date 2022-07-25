@@ -1087,18 +1087,22 @@ impl<'w> BlockContext<'w> {
                     }
                 };
 
-                let id = self.gen_id();
-                let instruction = match cast {
-                    Cast::Unary(op) => Instruction::unary(op, result_type_id, id, expr_id),
-                    Cast::Binary(op, operand) => {
-                        Instruction::binary(op, result_type_id, id, expr_id, operand)
-                    }
-                    Cast::Ternary(op, op1, op2) => {
-                        Instruction::ternary(op, result_type_id, id, expr_id, op1, op2)
-                    }
-                };
-                block.body.push(instruction);
-                id
+                if src_kind == kind {
+                    expr_id
+                } else {
+                    let id = self.gen_id();
+                    let instruction = match cast {
+                        Cast::Unary(op) => Instruction::unary(op, result_type_id, id, expr_id),
+                        Cast::Binary(op, operand) => {
+                            Instruction::binary(op, result_type_id, id, expr_id, operand)
+                        }
+                        Cast::Ternary(op, op1, op2) => {
+                            Instruction::ternary(op, result_type_id, id, expr_id, op1, op2)
+                        }
+                    };
+                    block.body.push(instruction);
+                    id
+                }
             }
             crate::Expression::ImageLoad {
                 image,
