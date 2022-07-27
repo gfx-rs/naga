@@ -159,6 +159,11 @@ pub enum HirExprKind {
         /// The target expression
         expr: Handle<HirExpr>,
     },
+    /// a .length() on an array
+    GetLength {
+        /// the array
+        array: Handle<HirExpr>,
+    },
 }
 
 #[derive(Debug, Hash, PartialEq, Eq)]

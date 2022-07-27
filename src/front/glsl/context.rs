@@ -1366,6 +1366,14 @@ impl Context {
                     value
                 }
             }
+            HirExprKind::GetLength { array } if ExprPos::Lhs != pos => {
+                let lowered_array = self.lower_expect_inner(stmt, parser, array, pos, body)?.0;
+                self.add_expression(
+                    Expression::ArrayLength(lowered_array),
+                    stmt.hir_exprs[expr].meta,
+                    body,
+                )
+            }
             _ => {
                 return Err(Error {
                     kind: ErrorKind::SemanticError(

@@ -231,6 +231,23 @@ impl<'source> ParsingContext<'source> {
                 TokenValue::Dot => {
                     let (field, end_meta) = self.expect_ident(parser)?;
 
+                    if let Some(tok) = self.peek(parser) {
+                        if tok.value == TokenValue::LeftParen && field == "length" {
+                            let _l_paren = self.expect(parser, TokenValue::LeftParen)?;
+                            let r_paren = self.expect(parser, TokenValue::RightParen)?;
+                            // can be sure we are trying to access .length() now
+                            meta.subsume(r_paren.meta);
+                            base = stmt.hir_exprs.append(
+                                HirExpr {
+                                    kind: HirExprKind::GetLength { array: base },
+                                    meta,
+                                },
+                                Default::default(),
+                            );
+                            continue;
+                        }
+                    }
+
                     meta.subsume(end_meta);
                     base = stmt.hir_exprs.append(
                         HirExpr {
