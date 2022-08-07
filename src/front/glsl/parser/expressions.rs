@@ -232,14 +232,55 @@ impl<'source> ParsingContext<'source> {
                     let (field, end_meta) = self.expect_ident(parser)?;
 
                     if let Some(tok) = self.peek(parser) {
-                        if tok.value == TokenValue::LeftParen && field == "length" {
+                        if tok.value == TokenValue::LeftParen {
                             let _l_paren = self.expect(parser, TokenValue::LeftParen)?;
-                            let r_paren = self.expect(parser, TokenValue::RightParen)?;
-                            // can be sure we are trying to access .length() now
-                            meta.subsume(r_paren.meta);
+
+                            let mut args = vec![];
+                            loop {
+                                let next = self.expect_peek(parser)?;
+                                match next.value {
+                                    TokenValue::RightParen => {
+                                        let r_paren =
+                                            self.expect(parser, TokenValue::RightParen)?;
+                                        meta.subsume(r_paren.meta);
+                                        break;
+                                    }
+                                    _ => {
+                                        let expr =
+                                            self.parse_expression(parser, ctx, stmt, body)?;
+                                        args.push(expr);
+                                    }
+                                }
+                                let tok = self.bump(parser)?;
+                                match tok.value {
+                                    TokenValue::Comma => {
+                                        continue;
+                                    }
+                                    TokenValue::RightParen => {
+                                        meta.subsume(tok.meta);
+                                        break;
+                                    }
+                                    _ => {
+                                        return Err(Error {
+                                            kind: ErrorKind::InvalidToken(
+                                                tok.value,
+                                                vec![
+                                                    ExpectedToken::Token(TokenValue::Comma),
+                                                    ExpectedToken::Token(TokenValue::RightParen),
+                                                ],
+                                            ),
+                                            meta: tok.meta,
+                                        })
+                                    }
+                                }
+                            }
                             base = stmt.hir_exprs.append(
                                 HirExpr {
-                                    kind: HirExprKind::GetLength { array: base },
+                                    kind: HirExprKind::Method {
+                                        object: base,
+                                        name: field,
+                                        args,
+                                    },
                                     meta,
                                 },
                                 Default::default(),

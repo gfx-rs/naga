@@ -159,10 +159,14 @@ pub enum HirExprKind {
         /// The target expression
         expr: Handle<HirExpr>,
     },
-    /// a .length() on an array
-    GetLength {
-        /// the array
-        array: Handle<HirExpr>,
+    /// a `what.something(a, b, c)`
+    Method {
+        /// the object the method is being called on (`what` in the example)
+        object: Handle<HirExpr>,
+        /// the method name (`something` in the example)
+        name: String,
+        /// the arguments to the method (`a`, `b`, and `c` in the example)
+        args: Vec<Handle<HirExpr>>,
     },
 }
 

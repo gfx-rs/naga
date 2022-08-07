@@ -1366,13 +1366,41 @@ impl Context {
                     value
                 }
             }
-            HirExprKind::GetLength { array } if ExprPos::Lhs != pos => {
-                let lowered_array = self.lower_expect_inner(stmt, parser, array, pos, body)?.0;
-                self.add_expression(
-                    Expression::ArrayLength(lowered_array),
-                    stmt.hir_exprs[expr].meta,
-                    body,
-                )
+            HirExprKind::Method {
+                object,
+                ref name,
+                ref args,
+            } if ExprPos::Lhs != pos => {
+                if name == "length" {
+                    if !args.is_empty() {
+                        return Err(Error {
+                            kind: ErrorKind::SemanticError(
+                                ".length() doesn't take any arguments".into(),
+                            ),
+                            meta,
+                        });
+                    }
+                    let lowered_array = self.lower_expect_inner(stmt, parser, object, pos, body)?.0;
+                    let array_length = self.add_expression(
+                        Expression::ArrayLength(lowered_array),
+                        stmt.hir_exprs[expr].meta,
+                        body,
+                    );
+                    self.add_expression(
+                        Expression::As {
+                            expr: array_length,
+                            kind: ScalarKind::Sint,
+                            convert: None,
+                        },
+                        stmt.hir_exprs[expr].meta,
+                        body,
+                    )
+                } else {
+                    return Err(Error {
+                        kind: ErrorKind::SemanticError("unknown method".into()),
+                        meta,
+                    });
+                }
             }
             _ => {
                 return Err(Error {
