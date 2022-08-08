@@ -1412,13 +1412,7 @@ impl Context {
                                     meta,
                                     body,
                                 );
-                                self.forced_conversion(
-                                    parser,
-                                    &mut array_length,
-                                    meta,
-                                    ScalarKind::Sint,
-                                    4,
-                                )?;
+                                self.conversion(&mut array_length, meta, ScalarKind::Sint, 4)?;
                                 array_length
                             }
                         }
