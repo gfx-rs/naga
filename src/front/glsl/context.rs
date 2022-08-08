@@ -1387,61 +1387,41 @@ impl Context {
                         }
                         let lowered_array =
                             self.lower_expect_inner(stmt, parser, object, pos, body)?.0;
-                        let array_type = parser.resolve_type_handle(self, lowered_array, meta)?;
-                        fn handle_type(
-                            this: &mut Context,
-                            t: Handle<Type>,
-                            array: Handle<Expression>,
-                            meta: Span,
-                            body: &mut Block,
-                            parser: &Parser,
-                        ) -> Result<Handle<Expression>> {
-                            let t = &parser.module.types[t];
-                            match t.inner {
-                                TypeInner::Array {
-                                    size: crate::ArraySize::Constant(size),
-                                    ..
-                                } => {
-                                    let mut array_length =
-                                        this.add_expression(Expression::Constant(size), meta, body);
-                                    this.forced_conversion(
-                                        parser,
-                                        &mut array_length,
-                                        meta,
-                                        ScalarKind::Sint,
-                                        4,
-                                    )?;
-                                    Ok(array_length)
-                                }
-                                TypeInner::Pointer { base, .. } => {
-                                    handle_type(this, base, array, meta, body, parser)
-                                }
-                                // let the error be handled in type checking if it's not a dynamic array
-                                _ => {
-                                    let mut array_length = this.add_expression(
-                                        Expression::ArrayLength(array),
-                                        meta,
-                                        body,
-                                    );
-                                    this.forced_conversion(
-                                        parser,
-                                        &mut array_length,
-                                        meta,
-                                        ScalarKind::Sint,
-                                        4,
-                                    )?;
-                                    Ok(array_length)
-                                }
+                        let array_type = parser.resolve_type(self, lowered_array, meta)?;
+
+                        match *array_type {
+                            TypeInner::Array {
+                                size: crate::ArraySize::Constant(size),
+                                ..
+                            } => {
+                                let mut array_length =
+                                    self.add_expression(Expression::Constant(size), meta, body);
+                                self.forced_conversion(
+                                    parser,
+                                    &mut array_length,
+                                    meta,
+                                    ScalarKind::Sint,
+                                    4,
+                                )?;
+                                array_length
+                            }
+                            // let the error be handled in type checking if it's not a dynamic array
+                            _ => {
+                                let mut array_length = self.add_expression(
+                                    Expression::ArrayLength(lowered_array),
+                                    meta,
+                                    body,
+                                );
+                                self.forced_conversion(
+                                    parser,
+                                    &mut array_length,
+                                    meta,
+                                    ScalarKind::Sint,
+                                    4,
+                                )?;
+                                array_length
                             }
                         }
-                        handle_type(
-                            self,
-                            array_type,
-                            lowered_array,
-                            stmt.hir_exprs[expr].meta,
-                            body,
-                            parser,
-                        )?
                     }
                     _ => {
                         return Err(Error {
