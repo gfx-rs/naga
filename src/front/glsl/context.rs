@@ -1367,39 +1367,49 @@ impl Context {
                 }
             }
             HirExprKind::Method {
-                object,
+                expr: object,
                 ref name,
                 ref args,
             } if ExprPos::Lhs != pos => {
-                if name == "length" {
-                    if !args.is_empty() {
+                let args = args
+                    .iter()
+                    .map(|e| self.lower_expect_inner(stmt, parser, *e, ExprPos::Rhs, body))
+                    .collect::<Result<Vec<_>>>()?;
+                match name.as_ref() {
+                    "length" => {
+                        if !args.is_empty() {
+                            parser.errors.push(Error {
+                                kind: ErrorKind::SemanticError(
+                                    ".length() doesn't take any arguments".into(),
+                                ),
+                                meta,
+                            });
+                        }
+                        let lowered_array =
+                            self.lower_expect_inner(stmt, parser, object, pos, body)?.0;
+                        let array_length = self.add_expression(
+                            Expression::ArrayLength(lowered_array),
+                            stmt.hir_exprs[expr].meta,
+                            body,
+                        );
+                        self.add_expression(
+                            Expression::As {
+                                expr: array_length,
+                                kind: ScalarKind::Sint,
+                                convert: Some(4),
+                            },
+                            stmt.hir_exprs[expr].meta,
+                            body,
+                        )
+                    }
+                    _ => {
                         return Err(Error {
                             kind: ErrorKind::SemanticError(
-                                ".length() doesn't take any arguments".into(),
+                                format!("unknown method '{}'", name).into(),
                             ),
                             meta,
                         });
                     }
-                    let lowered_array = self.lower_expect_inner(stmt, parser, object, pos, body)?.0;
-                    let array_length = self.add_expression(
-                        Expression::ArrayLength(lowered_array),
-                        stmt.hir_exprs[expr].meta,
-                        body,
-                    );
-                    self.add_expression(
-                        Expression::As {
-                            expr: array_length,
-                            kind: ScalarKind::Sint,
-                            convert: None,
-                        },
-                        stmt.hir_exprs[expr].meta,
-                        body,
-                    )
-                } else {
-                    return Err(Error {
-                        kind: ErrorKind::SemanticError("unknown method".into()),
-                        meta,
-                    });
                 }
             }
             _ => {

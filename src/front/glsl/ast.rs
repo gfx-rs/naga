@@ -159,10 +159,10 @@ pub enum HirExprKind {
         /// The target expression
         expr: Handle<HirExpr>,
     },
-    /// a `what.something(a, b, c)`
+    /// A method call like `what.something(a, b, c)`
     Method {
-        /// the object the method is being called on (`what` in the example)
-        object: Handle<HirExpr>,
+        /// expression the method call applies to (`what` in the example)
+        expr: Handle<HirExpr>,
         /// the method name (`something` in the example)
         name: String,
         /// the arguments to the method (`a`, `b`, and `c` in the example)
