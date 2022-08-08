@@ -1387,20 +1387,32 @@ impl Context {
                         }
                         let lowered_array =
                             self.lower_expect_inner(stmt, parser, object, pos, body)?.0;
-                        let array_length = self.add_expression(
-                            Expression::ArrayLength(lowered_array),
-                            stmt.hir_exprs[expr].meta,
-                            body,
-                        );
-                        self.add_expression(
-                            Expression::As {
-                                expr: array_length,
-                                kind: ScalarKind::Sint,
-                                convert: Some(4),
-                            },
-                            stmt.hir_exprs[expr].meta,
-                            body,
-                        )
+                        let array_type = parser.resolve_type(self, lowered_array, meta)?;
+                        match array_type {
+                            &TypeInner::Array {
+                                base: _,
+                                size: crate::ArraySize::Constant(size),
+                                stride: _,
+                            } => {
+                                let mut array_length = self.add_expression(
+                                    Expression::Constant(size),
+                                    stmt.hir_exprs[expr].meta,
+                                    body,
+                                );
+                                self.conversion(&mut array_length, meta, ScalarKind::Sint, 4)?;
+                                array_length
+                            }
+                            // let the error be handeled in type checking if it's not a dynamic array
+                            _ => {
+                                let mut array_length = self.add_expression(
+                                    Expression::ArrayLength(lowered_array),
+                                    stmt.hir_exprs[expr].meta,
+                                    body,
+                                );
+                                self.conversion(&mut array_length, meta, ScalarKind::Sint, 4)?;
+                                array_length
+                            }
+                        }
                     }
                     _ => {
                         return Err(Error {
