@@ -1399,16 +1399,21 @@ impl Context {
                             let t = &parser.module.types[t];
                             match t.inner {
                                 TypeInner::Array {
-                                    base: _,
                                     size: crate::ArraySize::Constant(size),
-                                    stride: _,
+                                    ..
                                 } => {
                                     let mut array_length =
                                         this.add_expression(Expression::Constant(size), meta, body);
-                                    this.conversion(&mut array_length, meta, ScalarKind::Sint, 4)?;
+                                    this.forced_conversion(
+                                        parser,
+                                        &mut array_length,
+                                        meta,
+                                        ScalarKind::Sint,
+                                        4,
+                                    )?;
                                     Ok(array_length)
                                 }
-                                TypeInner::Pointer { base, space: _ } => {
+                                TypeInner::Pointer { base, .. } => {
                                     handle_type(this, base, array, meta, body, parser)
                                 }
                                 // let the error be handled in type checking if it's not a dynamic array
@@ -1418,7 +1423,13 @@ impl Context {
                                         meta,
                                         body,
                                     );
-                                    this.conversion(&mut array_length, meta, ScalarKind::Sint, 4)?;
+                                    this.forced_conversion(
+                                        parser,
+                                        &mut array_length,
+                                        meta,
+                                        ScalarKind::Sint,
+                                        4,
+                                    )?;
                                     Ok(array_length)
                                 }
                             }

@@ -140,6 +140,10 @@ void testLength() {
     int len = a.length();
 }
 
+void testConstantLength(float a[4u]) {
+    int len = a.length();
+}
+
 out vec4 o_color;
 void main() {
     privatePointer(global);

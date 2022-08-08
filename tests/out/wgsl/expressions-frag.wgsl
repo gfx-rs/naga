@@ -382,6 +382,16 @@ fn testLength() {
     return;
 }
 
+fn testConstantLength(a_24: array<f32,4u>) {
+    var a_25: array<f32,4u>;
+    var len_1: i32 = 4;
+
+    _ = (&global_1.a);
+    a_25 = a_24;
+    _ = a_25;
+    _ = i32(4u);
+}
+
 fn main_1() {
     var local_5: f32;
 
