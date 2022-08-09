@@ -1087,7 +1087,12 @@ impl<'w> BlockContext<'w> {
                     }
                 };
 
-                if src_kind == kind {
+                let width_unchanged = if let Some(dst_width) = convert {
+                    src_width == dst_width
+                } else {
+                    true
+                };
+                if src_kind == kind && width_unchanged {
                     expr_id
                 } else {
                     let id = self.gen_id();
