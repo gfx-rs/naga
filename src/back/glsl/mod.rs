@@ -2755,20 +2755,12 @@ impl<'a, W: Write> Writer<'a, W> {
                         self.write_expr(arg, ctx)?;
 
                         match *ctx.info[arg].ty.inner_with(&self.module.types) {
-                            crate::TypeInner::Vector {
-                                size,
-                                kind: crate::ScalarKind::Float,
-                                ..
-                            } => write!(
+                            crate::TypeInner::Vector { size, .. } => write!(
                                 self.out,
                                 ", vec{}(0.0), vec{0}(1.0)",
                                 back::vector_size_str(size)
                             )?,
-                            crate::TypeInner::Scalar {
-                                kind: crate::ScalarKind::Float,
-                                ..
-                            } => write!(self.out, ", 0.0, 1.0")?,
-                            ref other => unreachable!("Unexpected type {:?}", other),
+                            _ => write!(self.out, ", 0.0, 1.0")?,
                         }
 
                         write!(self.out, ")")?;
