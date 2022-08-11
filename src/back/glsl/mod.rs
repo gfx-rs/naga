@@ -2749,7 +2749,32 @@ impl<'a, W: Write> Writer<'a, W> {
                     Mf::Min => "min",
                     Mf::Max => "max",
                     Mf::Clamp => "clamp",
-                    Mf::Saturate => todo!(),
+                    Mf::Saturate => {
+                        write!(self.out, "clamp(")?;
+
+                        self.write_expr(arg, ctx)?;
+
+                        match ctx.info[arg].ty.inner_with(&self.module.types) {
+                            crate::TypeInner::Vector {
+                                size,
+                                kind: crate::ScalarKind::Float,
+                                ..
+                            } => write!(
+                                self.out,
+                                ", vec{}(0.0), vec{0}(1.0)",
+                                back::vector_size_str(*size)
+                            )?,
+                            crate::TypeInner::Scalar {
+                                kind: crate::ScalarKind::Float,
+                                ..
+                            } => write!(self.out, ", 0.0, 1.0")?,
+                            other => unreachable!("Unexpected type {:?}", other),
+                        }
+
+                        write!(self.out, ")")?;
+
+                        return Ok(());
+                    }
                     // trigonometry
                     Mf::Cos => "cos",
                     Mf::Cosh => "cosh",
