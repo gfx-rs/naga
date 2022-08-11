@@ -696,6 +696,7 @@ impl<'w> BlockContext<'w> {
                         Some(crate::ScalarKind::Uint) => spirv::GLOp::UClamp,
                         other => unimplemented!("Unexpected max({:?})", other),
                     }),
+                    Mf::Saturate => todo!(),
                     // trigonometry
                     Mf::Sin => MathOp::Ext(spirv::GLOp::Sin),
                     Mf::Sinh => MathOp::Ext(spirv::GLOp::Sinh),

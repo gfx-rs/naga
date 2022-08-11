@@ -1040,6 +1040,20 @@ impl super::Validator {
                             ));
                         }
                     }
+                    Mf::Saturate => {
+                        if arg1_ty.is_some() | arg2_ty.is_some() | arg3_ty.is_some() {
+                            return Err(ExpressionError::WrongArgumentCount(fun));
+                        }
+                        match *arg_ty {
+                            Ti::Scalar {
+                                kind: Sk::Float, ..
+                            }
+                            | Ti::Vector {
+                                kind: Sk::Float, ..
+                            } => {}
+                            _ => return Err(ExpressionError::InvalidArgumentType(fun, 0, arg)),
+                        }
+                    }
                     Mf::Cos
                     | Mf::Cosh
                     | Mf::Sin
