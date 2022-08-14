@@ -633,27 +633,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         // If the global is a push constant write the type now because it will be a
         // generic argument to `ConstantBuffer`
         if global.space == crate::AddressSpace::PushConstant {
-            let matrix_data = get_inner_matrix_data(module, global.ty);
-
-            // We treat matrices of the form `matCx2` as a sequence of C `vec2`s.
-            // See the module-level block comment in mod.rs for details.
-            if let Some(MatrixType {
-                columns,
-                rows: crate::VectorSize::Bi,
-                width: 4,
-            }) = matrix_data
-            {
-                write!(self.out, "__mat{}x2", columns as u8)?;
-            } else {
-                // Even though Naga IR matrices are column-major, we must describe
-                // matrices passed from the CPU as being in row-major order.
-                // See the module-level block comment in mod.rs for details.
-                if matrix_data.is_some() {
-                    write!(self.out, "row_major ")?;
-                }
-
-                self.write_type(module, global.ty)?;
-            }
+            self.write_global_type(module, global.ty)?;
 
             // need to write the array size if the type was emitted with `write_type`
             if let TypeInner::Array { base, size, .. } = module.types[global.ty].inner {
@@ -718,34 +698,13 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         if global.space == crate::AddressSpace::Uniform {
             write!(self.out, " {{ ")?;
 
-            let matrix_data = get_inner_matrix_data(module, global.ty);
+            self.write_global_type(module, global.ty)?;
 
-            // We treat matrices of the form `matCx2` as a sequence of C `vec2`s.
-            // See the module-level block comment in mod.rs for details.
-            if let Some(MatrixType {
-                columns,
-                rows: crate::VectorSize::Bi,
-                width: 4,
-            }) = matrix_data
-            {
-                write!(
-                    self.out,
-                    "__mat{}x2 {}",
-                    columns as u8,
-                    &self.names[&NameKey::GlobalVariable(handle)]
-                )?;
-            } else {
-                // Even though Naga IR matrices are column-major, we must describe
-                // matrices passed from the CPU as being in row-major order.
-                // See the module-level block comment in mod.rs for details.
-                if matrix_data.is_some() {
-                    write!(self.out, "row_major ")?;
-                }
-
-                self.write_type(module, global.ty)?;
-                let sub_name = &self.names[&NameKey::GlobalVariable(handle)];
-                write!(self.out, " {}", sub_name)?;
-            }
+            write!(
+                self.out,
+                " {}",
+                &self.names[&NameKey::GlobalVariable(handle)]
+            )?;
 
             // need to write the array size if the type was emitted with `write_type`
             if let TypeInner::Array { base, size, .. } = module.types[global.ty].inner {
@@ -882,27 +841,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 TypeInner::Array { base, size, .. } => {
                     // HLSL arrays are written as `type name[size]`
 
-                    let matrix_data = get_inner_matrix_data(module, member.ty);
-
-                    // We treat matrices of the form `matCx2` as a sequence of C `vec2`s.
-                    // See the module-level block comment in mod.rs for details.
-                    if let Some(MatrixType {
-                        columns,
-                        rows: crate::VectorSize::Bi,
-                        width: 4,
-                    }) = matrix_data
-                    {
-                        write!(self.out, "__mat{}x2", columns as u8)?;
-                    } else {
-                        // Even though Naga IR matrices are column-major, we must describe
-                        // matrices passed from the CPU as being in row-major order.
-                        // See the module-level block comment in mod.rs for details.
-                        if matrix_data.is_some() {
-                            write!(self.out, "row_major ")?;
-                        }
-
-                        self.write_type(module, base)?;
-                    }
+                    self.write_global_type(module, member.ty)?;
 
                     // Write `name`
                     write!(
@@ -973,6 +912,40 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         }
 
         writeln!(self.out, "}};")?;
+        Ok(())
+    }
+
+    /// Helper method used to write global/structs non image/sampler types
+    ///
+    /// # Notes
+    /// Adds no trailing or leading whitespace
+    pub(super) fn write_global_type(
+        &mut self,
+        module: &Module,
+        ty: Handle<crate::Type>,
+    ) -> BackendResult {
+        let matrix_data = get_inner_matrix_data(module, ty);
+
+        // We treat matrices of the form `matCx2` as a sequence of C `vec2`s.
+        // See the module-level block comment in mod.rs for details.
+        if let Some(MatrixType {
+            columns,
+            rows: crate::VectorSize::Bi,
+            width: 4,
+        }) = matrix_data
+        {
+            write!(self.out, "__mat{}x2", columns as u8)?;
+        } else {
+            // Even though Naga IR matrices are column-major, we must describe
+            // matrices passed from the CPU as being in row-major order.
+            // See the module-level block comment in mod.rs for details.
+            if matrix_data.is_some() {
+                write!(self.out, "row_major ")?;
+            }
+
+            self.write_type(module, ty)?;
+        }
+
         Ok(())
     }
 
