@@ -54,10 +54,22 @@ float constructors() {
 }
 
 void logical() {
+    bool local = false;
+    bool local_1 = false;
     bool unnamed_11 = (!true);
     bvec2 unnamed_12 = not(bvec2(true));
-    bool unnamed_13 = (true || false);
-    bool unnamed_14 = (true && false);
+    if (true) {
+        local = true;
+    } else {
+        local = false;
+    }
+    bool unnamed_13 = local;
+    if (true) {
+        local_1 = false;
+    } else {
+        local_1 = false;
+    }
+    bool unnamed_14 = local_1;
     bool unnamed_15 = (true || false);
     bvec3 unnamed_16 = bvec3(bvec3(true).x || bvec3(false).x, bvec3(true).y || bvec3(false).y, bvec3(true).z || bvec3(false).z);
     bool unnamed_17 = (true && false);

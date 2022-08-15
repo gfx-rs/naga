@@ -1057,7 +1057,9 @@ fn main_1() {
     var R_4: vec3<f32>;
     var light_accum: vec3<f32> = vec3<f32>(0.0, 0.0, 0.0);
     var i: i32 = 0;
+    var local_3: bool;
     var i_1: i32 = 0;
+    var local_4: bool;
     var diffuse_ambient: vec3<f32>;
     var specular_ambient: vec3<f32>;
 
@@ -1190,14 +1192,20 @@ fn main_1() {
     loop {
         let _e227 = i;
         let _e228 = global_2.NumLights;
-        let _e232 = i;
-        if !(((_e227 < i32(_e228.x)) && (_e232 < 10))) {
+        if (_e227 < i32(_e228.x)) {
+            let _e232 = i;
+            local_3 = (_e232 < 10);
+        } else {
+            local_3 = false;
+        }
+        let _e236 = local_3;
+        if !(_e236) {
             break;
         }
         {
-            let _e239 = light_accum;
-            let _e240 = i;
-            _ = global_2.PointLights[_e240];
+            let _e241 = light_accum;
+            let _e242 = i;
+            _ = global_2.PointLights[_e242];
             _ = roughness_12;
             _ = NdotV_4;
             _ = N_2;
@@ -1205,34 +1213,40 @@ fn main_1() {
             _ = R_4;
             _ = F0_4;
             _ = diffuseColor_4;
-            let _e250 = i;
-            let _e252 = global_2.PointLights[_e250];
-            let _e253 = roughness_12;
-            let _e254 = NdotV_4;
-            let _e255 = N_2;
-            let _e256 = V_3;
-            let _e257 = R_4;
-            let _e258 = F0_4;
-            let _e259 = diffuseColor_4;
-            let _e260 = point_light(_e252, _e253, _e254, _e255, _e256, _e257, _e258, _e259);
-            light_accum = (_e239 + _e260);
+            let _e252 = i;
+            let _e254 = global_2.PointLights[_e252];
+            let _e255 = roughness_12;
+            let _e256 = NdotV_4;
+            let _e257 = N_2;
+            let _e258 = V_3;
+            let _e259 = R_4;
+            let _e260 = F0_4;
+            let _e261 = diffuseColor_4;
+            let _e262 = point_light(_e254, _e255, _e256, _e257, _e258, _e259, _e260, _e261);
+            light_accum = (_e241 + _e262);
         }
         continuing {
-            let _e236 = i;
-            i = (_e236 + 1);
+            let _e238 = i;
+            i = (_e238 + 1);
         }
     }
     loop {
-        let _e264 = i_1;
-        let _e265 = global_2.NumLights;
-        let _e269 = i_1;
-        if !(((_e264 < i32(_e265.y)) && (_e269 < 1))) {
+        let _e266 = i_1;
+        let _e267 = global_2.NumLights;
+        if (_e266 < i32(_e267.y)) {
+            let _e271 = i_1;
+            local_4 = (_e271 < 1);
+        } else {
+            local_4 = false;
+        }
+        let _e275 = local_4;
+        if !(_e275) {
             break;
         }
         {
-            let _e276 = light_accum;
-            let _e277 = i_1;
-            _ = global_2.DirectionalLights[_e277];
+            let _e280 = light_accum;
+            let _e281 = i_1;
+            _ = global_2.DirectionalLights[_e281];
             _ = roughness_12;
             _ = NdotV_4;
             _ = N_2;
@@ -1240,74 +1254,74 @@ fn main_1() {
             _ = R_4;
             _ = F0_4;
             _ = diffuseColor_4;
-            let _e287 = i_1;
-            let _e289 = global_2.DirectionalLights[_e287];
-            let _e290 = roughness_12;
-            let _e291 = NdotV_4;
-            let _e292 = N_2;
-            let _e293 = V_3;
-            let _e294 = R_4;
-            let _e295 = F0_4;
-            let _e296 = diffuseColor_4;
-            let _e297 = dir_light(_e289, _e290, _e291, _e292, _e293, _e294, _e295, _e296);
-            light_accum = (_e276 + _e297);
+            let _e291 = i_1;
+            let _e293 = global_2.DirectionalLights[_e291];
+            let _e294 = roughness_12;
+            let _e295 = NdotV_4;
+            let _e296 = N_2;
+            let _e297 = V_3;
+            let _e298 = R_4;
+            let _e299 = F0_4;
+            let _e300 = diffuseColor_4;
+            let _e301 = dir_light(_e293, _e294, _e295, _e296, _e297, _e298, _e299, _e300);
+            light_accum = (_e280 + _e301);
         }
         continuing {
-            let _e273 = i_1;
-            i_1 = (_e273 + 1);
+            let _e277 = i_1;
+            i_1 = (_e277 + 1);
         }
     }
     _ = diffuseColor_4;
     _ = NdotV_4;
-    let _e302 = diffuseColor_4;
-    let _e304 = NdotV_4;
-    let _e305 = EnvBRDFApprox(_e302, 1.0, _e304);
-    diffuse_ambient = _e305;
+    let _e306 = diffuseColor_4;
+    let _e308 = NdotV_4;
+    let _e309 = EnvBRDFApprox(_e306, 1.0, _e308);
+    diffuse_ambient = _e309;
     _ = F0_4;
     _ = perceptual_roughness_2;
     _ = NdotV_4;
-    let _e310 = F0_4;
-    let _e311 = perceptual_roughness_2;
-    let _e312 = NdotV_4;
-    let _e313 = EnvBRDFApprox(_e310, _e311, _e312);
-    specular_ambient = _e313;
-    let _e315 = output_color;
-    _ = _e315.xyz;
-    let _e317 = light_accum;
-    output_color.x = _e317.x;
-    output_color.y = _e317.y;
-    output_color.z = _e317.z;
-    let _e324 = output_color;
-    _ = _e324.xyz;
-    let _e326 = output_color;
-    let _e328 = diffuse_ambient;
-    let _e329 = specular_ambient;
-    let _e331 = global_2.AmbientColor;
-    let _e334 = occlusion;
-    let _e336 = (_e326.xyz + (((_e328 + _e329) * _e331.xyz) * _e334));
-    output_color.x = _e336.x;
-    output_color.y = _e336.y;
-    output_color.z = _e336.z;
-    let _e343 = output_color;
-    _ = _e343.xyz;
-    let _e345 = output_color;
-    let _e347 = emissive;
+    let _e314 = F0_4;
+    let _e315 = perceptual_roughness_2;
+    let _e316 = NdotV_4;
+    let _e317 = EnvBRDFApprox(_e314, _e315, _e316);
+    specular_ambient = _e317;
+    let _e319 = output_color;
+    _ = _e319.xyz;
+    let _e321 = light_accum;
+    output_color.x = _e321.x;
+    output_color.y = _e321.y;
+    output_color.z = _e321.z;
+    let _e328 = output_color;
+    _ = _e328.xyz;
+    let _e330 = output_color;
+    let _e332 = diffuse_ambient;
+    let _e333 = specular_ambient;
+    let _e335 = global_2.AmbientColor;
+    let _e338 = occlusion;
+    let _e340 = (_e330.xyz + (((_e332 + _e333) * _e335.xyz) * _e338));
+    output_color.x = _e340.x;
+    output_color.y = _e340.y;
+    output_color.z = _e340.z;
+    let _e347 = output_color;
+    _ = _e347.xyz;
     let _e349 = output_color;
-    let _e352 = (_e345.xyz + (_e347.xyz * _e349.w));
-    output_color.x = _e352.x;
-    output_color.y = _e352.y;
-    output_color.z = _e352.z;
-    let _e359 = output_color;
-    _ = _e359.xyz;
-    let _e361 = output_color;
-    _ = _e361.xyz;
+    let _e351 = emissive;
+    let _e353 = output_color;
+    let _e356 = (_e349.xyz + (_e351.xyz * _e353.w));
+    output_color.x = _e356.x;
+    output_color.y = _e356.y;
+    output_color.z = _e356.z;
     let _e363 = output_color;
-    let _e365 = reinhard_luminance(_e363.xyz);
-    output_color.x = _e365.x;
-    output_color.y = _e365.y;
-    output_color.z = _e365.z;
-    let _e372 = output_color;
-    o_Target = _e372;
+    _ = _e363.xyz;
+    let _e365 = output_color;
+    _ = _e365.xyz;
+    let _e367 = output_color;
+    let _e369 = reinhard_luminance(_e367.xyz);
+    output_color.x = _e369.x;
+    output_color.y = _e369.y;
+    output_color.z = _e369.z;
+    let _e376 = output_color;
+    o_Target = _e376;
     return;
 }
 

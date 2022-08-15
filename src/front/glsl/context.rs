@@ -585,6 +585,120 @@ impl Context {
                 self.add_expression(Expression::Constant(constant), meta, body)
             }
             HirExprKind::Binary { left, op, right } if pos != ExprPos::Lhs => {
+                // Logical operators must short circuit by emitting an if statement.
+                // Handle them as a special case.
+                if let BinaryOperator::LogicalAnd | BinaryOperator::LogicalOr = op {
+                    // Lower the lhs, then emit all expressions lowered so far.
+                    let (mut left, left_meta) =
+                        self.lower_expect_inner(stmt, parser, left, ExprPos::Rhs, body)?;
+                    self.emit_restart(body);
+
+                    // Lower the rhs into a special body for use in the if statement.
+                    let mut right_body = Block::new();
+                    let (mut right, right_meta) = self.lower_expect_inner(
+                        stmt,
+                        parser,
+                        right,
+                        ExprPos::Rhs,
+                        &mut right_body,
+                    )?;
+                    self.emit_restart(&mut right_body);
+
+                    // Type check and emit a conversion if necessary.
+                    parser.typifier_grow(self, left, left_meta)?;
+                    parser.typifier_grow(self, right, right_meta)?;
+                    self.binary_implicit_conversion(
+                        parser, &mut left, left_meta, &mut right, right_meta,
+                    )?;
+                    self.emit_end(body);
+
+                    // Create a temporary local to hold the result of the operator.
+                    let bool_ty = parser.module.types.insert(
+                        Type {
+                            name: None,
+                            inner: TypeInner::Scalar {
+                                kind: ScalarKind::Bool,
+                                width: crate::BOOL_WIDTH,
+                            },
+                        },
+                        Default::default(),
+                    );
+                    let local = self.locals.append(
+                        LocalVariable {
+                            name: None,
+                            ty: bool_ty,
+                            init: None,
+                        },
+                        meta,
+                    );
+                    let local_expr = self
+                        .expressions
+                        .append(Expression::LocalVariable(local), meta);
+
+                    // Store the result of the RHS to the local.
+                    right_body.push(
+                        Statement::Store {
+                            pointer: local_expr,
+                            value: right,
+                        },
+                        right_meta,
+                    );
+
+                    // Create a value representing the result of the operator if it short circuits and does not evaluate the RHS.
+                    let short_circuit_value = match op {
+                        BinaryOperator::LogicalAnd => false,
+                        BinaryOperator::LogicalOr => true,
+                        _ => unreachable!(),
+                    };
+                    let short_circuit_constant = parser.module.constants.fetch_or_append(
+                        Constant {
+                            name: None,
+                            specialization: None,
+                            inner: crate::ConstantInner::boolean(short_circuit_value),
+                        },
+                        Default::default(),
+                    );
+                    let short_circuit_expr = self
+                        .expressions
+                        .append(Expression::Constant(short_circuit_constant), meta);
+
+                    // Create a short circuit body, which assigns the short circuit value to the local.
+                    let mut short_circuit_body = Block::new();
+                    short_circuit_body.push(
+                        Statement::Store {
+                            pointer: local_expr,
+                            value: short_circuit_expr,
+                        },
+                        meta,
+                    );
+
+                    // Add an if statement which either evaluates the RHS block or the short circuit block.
+                    let (accept, reject) = match op {
+                        BinaryOperator::LogicalAnd => (right_body, short_circuit_body),
+                        BinaryOperator::LogicalOr => (short_circuit_body, right_body),
+                        _ => unimplemented!(),
+                    };
+                    body.push(
+                        Statement::If {
+                            condition: left,
+                            accept,
+                            reject,
+                        },
+                        meta,
+                    );
+
+                    // The result of lowering this operator is just the local in which the result is stored.
+                    self.emit_start();
+                    let load_local_expr = self.expressions.append(
+                        Expression::Load {
+                            pointer: local_expr,
+                        },
+                        meta,
+                    );
+
+                    return Ok((Some(load_local_expr), meta));
+                };
+
                 let (mut left, left_meta) =
                     self.lower_expect_inner(stmt, parser, left, ExprPos::Rhs, body)?;
                 let (mut right, right_meta) =

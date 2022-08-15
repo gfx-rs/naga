@@ -81,10 +81,22 @@ float constructors(
 
 void logical(
 ) {
+    bool local = {};
+    bool local_1 = {};
     bool unnamed_11 = !true;
     metal::bool2 unnamed_12 = !metal::bool2(true);
-    bool unnamed_13 = true || false;
-    bool unnamed_14 = true && false;
+    if (true) {
+        local = true;
+    } else {
+        local = false;
+    }
+    bool unnamed_13 = local;
+    if (true) {
+        local_1 = false;
+    } else {
+        local_1 = false;
+    }
+    bool unnamed_14 = local_1;
     bool unnamed_15 = true | false;
     metal::bool3 unnamed_16 = metal::bool3(true) | metal::bool3(false);
     bool unnamed_17 = true & false;
