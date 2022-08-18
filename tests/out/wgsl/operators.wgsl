@@ -52,10 +52,23 @@ fn constructors() -> f32 {
 }
 
 fn logical() {
+    var local: bool;
+    var local_1: bool;
+
     _ = !(true);
     _ = !(vec2<bool>(true));
-    _ = (true || false);
-    _ = (true && false);
+    if true {
+        local = true;
+    } else {
+        local = false;
+    }
+    _ = local;
+    if true {
+        local_1 = false;
+    } else {
+        local_1 = false;
+    }
+    _ = local_1;
     _ = (true | false);
     _ = (vec3<bool>(true) | vec3<bool>(false));
     _ = (true & false);

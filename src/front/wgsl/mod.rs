@@ -813,7 +813,7 @@ struct ExpressionContext<'input, 'temp, 'out> {
     types: &'out mut UniqueArena<crate::Type>,
     constants: &'out mut Arena<crate::Constant>,
     global_vars: &'out Arena<crate::GlobalVariable>,
-    local_vars: &'out Arena<crate::LocalVariable>,
+    local_vars: &'out mut Arena<crate::LocalVariable>,
     arguments: &'out [crate::FunctionArgument],
     functions: &'out Arena<crate::Function>,
     block: &'temp mut crate::Block,
@@ -893,6 +893,124 @@ impl<'a> ExpressionContext<'a, '_, '_> {
             );
             // Binary expressions never produce references.
             accumulator = TypedExpression::non_reference(left);
+        }
+        Ok(accumulator)
+    }
+
+    fn parse_binary_short_circuit_op(
+        &mut self,
+        lexer: &mut Lexer<'a>,
+        classifier: impl Fn(Token<'a>) -> Option<crate::BinaryOperator>,
+        mut parser: impl FnMut(
+            &mut Lexer<'a>,
+            ExpressionContext<'a, '_, '_>,
+        ) -> Result<TypedExpression, Error<'a>>,
+    ) -> Result<TypedExpression, Error<'a>> {
+        let start = lexer.current_byte_offset() as u32;
+        let mut accumulator = parser(lexer, self.reborrow())?;
+        while let Some(op) = classifier(lexer.peek().0) {
+            let _ = lexer.next();
+
+            // Apply load rule to the lhs.
+            let left = self.apply_load_rule(accumulator);
+
+            // Emit all previous expressions, and prepare a body for the rhs.
+            self.block.extend(self.emitter.finish(self.expressions));
+            let mut rhs_body = crate::Block::new();
+            let mut rhs_ctx = self.reborrow();
+            rhs_ctx.block = &mut rhs_body;
+            rhs_ctx.emitter.start(rhs_ctx.expressions);
+
+            // Parse the rhs using the rhs body.
+            let unloaded_right = parser(lexer, rhs_ctx)?;
+            let end = lexer.current_byte_offset() as u32;
+            let span = NagaSpan::new(start, end);
+            let right = self.apply_load_rule(unloaded_right);
+            rhs_body.extend(self.emitter.finish(self.expressions));
+
+            // Create a temporary local to store the result of the operator.
+            let local_ty = self.types.insert(
+                crate::Type {
+                    name: None,
+                    inner: crate::TypeInner::Scalar {
+                        kind: crate::ScalarKind::Bool,
+                        width: crate::BOOL_WIDTH,
+                    },
+                },
+                Default::default(),
+            );
+            let local = self.local_vars.append(
+                crate::LocalVariable {
+                    name: None,
+                    ty: local_ty,
+                    init: None,
+                },
+                span,
+            );
+
+            // Assign the rhs expression to the local variable inside the rhs body.
+            let local_expr = self
+                .expressions
+                .append(crate::Expression::LocalVariable(local), span);
+
+            rhs_body.push(
+                crate::Statement::Store {
+                    pointer: local_expr,
+                    value: right,
+                },
+                span,
+            );
+
+            // Make a short circuit body which assigns the local variable to the short circuit value.
+            let short_circuit_value = match op {
+                crate::BinaryOperator::LogicalAnd => false,
+                crate::BinaryOperator::LogicalOr => true,
+                _ => unreachable!(),
+            };
+
+            let short_circuit_constant = self.constants.fetch_or_append(
+                crate::Constant {
+                    name: None,
+                    specialization: None,
+                    inner: ConstantInner::boolean(short_circuit_value),
+                },
+                Default::default(),
+            );
+            let short_circuit_expr = self
+                .expressions
+                .append(crate::Expression::Constant(short_circuit_constant), span);
+
+            let mut short_circuit_body = crate::Block::new();
+            short_circuit_body.push(
+                crate::Statement::Store {
+                    pointer: local_expr,
+                    value: short_circuit_expr,
+                },
+                span,
+            );
+
+            // Append an if statement. This implements the short circuiting behavior, by deciding whether to
+            // evaluate the rhs based on the value of the lhs.
+            let (accept, reject) = match op {
+                crate::BinaryOperator::LogicalAnd => (rhs_body, short_circuit_body),
+                crate::BinaryOperator::LogicalOr => (short_circuit_body, rhs_body),
+                _ => unreachable!(),
+            };
+            self.block.push(
+                crate::Statement::If {
+                    condition: left,
+                    accept,
+                    reject,
+                },
+                span,
+            );
+
+            // Prepare to resume parsing expressions.
+            self.emitter.start(self.expressions);
+            accumulator = TypedExpression {
+                handle: local_expr,
+                is_reference: true,
+            };
         }
         Ok(accumulator)
     }
@@ -2683,7 +2801,7 @@ impl Parser {
     ) -> Result<(TypedExpression, Span), Error<'a>> {
         self.push_scope(Scope::GeneralExpr, lexer);
         // logical_or_expression
-        let handle = context.parse_binary_op(
+        let handle = context.parse_binary_short_circuit_op(
             lexer,
             |token| match token {
                 Token::LogicalOperation('|') => Some(crate::BinaryOperator::LogicalOr),
@@ -2691,7 +2809,7 @@ impl Parser {
             },
             // logical_and_expression
             |lexer, mut context| {
-                context.parse_binary_op(
+                context.parse_binary_short_circuit_op(
                     lexer,
                     |token| match token {
                         Token::LogicalOperation('&') => Some(crate::BinaryOperator::LogicalAnd),

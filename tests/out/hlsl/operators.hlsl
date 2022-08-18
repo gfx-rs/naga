@@ -80,10 +80,23 @@ float constructors()
 
 void logical()
 {
+    bool local = (bool)0;
+    bool local_1 = (bool)0;
+
     bool unnamed_11 = !true;
     bool2 unnamed_12 = !(true).xx;
-    bool unnamed_13 = (true || false);
-    bool unnamed_14 = (true && false);
+    if (true) {
+        local = true;
+    } else {
+        local = false;
+    }
+    bool unnamed_13 = local;
+    if (true) {
+        local_1 = false;
+    } else {
+        local_1 = false;
+    }
+    bool unnamed_14 = local_1;
     bool unnamed_15 = (true | false);
     bool3 unnamed_16 = ((true).xxx | (false).xxx);
     bool unnamed_17 = (true & false);
