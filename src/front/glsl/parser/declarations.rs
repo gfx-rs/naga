@@ -190,14 +190,21 @@ impl<'source> ParsingContext<'source> {
                 })
                 .transpose()?;
 
-            // If the variable is global and const qualified, solve the initializer for a constant
-            // and use that as the variable's initial value.
             let is_const = ctx.qualifiers.storage.0 == StorageQualifier::Const;
-            let maybe_constant = match (init, ctx.external, is_const) {
-                (Some((root, meta)), true, true) => {
-                    Some(parser.solve_constant(ctx.ctx, root, meta)?)
+            let maybe_constant = if ctx.external {
+                if let Some((root, meta)) = init {
+                    match parser.solve_constant(ctx.ctx, root, meta) {
+                        Ok(res) => Some(res),
+                        // If the declaration is external (global scope) and is constant qualified
+                        // then the initializer must be a constant expression
+                        Err(err) if is_const => return Err(err),
+                        _ => None,
+                    }
+                } else {
+                    None
                 }
-                _ => None,
+            } else {
+                None
             };
 
             let pointer = ctx.add_var(parser, ty, name, maybe_constant, meta)?;
