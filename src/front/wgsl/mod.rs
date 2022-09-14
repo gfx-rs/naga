@@ -3349,7 +3349,7 @@ impl Parser {
                 ty: if context.named_expressions.contains_key(&reference.handle) {
                     InvalidAssignmentType::ImmutableBinding
                 } else {
-                    match context.expressions.get_mut(reference.handle) {
+                    match *context.expressions.get_mut(reference.handle) {
                         crate::Expression::Swizzle { .. } => InvalidAssignmentType::Swizzle,
                         _ => InvalidAssignmentType::Other,
                     }
