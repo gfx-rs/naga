@@ -101,6 +101,7 @@ pub enum NumberError {
 pub enum InvalidAssignmentType {
     Other,
     Swizzle,
+    ImmutableBinding,
 }
 
 #[derive(Clone, Debug)]
@@ -456,7 +457,8 @@ impl<'a> Error<'a> {
                 message: "invalid left-hand side of assignment".into(),
                 labels: vec![(span.clone(), "cannot assign to this expression".into())],
                 notes: match ty {
-                    InvalidAssignmentType::Swizzle => vec!["WGSL does not support assignments to swizzles".into(), "trying assigning each component individually".into()],
+                    InvalidAssignmentType::Swizzle => vec!["WGSL does not support assignments to swizzles".into(), "consider assigning each component individually".into()],
+                    InvalidAssignmentType::ImmutableBinding => vec![format!("'{}' is an immutable binding", &source[span.clone()]), "consider declaring it with `var` instead of `let`".into()],
                     InvalidAssignmentType::Other => vec![],
                 },
             },
@@ -3321,14 +3323,16 @@ impl Parser {
     fn parse_assignment_statement<'a, 'out>(
         &mut self,
         lexer: &mut Lexer<'a>,
-        mut context: ExpressionContext<'a, '_, 'out>,
+        mut context: StatementContext<'a, '_, 'out>,
+        block: &mut crate::Block,
+        emitter: &mut super::Emitter,
     ) -> Result<(), Error<'a>> {
         use crate::BinaryOperator as Bo;
 
         let span_start = lexer.start_byte_offset();
-        context.emitter.start(context.expressions);
-        let (reference, lhs_span) =
-            self.parse_general_expression_for_reference(lexer, context.reborrow())?;
+        emitter.start(context.expressions);
+        let (reference, lhs_span) = self
+            .parse_general_expression_for_reference(lexer, context.as_expression(block, emitter))?;
         let op = lexer.next();
         // The left hand side of an assignment must be a reference.
         if !matches!(
@@ -3342,12 +3346,18 @@ impl Parser {
         } else if !reference.is_reference {
             return Err(Error::InvalidAssignment {
                 span: lhs_span,
-                ty: match context.expressions.get_mut(reference.handle) {
-                    crate::Expression::Swizzle { .. } => InvalidAssignmentType::Swizzle,
-                    _ => InvalidAssignmentType::Other,
+                ty: if context.named_expressions.contains_key(&reference.handle) {
+                    InvalidAssignmentType::ImmutableBinding
+                } else {
+                    match context.expressions.get_mut(reference.handle) {
+                        crate::Expression::Swizzle { .. } => InvalidAssignmentType::Swizzle,
+                        _ => InvalidAssignmentType::Other,
+                    }
                 },
             });
         }
+
+        let mut context = context.as_expression(block, emitter);
 
         let value = match op {
             (Token::Operation('='), _) => {
@@ -3990,7 +4000,9 @@ impl Parser {
                                 }
                                 _ => self.parse_assignment_statement(
                                     lexer,
-                                    context.as_expression(&mut continuing, &mut emitter),
+                                    context.reborrow(),
+                                    &mut continuing,
+                                    &mut emitter,
                                 )?,
                             }
                             lexer.expect(Token::Paren(')'))?;
@@ -4095,7 +4107,9 @@ impl Parser {
                         match context.symbol_table.lookup(ident) {
                             Some(_) => self.parse_assignment_statement(
                                 lexer,
-                                context.as_expression(block, &mut emitter),
+                                context,
+                                block,
+                                &mut emitter,
                             )?,
                             None => self.parse_function_statement(
                                 lexer,
@@ -4114,7 +4128,7 @@ impl Parser {
             }
             _ => {
                 let mut emitter = super::Emitter::default();
-                self.parse_assignment_statement(lexer, context.as_expression(block, &mut emitter))?;
+                self.parse_assignment_statement(lexer, context, block, &mut emitter)?;
                 self.pop_rule_span(lexer);
             }
         }
