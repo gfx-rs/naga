@@ -71,6 +71,8 @@ pub enum ExpectedToken<'a> {
     Constant,
     /// Expected: constant, parenthesized expression, identifier
     PrimaryExpression,
+    /// Expected: assignment, increment/decrement expression
+    Assignment,
     /// Expected: '}', identifier
     FieldName,
     /// Expected: attribute for a type
@@ -95,9 +97,15 @@ pub enum NumberError {
     UnimplementedF16,
 }
 
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub enum InvalidAssignmentType {
+    Other,
+    Swizzle,
+}
+
 #[derive(Clone, Debug)]
 pub enum Error<'a> {
-    Unexpected(TokenSpan<'a>, ExpectedToken<'a>),
+    Unexpected(Span, ExpectedToken<'a>),
     UnexpectedComponents(Span),
     BadNumber(Span, NumberError),
     /// A negative signed integer literal where both signed and unsigned,
@@ -151,6 +159,10 @@ pub enum Error<'a> {
     Pointer(&'static str, Span),
     NotPointer(Span),
     NotReference(&'static str, Span),
+    InvalidAssignment {
+        span: Span,
+        ty: InvalidAssignmentType,
+    },
     ReservedKeyword(Span),
     Redefinition {
         previous: Span,
@@ -162,7 +174,7 @@ pub enum Error<'a> {
 impl<'a> Error<'a> {
     fn as_parse_error(&self, source: &'a str) -> ParseError {
         match *self {
-            Error::Unexpected((_, ref unexpected_span), expected) => {
+            Error::Unexpected(ref unexpected_span, expected) => {
                 let expected_str = match expected {
                         ExpectedToken::Token(token) => {
                             match token {
@@ -195,6 +207,7 @@ impl<'a> Error<'a> {
                         ExpectedToken::Integer => "unsigned/signed integer literal".to_string(),
                         ExpectedToken::Constant => "constant".to_string(),
                         ExpectedToken::PrimaryExpression => "expression".to_string(),
+                        ExpectedToken::Assignment => "assignment or increment/decrement".to_string(),
                         ExpectedToken::FieldName => "field name or a closing curly bracket to signify the end of the struct".to_string(),
                         ExpectedToken::TypeAttribute => "type attribute".to_string(),
                         ExpectedToken::Statement => "statement".to_string(),
@@ -438,6 +451,14 @@ impl<'a> Error<'a> {
                 message: format!("{} must be a reference", what),
                 labels: vec![(span.clone(), "expression is not a reference".into())],
                 notes: vec![],
+            },
+            Error::InvalidAssignment{ ref span, ty} => ParseError {
+                message: "invalid left-hand side of assignment".into(),
+                labels: vec![(span.clone(), "cannot assign to this expression".into())],
+                notes: match ty {
+                    InvalidAssignmentType::Swizzle => vec!["WGSL does not support assignments to swizzles".into(), "trying assigning each component individually".into()],
+                    InvalidAssignmentType::Other => vec![],
+                },
             },
             Error::Pointer(what, ref span) => ParseError {
                 message: format!("{} must not be a pointer", what),
@@ -1409,7 +1430,7 @@ impl Parser {
             Token::Number(Ok(Number::U32(num))) if uint => Ok(num as i32),
             Token::Number(Ok(Number::I32(num))) if !uint => Ok(num),
             Token::Number(Err(e)) => Err(Error::BadNumber(token_span.1, e)),
-            _ => Err(Error::Unexpected(token_span, ExpectedToken::Integer)),
+            _ => Err(Error::Unexpected(token_span.1, ExpectedToken::Integer)),
         }
     }
 
@@ -1422,7 +1443,7 @@ impl Parser {
             }
             (Token::Number(Err(e)), span) => Err(Error::BadNumber(span, e)),
             other => Err(Error::Unexpected(
-                other,
+                other.1,
                 ExpectedToken::Number(NumberType::I32),
             )),
         }
@@ -1439,7 +1460,7 @@ impl Parser {
             (Token::Number(Ok(Number::U32(num))), _) => Ok(num),
             (Token::Number(Err(e)), span) => Err(Error::BadNumber(span, e)),
             other => Err(Error::Unexpected(
-                other,
+                other.1,
                 ExpectedToken::Number(NumberType::I32),
             )),
         }
@@ -2239,7 +2260,7 @@ impl Parser {
                     components,
                 }
             }
-            other => return Err(Error::Unexpected(other, ExpectedToken::Constant)),
+            other => return Err(Error::Unexpected(other.1, ExpectedToken::Constant)),
         };
 
         // Only set span if it's a named constant. Otherwise, the enclosing Expression should have
@@ -2330,7 +2351,7 @@ impl Parser {
                     }
                 }
             }
-            other => return Err(Error::Unexpected(other, ExpectedToken::PrimaryExpression)),
+            other => return Err(Error::Unexpected(other.1, ExpectedToken::PrimaryExpression)),
         };
         Ok(expr)
     }
@@ -2831,7 +2852,7 @@ impl Parser {
         while !lexer.skip(Token::Paren('}')) {
             if !ready {
                 return Err(Error::Unexpected(
-                    lexer.next(),
+                    lexer.next().1,
                     ExpectedToken::Token(Token::Separator(',')),
                 ));
             }
@@ -2863,7 +2884,7 @@ impl Parser {
 
             let (name, span) = match lexer.next() {
                 (Token::Word(word), span) => (word, span),
-                other => return Err(Error::Unexpected(other, ExpectedToken::FieldName)),
+                other => return Err(Error::Unexpected(other.1, ExpectedToken::FieldName)),
             };
             if crate::keywords::wgsl::RESERVED.contains(&name) {
                 return Err(Error::ReservedKeyword(span));
@@ -3276,7 +3297,7 @@ impl Parser {
 
         if lexer.skip(Token::Attribute) {
             let other = lexer.next();
-            return Err(Error::Unexpected(other, ExpectedToken::TypeAttribute));
+            return Err(Error::Unexpected(other.1, ExpectedToken::TypeAttribute));
         }
 
         let (name, name_span) = lexer.next_ident_with_span()?;
@@ -3306,17 +3327,29 @@ impl Parser {
 
         let span_start = lexer.start_byte_offset();
         context.emitter.start(context.expressions);
-        let reference = self.parse_unary_expression(lexer, context.reborrow())?;
+        let (reference, lhs_span) =
+            self.parse_general_expression_for_reference(lexer, context.reborrow())?;
+        let op = lexer.next();
         // The left hand side of an assignment must be a reference.
-        let lhs_span = span_start..lexer.end_byte_offset();
-        if !reference.is_reference {
-            return Err(Error::NotReference(
-                "the left-hand side of an assignment",
-                lhs_span,
-            ));
+        if !matches!(
+            op.0,
+            Token::Operation('=')
+                | Token::AssignmentOperation(_)
+                | Token::IncrementOperation
+                | Token::DecrementOperation
+        ) {
+            return Err(Error::Unexpected(lhs_span, ExpectedToken::Assignment));
+        } else if !reference.is_reference {
+            return Err(Error::InvalidAssignment {
+                span: lhs_span,
+                ty: match context.expressions.get_mut(reference.handle) {
+                    crate::Expression::Swizzle { .. } => InvalidAssignmentType::Swizzle,
+                    _ => InvalidAssignmentType::Other,
+                },
+            });
         }
 
-        let value = match lexer.next() {
+        let value = match op {
             (Token::Operation('='), _) => {
                 self.parse_general_expression(lexer, context.reborrow())?
             }
@@ -3406,7 +3439,7 @@ impl Parser {
                     op_span.into(),
                 )
             }
-            other => return Err(Error::Unexpected(other, ExpectedToken::SwitchItem)),
+            other => return Err(Error::Unexpected(other.1, ExpectedToken::SwitchItem)),
         };
 
         let span_end = lexer.end_byte_offset();
@@ -3843,7 +3876,10 @@ impl Parser {
                                 }
                                 (Token::Paren('}'), _) => break,
                                 other => {
-                                    return Err(Error::Unexpected(other, ExpectedToken::SwitchItem))
+                                    return Err(Error::Unexpected(
+                                        other.1,
+                                        ExpectedToken::SwitchItem,
+                                    ))
                                 }
                             }
                         }
@@ -4262,7 +4298,7 @@ impl Parser {
         while !lexer.skip(Token::Paren(')')) {
             if !ready {
                 return Err(Error::Unexpected(
-                    lexer.next(),
+                    lexer.next().1,
                     ExpectedToken::Token(Token::Separator(',')),
                 ));
             }
@@ -4391,7 +4427,7 @@ impl Parser {
                             (Token::Separator(','), _) if i != 2 => (),
                             other => {
                                 return Err(Error::Unexpected(
-                                    other,
+                                    other.1,
                                     ExpectedToken::WorkgroupSizeSeparator,
                                 ))
                             }
@@ -4577,7 +4613,7 @@ impl Parser {
                 }
             }
             (Token::End, _) => return Ok(false),
-            other => return Err(Error::Unexpected(other, ExpectedToken::GlobalItem)),
+            other => return Err(Error::Unexpected(other.1, ExpectedToken::GlobalItem)),
         }
 
         match binding {
