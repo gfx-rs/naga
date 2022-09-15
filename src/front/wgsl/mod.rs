@@ -457,8 +457,13 @@ impl<'a> Error<'a> {
                 message: "invalid left-hand side of assignment".into(),
                 labels: vec![(span.clone(), "cannot assign to this expression".into())],
                 notes: match ty {
-                    InvalidAssignmentType::Swizzle => vec!["WGSL does not support assignments to swizzles".into(), "consider assigning each component individually".into()],
-                    InvalidAssignmentType::ImmutableBinding => vec![format!("'{}' is an immutable binding", &source[span.clone()]), "consider declaring it with `var` instead of `let`".into()],
+                    InvalidAssignmentType::Swizzle => vec![
+                        "WGSL does not support assignments to swizzles".into(),
+                        "consider assigning each component individually".into()
+                    ],
+                    InvalidAssignmentType::ImmutableBinding => vec![
+                        format!("'{}' is an immutable binding", &source[span.clone()]), "consider declaring it with `var` instead of `let`".into()
+                    ],
                     InvalidAssignmentType::Other => vec![],
                 },
             },
@@ -3344,17 +3349,16 @@ impl Parser {
         ) {
             return Err(Error::Unexpected(lhs_span, ExpectedToken::Assignment));
         } else if !reference.is_reference {
-            return Err(Error::InvalidAssignment {
-                span: lhs_span,
-                ty: if context.named_expressions.contains_key(&reference.handle) {
-                    InvalidAssignmentType::ImmutableBinding
-                } else {
-                    match *context.expressions.get_mut(reference.handle) {
-                        crate::Expression::Swizzle { .. } => InvalidAssignmentType::Swizzle,
-                        _ => InvalidAssignmentType::Other,
-                    }
-                },
-            });
+            let ty = if context.named_expressions.contains_key(&reference.handle) {
+                InvalidAssignmentType::ImmutableBinding
+            } else {
+                match *context.expressions.get_mut(reference.handle) {
+                    crate::Expression::Swizzle { .. } => InvalidAssignmentType::Swizzle,
+                    _ => InvalidAssignmentType::Other,
+                }
+            };
+
+            return Err(Error::InvalidAssignment { span: lhs_span, ty });
         }
 
         let mut context = context.as_expression(block, emitter);
