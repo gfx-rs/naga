@@ -320,6 +320,20 @@ fn declarations() {
         "#,
         )
         .unwrap();
+
+    parser
+        .parse(
+            &Options::from(ShaderStage::Compute),
+            r#"
+        #version 450
+        precision highp float;
+        
+        layout(binding = 0) uniform writeonly image2D image;
+
+        void main() {}
+        "#,
+        )
+        .unwrap();
 }
 
 #[test]
