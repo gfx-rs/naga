@@ -4,6 +4,7 @@ Frontend for [WGSL][wgsl] (WebGPU Shading Language).
 [wgsl]: https://gpuweb.github.io/gpuweb/wgsl.html
 */
 
+use crate::front::wgsl::lower::Lowerer;
 use crate::{SourceLocation, Span};
 use codespan_reporting::diagnostic::{Diagnostic, Label};
 use codespan_reporting::files::SimpleFile;
@@ -14,11 +15,20 @@ use wgsl::parse::parse;
 use wgsl::resolve::resolve;
 use wgsl::text::Interner;
 
+mod const_eval;
+mod lower;
+
 #[derive(Clone, Debug)]
 pub struct WgslError {
     message: String,
     labels: Vec<(Span, String)>,
     notes: Vec<String>,
+}
+
+impl From<wgsl::diagnostic::Span> for Span {
+    fn from(s: wgsl::diagnostic::Span) -> Self {
+        Self::new(s.start, s.end)
+    }
 }
 
 impl WgslError {
@@ -29,7 +39,7 @@ impl WgslError {
                 labels: diag
                     .labels
                     .into_iter()
-                    .map(|l| (Span::new(l.span.start, l.span.end), l.message))
+                    .map(|l| (l.span.into(), l.message))
                     .collect(),
                 notes: diag.notes,
             }),
@@ -129,5 +139,5 @@ pub fn parse_str(source: &str) -> Result<crate::Module, Vec<WgslError>> {
             .collect());
     }
 
-    Ok(crate::Module::default())
+    Lowerer::new(&module, &intern).lower()
 }
