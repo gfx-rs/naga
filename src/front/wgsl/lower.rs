@@ -2,7 +2,10 @@ use crate::front::wgsl::const_eval::{Evaluator, Value};
 use crate::front::wgsl::WgslError;
 use crate::front::Typifier;
 use crate::proc::{Alignment, Layouter};
-use crate::{FastHashMap, Handle};
+use crate::{
+    FastHashMap, Handle, ImageClass, ImageDimension, ScalarKind, StorageFormat, TypeInner,
+};
+use std::fmt::{Display, Formatter};
 use wgsl::resolve::inbuilt::{
     AccessMode, AddressSpace, Builtin, ConservativeDepth, DepthTextureType, InterpolationSample,
     InterpolationType, MatType, PrimitiveType, SampledTextureType, SamplerType, StorageTextureType,
@@ -60,7 +63,7 @@ impl<'a> Lowerer<'a> {
 
     pub fn lower(mut self) -> Result<crate::Module, Vec<WgslError>> {
         for (id, decl) in self.tu.decls_ordered() {
-            let data = self.decl(id, decl);
+            let data = self.decl(decl);
             self.decl_map.insert(id, data);
         }
 
@@ -73,7 +76,7 @@ impl<'a> Lowerer<'a> {
         }
     }
 
-    fn decl(&mut self, id: DeclId, decl: &Decl) -> DeclData {
+    fn decl(&mut self, decl: &Decl) -> DeclData {
         match decl.kind {
             DeclKind::Fn(ref f) => {
                 let handle = self.fn_(f, decl.span.into());
@@ -94,7 +97,7 @@ impl<'a> Lowerer<'a> {
                 handle.map(DeclData::Global).unwrap_or(DeclData::Error)
             }
             DeclKind::Const(ref c) => {
-                let handle = self.const_(id, c, decl.span.into());
+                let handle = self.const_(c, decl.span.into());
                 handle.map(DeclData::Const).unwrap_or(DeclData::Error)
             }
             DeclKind::StaticAssert(ref expr) => {
@@ -318,7 +321,6 @@ impl<'a> Lowerer<'a> {
 
             offset = align.round_up(offset);
             alignment = alignment.max(align);
-            offset += size;
 
             members.push(crate::StructMember {
                 name: Some(name),
@@ -326,11 +328,13 @@ impl<'a> Lowerer<'a> {
                 ty,
                 offset,
             });
+
+            offset += size;
         }
 
         let ty = crate::Type {
             name: Some(name),
-            inner: crate::TypeInner::Struct {
+            inner: TypeInner::Struct {
                 members,
                 span: alignment.round_up(offset),
             },
@@ -339,12 +343,7 @@ impl<'a> Lowerer<'a> {
         Some(self.module.types.insert(ty, span))
     }
 
-    fn const_(
-        &mut self,
-        id: DeclId,
-        c: &Let,
-        span: crate::Span,
-    ) -> Option<Handle<crate::Constant>> {
+    fn const_(&mut self, c: &Let, span: crate::Span) -> Option<Handle<crate::Constant>> {
         let ident = self.intern.resolve(c.name.name).to_string();
         let value = self.eval.eval(&c.val)?;
         let (width, value) = self.val_to_scalar(value);
@@ -704,14 +703,14 @@ impl<'a> Lowerer<'a> {
         }
     }
 
-    fn primitive_ty(&mut self, ty: &PrimitiveType) -> (crate::ScalarKind, crate::Bytes) {
+    fn primitive_ty(&mut self, ty: &PrimitiveType) -> (ScalarKind, crate::Bytes) {
         match ty {
-            PrimitiveType::I32 => (crate::ScalarKind::Sint, 4),
-            PrimitiveType::U32 => (crate::ScalarKind::Uint, 4),
-            PrimitiveType::F64 => (crate::ScalarKind::Float, 8),
-            PrimitiveType::F32 => (crate::ScalarKind::Float, 4),
-            PrimitiveType::F16 => (crate::ScalarKind::Float, 2),
-            PrimitiveType::Bool => (crate::ScalarKind::Bool, 1),
+            PrimitiveType::I32 => (ScalarKind::Sint, 4),
+            PrimitiveType::U32 => (ScalarKind::Uint, 4),
+            PrimitiveType::F64 => (ScalarKind::Float, 8),
+            PrimitiveType::F32 => (ScalarKind::Float, 4),
+            PrimitiveType::F16 => (ScalarKind::Float, 2),
+            PrimitiveType::Bool => (ScalarKind::Bool, 1),
             PrimitiveType::Infer => unreachable!("cannot infer type here"),
         }
     }
@@ -918,9 +917,20 @@ impl<'a> Lowerer<'a> {
                 };
 
                 Some(
-                    self.module
-                        .types
-                        .insert(crate::Type { name: None, inner }, crate::Span::UNDEFINED),
+                    self.module.types.insert(
+                        crate::Type {
+                            name: Some(
+                                TypeFormatter {
+                                    ty: &inner,
+                                    types: &self.module.types,
+                                    constants: &self.module.constants,
+                                }
+                                .to_string(),
+                            ),
+                            inner,
+                        },
+                        crate::Span::UNDEFINED,
+                    ),
                 )
             }
             TypeKind::User(ref id) => match self.decl_map[id] {
@@ -998,6 +1008,241 @@ impl<'a> Lowerer<'a> {
             AccessMode::Read => crate::StorageAccess::LOAD,
             AccessMode::Write => crate::StorageAccess::STORE,
             AccessMode::ReadWrite => crate::StorageAccess::LOAD | crate::StorageAccess::STORE,
+        }
+    }
+}
+
+struct TypeFormatter<'a> {
+    ty: &'a TypeInner,
+    types: &'a crate::UniqueArena<crate::Type>,
+    constants: &'a crate::Arena<crate::Constant>,
+}
+
+impl Display for TypeFormatter<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match *self.ty {
+            TypeInner::Scalar { kind, width } => ScalarFormatter { kind, width }.fmt(f),
+            TypeInner::Vector { size, kind, width } => write!(
+                f,
+                "vec{}<{}>",
+                VectorSizeFormatter { size },
+                ScalarFormatter { kind, width }
+            ),
+            TypeInner::Matrix {
+                columns,
+                rows,
+                width,
+            } => write!(
+                f,
+                "mat{}x{}<{}>",
+                columns as u8,
+                VectorSizeFormatter { size: rows },
+                ScalarFormatter {
+                    kind: crate::ScalarKind::Float,
+                    width
+                }
+            ),
+            TypeInner::Atomic { kind, width } => {
+                write!(f, "atomic<{}>", ScalarFormatter { kind, width })
+            }
+            TypeInner::Pointer { base, space } => write!(
+                f,
+                "ptr<{}, {}>",
+                match space {
+                    crate::AddressSpace::Function => "function",
+                    crate::AddressSpace::Private => "private",
+                    crate::AddressSpace::WorkGroup => "workgroup",
+                    crate::AddressSpace::Uniform => "uniform",
+                    crate::AddressSpace::Storage { .. } => "storage",
+                    crate::AddressSpace::Handle => "handle",
+                    crate::AddressSpace::PushConstant => "push_constant",
+                },
+                self.types
+                    .get_handle(base)
+                    .unwrap()
+                    .name
+                    .as_ref()
+                    .expect("created type without name"),
+            ),
+            TypeInner::ValuePointer { .. } => {
+                panic!("TypeInner::ValuePointer should not be formatted by the frontend")
+            }
+            TypeInner::Array { base, size, .. } => {
+                let base = self
+                    .types
+                    .get_handle(base)
+                    .unwrap()
+                    .name
+                    .as_ref()
+                    .expect("created type without name");
+                match size {
+                    crate::ArraySize::Constant(c) => write!(
+                        f,
+                        "array<{}, {}>",
+                        base,
+                        match self.constants[c].inner {
+                            crate::ConstantInner::Scalar {
+                                value: crate::ScalarValue::Uint(u),
+                                ..
+                            } => u,
+                            _ => panic!("Array size should be a constant"),
+                        }
+                    ),
+                    crate::ArraySize::Dynamic => write!(f, "array<{}>", base),
+                }
+            }
+            TypeInner::Struct { .. } => {
+                panic!("TypeInner::Struct should not be formatted by the frontend")
+            }
+            TypeInner::Image {
+                dim,
+                arrayed,
+                class,
+            } => {
+                let dim = match dim {
+                    ImageDimension::D1 => "1d",
+                    ImageDimension::D2 => "2d",
+                    ImageDimension::D3 => "3d",
+                    ImageDimension::Cube => "cube",
+                };
+                let arrayed = if arrayed { "_array" } else { "" };
+                match class {
+                    ImageClass::Sampled { kind, multi } => {
+                        let multi = if multi { "multisampled_" } else { "" };
+                        write!(
+                            f,
+                            "texture_{}{}{}<{}>",
+                            multi,
+                            dim,
+                            arrayed,
+                            match kind {
+                                ScalarKind::Sint => "int",
+                                ScalarKind::Uint => "uint",
+                                ScalarKind::Float => "float",
+                                ScalarKind::Bool => "bool",
+                            }
+                        )
+                    }
+                    ImageClass::Depth { multi } => {
+                        let multi = if multi { "multisampled_" } else { "" };
+                        write!(f, "texture_depth_{}{}{}", multi, dim, arrayed)
+                    }
+                    ImageClass::Storage { format, access } => {
+                        write!(
+                            f,
+                            "texture_storage_{}{}<{}, {}>",
+                            dim,
+                            arrayed,
+                            match format {
+                                StorageFormat::R8Unorm => "r8unorm",
+                                StorageFormat::R8Snorm => "r8snorm",
+                                StorageFormat::R8Uint => "r8uint",
+                                StorageFormat::R8Sint => "r8sint",
+                                StorageFormat::R16Uint => "r16uint",
+                                StorageFormat::R16Sint => "r16sint",
+                                StorageFormat::R16Float => "r16float",
+                                StorageFormat::Rg8Unorm => "rg8unorm",
+                                StorageFormat::Rg8Snorm => "rg8snorm",
+                                StorageFormat::Rg8Uint => "rg8uint",
+                                StorageFormat::Rg8Sint => "rg8sint",
+                                StorageFormat::R32Uint => "r32uint",
+                                StorageFormat::R32Sint => "r32sint",
+                                StorageFormat::R32Float => "r32float",
+                                StorageFormat::Rg16Uint => "rg16uint",
+                                StorageFormat::Rg16Sint => "rg16sint",
+                                StorageFormat::Rg16Float => "rg16float",
+                                StorageFormat::Rgba8Unorm => "rgba8unorm",
+                                StorageFormat::Rgba8Snorm => "rgba8snorm",
+                                StorageFormat::Rgba8Uint => "rgba8uint",
+                                StorageFormat::Rgba8Sint => "rgba8sint",
+                                StorageFormat::Rgb10a2Unorm => "rgb10a2unorm",
+                                StorageFormat::Rg11b10Float => "rg11b10float",
+                                StorageFormat::Rg32Uint => "rg32uint",
+                                StorageFormat::Rg32Sint => "rg32sint",
+                                StorageFormat::Rg32Float => "rg32float",
+                                StorageFormat::Rgba16Uint => "rgba16uint",
+                                StorageFormat::Rgba16Sint => "rgba16sint",
+                                StorageFormat::Rgba16Float => "rgba16float",
+                                StorageFormat::Rgba32Uint => "rgba32uint",
+                                StorageFormat::Rgba32Sint => "rgba32sint",
+                                StorageFormat::Rgba32Float => "rgba32float",
+                            },
+                            if access
+                                .contains(crate::StorageAccess::STORE | crate::StorageAccess::LOAD)
+                            {
+                                "read_write"
+                            } else if access.contains(crate::StorageAccess::STORE) {
+                                "write"
+                            } else {
+                                "read"
+                            }
+                        )
+                    }
+                }
+            }
+            TypeInner::Sampler { comparison } => write!(
+                f,
+                "{}",
+                if comparison {
+                    "sampler_comparison"
+                } else {
+                    "sampler"
+                }
+            ),
+            TypeInner::BindingArray { base, size } => {
+                let base = self
+                    .types
+                    .get_handle(base)
+                    .unwrap()
+                    .name
+                    .as_ref()
+                    .expect("created type without name");
+                match size {
+                    crate::ArraySize::Constant(c) => write!(
+                        f,
+                        "binding_array<{}, {}>",
+                        base,
+                        match self.constants[c].inner {
+                            crate::ConstantInner::Scalar {
+                                value: crate::ScalarValue::Uint(u),
+                                ..
+                            } => u,
+                            _ => panic!("Array size should be a constant"),
+                        }
+                    ),
+                    crate::ArraySize::Dynamic => write!(f, "binding_array<{}>", base),
+                }
+            }
+        }
+    }
+}
+
+struct ScalarFormatter {
+    kind: ScalarKind,
+    width: crate::Bytes,
+}
+
+impl Display for ScalarFormatter {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self.kind {
+            crate::ScalarKind::Sint => write!(f, "i{}", self.width * 8),
+            crate::ScalarKind::Uint => write!(f, "u{}", self.width * 8),
+            crate::ScalarKind::Float => write!(f, "f{}", self.width * 8),
+            crate::ScalarKind::Bool => write!(f, "bool"),
+        }
+    }
+}
+
+struct VectorSizeFormatter {
+    size: crate::VectorSize,
+}
+
+impl Display for VectorSizeFormatter {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self.size {
+            crate::VectorSize::Bi => write!(f, "2"),
+            crate::VectorSize::Tri => write!(f, "3"),
+            crate::VectorSize::Quad => write!(f, "4"),
         }
     }
 }
