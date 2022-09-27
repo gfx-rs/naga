@@ -13,7 +13,10 @@ fn capabilities_used(source: &str) -> naga::FastHashSet<Ca> {
     let module = naga::front::wgsl::parse_str(source).unwrap_or_else(|e| {
         panic!(
             "expected WGSL to parse successfully:\n{}",
-            e.emit_to_string(source)
+            e.into_iter()
+                .map(|x| x.emit_to_string(source))
+                .collect::<Vec<_>>()
+                .join("\n"),
         );
     });
 

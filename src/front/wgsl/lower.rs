@@ -1,5 +1,6 @@
-use crate::front::wgsl::const_eval::{Evaluator, FloatValue, ScalarValue, Value, VecWidth};
+use crate::front::wgsl::const_eval::{Evaluator, Value};
 use crate::front::wgsl::WgslError;
+use crate::front::Typifier;
 use crate::proc::{Alignment, Layouter};
 use crate::{FastHashMap, Handle};
 use wgsl::resolve::inbuilt::{
@@ -8,8 +9,9 @@ use wgsl::resolve::inbuilt::{
     TexelFormat, VecType,
 };
 use wgsl::resolve::ir::{
-    Arg, ArgAttribs, Decl, DeclId, DeclKind, Expr, FloatType, Fn, FnAttribs, InbuiltType, Let,
-    SampleType, Struct, TranslationUnit, Type, TypeKind, Var,
+    Arg, ArgAttribs, Block, CaseSelector, Decl, DeclId, DeclKind, Expr, ExprKind,
+    ExprStatementKind, FloatType, Fn, FnAttribs, InbuiltType, Let, LocalId, SampleType, Stmt,
+    StmtKind, Struct, TranslationUnit, Type, TypeKind, Var, VarDeclKind,
 };
 use wgsl::text::Interner;
 
@@ -21,6 +23,8 @@ pub struct Lowerer<'a> {
     errors: Vec<WgslError>,
     decl_map: FastHashMap<DeclId, DeclData>,
     layouter: Layouter,
+    typifier: Typifier,
+    locals: FastHashMap<LocalId, LocalData>,
 }
 
 enum DeclData {
@@ -34,6 +38,11 @@ enum DeclData {
     Error,
 }
 
+enum LocalData {
+    Variable(Handle<crate::LocalVariable>),
+    Let(Handle<crate::Expression>),
+}
+
 impl<'a> Lowerer<'a> {
     pub fn new(module: &'a TranslationUnit, intern: &'a Interner) -> Self {
         Self {
@@ -44,12 +53,14 @@ impl<'a> Lowerer<'a> {
             errors: Vec::new(),
             decl_map: FastHashMap::default(),
             layouter: Layouter::default(),
+            typifier: Typifier::default(),
+            locals: FastHashMap::default(),
         }
     }
 
     pub fn lower(mut self) -> Result<crate::Module, Vec<WgslError>> {
         for (id, decl) in self.tu.decls_ordered() {
-            let data = self.decl(decl);
+            let data = self.decl(id, decl);
             self.decl_map.insert(id, data);
         }
 
@@ -62,7 +73,7 @@ impl<'a> Lowerer<'a> {
         }
     }
 
-    fn decl(&mut self, decl: &Decl) -> DeclData {
+    fn decl(&mut self, id: DeclId, decl: &Decl) -> DeclData {
         match decl.kind {
             DeclKind::Fn(ref f) => {
                 let handle = self.fn_(f, decl.span.into());
@@ -83,7 +94,7 @@ impl<'a> Lowerer<'a> {
                 handle.map(DeclData::Global).unwrap_or(DeclData::Error)
             }
             DeclKind::Const(ref c) => {
-                let handle = self.const_(c, decl.span.into());
+                let handle = self.const_(id, c, decl.span.into());
                 handle.map(DeclData::Const).unwrap_or(DeclData::Error)
             }
             DeclKind::StaticAssert(ref expr) => {
@@ -112,7 +123,7 @@ impl<'a> Lowerer<'a> {
         let name = self.intern.resolve(f.name.name).to_string();
         let is_frag = matches!(f.attribs, FnAttribs::Fragment(_));
 
-        let fun = crate::Function {
+        let mut fun = crate::Function {
             name: Some(name.clone()),
             arguments: f
                 .args
@@ -130,6 +141,10 @@ impl<'a> Lowerer<'a> {
             named_expressions: Default::default(),
             body: Default::default(),
         };
+
+        self.locals.clear();
+        let body = self.block(&f.block, &mut fun);
+        fun.body = body;
 
         let entry = match f.attribs {
             FnAttribs::None => {
@@ -198,10 +213,27 @@ impl<'a> Lowerer<'a> {
             return None;
         };
 
+        let binding = if let Some(ref binding) = v.attribs.binding {
+            if let Some(ref group) = v.attribs.group {
+                let binding = self.eval.as_positive_int(binding).unwrap_or(0);
+                let group = self.eval.as_positive_int(group).unwrap_or(0);
+                Some(crate::ResourceBinding { binding, group })
+            } else {
+                self.errors.push(WgslError {
+                    message: "resource variable must have both binding and group".to_string(),
+                    labels: vec![(span, "".to_string())],
+                    notes: vec![],
+                });
+                None
+            }
+        } else {
+            None
+        };
+
         let var = crate::GlobalVariable {
             name: Some(name),
             space: self.address_space(v.inner.address_space, v.inner.access_mode),
-            binding: None,
+            binding,
             ty,
             init: init.map(|(v, span)| self.val_to_const(v, span.into())),
         };
@@ -307,15 +339,20 @@ impl<'a> Lowerer<'a> {
         Some(self.module.types.insert(ty, span))
     }
 
-    fn const_(&mut self, c: &Let, span: crate::Span) -> Option<Handle<crate::Constant>> {
+    fn const_(
+        &mut self,
+        id: DeclId,
+        c: &Let,
+        span: crate::Span,
+    ) -> Option<Handle<crate::Constant>> {
         let ident = self.intern.resolve(c.name.name).to_string();
         let value = self.eval.eval(&c.val)?;
-        let init = self.val_to_const_inner(value, c.val.span.into());
+        let (width, value) = self.val_to_scalar(value);
 
         let constant = crate::Constant {
             name: Some(ident),
             specialization: None,
-            inner: init,
+            inner: crate::ConstantInner::Scalar { width, value },
         };
         Some(self.module.constants.append(constant, span))
     }
@@ -326,6 +363,260 @@ impl<'a> Lowerer<'a> {
             ty: self.ty(&arg.ty)?,
             binding: self.binding(&arg.attribs, arg.span.into(), is_frag),
         })
+    }
+
+    fn block(&mut self, b: &Block, fun: &mut crate::Function) -> crate::Block {
+        let mut block = crate::Block::with_capacity(b.stmts.len());
+
+        for stmt in b.stmts.iter() {
+            self.stmt(stmt, &mut block, fun);
+        }
+
+        block
+    }
+
+    fn stmt(&mut self, s: &Stmt, b: &mut crate::Block, fun: &mut crate::Function) -> Option<()> {
+        let stmt = match s.kind {
+            StmtKind::Expr(ref k) => return Some(self.expr_stmt(k, s.span.into(), b, fun)),
+            StmtKind::Block(ref b) => crate::Statement::Block(self.block(b, fun)),
+            StmtKind::Break => crate::Statement::Break,
+            StmtKind::Continue => crate::Statement::Continue,
+            StmtKind::Discard => crate::Statement::Kill,
+            StmtKind::For(ref f) => {
+                let mut block = crate::Block::with_capacity(2);
+                if let Some(ref x) = f.init {
+                    self.expr_stmt(&x.kind, x.span.into(), &mut block, fun);
+                }
+
+                let mut body = crate::Block::with_capacity(2);
+                if let Some(ref x) = f.cond {
+                    let condition = self.expr(&x, &mut body, fun)?;
+                    body.push(
+                        crate::Statement::If {
+                            condition,
+                            accept: crate::Block::new(),
+                            reject: {
+                                let mut b = crate::Block::new();
+                                b.push(crate::Statement::Break, x.span.into());
+                                b
+                            },
+                        },
+                        x.span.into(),
+                    );
+                }
+                body.push(
+                    crate::Statement::Block(self.block(&f.block, fun)),
+                    f.block.span.into(),
+                );
+
+                let mut continuing = crate::Block::new();
+                if let Some(ref x) = f.update {
+                    self.expr_stmt(&x.kind, x.span.into(), &mut continuing, fun)
+                }
+
+                block.push(
+                    crate::Statement::Loop {
+                        body,
+                        continuing,
+                        break_if: None,
+                    },
+                    s.span.into(),
+                );
+
+                crate::Statement::Block(block)
+            }
+            StmtKind::If(ref i) => {
+                let condition = self.expr(&i.cond, b, fun)?;
+                let accept = self.block(&i.block, fun);
+                let reject = i
+                    .else_
+                    .as_ref()
+                    .map(|stmt| {
+                        let mut b = crate::Block::with_capacity(1);
+                        self.stmt(&stmt, &mut b, fun);
+                        b
+                    })
+                    .unwrap_or_default();
+
+                crate::Statement::If {
+                    condition,
+                    accept,
+                    reject,
+                }
+            }
+            StmtKind::Loop(ref l) => {
+                let continuing = l.stmts.last().and_then(|x| match x.kind {
+                    StmtKind::Continuing(ref b) => Some(b),
+                    _ => None,
+                });
+                let break_if = continuing
+                    .and_then(|b| b.stmts.last())
+                    .and_then(|x| match x.kind {
+                        StmtKind::BreakIf(ref e) => Some(e),
+                        _ => None,
+                    });
+
+                let len = continuing
+                    .map(|_| l.stmts.len() - 1)
+                    .unwrap_or(l.stmts.len());
+                let stmts = l.stmts.iter().take(len);
+                let mut body = crate::Block::with_capacity(len);
+                for stmt in stmts {
+                    self.stmt(stmt, &mut body, fun);
+                }
+
+                let (continuing, break_if) = if let Some(continuing) = continuing {
+                    let len = break_if
+                        .map(|_| continuing.stmts.len() - 1)
+                        .unwrap_or(continuing.stmts.len());
+                    let stmts = continuing.stmts.iter().take(len);
+                    let mut cont = crate::Block::with_capacity(len);
+                    for stmt in stmts {
+                        self.stmt(stmt, &mut cont, fun);
+                    }
+
+                    let b = break_if.map(|x| self.expr(x, &mut cont, fun))?;
+
+                    (cont, b)
+                } else {
+                    (crate::Block::new(), None)
+                };
+
+                crate::Statement::Loop {
+                    body,
+                    continuing,
+                    break_if,
+                }
+            }
+            StmtKind::Return(ref e) => crate::Statement::Return {
+                value: e.as_ref().and_then(|x| self.expr(x, b, fun)),
+            },
+            StmtKind::StaticAssert(ref expr) => {
+                if let Some(value) = self.eval.as_bool(expr) {
+                    if !value {
+                        self.errors.push(WgslError {
+                            message: "static assertion failed".to_string(),
+                            labels: vec![(expr.span.into(), "".to_string())],
+                            notes: vec![],
+                        });
+                    }
+                }
+
+                return None;
+            }
+            StmtKind::Switch(ref s) => {
+                let selector = self.expr(&s.expr, b, fun)?;
+                let cases = s
+                    .cases
+                    .iter()
+                    .flat_map(|x| {
+                        let block = self.block(&x.block, fun);
+                        let this = &mut *self;
+                        x.selectors
+                            .iter()
+                            .filter_map(move |sel| {
+                                let value = match sel {
+                                    CaseSelector::Expr(e) => {
+                                        let value = this.eval.as_int(e)?;
+                                        crate::SwitchValue::Integer(value)
+                                    }
+                                    CaseSelector::Default => crate::SwitchValue::Default,
+                                };
+                                Some(crate::SwitchCase {
+                                    value,
+                                    body: block.clone(),
+                                    fall_through: false,
+                                })
+                            })
+                            .collect::<Vec<_>>()
+                    })
+                    .collect();
+                crate::Statement::Switch { selector, cases }
+            }
+            StmtKind::While(ref w) => {
+                let mut body = crate::Block::with_capacity(3);
+                let condition = self.expr(&w.cond, &mut body, fun)?;
+
+                body.push(
+                    crate::Statement::If {
+                        condition,
+                        accept: crate::Block::new(),
+                        reject: {
+                            let mut b = crate::Block::new();
+                            b.push(crate::Statement::Break, w.cond.span.into());
+                            b
+                        },
+                    },
+                    w.cond.span.into(),
+                );
+
+                let b = self.block(&w.block, fun);
+                body.push(crate::Statement::Block(b), w.block.span.into());
+
+                crate::Statement::Loop {
+                    body,
+                    continuing: crate::Block::new(),
+                    break_if: None,
+                }
+            }
+            StmtKind::Continuing(_) | StmtKind::BreakIf(_) => {
+                unreachable!("continuing or break if should've been handled in the parent loop");
+            }
+        };
+        b.push(stmt, s.span.into());
+        None
+    }
+
+    fn expr_stmt(
+        &mut self,
+        s: &ExprStatementKind,
+        span: crate::Span,
+        b: &mut crate::Block,
+        fun: &mut crate::Function,
+    ) {
+        match *s {
+            ExprStatementKind::VarDecl(ref decl) => match decl.kind {
+                VarDeclKind::Var(_) => {}
+                VarDeclKind::Const(_) => {}
+                VarDeclKind::Let(_) => {}
+            },
+            ExprStatementKind::Call(ref call) => {}
+            ExprStatementKind::Assign(_) => {}
+            ExprStatementKind::Postfix(_) => {}
+        }
+    }
+
+    fn expr(
+        &mut self,
+        e: &Expr,
+        b: &mut crate::Block,
+        fun: &mut crate::Function,
+    ) -> Option<Handle<crate::Expression>> {
+        let start = fun.expressions.len();
+        let handle = self.expr_inner(e, fun)?;
+        let range = fun.expressions.range_from(start);
+        b.push(crate::Statement::Emit(range), e.span.into());
+        Some(handle)
+    }
+
+    fn expr_inner(
+        &mut self,
+        e: &Expr,
+        fun: &mut crate::Function,
+    ) -> Option<Handle<crate::Expression>> {
+        match e.kind {
+            ExprKind::Error => {}
+            ExprKind::Literal(_) => {}
+            ExprKind::Local(_) => {}
+            ExprKind::Global(_) => {}
+            ExprKind::Unary(_) => {}
+            ExprKind::Binary(_) => {}
+            ExprKind::Call(_) => {}
+            ExprKind::Index(_, _) => {}
+            ExprKind::Member(_, _) => {}
+        }
+
+        None
     }
 
     fn binding(
@@ -652,138 +943,39 @@ impl<'a> Lowerer<'a> {
     }
 
     fn val_to_const(&mut self, value: Value, span: crate::Span) -> Handle<crate::Constant> {
+        let (width, value) = self.val_to_scalar(value);
+
         let value = crate::Constant {
             name: None,
             specialization: None,
-            inner: self.val_to_const_inner(value, span),
+            inner: crate::ConstantInner::Scalar { width, value },
         };
 
         self.module.constants.append(value, span)
     }
 
-    fn val_to_const_inner(&mut self, value: Value, span: crate::Span) -> crate::ConstantInner {
-        match value {
-            Value::Scalar(s) => {
-                let (width, value) = self.scalar_value(s);
-
-                crate::ConstantInner::Scalar { width, value }
-            }
-            Value::Vector(v) => {
-                let (width, value) = self.scalar_value(*v.get_any());
-                let kind = value.scalar_kind();
-
-                match v {
-                    VecWidth::W2(v) => crate::ConstantInner::Composite {
-                        ty: self.module.types.insert(
-                            crate::Type {
-                                name: None,
-                                inner: crate::TypeInner::Vector {
-                                    size: crate::VectorSize::Bi,
-                                    kind,
-                                    width,
-                                },
-                            },
-                            crate::Span::UNDEFINED,
-                        ),
-                        components: v
-                            .iter()
-                            .map(|s| self.val_to_const(Value::Scalar(*s), span))
-                            .collect(),
-                    },
-                    VecWidth::W3(v) => crate::ConstantInner::Composite {
-                        ty: self.module.types.insert(
-                            crate::Type {
-                                name: None,
-                                inner: crate::TypeInner::Vector {
-                                    size: crate::VectorSize::Tri,
-                                    kind,
-                                    width,
-                                },
-                            },
-                            crate::Span::UNDEFINED,
-                        ),
-                        components: v
-                            .iter()
-                            .map(|s| self.val_to_const(Value::Scalar(*s), span))
-                            .collect(),
-                    },
-                    VecWidth::W4(v) => crate::ConstantInner::Composite {
-                        ty: self.module.types.insert(
-                            crate::Type {
-                                name: None,
-                                inner: crate::TypeInner::Vector {
-                                    size: crate::VectorSize::Quad,
-                                    kind,
-                                    width,
-                                },
-                            },
-                            crate::Span::UNDEFINED,
-                        ),
-                        components: v
-                            .iter()
-                            .map(|s| self.val_to_const(Value::Scalar(*s), span))
-                            .collect(),
-                    },
-                }
-            }
-        }
-    }
-
     fn val_to_ty(&mut self, value: Value, span: crate::Span) -> Handle<crate::Type> {
+        let (width, value) = self.val_to_scalar(value);
         let ty = crate::Type {
             name: None,
-            inner: match value {
-                Value::Scalar(s) => {
-                    let (width, value) = self.scalar_value(s);
-
-                    crate::TypeInner::Scalar {
-                        kind: value.scalar_kind(),
-                        width,
-                    }
-                }
-                Value::Vector(v) => {
-                    let (width, value) = self.scalar_value(*v.get_any());
-                    let kind = value.scalar_kind();
-
-                    match v {
-                        VecWidth::W2(_) => crate::TypeInner::Vector {
-                            size: crate::VectorSize::Bi,
-                            kind,
-                            width,
-                        },
-                        VecWidth::W3(_) => crate::TypeInner::Vector {
-                            size: crate::VectorSize::Tri,
-                            kind,
-                            width,
-                        },
-                        VecWidth::W4(_) => crate::TypeInner::Vector {
-                            size: crate::VectorSize::Quad,
-                            kind,
-                            width,
-                        },
-                    }
-                }
+            inner: crate::TypeInner::Scalar {
+                kind: value.scalar_kind(),
+                width,
             },
         };
 
         self.module.types.insert(ty, span)
     }
 
-    fn scalar_value(&mut self, value: ScalarValue) -> (crate::Bytes, crate::ScalarValue) {
+    fn val_to_scalar(&mut self, value: Value) -> (crate::Bytes, crate::ScalarValue) {
         match value {
-            ScalarValue::Bool(b) => (1, crate::ScalarValue::Bool(b)),
-            ScalarValue::AbstractInt(i) => (4, crate::ScalarValue::Sint(i)), // Concretize to `i32`.
-            ScalarValue::I32(i) => (4, crate::ScalarValue::Sint(i as _)),
-            ScalarValue::U32(u) => (4, crate::ScalarValue::Uint(u as _)),
-            ScalarValue::Float(f) => self.float_value(f),
-        }
-    }
-
-    fn float_value(&mut self, value: FloatValue) -> (crate::Bytes, crate::ScalarValue) {
-        match value {
-            FloatValue::AbstractFloat(f) => (4, crate::ScalarValue::Float(f)), // Concretize to `f32`.
-            FloatValue::F32(f) => (4, crate::ScalarValue::Float(f as _)),
-            FloatValue::F64(f) => (8, crate::ScalarValue::Float(f)),
+            Value::Bool(b) => (1, crate::ScalarValue::Bool(b)),
+            Value::AbstractInt(i) => (4, crate::ScalarValue::Sint(i)), // Concretize to `i32`.
+            Value::I32(i) => (4, crate::ScalarValue::Sint(i as _)),
+            Value::U32(u) => (4, crate::ScalarValue::Uint(u as _)),
+            Value::AbstractFloat(f) => (4, crate::ScalarValue::Float(f)), // Concretize to `f32`.
+            Value::F32(f) => (4, crate::ScalarValue::Float(f as _)),
+            Value::F64(f) => (8, crate::ScalarValue::Float(f)),
         }
     }
 

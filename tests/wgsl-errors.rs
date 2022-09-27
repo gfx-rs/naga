@@ -6,7 +6,10 @@ Tests for the WGSL front end.
 fn check(input: &str, snapshot: &str) {
     let output = naga::front::wgsl::parse_str(input)
         .expect_err("expected parser error")
-        .emit_to_string(input);
+        .into_iter()
+        .map(|x| x.emit_to_string(input))
+        .collect::<Vec<_>>()
+        .join("\n");
     if output != snapshot {
         for diff in diff::lines(&output, snapshot) {
             match diff {
@@ -911,7 +914,13 @@ fn validation_error(source: &str) -> Result<naga::valid::ModuleInfo, naga::valid
         Ok(module) => module,
         Err(err) => {
             eprintln!("WGSL parse failed:");
-            panic!("{}", err.emit_to_string(source));
+            panic!(
+                "{}",
+                err.into_iter()
+                    .map(|x| x.emit_to_string(source))
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            );
         }
     };
     naga::valid::Validator::new(
