@@ -6,6 +6,7 @@ use crate::{
     FastHashMap, Handle, ImageClass, ImageDimension, ScalarKind, StorageFormat, TypeInner,
 };
 use std::fmt::{Display, Formatter};
+use wgsl::ast::{BinaryOp, UnaryOp};
 use wgsl::resolve::inbuilt::{
     AccessMode, AddressSpace, Builtin, ConservativeDepth, DepthTextureType, InterpolationSample,
     InterpolationType, MatType, PrimitiveType, SampledTextureType, SamplerType, StorageTextureType,
@@ -44,6 +45,12 @@ enum DeclData {
 enum LocalData {
     Variable(Handle<crate::LocalVariable>),
     Let(Handle<crate::Expression>),
+    FunctionArg(u32),
+}
+
+struct RefExpression {
+    handle: Handle<crate::Expression>,
+    is_ref: bool,
 }
 
 impl<'a> Lowerer<'a> {
@@ -126,12 +133,17 @@ impl<'a> Lowerer<'a> {
         let name = self.intern.resolve(f.name.name).to_string();
         let is_frag = matches!(f.attribs, FnAttribs::Fragment(_));
 
+        self.locals.clear();
         let mut fun = crate::Function {
             name: Some(name.clone()),
             arguments: f
                 .args
                 .iter()
-                .filter_map(|arg| self.arg(arg, is_frag))
+                .enumerate()
+                .filter_map(|(i, arg)| {
+                    self.locals.insert(arg.id, LocalData::FunctionArg(i as u32));
+                    self.arg(arg, is_frag)
+                })
                 .collect(),
             result: f.ret.as_ref().and_then(|x| {
                 Some(crate::FunctionResult {
@@ -145,7 +157,6 @@ impl<'a> Lowerer<'a> {
             body: Default::default(),
         };
 
-        self.locals.clear();
         let body = self.block(&f.block, &mut fun);
         fun.body = body;
 
@@ -579,7 +590,7 @@ impl<'a> Lowerer<'a> {
                 VarDeclKind::Const(_) => {}
                 VarDeclKind::Let(_) => {}
             },
-            ExprStatementKind::Call(ref call) => {}
+            ExprStatementKind::Call(_) => {}
             ExprStatementKind::Assign(_) => {}
             ExprStatementKind::Postfix(_) => {}
         }
@@ -592,30 +603,159 @@ impl<'a> Lowerer<'a> {
         fun: &mut crate::Function,
     ) -> Option<Handle<crate::Expression>> {
         let start = fun.expressions.len();
-        let handle = self.expr_inner(e, fun)?;
+        let handle = self.expr_load(e, fun)?;
         let range = fun.expressions.range_from(start);
         b.push(crate::Statement::Emit(range), e.span.into());
         Some(handle)
     }
 
-    fn expr_inner(
+    fn expr_load(
         &mut self,
         e: &Expr,
         fun: &mut crate::Function,
     ) -> Option<Handle<crate::Expression>> {
-        match e.kind {
-            ExprKind::Error => {}
-            ExprKind::Literal(_) => {}
-            ExprKind::Local(_) => {}
-            ExprKind::Global(_) => {}
-            ExprKind::Unary(_) => {}
-            ExprKind::Binary(_) => {}
-            ExprKind::Call(_) => {}
-            ExprKind::Index(_, _) => {}
-            ExprKind::Member(_, _) => {}
-        }
+        let handle = self.expr_base(e, fun)?;
+        Some(if handle.is_ref {
+            fun.expressions.append(
+                crate::Expression::Load {
+                    pointer: handle.handle,
+                },
+                e.span.into(),
+            )
+        } else {
+            handle.handle
+        })
+    }
 
-        None
+    fn expr_base(&mut self, e: &Expr, fun: &mut crate::Function) -> Option<RefExpression> {
+        let (expr, is_ptr) = match e.kind {
+            ExprKind::Error => return None,
+            ExprKind::Literal(_) => return None,
+            ExprKind::Local(local) => match self.locals[&local] {
+                LocalData::Variable(var) => (crate::Expression::LocalVariable(var), true),
+                LocalData::Let(l) => {
+                    return Some(RefExpression {
+                        handle: l,
+                        is_ref: false,
+                    })
+                }
+                LocalData::FunctionArg(arg) => (crate::Expression::FunctionArgument(arg), true),
+            },
+            ExprKind::Global(global) => match self.decl_map[&global] {
+                DeclData::Function(_) | DeclData::EntryPoint => {
+                    self.errors.push(WgslError {
+                        message: "function cannot be used as an expression".to_string(),
+                        labels: vec![(e.span.into(), "".to_string())],
+                        notes: vec!["all function calls must be resolved statically".to_string()],
+                    });
+                    return None;
+                }
+                DeclData::Global(var) => (crate::Expression::GlobalVariable(var), true),
+                DeclData::Const(constant) => (crate::Expression::Constant(constant), false),
+                DeclData::Type(_) => {
+                    self.errors.push(WgslError {
+                        message: "expected value, found type".to_string(),
+                        labels: vec![(e.span.into(), "".to_string())],
+                        notes: vec![],
+                    });
+                    return None;
+                }
+                DeclData::Assert | DeclData::Override | DeclData::Error => return None,
+            },
+            ExprKind::Unary(ref un) => match un.op {
+                UnaryOp::Ref => {
+                    let expr = self.expr_base(e, fun)?;
+                    if !expr.is_ref {
+                        self.errors.push(WgslError {
+                            message: "expected reference, found value".to_string(),
+                            labels: vec![(e.span.into(), "".to_string())],
+                            notes: vec![],
+                        });
+                        return None;
+                    }
+                    return Some(RefExpression {
+                        handle: expr.handle,
+                        is_ref: false,
+                    });
+                }
+                UnaryOp::Not | UnaryOp::BitNot => (
+                    {
+                        let expr = self.expr_load(&un.expr, fun)?;
+                        crate::Expression::Unary {
+                            op: crate::UnaryOperator::Not,
+                            expr,
+                        }
+                    },
+                    false,
+                ),
+                UnaryOp::Minus => (
+                    {
+                        let expr = self.expr_load(&un.expr, fun)?;
+                        crate::Expression::Unary {
+                            op: crate::UnaryOperator::Negate,
+                            expr,
+                        }
+                    },
+                    false,
+                ),
+                UnaryOp::Deref => (
+                    {
+                        let expr = self.expr_load(&un.expr, fun)?;
+                        crate::Expression::Load { pointer: expr }
+                    },
+                    false,
+                ),
+            },
+            ExprKind::Binary(ref bin) => {
+                let left = self.expr_load(&bin.lhs, fun)?;
+                let right = self.expr_load(&bin.rhs, fun)?;
+                (
+                    crate::Expression::Binary {
+                        left,
+                        right,
+                        op: match bin.op {
+                            BinaryOp::Add => crate::BinaryOperator::Add,
+                            BinaryOp::Sub => crate::BinaryOperator::Subtract,
+                            BinaryOp::Mul => crate::BinaryOperator::Multiply,
+                            BinaryOp::Div => crate::BinaryOperator::Divide,
+                            BinaryOp::Mod => crate::BinaryOperator::Modulo,
+                            BinaryOp::BitAnd => crate::BinaryOperator::And,
+                            BinaryOp::BitOr => crate::BinaryOperator::InclusiveOr,
+                            BinaryOp::BitXor => crate::BinaryOperator::ExclusiveOr,
+                            BinaryOp::BitShiftLeft => crate::BinaryOperator::ShiftLeft,
+                            BinaryOp::BitShiftRight => crate::BinaryOperator::ShiftRight,
+                            BinaryOp::Equal => crate::BinaryOperator::Equal,
+                            BinaryOp::NotEqual => crate::BinaryOperator::NotEqual,
+                            BinaryOp::LessThan => crate::BinaryOperator::Less,
+                            BinaryOp::LessThanEqual => crate::BinaryOperator::LessEqual,
+                            BinaryOp::GreaterThan => crate::BinaryOperator::Greater,
+                            BinaryOp::GreaterThanEqual => crate::BinaryOperator::GreaterEqual,
+                            BinaryOp::And => crate::BinaryOperator::And,
+                            BinaryOp::Or => crate::BinaryOperator::InclusiveOr,
+                        },
+                    },
+                    false,
+                )
+            }
+            ExprKind::Call(_) => return None,
+            ExprKind::Index(ref base, ref index) => {
+                let base = self.expr_base(base, fun)?;
+                let index = self.expr_load(index, fun)?;
+                (
+                    crate::Expression::Access {
+                        base: base.handle,
+                        index,
+                    },
+                    base.is_ref,
+                )
+            }
+            ExprKind::Member(_, _) => return None,
+        };
+
+        Some(RefExpression {
+            handle: fun.expressions.append(expr, e.span.into()),
+            is_ref: is_ptr,
+        })
     }
 
     fn binding(

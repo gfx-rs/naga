@@ -46,28 +46,15 @@ impl<'a> Evaluator<'a> {
                     return None;
                 }
             }),
-            ExprKind::Local(_) => unreachable!("local usage found in const expr?"),
-            ExprKind::Global(_) => {
-                unsupported(self);
-                None
-            }
             ExprKind::Unary(ref u) => {
                 let rhs = self.eval(&u.expr)?;
                 let ret = match u.op {
-                    UnaryOp::Ref => {
-                        unsupported(self);
-                        return None;
-                    }
-                    UnaryOp::RefRef => {
+                    UnaryOp::Ref | UnaryOp::Deref => {
                         unsupported(self);
                         return None;
                     }
                     UnaryOp::Not => !rhs,
                     UnaryOp::Minus => -rhs,
-                    UnaryOp::Deref => {
-                        unsupported(self);
-                        return None;
-                    }
                     UnaryOp::BitNot => rhs.bit_not(),
                 };
 
@@ -81,19 +68,12 @@ impl<'a> Evaluator<'a> {
 
                 ret
             }
-            ExprKind::Binary(_) => {
-                unsupported(self);
-                None
-            }
-            ExprKind::Call(_) => {
-                unsupported(self);
-                None
-            }
-            ExprKind::Index(_, _) => {
-                unsupported(self);
-                None
-            }
-            ExprKind::Member(_, _) => {
+            ExprKind::Binary(_)
+            | ExprKind::Call(_)
+            | ExprKind::Index(_, _)
+            | ExprKind::Member(_, _)
+            | ExprKind::Global(_)
+            | ExprKind::Local(_) => {
                 unsupported(self);
                 None
             }
