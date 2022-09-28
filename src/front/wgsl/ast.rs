@@ -232,32 +232,16 @@ pub struct UnaryExpr {
 #[derive(Copy, Clone, Debug)]
 pub enum UnaryOp {
     Ref,
+    Deref,
     Not,
     Minus,
-    Deref,
-    BitNot,
 }
 
 #[derive(Clone, Debug)]
 pub struct AssignExpr {
     pub lhs: Box<Expr>,
-    pub op: AssignOp,
+    pub op: Option<crate::BinaryOperator>,
     pub rhs: Box<Expr>,
-}
-
-#[derive(Copy, Clone, Debug)]
-pub enum AssignOp {
-    Assign,
-    Add,
-    Sub,
-    Mul,
-    Div,
-    Mod,
-    BitAnd,
-    BitOr,
-    BitXor,
-    ShiftLeft,
-    ShiftRight,
 }
 
 #[derive(Clone, Debug)]
@@ -269,30 +253,8 @@ pub struct CallExpr {
 #[derive(Clone, Debug)]
 pub struct BinaryExpr {
     pub lhs: Box<Expr>,
-    pub op: BinaryOp,
+    pub op: crate::BinaryOperator,
     pub rhs: Box<Expr>,
-}
-
-#[derive(Copy, Clone, Debug)]
-pub enum BinaryOp {
-    Add,
-    Sub,
-    Mul,
-    Div,
-    Mod,
-    BitAnd,
-    BitOr,
-    BitXor,
-    BitShiftLeft,
-    BitShiftRight,
-    Equal,
-    NotEqual,
-    LessThan,
-    LessThanEqual,
-    GreaterThan,
-    GreaterThanEqual,
-    And,
-    Or,
 }
 
 #[derive(Clone, Debug)]

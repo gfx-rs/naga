@@ -1,6 +1,8 @@
 use aho_corasick::AhoCorasick;
 use rustc_hash::{FxHashMap, FxHashSet};
 
+use crate::front::wgsl::ast::UnaryOp;
+use crate::front::wgsl::resolve::inbuilt::Attribute;
 use crate::front::wgsl::WgslError;
 use crate::{
     front::wgsl::ast,
@@ -15,13 +17,10 @@ use crate::{
         },
         inbuilt_functions::InbuiltFunction,
         index::Index,
-        ir::{
-            DeclDependency, DeclDependencyKind, DeclId, FloatType, FnTarget, InbuiltType, LocalId,
-            SampleType,
-        },
+        ir::{DeclDependency, DeclId, FnTarget, InbuiltType, LocalId},
     },
     front::wgsl::text::{Interner, Text},
-    Span,
+    BinaryOperator, ImageClass, ScalarKind, Span, StorageAccess, UnaryOperator,
 };
 
 mod dependency;
@@ -67,8 +66,6 @@ pub fn resolve(
         intern,
         reserved_matcher: reserved_matcher(),
         locals: 0,
-        in_loop: false,
-        in_continuing: false,
         in_function: false,
         scopes: Vec::new(),
         dependencies: FxHashSet::default(),
@@ -106,8 +103,6 @@ struct Resolver<'a> {
     inbuilt_function: Matcher<InbuiltFunction>,
     kws: Box<Kws>,
     locals: u32,
-    in_loop: bool,
-    in_continuing: bool,
     in_function: bool,
     scopes: Vec<FxHashMap<Text, (LocalId, Span, bool)>>,
     dependencies: FxHashSet<DeclDependency>,
@@ -121,7 +116,7 @@ impl<'a> Resolver<'a> {
             GlobalDeclKind::Fn(f) => {
                 let f = self.fn_(f);
 
-                if !matches!(f.attribs, ir::FnAttribs::None) {
+                if !matches!(f.stage, ir::ShaderStage::None) {
                     self.tu.roots.push(DeclId(self.tu.decls.len() as _));
                 }
 
@@ -173,10 +168,10 @@ impl<'a> Resolver<'a> {
         self.in_function = false;
 
         ir::Fn {
-            attribs: self.fn_attribs(fn_.attribs),
+            stage: self.fn_attribs(fn_.attribs),
             name: fn_.name,
             args,
-            ret_attribs: self.arg_attribs(fn_.ret_attribs),
+            ret_binding: self.binding(fn_.ret_attribs),
             ret: fn_.ret.map(|x| self.ty(x)),
             block,
         }
@@ -212,7 +207,10 @@ impl<'a> Resolver<'a> {
         ir::Override {
             id,
             name: o.name,
-            ty: o.ty.map(|x| self.ty(x)),
+            ty: o.ty.map(|x| self.ty(x)).unwrap_or(ir::Type {
+                kind: ir::TypeKind::Inbuilt(InbuiltType::Infer),
+                span: Span::UNDEFINED,
+            }),
             val: o.val.map(|x| self.expr(x)),
         }
     }
@@ -233,7 +231,7 @@ impl<'a> Resolver<'a> {
         }
 
         ir::Arg {
-            attribs: self.arg_attribs(arg.attribs),
+            binding: self.binding(arg.attribs),
             name: arg.name,
             ty: self.ty(arg.ty),
             span: arg.span,
@@ -245,7 +243,10 @@ impl<'a> Resolver<'a> {
         self.verify_ident(l.name);
         ir::Let {
             name: l.name,
-            ty: l.ty.map(|x| self.ty(x)),
+            ty: l.ty.map(|x| self.ty(x)).unwrap_or(ir::Type {
+                kind: ir::TypeKind::Inbuilt(InbuiltType::Infer),
+                span: Span::UNDEFINED,
+            }),
             val: self.expr(l.val),
         }
     }
@@ -286,62 +287,140 @@ impl<'a> Resolver<'a> {
         out
     }
 
-    fn arg_attribs(&mut self, attribs: Vec<ast::Attribute>) -> ir::ArgAttribs {
-        let mut out = ir::ArgAttribs {
-            builtin: None,
-            location: None,
-            interpolate: None,
-            invariant: false,
-        };
+    fn binding(&mut self, attribs: Vec<ast::Attribute>) -> Option<ir::Binding> {
+        let mut out = None;
 
         let a: Vec<_> = attribs.into_iter().filter_map(|x| self.attrib(x)).collect();
+
+        let mut inv = None;
+        let mut builtin = None;
+
         for attrib in a {
-            match attrib.ty {
-                AttributeType::Builtin(b) => {
-                    if out.builtin.is_some() {
-                        self.diagnostics
-                            .push(WgslError::new("duplicate attribute").marker(attrib.span));
-                    } else {
-                        out.builtin = Some(b);
-                    }
-                }
-                AttributeType::Location(l) => {
-                    if out.location.is_some() {
-                        self.diagnostics
-                            .push(WgslError::new("duplicate attribute").marker(attrib.span));
-                    } else {
-                        out.location = Some(self.expr(l));
-                    }
-                }
-                AttributeType::Interpolate(i, s) => {
-                    if out.interpolate.is_some() {
-                        self.diagnostics
-                            .push(WgslError::new("duplicate attribute").marker(attrib.span));
-                    } else {
-                        out.interpolate = Some((i, s));
-                    }
-                }
-                AttributeType::Invariant => {
-                    if out.invariant {
-                        self.diagnostics
-                            .push(WgslError::new("duplicate attribute").marker(attrib.span));
-                    } else {
-                        out.invariant = true;
-                    }
-                }
-                _ => {
-                    self.diagnostics.push(
-                        WgslError::new("this attribute is not allowed here").marker(attrib.span),
-                    );
-                }
+            self.binding_inner(attrib, &mut out, &mut inv, &mut builtin);
+        }
+
+        if let Some(invariant) = inv {
+            if builtin.is_none() {
+                self.diagnostics.push(
+                    WgslError::new("invariant requires a `@builtin(position)` attribute")
+                        .marker(invariant),
+                );
             }
         }
 
         out
     }
 
-    fn fn_attribs(&mut self, attribs: Vec<ast::Attribute>) -> ir::FnAttribs {
-        let mut out = ir::FnAttribs::None;
+    fn binding_inner(
+        &mut self,
+        attrib: Attribute,
+        out: &mut Option<ir::Binding>,
+        inv: &mut Option<Span>,
+        builtin: &mut Option<Span>,
+    ) {
+        match attrib.ty {
+            AttributeType::Builtin(b) => match out {
+                Some(ir::Binding::Builtin(_)) if inv.is_none() => {
+                    self.diagnostics
+                        .push(WgslError::new("duplicate attribute").marker(attrib.span));
+                }
+                Some(ir::Binding::Location { .. }) => {
+                    self.diagnostics.push(
+                        WgslError::new("this attribute is not allowed here").marker(attrib.span),
+                    );
+                }
+                _ => {
+                    *out = Some(ir::Binding::Builtin(b.into()));
+                    *builtin = Some(attrib.span);
+                }
+            },
+            AttributeType::Location(l) => match out {
+                Some(ir::Binding::Builtin(_)) => {
+                    self.diagnostics.push(
+                        WgslError::new("this attribute is not allowed here").marker(attrib.span),
+                    );
+                }
+                Some(ir::Binding::Location { ref location, .. }) if location.is_some() => {
+                    self.diagnostics
+                        .push(WgslError::new("duplicate attribute").marker(attrib.span));
+                }
+                Some(ir::Binding::Location {
+                    ref mut location, ..
+                }) => {
+                    *location = Some(self.expr(l));
+                }
+                None => {
+                    *out = Some(ir::Binding::Location {
+                        location: Some(self.expr(l)),
+                        interpolation: None,
+                        sampling: None,
+                    });
+                }
+            },
+            AttributeType::Interpolate(i, s) => match out {
+                Some(ir::Binding::Builtin(_)) => {
+                    self.diagnostics.push(
+                        WgslError::new("this attribute is not allowed here").marker(attrib.span),
+                    );
+                }
+                Some(ir::Binding::Location { interpolation, .. }) if interpolation.is_some() => {
+                    self.diagnostics
+                        .push(WgslError::new("duplicate attribute").marker(attrib.span));
+                }
+                Some(ir::Binding::Location {
+                    ref mut interpolation,
+                    ref mut sampling,
+                    ..
+                }) => {
+                    *interpolation = Some(i.into());
+                    *sampling = s.map(|x| x.into());
+                }
+                None => {
+                    *out = Some(ir::Binding::Location {
+                        location: None,
+                        interpolation: Some(i.into()),
+                        sampling: s.map(|x| x.into()),
+                    });
+                }
+            },
+            AttributeType::Invariant => match out {
+                Some(ir::Binding::Builtin(_)) if builtin.is_none() => {
+                    self.diagnostics
+                        .push(WgslError::new("duplicate attribute").marker(attrib.span));
+                }
+                Some(ir::Binding::Builtin(ref mut b)) => match b {
+                    crate::BuiltIn::Position { ref mut invariant } => {
+                        *invariant = true;
+                        *inv = Some(attrib.span);
+                    }
+                    _ => {
+                        self.diagnostics.push(
+                            WgslError::new("this attribute is not allowed here")
+                                .marker(attrib.span),
+                        );
+                    }
+                },
+                Some(ir::Binding::Location { .. }) => {
+                    self.diagnostics.push(
+                        WgslError::new("this attribute is not allowed here").marker(attrib.span),
+                    );
+                }
+                None => {
+                    *out = Some(ir::Binding::Builtin(crate::BuiltIn::Position {
+                        invariant: true,
+                    }));
+                    *inv = Some(attrib.span);
+                }
+            },
+            _ => {
+                self.diagnostics
+                    .push(WgslError::new("this attribute is not allowed here").marker(attrib.span));
+            }
+        }
+    }
+
+    fn fn_attribs(&mut self, attribs: Vec<ast::Attribute>) -> ir::ShaderStage {
+        let mut out = ir::ShaderStage::None;
         let mut expect_compute = None;
 
         let a: Vec<_> = attribs.into_iter().filter_map(|x| self.attrib(x)).collect();
@@ -352,25 +431,25 @@ impl<'a> Resolver<'a> {
                         .marker(attrib.span),
                 ),
                 AttributeType::Vertex => {
-                    if let ir::FnAttribs::None = out {
-                        out = ir::FnAttribs::Vertex;
+                    if let ir::ShaderStage::None = out {
+                        out = ir::ShaderStage::Vertex;
                     } else {
                         self.diagnostics
                             .push(WgslError::new("duplicate attribute").marker(attrib.span));
                     }
                 }
                 AttributeType::Fragment => {
-                    if let ir::FnAttribs::None = out {
-                        out = ir::FnAttribs::Fragment(None);
+                    if let ir::ShaderStage::None = out {
+                        out = ir::ShaderStage::Fragment(None);
                     } else {
                         self.diagnostics
                             .push(WgslError::new("duplicate attribute").marker(attrib.span));
                     }
                 }
                 AttributeType::Compute => {
-                    if let ir::FnAttribs::None = out {
+                    if let ir::ShaderStage::None = out {
                         expect_compute = Some(attrib.span);
-                        out = ir::FnAttribs::Compute(None, None, None);
+                        out = ir::ShaderStage::Compute(None, None, None);
                     } else if expect_compute.is_some() {
                         expect_compute = None;
                     } else {
@@ -379,9 +458,9 @@ impl<'a> Resolver<'a> {
                     }
                 }
                 AttributeType::WorkgroupSize(x, y, z) => {
-                    if let ir::FnAttribs::None = out {
+                    if let ir::ShaderStage::None = out {
                         expect_compute = Some(attrib.span);
-                        out = ir::FnAttribs::Compute(
+                        out = ir::ShaderStage::Compute(
                             Some(self.expr(x)),
                             y.map(|x| self.expr(x)),
                             z.map(|x| self.expr(x)),
@@ -394,8 +473,10 @@ impl<'a> Resolver<'a> {
                     }
                 }
                 AttributeType::ConservativeDepth(depth) => {
-                    if let ir::FnAttribs::Fragment(_) = out {
-                        out = ir::FnAttribs::Fragment(Some(depth));
+                    if let ir::ShaderStage::Fragment(_) = out {
+                        out = ir::ShaderStage::Fragment(Some(crate::EarlyDepthTest {
+                            conservative: depth.map(|x| x.into()),
+                        }));
                     } else {
                         self.diagnostics.push(
                             WgslError::new("this attribute is not allowed here")
@@ -413,7 +494,7 @@ impl<'a> Resolver<'a> {
 
         if let Some(span) = expect_compute {
             self.diagnostics.push(
-                WgslError::new(if matches!(out, ir::FnAttribs::Compute(None, _, _)) {
+                WgslError::new(if matches!(out, ir::ShaderStage::Compute(None, _, _)) {
                     "`@compute` without `@workgroup_size` attribute"
                 } else {
                     "`@workgroup_size` without `@compute` attribute"
@@ -428,12 +509,7 @@ impl<'a> Resolver<'a> {
     fn field(&mut self, field: ast::Arg) -> ir::Field {
         let mut attribs = ir::FieldAttribs {
             align: None,
-            arg: ir::ArgAttribs {
-                builtin: None,
-                location: None,
-                interpolate: None,
-                invariant: false,
-            },
+            binding: None,
             size: None,
         };
 
@@ -442,6 +518,10 @@ impl<'a> Resolver<'a> {
             .into_iter()
             .filter_map(|x| self.attrib(x))
             .collect();
+
+        let mut inv = None;
+        let mut builtin = None;
+
         for attrib in a {
             match attrib.ty {
                 AttributeType::Align(expr) => {
@@ -450,38 +530,6 @@ impl<'a> Resolver<'a> {
                             .push(WgslError::new("duplicate attribute").marker(attrib.span));
                     } else {
                         attribs.align = Some(self.expr(expr));
-                    }
-                }
-                AttributeType::Builtin(b) => {
-                    if attribs.arg.builtin.is_some() {
-                        self.diagnostics
-                            .push(WgslError::new("duplicate attribute").marker(attrib.span));
-                    } else {
-                        attribs.arg.builtin = Some(b);
-                    }
-                }
-                AttributeType::Location(loc) => {
-                    if attribs.arg.location.is_some() {
-                        self.diagnostics
-                            .push(WgslError::new("duplicate attribute").marker(attrib.span));
-                    } else {
-                        attribs.arg.location = Some(self.expr(loc));
-                    }
-                }
-                AttributeType::Interpolate(i, s) => {
-                    if attribs.arg.interpolate.is_some() {
-                        self.diagnostics
-                            .push(WgslError::new("duplicate attribute").marker(attrib.span));
-                    } else {
-                        attribs.arg.interpolate = Some((i, s));
-                    }
-                }
-                AttributeType::Invariant => {
-                    if attribs.arg.invariant {
-                        self.diagnostics
-                            .push(WgslError::new("duplicate attribute").marker(attrib.span));
-                    } else {
-                        attribs.arg.invariant = true;
                     }
                 }
                 AttributeType::Size(expr) => {
@@ -493,9 +541,7 @@ impl<'a> Resolver<'a> {
                     }
                 }
                 _ => {
-                    self.diagnostics.push(
-                        WgslError::new("this attribute is not allowed here").marker(attrib.span),
-                    );
+                    self.binding_inner(attrib, &mut attribs.binding, &mut inv, &mut builtin);
                 }
             }
         }
@@ -510,7 +556,10 @@ impl<'a> Resolver<'a> {
     fn var(&mut self, v: ast::VarNoAttribs) -> ir::VarNoAttribs {
         self.verify_ident(v.name);
 
-        let ty = v.ty.map(|x| self.ty(x));
+        let ty = v.ty.map(|x| self.ty(x)).unwrap_or(ir::Type {
+            kind: ir::TypeKind::Inbuilt(InbuiltType::Infer),
+            span: Span::UNDEFINED,
+        });
 
         let as_ = v
             .address_space
@@ -520,24 +569,20 @@ impl<'a> Resolver<'a> {
             .access_mode
             .map(|x| (self.access_mode(x), x.span))
             .and_then(|(a, s)| a.map(|a| (a, s)));
-        let (address_space, access_mode) = self.handle_address_space_and_access_mode(as_, am);
 
-        let (address_space, access_mode) = if address_space == AddressSpace::Handle {
-            if let Some(ir::TypeKind::Inbuilt(
+        let address_space = as_.map(|x| x.0).unwrap_or_else(|| {
+            if let ir::TypeKind::Inbuilt(
                 InbuiltType::BindingArray { .. }
-                | InbuiltType::Sampler(_)
-                | InbuiltType::StorageTexture(..)
-                | InbuiltType::SampledTexture(..),
-            )) = ty.as_ref().map(|x| &x.kind)
+                | InbuiltType::Sampler { .. }
+                | InbuiltType::Image { .. },
+            ) = &ty.kind
             {
                 // Infer handle if its a resource type.
-                (AddressSpace::Handle, AccessMode::Read)
+                AddressSpace::Handle
             } else {
-                (AddressSpace::Private, AccessMode::ReadWrite)
+                AddressSpace::Private
             }
-        } else {
-            (address_space, access_mode)
-        };
+        });
 
         if self.in_function && address_space != AddressSpace::Function {
             let span = as_.unwrap().1;
@@ -558,24 +603,28 @@ impl<'a> Resolver<'a> {
             );
         }
 
-        if let Some(val) = v.val.as_ref() {
-            if !matches!(
-                address_space,
-                AddressSpace::Function | AddressSpace::Private
-            ) {
-                self.diagnostics.push(
-                    WgslError::new(format!(
-                        "cannot initialize variable with address space `{}`",
-                        address_space
-                    ))
-                    .marker(val.span),
-                );
+        let address_space = if let Some((mode, span)) = am {
+            let mut x = address_space.into();
+            match x {
+                crate::AddressSpace::Storage { ref mut access } => *access = mode.into(),
+                _ => {
+                    self.diagnostics.push(
+                        WgslError::new(format!(
+                            "cannot declare variable with access mode `{}` in address space `{}`",
+                            mode, address_space
+                        ))
+                        .marker(span),
+                    );
+                }
             }
-        }
+
+            x
+        } else {
+            address_space.into()
+        };
 
         ir::VarNoAttribs {
             address_space,
-            access_mode,
             name: v.name,
             ty,
             val: v.val.map(|x| self.expr(x)),
@@ -599,14 +648,17 @@ impl<'a> Resolver<'a> {
 
             if let Some(user) = self.index.get(ident.name) {
                 self.dependencies.insert(DeclDependency {
-                    kind: DeclDependencyKind::Decl(user),
+                    id: user,
                     usage: ident.span,
                 });
                 ir::TypeKind::User(user)
             } else {
                 self.diagnostics
                     .push(WgslError::new("undefined type").marker(ident.span));
-                ir::TypeKind::Inbuilt(InbuiltType::Primitive(PrimitiveType::Infer))
+                ir::TypeKind::Inbuilt(InbuiltType::Scalar {
+                    kind: ScalarKind::Sint,
+                    width: 4,
+                })
             }
         };
 
@@ -622,24 +674,9 @@ impl<'a> Resolver<'a> {
 
     fn block_inner(&mut self, block: ast::Block) -> ir::Block {
         let mut stmts = Vec::with_capacity(block.stmts.len());
-        let last = block.stmts.len().wrapping_sub(1);
-        for (i, stmt) in block.stmts.into_iter().enumerate() {
+        for stmt in block.stmts {
             if let Some(stmt) = self.stmt(stmt) {
-                if i != last {
-                    if matches!(stmt.kind, ir::StmtKind::Continuing(_)) && self.in_loop {
-                        self.diagnostics.push(
-                            WgslError::new("`continuing` must be the last statement in `loop`")
-                                .marker(stmt.span),
-                        );
-                    } else if matches!(stmt.kind, ir::StmtKind::BreakIf(_)) && self.in_continuing {
-                        self.diagnostics.push(
-                            WgslError::new("`break if` must be the last statement in `continuing`")
-                                .marker(stmt.span),
-                        );
-                    }
-                } else {
-                    stmts.push(stmt);
-                }
+                stmts.push(stmt);
             }
         }
 
@@ -702,11 +739,39 @@ impl<'a> Resolver<'a> {
 
                 ir::StmtKind::If(ir::If { cond, block, else_ })
             }
-            StmtKind::Loop(block) => {
-                self.in_loop = true;
-                let block = self.block(block);
-                self.in_loop = false;
-                ir::StmtKind::Loop(block)
+            StmtKind::Loop(mut block) => {
+                let (continuing, break_if) = if let Some(continuing) = block.stmts.pop() {
+                    match continuing.kind {
+                        StmtKind::Continuing(mut c) => {
+                            let break_if = if let Some(break_if) = c.stmts.pop() {
+                                match break_if.kind {
+                                    StmtKind::BreakIf(b) => Some(self.expr(b)),
+                                    _ => {
+                                        c.stmts.push(break_if);
+                                        None
+                                    }
+                                }
+                            } else {
+                                None
+                            };
+
+                            (Some(self.block(c)), break_if)
+                        }
+                        _ => {
+                            block.stmts.push(continuing);
+                            (None, None)
+                        }
+                    }
+                } else {
+                    (None, None)
+                };
+
+                let body = self.block(block);
+                ir::StmtKind::Loop(ir::Loop {
+                    body,
+                    continuing,
+                    break_if,
+                })
             }
             StmtKind::Return(expr) => ir::StmtKind::Return(expr.map(|x| self.expr(x))),
             StmtKind::StaticAssert(assert) => ir::StmtKind::StaticAssert(self.expr(assert.expr)),
@@ -736,25 +801,20 @@ impl<'a> Resolver<'a> {
                 block: self.block(while_.block),
             }),
             StmtKind::Continuing(c) => {
-                if !self.in_loop {
-                    self.diagnostics.push(
-                        WgslError::new("`continuing` must be inside a `loop`").marker(stmt.span),
-                    );
-                }
-                self.in_loop = false;
-                self.in_continuing = true;
-                let block = self.block(c);
-                self.in_continuing = false;
-                ir::StmtKind::Continuing(block)
+                let _ = self.block(c);
+                self.diagnostics.push(
+                    WgslError::new("`continuing` must be the last statement in `loop`")
+                        .marker(stmt.span),
+                );
+                return None;
             }
-            StmtKind::BreakIf(expr) => {
-                if !self.in_continuing {
-                    self.diagnostics.push(
-                        WgslError::new("`break if` must be inside a `continuing`")
-                            .marker(stmt.span),
-                    );
-                }
-                ir::StmtKind::BreakIf(self.expr(expr))
+            StmtKind::BreakIf(x) => {
+                let _ = self.expr(x);
+                self.diagnostics.push(
+                    WgslError::new("`break if` must be the last statement in `continuing`")
+                        .marker(stmt.span),
+                );
+                return None;
             }
             StmtKind::Empty => return None,
         };
@@ -798,10 +858,21 @@ impl<'a> Resolver<'a> {
                 }
                 self.resolve_access(ident.name)
             }
-            ExprKind::Unary(u) => ir::ExprKind::Unary(ir::UnaryExpr {
-                op: u.op,
-                expr: Box::new(self.expr(*u.expr)),
-            }),
+            ExprKind::Unary(u) => match u.op {
+                UnaryOp::Ref => ir::ExprKind::AddrOf(Box::new(self.expr(*u.expr))),
+                UnaryOp::Deref => ir::ExprKind::Deref(Box::new(self.expr(*u.expr))),
+                op => {
+                    let op = match op {
+                        UnaryOp::Not => UnaryOperator::Not,
+                        UnaryOp::Minus => UnaryOperator::Negate,
+                        _ => unreachable!(),
+                    };
+                    ir::ExprKind::Unary(ir::UnaryExpr {
+                        op,
+                        expr: Box::new(self.expr(*u.expr)),
+                    })
+                }
+            },
             ExprKind::Binary(b) => ir::ExprKind::Binary(ir::BinaryExpr {
                 op: b.op,
                 lhs: Box::new(self.expr(*b.lhs)),
@@ -848,7 +919,7 @@ impl<'a> Resolver<'a> {
 
                 ir::ExprStatementKind::VarDecl(ir::VarDecl {
                     kind,
-                    local: {
+                    id: {
                         let id = LocalId(self.locals);
                         self.locals += 1;
                         let old = self
@@ -876,14 +947,10 @@ impl<'a> Resolver<'a> {
             }
             ExprKind::Assign(assign) => {
                 if let ExprKind::Underscore = &assign.lhs.kind {
-                    if let ast::AssignOp::Assign = assign.op {
+                    if assign.op.is_none() {
                         ir::ExprStatementKind::Assign(ir::AssignExpr {
-                            lhs: Box::new(ir::AssignTarget {
-                                kind: ir::AssignTargetKind::Ignore,
-                                span: assign.lhs.span,
-                            }),
-                            op: ast::AssignOp::Assign,
-                            rhs: Box::new(self.expr(*assign.rhs)),
+                            target: ir::AssignTarget::Phony,
+                            value: Box::new(self.expr(*assign.rhs)),
                         })
                     } else {
                         self.diagnostics.push(
@@ -892,42 +959,44 @@ impl<'a> Resolver<'a> {
                         return None;
                     }
                 } else {
-                    let lhs = self.expr(*assign.lhs);
-
-                    let kind = match lhs.kind {
-                        ir::ExprKind::Local(l) => ir::AssignTargetKind::Local(l),
-                        ir::ExprKind::Global(g) => ir::AssignTargetKind::Global(g),
-                        ir::ExprKind::Member(m, i) => ir::AssignTargetKind::Member(m, i),
-                        ir::ExprKind::Index(i, w) => ir::AssignTargetKind::Index(i, w),
-                        ir::ExprKind::Unary(unary) if matches!(unary.op, ast::UnaryOp::Deref) => {
-                            ir::AssignTargetKind::Deref(unary.expr)
-                        }
-                        _ => {
-                            self.diagnostics.push(
-                                WgslError::new("cannot assign to this expression").marker(lhs.span),
-                            );
-                            ir::AssignTargetKind::Ignore
-                        }
-                    };
-                    let lhs = Box::new(ir::AssignTarget {
-                        kind,
-                        span: lhs.span,
-                    });
-
+                    let lhs = Box::new(self.expr(*assign.lhs));
                     let rhs = Box::new(self.expr(*assign.rhs));
-                    ir::ExprStatementKind::Assign(ir::AssignExpr {
-                        lhs,
-                        rhs,
-                        op: assign.op,
-                    })
+
+                    let value = match assign.op {
+                        Some(op) => Box::new(ir::Expr {
+                            kind: ir::ExprKind::Binary(ir::BinaryExpr {
+                                lhs: lhs.clone(),
+                                op,
+                                rhs,
+                            }),
+                            span: expr.span,
+                        }),
+                        None => rhs,
+                    };
+
+                    let target = ir::AssignTarget::Expr(lhs);
+
+                    ir::ExprStatementKind::Assign(ir::AssignExpr { target, value })
                 }
             }
             ExprKind::Postfix(postfix) => {
+                let span = postfix.expr.span;
                 let expr = Box::new(self.expr(*postfix.expr));
-                ir::ExprStatementKind::Postfix(ir::PostfixExpr {
-                    expr,
-                    op: postfix.op,
-                })
+
+                let target = ir::AssignTarget::Expr(expr.clone());
+                let value = Box::new(ir::Expr {
+                    kind: ir::ExprKind::Binary(ir::BinaryExpr {
+                        op: BinaryOperator::Add,
+                        rhs: Box::new(ir::Expr {
+                            kind: ir::ExprKind::Literal(ast::Literal::AbstractInt(1)),
+                            span,
+                        }),
+                        lhs: expr,
+                    }),
+                    span,
+                });
+
+                ir::ExprStatementKind::Assign(ir::AssignExpr { target, value })
             }
             _ => {
                 self.diagnostics
@@ -949,17 +1018,13 @@ impl<'a> Resolver<'a> {
 
                 if let Some(decl) = self.index.get(name.name) {
                     self.dependencies.insert(DeclDependency {
-                        kind: DeclDependencyKind::Decl(decl),
+                        id: decl,
                         usage: name.span,
                     });
                     FnTarget::Decl(decl)
-                } else if let Some(ty) = self.constructible_inbuilt(ident) {
+                } else if let Some(ty) = self.constructible_inbuilt(ident, target.span) {
                     FnTarget::InbuiltType(Box::new(ty))
                 } else if let Some(inbuilt) = self.inbuilt_function.get(name.name) {
-                    self.dependencies.insert(DeclDependency {
-                        kind: DeclDependencyKind::Inbuilt(inbuilt),
-                        usage: name.span,
-                    });
                     FnTarget::InbuiltFunction(inbuilt)
                 } else {
                     self.diagnostics
@@ -975,7 +1040,7 @@ impl<'a> Resolver<'a> {
         }
     }
 
-    fn constructible_inbuilt(&mut self, ident: ast::IdentExpr) -> Option<InbuiltType> {
+    fn constructible_inbuilt(&mut self, ident: ast::IdentExpr, span: Span) -> Option<InbuiltType> {
         let name = ident.name.name;
         Some(if name == self.kws.array {
             if ident.generics.len() > 1 {
@@ -988,7 +1053,7 @@ impl<'a> Resolver<'a> {
                 .next()
                 .map(|x| self.ty(x))
                 .unwrap_or(ir::Type {
-                    kind: ir::TypeKind::Inbuilt(InbuiltType::Primitive(PrimitiveType::Infer)),
+                    kind: ir::TypeKind::Inbuilt(InbuiltType::Infer),
                     span: ident.name.span,
                 });
             let len = ident.array_len.map(|x| self.expr(*x));
@@ -996,87 +1061,10 @@ impl<'a> Resolver<'a> {
                 of: Box::new(of),
                 len,
             }
-        } else if let Some(prim) = self.primitive.get(name) {
-            match prim {
-                PrimitiveType::F64 => self.tu.features.require(
-                    Feature::Float64,
-                    ident.name.span,
-                    &mut self.diagnostics,
-                ),
-                PrimitiveType::F16 => self.tu.features.require(
-                    Feature::Float16,
-                    ident.name.span,
-                    &mut self.diagnostics,
-                ),
-                _ => {}
-            }
-
-            InbuiltType::Primitive(prim)
-        } else if let Some(comp) = self.vec.get(name) {
-            let name = comp.to_static_str();
-            if ident.generics.len() > 1 {
-                self.diagnostics.push(
-                    WgslError::new(format!("too many generics for `{}`", name))
-                        .marker(ident.name.span),
-                );
-            }
-            let ty = ident.generics.into_iter().next();
-            let of = ty.map(|x| (x.span, self.inbuilt(x)));
-            match of {
-                Some((_, Some(InbuiltType::Primitive(ty)))) => InbuiltType::Vec { ty, comp },
-                Some((span, _)) => {
-                    self.diagnostics.push(
-                        WgslError::new(format!("`{}` requires primitive type", name)).marker(span),
-                    );
-                    InbuiltType::Vec {
-                        ty: PrimitiveType::Infer,
-                        comp,
-                    }
-                }
-                None => InbuiltType::Vec {
-                    ty: PrimitiveType::Infer,
-                    comp,
-                },
-            }
-        } else if let Some(comp) = self.mat.get(name) {
-            let name = comp.to_static_str();
-            if ident.generics.len() > 1 {
-                self.diagnostics.push(
-                    WgslError::new(format!("too many generics for `{}`", name))
-                        .marker(ident.name.span),
-                );
-            }
-            let ty = ident.generics.into_iter().next();
-            let of = ty.map(|x| (x.span, self.inbuilt(x)));
-            match of {
-                Some((_, Some(InbuiltType::Primitive(ty)))) => {
-                    let ty = if let PrimitiveType::F16 = ty {
-                        FloatType::F16
-                    } else if let PrimitiveType::F32 = ty {
-                        FloatType::F32
-                    } else {
-                        self.diagnostics.push(
-                            WgslError::new(format!("`{}` requires floating point type", name))
-                                .marker(ident.name.span),
-                        );
-                        FloatType::Infer
-                    };
-                    InbuiltType::Mat { ty, comp }
-                }
-                Some((span, _)) => {
-                    self.diagnostics.push(
-                        WgslError::new(format!("`{}` requires primitive type", name)).marker(span),
-                    );
-                    InbuiltType::Mat {
-                        ty: FloatType::Infer,
-                        comp,
-                    }
-                }
-                None => InbuiltType::Mat {
-                    ty: FloatType::Infer,
-                    comp,
-                },
-            }
+        } else if let Some(inbuilt) =
+            self.constructible_non_array_inbuilt(ident.name, ident.generics, span)
+        {
+            inbuilt
         } else {
             return None;
         })
@@ -1095,107 +1083,7 @@ impl<'a> Resolver<'a> {
 
         let ty = match ty.kind {
             ast::TypeKind::Ident(ident, generics) => {
-                if let Some(prim) = self.primitive.get(ident.name) {
-                    no_generics(self, generics, prim.to_static_str());
-
-                    match prim {
-                        PrimitiveType::F64 => self.tu.features.require(
-                            Feature::Float64,
-                            ident.span,
-                            &mut self.diagnostics,
-                        ),
-                        PrimitiveType::F16 => self.tu.features.require(
-                            Feature::Float16,
-                            ident.span,
-                            &mut self.diagnostics,
-                        ),
-                        _ => {}
-                    }
-
-                    InbuiltType::Primitive(prim)
-                } else if let Some(comp) = self.vec.get(ident.name) {
-                    let name = comp.to_static_str();
-
-                    if generics.len() != 1 {
-                        self.diagnostics.push(
-                            WgslError::new(format!(
-                                "`{}` must have exactly 1 generic parameter",
-                                name
-                            ))
-                            .marker(ty.span),
-                        );
-                    }
-
-                    if let Some(InbuiltType::Primitive(ty)) = generics
-                        .into_iter()
-                        .next()
-                        .map(|x| self.inbuilt(x))
-                        .flatten()
-                    {
-                        InbuiltType::Vec { comp, ty }
-                    } else {
-                        self.diagnostics.push(
-                            WgslError::new(format!(
-                                "`{}` must have a scalar type as its generic parameter",
-                                name
-                            ))
-                            .marker(ty.span),
-                        );
-                        InbuiltType::Vec {
-                            comp,
-                            ty: PrimitiveType::F32,
-                        }
-                    }
-                } else if let Some(comp) = self.mat.get(ident.name) {
-                    let name = comp.to_static_str();
-
-                    if generics.len() != 1 {
-                        self.diagnostics.push(
-                            WgslError::new(format!(
-                                "`{}` must have exactly 1 generic parameter",
-                                name
-                            ))
-                            .marker(ty.span),
-                        );
-                    }
-
-                    if let Some(InbuiltType::Primitive(x)) = generics
-                        .into_iter()
-                        .next()
-                        .map(|x| self.inbuilt(x))
-                        .flatten()
-                    {
-                        let ty = match x {
-                            PrimitiveType::F16 => FloatType::F16,
-                            PrimitiveType::F32 => FloatType::F32,
-                            PrimitiveType::F64 => FloatType::F64,
-                            _ => {
-                                self.diagnostics.push(
-                                    WgslError::new(format!(
-										"`{}` must have a floating-point type as its generic parameter",
-										name
-									))
-                                    .marker(ty.span),
-                                );
-                                FloatType::F32
-                            }
-                        };
-
-                        InbuiltType::Mat { comp, ty }
-                    } else {
-                        self.diagnostics.push(
-                            WgslError::new(format!(
-                                "`{}` must have a floating-point type as its generic parameter",
-                                name
-                            ))
-                            .marker(ty.span),
-                        );
-                        InbuiltType::Mat {
-                            comp,
-                            ty: FloatType::F32,
-                        }
-                    }
-                } else if ident.name == self.kws.atomic {
+                if ident.name == self.kws.atomic {
                     if generics.len() != 1 {
                         self.diagnostics.push(
                             WgslError::new(format!(
@@ -1205,33 +1093,24 @@ impl<'a> Resolver<'a> {
                         );
                     }
 
-                    if let Some(InbuiltType::Primitive(p)) = generics
+                    if let Some(InbuiltType::Scalar { kind, width }) = generics
                         .into_iter()
                         .next()
                         .map(|x| self.inbuilt(x))
                         .flatten()
                     {
-                        if let PrimitiveType::U32 = p {
-                            InbuiltType::Atomic { signed: false }
-                        } else if let PrimitiveType::I32 = p {
-                            InbuiltType::Atomic { signed: true }
-                        } else {
-                            self.diagnostics.push(
-                                WgslError::new(format!(
-                                    "`atomic` must have an integer type as its generic parameter",
-                                ))
-                                .marker(ty.span),
-                            );
-                            InbuiltType::Atomic { signed: true }
-                        }
+                        InbuiltType::Atomic { kind, width }
                     } else {
                         self.diagnostics.push(
                             WgslError::new(format!(
-                                "`atomic` must have an integer type as its generic parameter",
+                                "`atomic` must have a scalar type as its generic parameter",
                             ))
                             .marker(ty.span),
                         );
-                        InbuiltType::Atomic { signed: true }
+                        InbuiltType::Atomic {
+                            kind: ScalarKind::Sint,
+                            width: 4,
+                        }
                     }
                 } else if ident.name == self.kws.ptr {
                     let mut generics = generics.into_iter();
@@ -1246,16 +1125,6 @@ impl<'a> Resolver<'a> {
                         })
                         .and_then(|(a, s)| a.map(|a| (a, s)));
 
-                    let to = if let Some(to) = to {
-                        to
-                    } else {
-                        self.diagnostics
-                            .push(WgslError::new(format!("expected type")).marker(ty.span));
-                        ir::Type {
-                            kind: ir::TypeKind::Inbuilt(InbuiltType::Primitive(PrimitiveType::I32)),
-                            span: ty.span,
-                        }
-                    };
                     let access_mode = access_mode
                         .and_then(|access_mode| {
                             self.ty_to_ident(access_mode, "access mode")
@@ -1263,19 +1132,49 @@ impl<'a> Resolver<'a> {
                         })
                         .and_then(|(a, s)| a.map(|a| (a, s)));
 
-                    if address_space.is_none() {
-                        self.diagnostics.push(
-                            WgslError::new(format!("expected address space")).marker(ty.span),
-                        );
-                    }
+                    let to = to.unwrap_or_else(|| {
+                        self.diagnostics
+                            .push(WgslError::new(format!("expected type")).marker(span));
+                        ir::Type {
+                            kind: ir::TypeKind::Inbuilt(InbuiltType::Scalar {
+                                kind: ScalarKind::Sint,
+                                width: 4,
+                            }),
+                            span,
+                        }
+                    });
 
-                    let (address_space, access_mode) =
-                        self.handle_address_space_and_access_mode(address_space, access_mode);
+                    let address_space = address_space.map(|x| x.0).unwrap_or_else(|| {
+                        self.diagnostics
+                            .push(WgslError::new(format!("expected address space")).marker(span));
+                        AddressSpace::Function
+                    });
 
-                    InbuiltType::Ptr {
-                        address_space,
+                    let address_space = if let Some((mode, span)) = access_mode {
+                        let mut x = address_space.into();
+                        match x {
+                            crate::AddressSpace::Storage { ref mut access } => {
+                                *access = mode.into()
+                            }
+                            _ => {
+                                self.diagnostics.push(
+                                    WgslError::new(format!(
+                                        "cannot declare variable with access mode `{}` in address space `{}`",
+                                        mode, address_space
+                                    ))
+                                        .marker(span),
+                                );
+                            }
+                        }
+
+                        x
+                    } else {
+                        address_space.into()
+                    };
+
+                    InbuiltType::Pointer {
+                        space: address_space,
                         to: Box::new(to),
-                        access_mode,
                     }
                 } else if let Some(s) = self.sampled_texture.get(ident.name) {
                     let name = s.to_static_str();
@@ -1291,27 +1190,36 @@ impl<'a> Resolver<'a> {
                     }
 
                     let sample_type = generics.into_iter().next().and_then(|x| self.inbuilt(x));
-                    let sample_type = match sample_type {
-                        Some(InbuiltType::Primitive(PrimitiveType::F32)) => SampleType::F32,
-                        Some(InbuiltType::Primitive(PrimitiveType::U32)) => SampleType::U32,
-                        Some(InbuiltType::Primitive(PrimitiveType::I32)) => SampleType::I32,
+                    let kind = match sample_type {
+                        Some(InbuiltType::Scalar { kind, .. }) => kind,
                         Some(_) => {
                             self.diagnostics.push(
                                 WgslError::new(format!(
-									"`{}` must have either `f32`, `i32`, or `u32` as its generic parameter",
-									name
-								))
+                                    "`{}` must have a scalar type as its generic parameter",
+                                    name
+                                ))
                                 .marker(ty.span),
                             );
-                            SampleType::F32
+                            ScalarKind::Float
                         }
-                        None => SampleType::F32,
+                        None => ScalarKind::Float,
                     };
 
-                    InbuiltType::SampledTexture(s, sample_type)
+                    let (dim, arrayed, multi) = s.into();
+                    InbuiltType::Image {
+                        dim,
+                        arrayed,
+                        class: ImageClass::Sampled { kind, multi },
+                    }
                 } else if let Some(depth) = self.depth_texture.get(ident.name) {
                     no_generics(self, generics, depth.to_static_str());
-                    InbuiltType::DepthTexture(depth)
+
+                    let (dim, arrayed, multi) = depth.into();
+                    InbuiltType::Image {
+                        dim,
+                        arrayed,
+                        class: ImageClass::Depth { multi },
+                    }
                 } else if let Some(s) = self.storage_texture.get(ident.name) {
                     let name = s.to_static_str();
 
@@ -1345,15 +1253,29 @@ impl<'a> Resolver<'a> {
                                 &mut self.diagnostics,
                             );
                         }
-                        access
+                        access.into()
                     } else {
-                        AccessMode::Write
+                        StorageAccess::STORE
                     };
 
-                    InbuiltType::StorageTexture(s, texel_format, access)
+                    let (dim, arrayed) = s.into();
+                    InbuiltType::Image {
+                        dim,
+                        arrayed,
+                        class: ImageClass::Storage {
+                            format: texel_format.into(),
+                            access,
+                        },
+                    }
                 } else if let Some(s) = self.sampler.get(ident.name) {
                     no_generics(self, generics, s.to_static_str());
-                    InbuiltType::Sampler(s)
+                    InbuiltType::Sampler {
+                        comparison: s.into(),
+                    }
+                } else if let Some(inbuilt) =
+                    self.constructible_non_array_inbuilt(ident, generics, span)
+                {
+                    inbuilt
                 } else {
                     return None;
                 }
@@ -1383,7 +1305,130 @@ impl<'a> Resolver<'a> {
         Some(ty)
     }
 
-    fn attrib(&mut self, attrib: ast::Attribute) -> Option<ir::Attribute> {
+    fn constructible_non_array_inbuilt(
+        &mut self,
+        ident: Ident,
+        generics: Vec<ast::Type>,
+        span: Span,
+    ) -> Option<InbuiltType> {
+        let ty = if let Some(prim) = self.primitive.get(ident.name) {
+            if generics.len() != 0 {
+                self.diagnostics.push(
+                    WgslError::new(format!(
+                        "`{}` cannot have generic parameters",
+                        prim.to_static_str()
+                    ))
+                    .marker(span),
+                );
+            }
+
+            match prim {
+                PrimitiveType::F64 => {
+                    self.tu
+                        .features
+                        .require(Feature::Float64, ident.span, &mut self.diagnostics)
+                }
+                PrimitiveType::F16 => {
+                    self.tu
+                        .features
+                        .require(Feature::Float16, ident.span, &mut self.diagnostics)
+                }
+                _ => {}
+            }
+
+            let (kind, width) = prim.into();
+            InbuiltType::Scalar { kind, width }
+        } else if let Some(comp) = self.vec.get(ident.name) {
+            let name = comp.to_static_str();
+
+            if generics.len() != 1 {
+                self.diagnostics.push(
+                    WgslError::new(format!("`{}` must have exactly 1 generic parameter", name))
+                        .marker(span),
+                );
+            }
+
+            if let Some(InbuiltType::Scalar { kind, width }) = generics
+                .into_iter()
+                .next()
+                .map(|x| self.inbuilt(x))
+                .flatten()
+            {
+                InbuiltType::Vector {
+                    kind,
+                    width,
+                    size: comp.into(),
+                }
+            } else {
+                self.diagnostics.push(
+                    WgslError::new(format!(
+                        "`{}` must have a scalar type as its generic parameter",
+                        name
+                    ))
+                    .marker(span),
+                );
+                InbuiltType::Vector {
+                    kind: ScalarKind::Sint,
+                    width: 4,
+                    size: comp.into(),
+                }
+            }
+        } else if let Some(comp) = self.mat.get(ident.name) {
+            let name = comp.to_static_str();
+
+            if generics.len() != 1 {
+                self.diagnostics.push(
+                    WgslError::new(format!("`{}` must have exactly 1 generic parameter", name))
+                        .marker(span),
+                );
+            }
+
+            if let Some(InbuiltType::Scalar { width, kind }) = generics
+                .into_iter()
+                .next()
+                .map(|x| self.inbuilt(x))
+                .flatten()
+            {
+                if kind != ScalarKind::Float {
+                    self.diagnostics.push(
+                        WgslError::new(format!(
+                            "`{}` must have a floating point type as its generic parameter",
+                            name
+                        ))
+                        .marker(span),
+                    );
+                }
+
+                let (columns, rows) = comp.into();
+                InbuiltType::Matrix {
+                    columns,
+                    rows,
+                    width,
+                }
+            } else {
+                self.diagnostics.push(
+                    WgslError::new(format!(
+                        "`{}` must have a floating-point type as its generic parameter",
+                        name
+                    ))
+                    .marker(span),
+                );
+
+                let (columns, rows) = comp.into();
+                InbuiltType::Matrix {
+                    columns,
+                    rows,
+                    width: 4,
+                }
+            }
+        } else {
+            return None;
+        };
+
+        Some(ty)
+    }
+
+    fn attrib(&mut self, attrib: ast::Attribute) -> Option<Attribute> {
         let args = |this: &mut Self, args: usize| {
             if attrib.exprs.len() != args {
                 this.diagnostics
@@ -1445,10 +1490,7 @@ impl<'a> Resolver<'a> {
                         );
                     }
 
-                    Some(AttributeType::Interpolate(
-                        ty,
-                        sample.unwrap_or(InterpolationSample::Center),
-                    ))
+                    Some(AttributeType::Interpolate(ty, sample))
                 }
             }
             x if x == self.kws.invariant => args(self, 0).map(|_| AttributeType::Invariant),
@@ -1474,8 +1516,7 @@ impl<'a> Resolver<'a> {
             x if x == self.kws.early_depth_test => args(self, 1).map(|_| {
                 AttributeType::ConservativeDepth(
                     expr_as_ident(self, &attrib.exprs.into_iter().next().unwrap())
-                        .and_then(|x| self.conservative_depth(x))
-                        .unwrap_or(ConservativeDepth::Unchanged),
+                        .and_then(|x| self.conservative_depth(x)),
                 )
             }),
             _ => {
@@ -1485,7 +1526,7 @@ impl<'a> Resolver<'a> {
             }
         };
 
-        ty.map(|ty| ir::Attribute { span, ty })
+        ty.map(|ty| Attribute { span, ty })
     }
 
     fn access_mode(&mut self, ident: Ident) -> Option<AccessMode> {
@@ -1590,44 +1631,6 @@ impl<'a> Resolver<'a> {
         }
     }
 
-    fn handle_address_space_and_access_mode(
-        &mut self,
-        address_space: Option<(AddressSpace, Span)>,
-        access_mode: Option<(AccessMode, Span)>,
-    ) -> (AddressSpace, AccessMode) {
-        let address_space = address_space.map(|x| x.0).unwrap_or_else(|| {
-            if self.in_function {
-                AddressSpace::Function
-            } else {
-                AddressSpace::Handle // Is not user-settable, so use as a sentinel.
-            }
-        });
-
-        let default = || match address_space {
-            AddressSpace::Function => AccessMode::ReadWrite,
-            AddressSpace::Private => AccessMode::ReadWrite,
-            AddressSpace::Storage => AccessMode::Read,
-            AddressSpace::Uniform => AccessMode::Read,
-            AddressSpace::Workgroup => AccessMode::ReadWrite,
-            AddressSpace::Handle => AccessMode::ReadWrite, // Doesn't matter what we return.
-            AddressSpace::PushConstant => AccessMode::Read,
-        };
-
-        let access_mode = if let Some((mode, span)) = access_mode {
-            if address_space != AddressSpace::Storage {
-                self.diagnostics
-                    .push(WgslError::new("access mode is not allowed here").marker(span));
-                default()
-            } else {
-                mode
-            }
-        } else {
-            default()
-        };
-
-        (address_space, access_mode)
-    }
-
     fn verify_ident(&mut self, ident: Ident) {
         let text = self.intern.resolve(ident.name);
         if let Some(m) = self.reserved_matcher.earliest_find(text) {
@@ -1653,7 +1656,7 @@ impl<'a> Resolver<'a> {
 
         if let Some(global) = self.index.get(ident.name) {
             self.dependencies.insert(DeclDependency {
-                kind: DeclDependencyKind::Decl(global),
+                id: global,
                 usage: ident.span,
             });
             ir::ExprKind::Global(global)

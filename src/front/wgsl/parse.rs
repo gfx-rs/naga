@@ -11,7 +11,7 @@ use crate::front::wgsl::{
     text::Interner,
     WgslError,
 };
-use crate::Span;
+use crate::{BinaryOperator, Span};
 
 impl chumsky::Span for Span {
     type Context = ();
@@ -375,10 +375,10 @@ impl Parser<'_> {
 
         let unary = select! {
             TokenKind::And => UnaryOp::Ref,
+            TokenKind::Star => UnaryOp::Deref,
             TokenKind::Bang => UnaryOp::Not,
             TokenKind::Minus => UnaryOp::Minus,
-            TokenKind::Star => UnaryOp::Deref,
-            TokenKind::Tilde => UnaryOp::BitNot,
+            TokenKind::Tilde => UnaryOp::Not,
         }
         .map_with_span(|op, span| (op, span))
         .repeated()
@@ -397,7 +397,7 @@ impl Parser<'_> {
 
         fn binary<'a>(
             side: impl CParser<TokenKind, Expr, Error = Simple<TokenKind, Span>> + Clone + 'a,
-            op: impl CParser<TokenKind, BinaryOp, Error = Simple<TokenKind, Span>> + Clone + 'a,
+            op: impl CParser<TokenKind, BinaryOperator, Error = Simple<TokenKind, Span>> + Clone + 'a,
         ) -> impl CParser<TokenKind, Expr, Error = Simple<TokenKind, Span>> + Clone + 'a {
             side.clone()
                 .then(op.then(side).repeated())
@@ -418,29 +418,29 @@ impl Parser<'_> {
         let product = binary(
             unary,
             select! {
-                TokenKind::Star => BinaryOp::Mul,
-                TokenKind::ForwardSlash => BinaryOp::Div,
-                TokenKind::Modulo => BinaryOp::Mod,
+                TokenKind::Star => BinaryOperator::Multiply,
+                TokenKind::ForwardSlash => BinaryOperator::Divide,
+                TokenKind::Modulo => BinaryOperator::Modulo,
             },
         );
         let sum = binary(
             product,
             select! {
-                TokenKind::Plus => BinaryOp::Add,
-                TokenKind::Minus => BinaryOp::Sub,
+                TokenKind::Plus => BinaryOperator::Add,
+                TokenKind::Minus => BinaryOperator::Subtract,
             },
         );
         let shift = binary(
             sum,
             select! {
-                TokenKind::ShiftLeft => BinaryOp::BitShiftLeft,
+                TokenKind::ShiftLeft => BinaryOperator::ShiftLeft,
             }
             .or(just(TokenKind::Greater)
                 .map_with_span(|_, span| span)
                 .then(just(TokenKind::Greater).map_with_span(|_, span: Span| span))
                 .try_map(|(l, r): (Span, Span), span| {
                     if l.end() == r.start() {
-                        Ok(BinaryOp::BitShiftRight)
+                        Ok(BinaryOperator::ShiftRight)
                     } else {
                         Err(Simple::custom(span, "you should not be seeing this"))
                     }
@@ -449,37 +449,37 @@ impl Parser<'_> {
         let comparison = binary(
             shift,
             select! {
-                TokenKind::Greater => BinaryOp::GreaterThan,
-                TokenKind::GreaterEqual => BinaryOp::GreaterThanEqual,
-                TokenKind::Less => BinaryOp::LessThan,
-                TokenKind::LessEqual => BinaryOp::LessThanEqual,
+                TokenKind::Greater => BinaryOperator::Greater,
+                TokenKind::GreaterEqual => BinaryOperator::GreaterEqual,
+                TokenKind::Less => BinaryOperator::Less,
+                TokenKind::LessEqual => BinaryOperator::LessEqual,
             },
         );
         let equality = binary(
             comparison,
             select! {
-                TokenKind::EqualEqual => BinaryOp::Equal,
-                TokenKind::NotEqual => BinaryOp::NotEqual,
+                TokenKind::EqualEqual => BinaryOperator::Equal,
+                TokenKind::NotEqual => BinaryOperator::NotEqual,
             },
         );
-        let bitand = binary(equality, just(TokenKind::And).to(BinaryOp::BitAnd));
-        let bitxor = binary(bitand, just(TokenKind::Xor).to(BinaryOp::BitXor));
-        let bitor = binary(bitxor, just(TokenKind::Or).to(BinaryOp::BitOr));
-        let and = binary(bitor, just(TokenKind::AndAnd).to(BinaryOp::And));
-        let or = binary(and, just(TokenKind::OrOr).to(BinaryOp::Or));
+        let bitand = binary(equality, just(TokenKind::And).to(BinaryOperator::And));
+        let bitxor = binary(bitand, just(TokenKind::Xor).to(BinaryOperator::ExclusiveOr));
+        let bitor = binary(bitxor, just(TokenKind::Or).to(BinaryOperator::InclusiveOr));
+        let and = binary(bitor, just(TokenKind::AndAnd).to(BinaryOperator::And));
+        let or = binary(and, just(TokenKind::OrOr).to(BinaryOperator::InclusiveOr));
 
         let assign = select! {
-            TokenKind::Equal => AssignOp::Assign,
-            TokenKind::PlusEqual => AssignOp::Add,
-            TokenKind::MinusEqual => AssignOp::Sub,
-            TokenKind::TimesEqual => AssignOp::Mul,
-            TokenKind::DivideEqual => AssignOp::Div,
-            TokenKind::ModuloEqual => AssignOp::Mod,
-            TokenKind::ShiftLeftEqual => AssignOp::ShiftLeft,
-            TokenKind::ShiftRightEqual => AssignOp::ShiftRight,
-            TokenKind::AndEqual => AssignOp::BitAnd,
-            TokenKind::XorEqual => AssignOp::BitXor,
-            TokenKind::OrEqual => AssignOp::BitOr,
+            TokenKind::Equal => None,
+            TokenKind::PlusEqual => Some(BinaryOperator::Add),
+            TokenKind::MinusEqual => Some(BinaryOperator::Subtract),
+            TokenKind::TimesEqual => Some(BinaryOperator::Multiply),
+            TokenKind::DivideEqual => Some(BinaryOperator::Divide),
+            TokenKind::ModuloEqual => Some(BinaryOperator::Modulo),
+            TokenKind::ShiftLeftEqual => Some(BinaryOperator::ShiftLeft),
+            TokenKind::ShiftRightEqual => Some(BinaryOperator::ShiftRight),
+            TokenKind::AndEqual => Some(BinaryOperator::And),
+            TokenKind::XorEqual => Some(BinaryOperator::ExclusiveOr),
+            TokenKind::OrEqual => Some(BinaryOperator::InclusiveOr),
         };
         let assign = or
             .clone()

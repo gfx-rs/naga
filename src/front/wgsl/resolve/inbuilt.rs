@@ -7,6 +7,8 @@ use strum::{EnumIter, IntoEnumIterator};
 use crate::{
     front::wgsl::ast::Expr,
     front::wgsl::text::{Interner, Text},
+    BuiltIn, Bytes, ImageDimension, Interpolation, Sampling, ScalarKind, Span, StorageFormat,
+    VectorSize,
 };
 
 pub trait ToStaticString {
@@ -33,6 +35,16 @@ impl ToStaticString for AccessMode {
 impl Display for AccessMode {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{}", self.to_static_str())
+    }
+}
+
+impl Into<crate::StorageAccess> for AccessMode {
+    fn into(self) -> crate::StorageAccess {
+        match self {
+            AccessMode::Read => crate::StorageAccess::LOAD,
+            AccessMode::Write => crate::StorageAccess::STORE,
+            AccessMode::ReadWrite => crate::StorageAccess::LOAD | crate::StorageAccess::STORE,
+        }
     }
 }
 
@@ -67,6 +79,28 @@ impl Display for AddressSpace {
     }
 }
 
+impl Into<crate::AddressSpace> for AddressSpace {
+    fn into(self) -> crate::AddressSpace {
+        match self {
+            AddressSpace::Function => crate::AddressSpace::Function,
+            AddressSpace::Private => crate::AddressSpace::Private,
+            AddressSpace::Storage => crate::AddressSpace::Storage {
+                access: crate::StorageAccess::LOAD,
+            },
+            AddressSpace::Uniform => crate::AddressSpace::Uniform,
+            AddressSpace::Workgroup => crate::AddressSpace::WorkGroup,
+            AddressSpace::Handle => crate::AddressSpace::Handle,
+            AddressSpace::PushConstant => crate::AddressSpace::PushConstant,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct Attribute {
+    pub ty: AttributeType,
+    pub span: Span,
+}
+
 #[derive(Clone, Debug)]
 pub enum AttributeType {
     Align(Expr),
@@ -77,13 +111,13 @@ pub enum AttributeType {
     Fragment,
     Group(Expr),
     Id(Expr),
-    Interpolate(InterpolationType, InterpolationSample),
+    Interpolate(InterpolationType, Option<InterpolationSample>),
     Invariant,
     Location(Expr),
     Size(Expr),
     Vertex,
     WorkgroupSize(Expr, Option<Expr>, Option<Expr>),
-    ConservativeDepth(ConservativeDepth),
+    ConservativeDepth(Option<ConservativeDepth>),
 }
 
 impl Display for AttributeType {
@@ -153,6 +187,27 @@ impl Display for Builtin {
     }
 }
 
+impl Into<BuiltIn> for Builtin {
+    fn into(self) -> BuiltIn {
+        match self {
+            Builtin::FragDepth => BuiltIn::FragDepth,
+            Builtin::FrontFacing => BuiltIn::FrontFacing,
+            Builtin::GlobalInvocationId => BuiltIn::GlobalInvocationId,
+            Builtin::InstanceIndex => BuiltIn::InstanceIndex,
+            Builtin::LocalInvocationId => BuiltIn::LocalInvocationId,
+            Builtin::LocalInvocationIndex => BuiltIn::LocalInvocationIndex,
+            Builtin::NumWorkgroups => BuiltIn::NumWorkGroups,
+            Builtin::Position => BuiltIn::Position { invariant: false },
+            Builtin::SampleIndex => BuiltIn::SampleIndex,
+            Builtin::SampleMask => BuiltIn::SampleMask,
+            Builtin::VertexIndex => BuiltIn::VertexIndex,
+            Builtin::WorkgroupId => BuiltIn::WorkGroupId,
+            Builtin::PrimitiveIndex => BuiltIn::PrimitiveIndex,
+            Builtin::ViewIndex => BuiltIn::ViewIndex,
+        }
+    }
+}
+
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Hash, EnumIter)]
 pub enum InterpolationSample {
     Center,
@@ -173,6 +228,16 @@ impl ToStaticString for InterpolationSample {
 impl Display for InterpolationSample {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{}", self.to_static_str())
+    }
+}
+
+impl Into<Sampling> for InterpolationSample {
+    fn into(self) -> Sampling {
+        match self {
+            InterpolationSample::Center => Sampling::Center,
+            InterpolationSample::Centroid => Sampling::Centroid,
+            InterpolationSample::Sample => Sampling::Sample,
+        }
     }
 }
 
@@ -199,6 +264,16 @@ impl Display for InterpolationType {
     }
 }
 
+impl Into<Interpolation> for InterpolationType {
+    fn into(self) -> Interpolation {
+        match self {
+            InterpolationType::Flat => Interpolation::Flat,
+            InterpolationType::Linear => Interpolation::Linear,
+            InterpolationType::Perspective => Interpolation::Perspective,
+        }
+    }
+}
+
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Hash, EnumIter)]
 pub enum PrimitiveType {
     I32,
@@ -207,7 +282,6 @@ pub enum PrimitiveType {
     F32,
     F16,
     Bool,
-    Infer,
 }
 
 impl ToStaticString for PrimitiveType {
@@ -219,7 +293,6 @@ impl ToStaticString for PrimitiveType {
             PrimitiveType::F32 => "f32",
             PrimitiveType::F16 => "f16",
             PrimitiveType::Bool => "bool",
-            PrimitiveType::Infer => "_",
         }
     }
 }
@@ -227,6 +300,19 @@ impl ToStaticString for PrimitiveType {
 impl Display for PrimitiveType {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{}", self.to_static_str())
+    }
+}
+
+impl Into<(ScalarKind, Bytes)> for PrimitiveType {
+    fn into(self) -> (ScalarKind, Bytes) {
+        match self {
+            PrimitiveType::I32 => (ScalarKind::Sint, 4),
+            PrimitiveType::U32 => (ScalarKind::Uint, 4),
+            PrimitiveType::F64 => (ScalarKind::Float, 8),
+            PrimitiveType::F32 => (ScalarKind::Float, 4),
+            PrimitiveType::F16 => (ScalarKind::Float, 2),
+            PrimitiveType::Bool => (ScalarKind::Bool, 1),
+        }
     }
 }
 
@@ -250,6 +336,16 @@ impl ToStaticString for VecType {
 impl Display for VecType {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{}", self.to_static_str())
+    }
+}
+
+impl Into<VectorSize> for VecType {
+    fn into(self) -> VectorSize {
+        match self {
+            VecType::Vec2 => VectorSize::Bi,
+            VecType::Vec3 => VectorSize::Tri,
+            VecType::Vec4 => VectorSize::Quad,
+        }
     }
 }
 
@@ -288,6 +384,22 @@ impl Display for MatType {
     }
 }
 
+impl Into<(VectorSize, VectorSize)> for MatType {
+    fn into(self) -> (VectorSize, VectorSize) {
+        match self {
+            MatType::Mat2x2 => (VectorSize::Bi, VectorSize::Bi),
+            MatType::Mat2x3 => (VectorSize::Bi, VectorSize::Tri),
+            MatType::Mat2x4 => (VectorSize::Bi, VectorSize::Quad),
+            MatType::Mat3x2 => (VectorSize::Tri, VectorSize::Bi),
+            MatType::Mat3x3 => (VectorSize::Tri, VectorSize::Tri),
+            MatType::Mat3x4 => (VectorSize::Tri, VectorSize::Quad),
+            MatType::Mat4x2 => (VectorSize::Quad, VectorSize::Bi),
+            MatType::Mat4x3 => (VectorSize::Quad, VectorSize::Tri),
+            MatType::Mat4x4 => (VectorSize::Quad, VectorSize::Quad),
+        }
+    }
+}
+
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Hash, EnumIter)]
 pub enum SampledTextureType {
     Texture1d,
@@ -321,6 +433,21 @@ impl Display for SampledTextureType {
     }
 }
 
+impl Into<(ImageDimension, bool, bool)> for SampledTextureType {
+    fn into(self) -> (ImageDimension, bool, bool) {
+        match self {
+            SampledTextureType::Texture1d => (ImageDimension::D1, false, false),
+            SampledTextureType::Texture1dArray => (ImageDimension::D1, true, false),
+            SampledTextureType::Texture2d => (ImageDimension::D2, false, false),
+            SampledTextureType::TextureMultisampled2d => (ImageDimension::D2, false, true),
+            SampledTextureType::Texture2dArray => (ImageDimension::D2, true, false),
+            SampledTextureType::Texture3d => (ImageDimension::D3, false, false),
+            SampledTextureType::TextureCube => (ImageDimension::Cube, false, false),
+            SampledTextureType::TextureCubeArray => (ImageDimension::Cube, true, false),
+        }
+    }
+}
+
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Hash, EnumIter)]
 pub enum DepthTextureType {
     Depth2d,
@@ -348,6 +475,18 @@ impl Display for DepthTextureType {
     }
 }
 
+impl Into<(ImageDimension, bool, bool)> for DepthTextureType {
+    fn into(self) -> (ImageDimension, bool, bool) {
+        match self {
+            DepthTextureType::Depth2d => (ImageDimension::D2, false, false),
+            DepthTextureType::Depth2dArray => (ImageDimension::D2, true, false),
+            DepthTextureType::DepthCube => (ImageDimension::Cube, false, false),
+            DepthTextureType::DepthCubeArray => (ImageDimension::Cube, true, false),
+            DepthTextureType::DepthMultisampled2d => (ImageDimension::D2, false, true),
+        }
+    }
+}
+
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Hash, EnumIter)]
 pub enum SamplerType {
     Sampler,
@@ -366,6 +505,15 @@ impl ToStaticString for SamplerType {
 impl Display for SamplerType {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{}", self.to_static_str())
+    }
+}
+
+impl Into<bool> for SamplerType {
+    fn into(self) -> bool {
+        match self {
+            SamplerType::Sampler => false,
+            SamplerType::SamplerComparison => true,
+        }
     }
 }
 
@@ -393,6 +541,18 @@ impl ToStaticString for StorageTextureType {
 impl Display for StorageTextureType {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{}", self.to_static_str())
+    }
+}
+
+impl Into<(ImageDimension, bool)> for StorageTextureType {
+    fn into(self) -> (ImageDimension, bool) {
+        match self {
+            StorageTextureType::Storage1d => (ImageDimension::D1, false),
+            StorageTextureType::Storage1dArray => (ImageDimension::D1, true),
+            StorageTextureType::Storage2d => (ImageDimension::D2, false),
+            StorageTextureType::Storage2dArray => (ImageDimension::D2, true),
+            StorageTextureType::Storage3d => (ImageDimension::D3, false),
+        }
     }
 }
 
@@ -445,6 +605,29 @@ impl Display for TexelFormat {
     }
 }
 
+impl Into<StorageFormat> for TexelFormat {
+    fn into(self) -> StorageFormat {
+        match self {
+            TexelFormat::R32Float => StorageFormat::R32Float,
+            TexelFormat::R32Sint => StorageFormat::R32Sint,
+            TexelFormat::R32Uint => StorageFormat::R32Uint,
+            TexelFormat::Rg32Float => StorageFormat::Rg32Float,
+            TexelFormat::Rg32Sint => StorageFormat::Rg32Sint,
+            TexelFormat::Rg32Uint => StorageFormat::Rg32Uint,
+            TexelFormat::Rgba16Float => StorageFormat::Rgba16Float,
+            TexelFormat::Rgba16Sint => StorageFormat::Rgba16Sint,
+            TexelFormat::Rgba16Uint => StorageFormat::Rgba16Uint,
+            TexelFormat::Rgba32Float => StorageFormat::Rgba32Float,
+            TexelFormat::Rgba32Sint => StorageFormat::Rgba32Sint,
+            TexelFormat::Rgba32Uint => StorageFormat::Rgba32Uint,
+            TexelFormat::Rgba8Sint => StorageFormat::Rgba8Sint,
+            TexelFormat::Rgba8Uint => StorageFormat::Rgba8Uint,
+            TexelFormat::Rgba8Unorm => StorageFormat::Rgba8Unorm,
+            TexelFormat::Rgba8Snorm => StorageFormat::Rgba8Snorm,
+        }
+    }
+}
+
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Hash, EnumIter)]
 pub enum ConservativeDepth {
     GreaterEqual,
@@ -465,6 +648,16 @@ impl ToStaticString for ConservativeDepth {
 impl Display for ConservativeDepth {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{}", self.to_static_str())
+    }
+}
+
+impl Into<crate::ConservativeDepth> for ConservativeDepth {
+    fn into(self) -> crate::ConservativeDepth {
+        match self {
+            ConservativeDepth::GreaterEqual => crate::ConservativeDepth::GreaterEqual,
+            ConservativeDepth::LessEqual => crate::ConservativeDepth::LessEqual,
+            ConservativeDepth::Unchanged => crate::ConservativeDepth::Unchanged,
+        }
     }
 }
 

@@ -142,7 +142,6 @@ pub enum TokenKind {
     ShiftRightEqual,
     #[token("<<=")]
     ShiftLeftEqual,
-    Eof,
     #[error]
     #[regex(r"[ \t\n\r\f]+|//.*|", logos::skip)]
     #[token("/*", |lex| {
@@ -216,7 +215,6 @@ impl Debug for TokenKind {
                 XorEqual => "^=",
                 ShiftRightEqual => ">>=",
                 ShiftLeftEqual => "<<=",
-                Eof => "<eof>",
                 Error => "<error>",
             }
         )

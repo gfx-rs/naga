@@ -3,16 +3,8 @@ use std::hash::Hash;
 use crate::{FastHashSet, Span};
 
 use crate::front::wgsl::{
-    ast::{AssignOp, BinaryOp, Ident, Literal, PostfixOp, UnaryOp},
-    resolve::{
-        features::EnabledFeatures,
-        inbuilt::{
-            AccessMode, AddressSpace, AttributeType, Builtin, ConservativeDepth, DepthTextureType,
-            InterpolationSample, InterpolationType, MatType, PrimitiveType, SampledTextureType,
-            SamplerType, StorageTextureType, TexelFormat, VecType,
-        },
-        inbuilt_functions::InbuiltFunction,
-    },
+    ast::{Ident, Literal},
+    resolve::{features::EnabledFeatures, inbuilt_functions::InbuiltFunction},
 };
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Hash)]
@@ -51,33 +43,21 @@ impl TranslationUnit {
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct Attribute {
-    pub ty: AttributeType,
-    pub span: Span,
-}
-
-#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
-pub enum DeclDependencyKind {
-    Decl(DeclId),
-    Inbuilt(InbuiltFunction),
-}
-
 #[derive(Copy, Clone, Debug)]
 pub struct DeclDependency {
-    pub kind: DeclDependencyKind,
+    pub id: DeclId,
     pub usage: Span,
 }
 
 impl Hash for DeclDependency {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.kind.hash(state);
+        self.id.hash(state);
     }
 }
 
 impl PartialEq for DeclDependency {
     fn eq(&self, other: &Self) -> bool {
-        self.kind == other.kind
+        self.id == other.id
     }
 }
 
@@ -86,6 +66,7 @@ impl Eq for DeclDependency {}
 #[derive(Clone, Debug)]
 pub struct Decl {
     pub kind: DeclKind,
+    /// The direct dependencies of this declaration.
     pub dependencies: FastHashSet<DeclDependency>,
     pub span: Span,
 }
@@ -103,25 +84,25 @@ pub enum DeclKind {
 
 #[derive(Clone, Debug)]
 pub struct Fn {
-    pub attribs: FnAttribs,
+    pub stage: ShaderStage,
     pub name: Ident,
     pub args: Vec<Arg>,
-    pub ret_attribs: ArgAttribs,
+    pub ret_binding: Option<Binding>,
     pub ret: Option<Type>,
     pub block: Block,
 }
 
 #[derive(Clone, Debug)]
-pub enum FnAttribs {
+pub enum ShaderStage {
     None,
     Vertex,
-    Fragment(Option<ConservativeDepth>),
+    Fragment(Option<crate::EarlyDepthTest>),
     Compute(Option<Expr>, Option<Expr>, Option<Expr>),
 }
 
 #[derive(Clone, Debug)]
 pub struct Arg {
-    pub attribs: ArgAttribs,
+    pub binding: Option<Binding>,
     pub name: Ident,
     pub ty: Type,
     pub span: Span,
@@ -129,18 +110,20 @@ pub struct Arg {
 }
 
 #[derive(Clone, Debug)]
-pub struct ArgAttribs {
-    pub builtin: Option<Builtin>,
-    pub location: Option<Expr>,
-    pub interpolate: Option<(InterpolationType, InterpolationSample)>,
-    pub invariant: bool,
+pub enum Binding {
+    Builtin(crate::BuiltIn),
+    Location {
+        location: Option<Expr>,
+        interpolation: Option<crate::Interpolation>,
+        sampling: Option<crate::Sampling>,
+    },
 }
 
 #[derive(Clone, Debug)]
 pub struct Override {
     pub id: Option<Expr>,
     pub name: Ident,
-    pub ty: Option<Type>,
+    pub ty: Type,
     pub val: Option<Expr>,
 }
 
@@ -158,10 +141,9 @@ pub struct VarAttribs {
 
 #[derive(Clone, Debug)]
 pub struct VarNoAttribs {
-    pub address_space: AddressSpace,
-    pub access_mode: AccessMode,
+    pub address_space: crate::AddressSpace,
     pub name: Ident,
-    pub ty: Option<Type>,
+    pub ty: Type,
     pub val: Option<Expr>,
 }
 
@@ -182,7 +164,7 @@ pub struct Field {
 pub struct FieldAttribs {
     pub align: Option<Expr>,
     pub size: Option<Expr>,
-    pub arg: ArgAttribs,
+    pub binding: Option<Binding>,
 }
 
 #[derive(Clone, Debug)]
@@ -203,37 +185,30 @@ pub enum TypeKind {
     User(DeclId),
 }
 
-#[derive(Copy, Clone, Eq, PartialEq, Debug, Hash)]
-pub enum FloatType {
-    F16,
-    F32,
-    F64,
-    Infer,
-}
-
-#[derive(Copy, Clone, Eq, PartialEq, Debug, Hash)]
-pub enum SampleType {
-    F64,
-    F32,
-    I32,
-    U32,
-}
-
 #[derive(Clone, Debug)]
 pub enum InbuiltType {
-    Primitive(PrimitiveType),
-    Vec {
-        ty: PrimitiveType,
-        comp: VecType,
+    Scalar {
+        kind: crate::ScalarKind,
+        width: crate::Bytes,
     },
-    Mat {
-        ty: FloatType,
-        comp: MatType,
+    Vector {
+        size: crate::VectorSize,
+        kind: crate::ScalarKind,
+        width: crate::Bytes,
     },
-    SampledTexture(SampledTextureType, SampleType),
-    DepthTexture(DepthTextureType),
-    StorageTexture(StorageTextureType, TexelFormat, AccessMode),
-    Sampler(SamplerType),
+    Matrix {
+        columns: crate::VectorSize,
+        rows: crate::VectorSize,
+        width: crate::Bytes,
+    },
+    Image {
+        dim: crate::ImageDimension,
+        arrayed: bool,
+        class: crate::ImageClass,
+    },
+    Sampler {
+        comparison: bool,
+    },
     Array {
         of: Box<Type>,
         len: Option<Expr>,
@@ -242,14 +217,15 @@ pub enum InbuiltType {
         of: Box<Type>,
         len: Option<Expr>,
     },
-    Ptr {
+    Pointer {
         to: Box<Type>,
-        address_space: AddressSpace,
-        access_mode: AccessMode,
+        space: crate::AddressSpace,
     },
     Atomic {
-        signed: bool, // Only i32 and u32 are allowed.
+        kind: crate::ScalarKind,
+        width: crate::Bytes,
     },
+    Infer,
 }
 
 #[derive(Clone, Debug)]
@@ -273,13 +249,11 @@ pub enum StmtKind {
     Discard,
     For(For),
     If(If),
-    Loop(Block),
+    Loop(Loop),
     Return(Option<Expr>),
     StaticAssert(Expr),
     Switch(Switch),
     While(While),
-    Continuing(Block),
-    BreakIf(Expr),
 }
 
 #[derive(Clone, Debug)]
@@ -293,7 +267,6 @@ pub enum ExprStatementKind {
     VarDecl(VarDecl),
     Call(CallExpr),
     Assign(AssignExpr),
-    Postfix(PostfixExpr),
 }
 
 #[derive(Clone, Debug)]
@@ -306,7 +279,8 @@ pub struct CallStmt {
 pub struct For {
     pub init: Option<ExprStatement>,
     pub cond: Option<Expr>,
-    pub update: Option<ExprStatement>, // var decls are not allowed here.
+    /// Var decls are not going to be here.
+    pub update: Option<ExprStatement>,
     pub block: Block,
 }
 
@@ -315,6 +289,13 @@ pub struct If {
     pub cond: Expr,
     pub block: Block,
     pub else_: Option<Box<Stmt>>,
+}
+
+#[derive(Clone, Debug)]
+pub struct Loop {
+    pub body: Block,
+    pub continuing: Option<Block>,
+    pub break_if: Option<Expr>,
 }
 
 #[derive(Clone, Debug)]
@@ -355,6 +336,8 @@ pub enum ExprKind {
     Local(LocalId),
     Global(DeclId),
     Unary(UnaryExpr),
+    AddrOf(Box<Expr>),
+    Deref(Box<Expr>),
     Binary(BinaryExpr),
     Call(CallExpr),
     Index(Box<Expr>, Box<Expr>),
@@ -363,37 +346,26 @@ pub enum ExprKind {
 
 #[derive(Clone, Debug)]
 pub struct UnaryExpr {
-    pub op: UnaryOp,
+    pub op: crate::UnaryOperator,
     pub expr: Box<Expr>,
 }
 
 #[derive(Clone, Debug)]
 pub struct AssignExpr {
-    pub lhs: Box<AssignTarget>,
-    pub op: AssignOp,
-    pub rhs: Box<Expr>,
+    pub target: AssignTarget,
+    pub value: Box<Expr>,
+}
+
+#[derive(Clone, Debug)]
+pub enum AssignTarget {
+    Phony,
+    Expr(Box<Expr>),
 }
 
 #[derive(Clone, Debug)]
 pub struct CallExpr {
     pub target: FnTarget,
     pub args: Vec<Expr>,
-}
-
-#[derive(Clone, Debug)]
-pub struct AssignTarget {
-    pub kind: AssignTargetKind,
-    pub span: Span,
-}
-
-#[derive(Clone, Debug)]
-pub enum AssignTargetKind {
-    Ignore,
-    Local(LocalId),
-    Global(DeclId),
-    Index(Box<Expr>, Box<Expr>),
-    Member(Box<Expr>, Ident),
-    Deref(Box<Expr>),
 }
 
 #[derive(Clone, Debug)]
@@ -407,20 +379,14 @@ pub enum FnTarget {
 #[derive(Clone, Debug)]
 pub struct BinaryExpr {
     pub lhs: Box<Expr>,
-    pub op: BinaryOp,
+    pub op: crate::BinaryOperator,
     pub rhs: Box<Expr>,
-}
-
-#[derive(Clone, Debug)]
-pub struct PostfixExpr {
-    pub expr: Box<Expr>,
-    pub op: PostfixOp,
 }
 
 #[derive(Clone, Debug)]
 pub struct VarDecl {
     pub kind: VarDeclKind,
-    pub local: LocalId,
+    pub id: LocalId,
 }
 
 #[derive(Clone, Debug)]
@@ -433,6 +399,6 @@ pub enum VarDeclKind {
 #[derive(Clone, Debug)]
 pub struct Let {
     pub name: Ident,
-    pub ty: Option<Type>,
+    pub ty: Type,
     pub val: Expr,
 }

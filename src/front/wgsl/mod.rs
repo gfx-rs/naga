@@ -15,7 +15,6 @@ use codespan_reporting::term;
 use termcolor::{ColorChoice, NoColor, StandardStream};
 
 mod ast;
-mod const_eval;
 mod lexer;
 mod lower;
 mod parse;

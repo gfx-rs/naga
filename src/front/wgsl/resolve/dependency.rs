@@ -1,139 +1,110 @@
-use crate::front::wgsl::resolve::ir::{
-    Decl, DeclDependencyKind, DeclId, DeclKind, TranslationUnit,
-};
+use crate::front::wgsl::resolve::ir::{Decl, DeclDependency, DeclId, DeclKind, TranslationUnit};
 use crate::front::wgsl::WgslError;
 use crate::Span;
 
-struct StackList<'a, T> {
-    prev: Option<&'a StackList<'a, T>>,
-    value: Option<T>,
+pub fn resolve_all_dependencies(module: &mut TranslationUnit, diagnostics: &mut Vec<WgslError>) {
+    let order = DependencySolver::new(module, diagnostics).solve();
+    module.dependency_order = order;
 }
 
-impl<'a, T> StackList<'a, T> {
-    fn empty() -> Self {
-        Self {
-            prev: None,
-            value: None,
-        }
-    }
-
-    fn with(&'a self, value: T) -> Self {
-        Self {
-            prev: Some(self),
-            value: Some(value),
-        }
-    }
+struct DependencySolver<'a> {
+    module: &'a TranslationUnit,
+    diagnostics: &'a mut Vec<WgslError>,
+    visited: Vec<bool>,
+    temp_visited: Vec<bool>,
+    path: Vec<DeclDependency>,
+    out: Vec<DeclId>,
 }
 
-pub fn resolve_all_dependencies(tu: &mut TranslationUnit, diagnostics: &mut Vec<WgslError>) {
-    let mut visited = vec![false; tu.decls.len()];
-    let mut temp_visited = vec![false; tu.decls.len()];
-
-    let mut depdendency_order = Vec::with_capacity(tu.decls.len());
-
-    for &decl in tu.roots.iter() {
-        recursive_solve(
-            decl,
-            StackList::empty(),
-            &mut tu.decls,
-            &mut visited,
-            &mut temp_visited,
-            &mut depdendency_order,
+impl<'a> DependencySolver<'a> {
+    fn new(module: &'a TranslationUnit, diagnostics: &'a mut Vec<WgslError>) -> Self {
+        let len = module.decls.len();
+        Self {
+            module,
             diagnostics,
-        );
-    }
-
-    for id in 0..tu.decls.len() {
-        let visit = visited[id];
-        if !visit {
-            recursive_solve(
-                DeclId(id as _),
-                StackList::empty(),
-                &mut tu.decls,
-                &mut visited,
-                &mut temp_visited,
-                &mut depdendency_order,
-                diagnostics,
-            );
+            visited: vec![false; len],
+            temp_visited: vec![false; len],
+            path: Vec::with_capacity(len),
+            out: Vec::with_capacity(len),
         }
     }
 
-    tu.dependency_order = depdendency_order;
-}
+    fn solve(mut self) -> Vec<DeclId> {
+        for id in 0..self.module.decls.len() {
+            if self.visited[id] {
+                continue;
+            }
+            self.dfs(id);
+        }
 
-fn recursive_solve(
-    id: DeclId,
-    ctx: StackList<(DeclId, Span)>,
-    decls: &mut [Decl],
-    visited: &mut [bool],
-    temp_visited: &mut [bool],
-    dep_order: &mut Vec<DeclId>,
-    diagnostics: &mut Vec<WgslError>,
-) {
-    if visited[id.0 as usize] {
-        return;
+        self.out
     }
 
-    let decl = &mut decls[id.0 as usize];
+    fn dfs(&mut self, id: usize) {
+        let decl = &self.module.decls[id];
+        if self.visited[id] {
+            return;
+        }
 
-    if temp_visited[id.0 as usize] {
-        let span = decl_ident_span(decl);
-        let mut error = WgslError::new("cyclic dependencies are not allowed")
-            .label(span, "cycle in this declaration");
+        self.temp_visited[id] = true;
+        for dep in decl.dependencies.iter() {
+            let dep_id = dep.id.0 as usize;
+            self.path.push(*dep);
 
-        let mut ctx = &ctx;
-        while let Some((i, span)) = ctx.value {
-            if i == id {
-                error
-                    .labels
-                    .push((span, "completing the cycle".to_string()));
-                break;
-            } else {
-                error.labels.push((span, "which depends on".to_string()));
+            if self.temp_visited[dep_id] {
+                // found a cycle.
+                if dep_id == id {
+                    self.diagnostics.push(
+                        WgslError::new("recursive declarations are not allowed")
+                            .marker(decl_ident_span(&decl))
+                            .label(dep.usage, "uses itself here"),
+                    )
+                } else {
+                    let mut error = WgslError::new("cyclic declarations are not allowed").label(
+                        decl_ident_span(&self.module.decls[dep_id]),
+                        "this declaration",
+                    );
+
+                    let start_at = self
+                        .path
+                        .iter()
+                        .rev()
+                        .enumerate()
+                        .find(|(_, dep)| dep.id.0 as usize == dep_id)
+                        .map(|x| x.0)
+                        .unwrap_or(0);
+
+                    let last = self.path.len() - start_at - 1;
+                    for (i, curr_dep) in self.path[start_at..].iter().enumerate() {
+                        let curr_id = curr_dep.id.0 as usize;
+                        let curr_decl = &self.module.decls[curr_id];
+
+                        error.labels.push((
+                            curr_dep.usage,
+                            if i == last {
+                                "ending the cycle".to_string()
+                            } else {
+                                "uses".to_string()
+                            },
+                        ));
+                        error
+                            .labels
+                            .push((decl_ident_span(curr_decl), "".to_string()));
+                    }
+
+                    self.diagnostics.push(error);
+                }
+            } else if !self.visited[dep_id] {
+                self.dfs(dep_id);
             }
 
-            if let Some(prev) = ctx.prev {
-                ctx = prev;
-            } else {
-                break;
-            }
+            self.path.pop();
         }
 
-        diagnostics.push(error);
-        return;
+        self.temp_visited[id] = false;
+        self.visited[id] = true;
+        self.out.push(DeclId(id as _));
     }
-    temp_visited[id.0 as usize] = true;
-
-    let dec: Vec<_> = decl
-        .dependencies
-        .iter()
-        .filter_map(|dep| match dep.kind {
-            DeclDependencyKind::Decl(id) => Some((id, dep.usage)),
-            DeclDependencyKind::Inbuilt(_) => None,
-        })
-        .collect();
-    for &(decl, span) in dec.iter() {
-        recursive_solve(
-            decl,
-            ctx.with((id, span)),
-            decls,
-            visited,
-            temp_visited,
-            dep_order,
-            diagnostics,
-        );
-    }
-
-    dep_order.push(id);
-    let deps: Vec<_> = dec
-        .iter()
-        .flat_map(|&id| decls[id.0 .0 as usize].dependencies.iter().copied())
-        .collect();
-    let decl = &mut decls[id.0 as usize];
-    decl.dependencies.extend(deps);
-
-    temp_visited[id.0 as usize] = false;
-    visited[id.0 as usize] = true;
 }
 
 fn decl_ident_span(decl: &Decl) -> Span {

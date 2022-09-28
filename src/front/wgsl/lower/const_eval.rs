@@ -1,7 +1,8 @@
-use crate::front::wgsl::ast::{Literal, UnaryOp};
+use crate::front::wgsl::ast::Literal;
 use crate::front::wgsl::resolve::ir::{Expr, ExprKind, TranslationUnit};
 use crate::front::wgsl::text::Interner;
 use crate::front::wgsl::WgslError;
+use crate::UnaryOperator;
 use std::convert::TryInto;
 use std::fmt::Display;
 use std::ops::{Neg, Not};
@@ -31,9 +32,7 @@ impl<'a> Evaluator<'a> {
         };
 
         match expr.kind {
-            ExprKind::Error => {
-                unreachable!("tried to evaluate errored expr: should've already exited?")
-            }
+            ExprKind::Error => return None,
             ExprKind::Literal(ref l) => Some(match l {
                 Literal::Bool(b) => Value::Bool(*b),
                 Literal::AbstractInt(i) => Value::AbstractInt(*i),
@@ -49,13 +48,8 @@ impl<'a> Evaluator<'a> {
             ExprKind::Unary(ref u) => {
                 let rhs = self.eval(&u.expr)?;
                 let ret = match u.op {
-                    UnaryOp::Ref | UnaryOp::Deref => {
-                        unsupported(self);
-                        return None;
-                    }
-                    UnaryOp::Not => !rhs,
-                    UnaryOp::Minus => -rhs,
-                    UnaryOp::BitNot => rhs.bit_not(),
+                    UnaryOperator::Not => !rhs,
+                    UnaryOperator::Negate => -rhs,
                 };
 
                 if ret.is_none() {
@@ -73,7 +67,9 @@ impl<'a> Evaluator<'a> {
             | ExprKind::Index(_, _)
             | ExprKind::Member(_, _)
             | ExprKind::Global(_)
-            | ExprKind::Local(_) => {
+            | ExprKind::Local(_)
+            | ExprKind::AddrOf(_)
+            | ExprKind::Deref(_) => {
                 unsupported(self);
                 None
             }
@@ -220,6 +216,9 @@ impl Not for Value {
     fn not(self) -> Self::Output {
         match self {
             Value::Bool(b) => Some(Value::Bool(!b)),
+            Value::U32(u) => Some(Value::U32(!u)),
+            Value::I32(i) => Some(Value::I32(!i)),
+            Value::AbstractInt(i) => Some(Value::AbstractInt(!i)),
             _ => None,
         }
     }
@@ -235,17 +234,6 @@ impl Neg for Value {
             Value::AbstractFloat(f) => Some(Value::AbstractFloat(-f)),
             Value::F32(f) => Some(Value::F32(-f)),
             Value::F64(f) => Some(Value::F64(-f)),
-            _ => None,
-        }
-    }
-}
-
-impl Value {
-    fn bit_not(self) -> Option<Self> {
-        match self {
-            Value::U32(u) => Some(Value::U32(!u)),
-            Value::I32(i) => Some(Value::I32(!i)),
-            Value::AbstractInt(i) => Some(Value::AbstractInt(!i)),
             _ => None,
         }
     }
