@@ -5,18 +5,22 @@ Frontend for [WGSL][wgsl] (WebGPU Shading Language).
 */
 
 use crate::front::wgsl::lower::Lowerer;
+use crate::front::wgsl::parse::parse;
+use crate::front::wgsl::resolve::resolve;
+use crate::front::wgsl::text::Interner;
 use crate::{SourceLocation, Span};
 use codespan_reporting::diagnostic::{Diagnostic, Label};
 use codespan_reporting::files::SimpleFile;
 use codespan_reporting::term;
 use termcolor::{ColorChoice, NoColor, StandardStream};
-use wgsl::diagnostic::{DiagnosticKind, Diagnostics};
-use wgsl::parse::parse;
-use wgsl::resolve::resolve;
-use wgsl::text::Interner;
 
+mod ast;
 mod const_eval;
+mod lexer;
 mod lower;
+mod parse;
+mod resolve;
+mod text;
 
 #[derive(Clone, Debug)]
 pub struct WgslError {
@@ -25,26 +29,28 @@ pub struct WgslError {
     notes: Vec<String>,
 }
 
-impl From<wgsl::diagnostic::Span> for Span {
-    fn from(s: wgsl::diagnostic::Span) -> Self {
-        Self::new(s.start, s.end)
-    }
-}
-
 impl WgslError {
-    fn from_wgsl(diag: wgsl::diagnostic::Diagnostic) -> Option<Self> {
-        match diag.kind {
-            DiagnosticKind::Error => Some(Self {
-                message: diag.message,
-                labels: diag
-                    .labels
-                    .into_iter()
-                    .map(|l| (l.span.into(), l.message))
-                    .collect(),
-                notes: diag.notes,
-            }),
-            _ => None,
+    fn new(message: impl Into<String>) -> Self {
+        Self {
+            message: message.into(),
+            labels: Vec::new(),
+            notes: Vec::new(),
         }
+    }
+
+    fn label(mut self, span: Span, message: impl Into<String>) -> Self {
+        self.labels.push((span, message.into()));
+        self
+    }
+
+    fn marker(mut self, span: Span) -> Self {
+        self.labels.push((span, String::new()));
+        self
+    }
+
+    fn note(mut self, message: impl Into<String>) -> Self {
+        self.notes.push(message.into());
+        self
     }
 
     pub fn labels(&self) -> impl Iterator<Item = (Span, &str)> + ExactSizeIterator + '_ {
@@ -126,17 +132,13 @@ impl std::error::Error for WgslError {
 
 pub fn parse_str(source: &str) -> Result<crate::Module, Vec<WgslError>> {
     let mut intern = Interner::new();
-    let mut diags = Diagnostics::new();
+    let mut diags = Vec::new();
 
     let ast = parse(source, &mut intern, &mut diags);
     let module = resolve(ast, &mut intern, &mut diags);
 
-    if diags.had_error() {
-        return Err(diags
-            .take()
-            .into_iter()
-            .filter_map(WgslError::from_wgsl)
-            .collect());
+    if !diags.is_empty() {
+        return Err(diags);
     }
 
     Lowerer::new(&module, &intern).lower()

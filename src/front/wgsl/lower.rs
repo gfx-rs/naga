@@ -1,4 +1,16 @@
+use crate::front::wgsl::ast::{BinaryOp, UnaryOp};
 use crate::front::wgsl::const_eval::{Evaluator, Value};
+use crate::front::wgsl::resolve::inbuilt::{
+    AccessMode, AddressSpace, Builtin, ConservativeDepth, DepthTextureType, InterpolationSample,
+    InterpolationType, MatType, PrimitiveType, SampledTextureType, SamplerType, StorageTextureType,
+    TexelFormat, VecType,
+};
+use crate::front::wgsl::resolve::ir::{
+    Arg, ArgAttribs, Block, CaseSelector, Decl, DeclId, DeclKind, Expr, ExprKind,
+    ExprStatementKind, FloatType, Fn, FnAttribs, InbuiltType, Let, LocalId, SampleType, Stmt,
+    StmtKind, Struct, TranslationUnit, Type, TypeKind, Var, VarDeclKind,
+};
+use crate::front::wgsl::text::Interner;
 use crate::front::wgsl::WgslError;
 use crate::front::Typifier;
 use crate::proc::{Alignment, Layouter};
@@ -6,18 +18,6 @@ use crate::{
     FastHashMap, Handle, ImageClass, ImageDimension, ScalarKind, StorageFormat, TypeInner,
 };
 use std::fmt::{Display, Formatter};
-use wgsl::ast::{BinaryOp, UnaryOp};
-use wgsl::resolve::inbuilt::{
-    AccessMode, AddressSpace, Builtin, ConservativeDepth, DepthTextureType, InterpolationSample,
-    InterpolationType, MatType, PrimitiveType, SampledTextureType, SamplerType, StorageTextureType,
-    TexelFormat, VecType,
-};
-use wgsl::resolve::ir::{
-    Arg, ArgAttribs, Block, CaseSelector, Decl, DeclId, DeclKind, Expr, ExprKind,
-    ExprStatementKind, FloatType, Fn, FnAttribs, InbuiltType, Let, LocalId, SampleType, Stmt,
-    StmtKind, Struct, TranslationUnit, Type, TypeKind, Var, VarDeclKind,
-};
-use wgsl::text::Interner;
 
 pub struct Lowerer<'a> {
     module: crate::Module,

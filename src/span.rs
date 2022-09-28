@@ -38,7 +38,7 @@ impl Span {
 
     /// Returns the smallest `Span` possible that contains all the `Span`s
     /// defined in the `from` iterator
-    pub fn total_span<T: Iterator<Item = Self>>(from: T) -> Self {
+    pub fn total_span<T: IntoIterator<Item = Self>>(from: T) -> Self {
         let mut span: Self = Default::default();
         for other in from {
             span.subsume(other);

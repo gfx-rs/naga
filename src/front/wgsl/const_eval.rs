@@ -1,10 +1,10 @@
+use crate::front::wgsl::ast::{Literal, UnaryOp};
+use crate::front::wgsl::resolve::ir::{Expr, ExprKind, TranslationUnit};
+use crate::front::wgsl::text::Interner;
 use crate::front::wgsl::WgslError;
 use std::convert::TryInto;
 use std::fmt::Display;
 use std::ops::{Neg, Not};
-use wgsl::ast::{Literal, UnaryOp};
-use wgsl::resolve::ir::{Expr, ExprKind, TranslationUnit};
-use wgsl::text::Interner;
 
 pub struct Evaluator<'a> {
     intern: &'a Interner,
