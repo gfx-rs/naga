@@ -1,14 +1,16 @@
 use crate::front::wgsl::lower::DeclData;
-use crate::{Bytes, ImageClass, ImageDimension, ScalarKind, StorageFormat, TypeInner, VectorSize};
+use crate::{
+    Bytes, ImageClass, ImageDimension, ScalarKind, StorageFormat, Type, TypeInner, VectorSize,
+};
 use std::fmt::{Display, Formatter};
 
-pub struct TypeFormatter<'a> {
+pub struct TypeInnerFormatter<'a> {
     pub ty: &'a TypeInner,
-    pub types: &'a crate::UniqueArena<crate::Type>,
+    pub types: &'a crate::UniqueArena<Type>,
     pub constants: &'a crate::Arena<crate::Constant>,
 }
 
-impl Display for TypeFormatter<'_> {
+impl Display for TypeInnerFormatter<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match *self.ty {
             TypeInner::Scalar { kind, width } => ScalarFormatter { kind, width }.fmt(f),
@@ -54,8 +56,33 @@ impl Display for TypeFormatter<'_> {
                     .as_ref()
                     .expect("created type without name"),
             ),
-            TypeInner::ValuePointer { .. } => {
-                panic!("TypeInner::ValuePointer should not be formatted by the frontend")
+            TypeInner::ValuePointer {
+                size,
+                kind,
+                width,
+                space,
+            } => {
+                let space = match space {
+                    crate::AddressSpace::Function => "function",
+                    crate::AddressSpace::Private => "private",
+                    crate::AddressSpace::WorkGroup => "workgroup",
+                    crate::AddressSpace::Uniform => "uniform",
+                    crate::AddressSpace::Storage { .. } => "storage",
+                    crate::AddressSpace::Handle => "handle",
+                    crate::AddressSpace::PushConstant => "push_constant",
+                };
+
+                if let Some(size) = size {
+                    write!(
+                        f,
+                        "ptr<{}, vec{}<{}>>",
+                        space,
+                        VectorSizeFormatter { size },
+                        ScalarFormatter { kind, width }
+                    )
+                } else {
+                    write!(f, "ptr<{}, {}>", space, ScalarFormatter { kind, width })
+                }
             }
             TypeInner::Array { base, size, .. } => {
                 let base = self

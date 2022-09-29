@@ -571,7 +571,9 @@ impl<'a> Resolver<'a> {
             .and_then(|(a, s)| a.map(|a| (a, s)));
 
         let address_space = as_.map(|x| x.0).unwrap_or_else(|| {
-            if let ir::TypeKind::Inbuilt(
+            if self.in_function {
+                AddressSpace::Function
+            } else if let ir::TypeKind::Inbuilt(
                 InbuiltType::BindingArray { .. }
                 | InbuiltType::Sampler { .. }
                 | InbuiltType::Image { .. },
