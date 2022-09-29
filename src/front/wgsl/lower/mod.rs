@@ -473,21 +473,19 @@ impl<'a> Lowerer<'a> {
                     .cases
                     .iter()
                     .flat_map(|x| {
-                        let block = self.block(&x.block, fun);
-                        let this = &mut *self;
                         x.selectors
                             .iter()
-                            .filter_map(move |sel| {
+                            .filter_map(|sel| {
                                 let value = match sel {
                                     CaseSelector::Expr(e) => {
-                                        let value = this.eval.as_int(e)?;
+                                        let value = self.eval.as_int(e)?;
                                         crate::SwitchValue::Integer(value)
                                     }
                                     CaseSelector::Default => crate::SwitchValue::Default,
                                 };
                                 Some(crate::SwitchCase {
                                     value,
-                                    body: block.clone(),
+                                    body: self.block(&x.block, fun),
                                     fall_through: false,
                                 })
                             })

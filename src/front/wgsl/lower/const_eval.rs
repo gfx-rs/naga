@@ -139,7 +139,7 @@ impl<'a> Evaluator<'a> {
                 }
             }
             Value::I32(i) => Some(i),
-            Value::AbstractInt(i) if i >= 0 => {
+            Value::AbstractInt(i) => {
                 let x: Result<i32, _> = i.try_into();
                 match x {
                     Ok(x) => Some(x),

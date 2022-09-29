@@ -64,7 +64,7 @@ pp-rs = { version = "0.2.1", optional = true }
 # wgsl frontend dependencies
 aho-corasick = { version = "0.7.19", optional = true }
 chumsky = { version = "0.8.0", optional = true }
-half = { version = "2.1.0", optional = true }
+half = { version = "1.8.2", optional = true }
 hexf-parse = { version = "0.2.1", optional = true }
 lasso = { version = "0.6.0", optional = true }
 logos = { version = "0.12.1", optional = true }
