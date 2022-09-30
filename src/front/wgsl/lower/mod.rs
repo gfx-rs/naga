@@ -15,6 +15,7 @@ use std::fmt::Display;
 
 mod const_eval;
 mod format;
+mod inbuilt_function;
 
 pub struct Lowerer<'a> {
     module: crate::Module,
@@ -122,7 +123,6 @@ impl<'a> Lowerer<'a> {
 
     fn fn_(&mut self, f: &Fn, span: crate::Span) -> Option<Handle<crate::Function>> {
         let name = self.intern.resolve(f.name.name).to_string();
-        let is_frag = matches!(f.stage, ShaderStage::Fragment(_));
 
         self.locals.clear();
         let mut fun = crate::Function {
@@ -133,16 +133,17 @@ impl<'a> Lowerer<'a> {
                 .enumerate()
                 .filter_map(|(i, arg)| {
                     self.locals.insert(arg.id, LocalData::FunctionArg(i as u32));
-                    self.arg(arg, is_frag)
+                    self.arg(arg)
                 })
                 .collect(),
             result: f.ret.as_ref().and_then(|x| {
+                let ty = self.ty(x)?;
                 Some(crate::FunctionResult {
-                    ty: self.ty(x)?,
+                    ty,
                     binding: f
                         .ret_binding
                         .as_ref()
-                        .and_then(|b| self.binding(b, x.span, false)),
+                        .and_then(|b| self.binding(b, x.span, ty)),
                 })
             }),
             local_variables: Default::default(),
@@ -257,7 +258,7 @@ impl<'a> Lowerer<'a> {
                 .attribs
                 .binding
                 .as_ref()
-                .and_then(|x| self.binding(x, field.name.span.into(), true));
+                .and_then(|x| self.binding(x, field.name.span.into(), ty));
 
             self.layouter
                 .update(&self.module.types, &self.module.constants)
@@ -346,14 +347,15 @@ impl<'a> Lowerer<'a> {
         Some(self.module.constants.append(constant, span))
     }
 
-    fn arg(&mut self, arg: &Arg, is_frag: bool) -> Option<crate::FunctionArgument> {
+    fn arg(&mut self, arg: &Arg) -> Option<crate::FunctionArgument> {
+        let ty = self.ty(&arg.ty)?;
         Some(crate::FunctionArgument {
             name: Some(self.intern.resolve(arg.name.name).to_string()),
-            ty: self.ty(&arg.ty)?,
+            ty,
             binding: arg
                 .binding
                 .as_ref()
-                .and_then(|x| self.binding(x, arg.span.into(), is_frag)),
+                .and_then(|x| self.binding(x, arg.span.into(), ty)),
         })
     }
 
@@ -741,7 +743,13 @@ impl<'a> Lowerer<'a> {
                     });
                     return None;
                 }
-                DeclData::Global(var) => (crate::Expression::GlobalVariable(var), true),
+                DeclData::Global(var) => {
+                    let space = self.module.global_variables[var].space;
+                    (
+                        crate::Expression::GlobalVariable(var),
+                        !matches!(space, crate::AddressSpace::Handle),
+                    )
+                }
                 DeclData::Const(constant) => (crate::Expression::Constant(constant), false),
                 DeclData::Type(_) => {
                     self.errors.push(WgslError {
@@ -758,8 +766,36 @@ impl<'a> Lowerer<'a> {
                 (crate::Expression::Unary { op: un.op, expr }, false)
             }
             ExprKind::Binary(ref bin) => {
-                let left = self.expr(&bin.lhs, b, fun)?;
-                let right = self.expr(&bin.rhs, b, fun)?;
+                let mut left = self.expr(&bin.lhs, b, fun)?;
+                let mut right = self.expr(&bin.rhs, b, fun)?;
+
+                // Insert splats if required.
+                if bin.op != crate::BinaryOperator::Multiply {
+                    let left_size = match *self.type_of(left, fun)? {
+                        TypeInner::Vector { size, .. } => Some(size),
+                        _ => None,
+                    };
+                    match (left_size, self.type_of(right, fun)?) {
+                        (Some(size), &TypeInner::Scalar { .. }) => {
+                            right = self.emit_expr(
+                                crate::Expression::Splat { size, value: right },
+                                bin.rhs.span,
+                                b,
+                                fun,
+                            );
+                        }
+                        (None, &TypeInner::Vector { size, .. }) => {
+                            left = self.emit_expr(
+                                crate::Expression::Splat { size, value: left },
+                                bin.lhs.span,
+                                b,
+                                fun,
+                            );
+                        }
+                        _ => {}
+                    }
+                }
+
                 (
                     crate::Expression::Binary {
                         left,
@@ -1203,7 +1239,9 @@ impl<'a> Lowerer<'a> {
                 }
                 DeclData::Assert | DeclData::Override | DeclData::Error => None,
             },
-            FnTarget::InbuiltFunction(_) => None,
+            FnTarget::InbuiltFunction(inbuilt, ref generics) => {
+                self.inbuilt_function(inbuilt, generics, &call.args, span, b, fun)
+            }
             FnTarget::Error => None,
         }
     }
@@ -1212,7 +1250,7 @@ impl<'a> Lowerer<'a> {
         &mut self,
         binding: &Binding,
         span: crate::Span,
-        is_frag: bool,
+        ty: Handle<crate::Type>,
     ) -> Option<crate::Binding> {
         match *binding {
             Binding::Builtin(b) => Some(crate::Binding::BuiltIn(b)),
@@ -1221,16 +1259,15 @@ impl<'a> Lowerer<'a> {
                 interpolation,
                 sampling,
             } => {
-                let interpolation =
-                    interpolation.or_else(|| is_frag.then_some(crate::Interpolation::Perspective));
-                let sampling = sampling.or_else(|| is_frag.then_some(crate::Sampling::Center));
-
                 if let Some(loc) = location {
-                    Some(crate::Binding::Location {
+                    let mut binding = crate::Binding::Location {
                         location: self.eval.as_positive_int(loc)?,
                         interpolation,
                         sampling,
-                    })
+                    };
+                    binding.apply_default_interpolation(&self.module.types[ty].inner);
+
+                    Some(binding)
                 } else {
                     self.errors.push(
                         WgslError::new("location must be specified for all bindings").marker(span),
@@ -1246,7 +1283,7 @@ impl<'a> Lowerer<'a> {
         expr: Handle<crate::Expression>,
         fun: &crate::Function,
     ) -> Option<&TypeInner> {
-        let _ = self.typifier.grow(
+        match self.typifier.grow(
             expr,
             &fun.expressions,
             &ResolveContext {
@@ -1257,7 +1294,16 @@ impl<'a> Lowerer<'a> {
                 functions: &self.module.functions,
                 arguments: &fun.arguments,
             },
-        );
+        ) {
+            Ok(_) => {}
+            Err(e) => {
+                self.errors.push(
+                    WgslError::new(format!("type error: {:?}", e))
+                        .marker(fun.expressions.get_span(expr)),
+                );
+                return None;
+            }
+        }
 
         Some(self.typifier.get(expr, &self.module.types))
     }

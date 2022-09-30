@@ -449,28 +449,30 @@ impl<'a> Resolver<'a> {
                 AttributeType::Compute => {
                     if let ir::ShaderStage::None = out {
                         expect_compute = Some(attrib.span);
-                        out = ir::ShaderStage::Compute(None, None, None);
                     } else if expect_compute.is_some() {
                         expect_compute = None;
                     } else {
                         self.diagnostics
                             .push(WgslError::new("duplicate attribute").marker(attrib.span));
                     }
+
+                    out = ir::ShaderStage::Compute(None, None, None);
                 }
                 AttributeType::WorkgroupSize(x, y, z) => {
                     if let ir::ShaderStage::None = out {
                         expect_compute = Some(attrib.span);
-                        out = ir::ShaderStage::Compute(
-                            Some(self.expr(x)),
-                            y.map(|x| self.expr(x)),
-                            z.map(|x| self.expr(x)),
-                        );
                     } else if expect_compute.is_some() {
                         expect_compute = None;
                     } else {
                         self.diagnostics
                             .push(WgslError::new("duplicate attribute").marker(attrib.span));
                     }
+
+                    out = ir::ShaderStage::Compute(
+                        Some(self.expr(x)),
+                        y.map(|x| self.expr(x)),
+                        z.map(|x| self.expr(x)),
+                    );
                 }
                 AttributeType::ConservativeDepth(depth) => {
                     if let ir::ShaderStage::Fragment(_) = out {
@@ -1023,11 +1025,18 @@ impl<'a> Resolver<'a> {
                         id: decl,
                         usage: name.span,
                     });
+                    if ident.generics.len() != 0 {
+                        self.diagnostics
+                            .push(WgslError::new("unexpected generics").marker(target.span));
+                    }
                     FnTarget::Decl(decl)
+                } else if let Some(inbuilt) = self.inbuilt_function.get(name.name) {
+                    FnTarget::InbuiltFunction(
+                        inbuilt,
+                        ident.generics.into_iter().map(|x| self.ty(x)).collect(),
+                    )
                 } else if let Some(ty) = self.constructible_inbuilt(ident, target.span) {
                     FnTarget::InbuiltType(Box::new(ty))
-                } else if let Some(inbuilt) = self.inbuilt_function.get(name.name) {
-                    FnTarget::InbuiltFunction(inbuilt)
                 } else {
                     self.diagnostics
                         .push(WgslError::new("undefined function").marker(name.span));

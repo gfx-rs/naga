@@ -371,7 +371,7 @@ pub struct CallExpr {
 #[derive(Clone, Debug)]
 pub enum FnTarget {
     Decl(DeclId),
-    InbuiltFunction(InbuiltFunction),
+    InbuiltFunction(InbuiltFunction, Vec<Type>),
     InbuiltType(Box<InbuiltType>),
     Error,
 }
