@@ -1,6 +1,6 @@
 // Global variable & constant declarations
 
-let Foo: bool = true;
+const FooConst: bool = true;
 
 var<workgroup> wg : array<f32, 10u>;
 var<workgroup> at: atomic<u32>;

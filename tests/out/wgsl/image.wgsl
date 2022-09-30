@@ -98,8 +98,8 @@ fn texture_sample() -> @location(0) vec4<f32> {
     let s1d = textureSample(image_1d, sampler_reg, tc.x);
     let s2d = textureSample(image_2d, sampler_reg, tc);
     let s2d_offset = textureSample(image_2d, sampler_reg, tc, vec2<i32>(3, 1));
-    let s2d_level = textureSampleLevel(image_2d, sampler_reg, tc, 2.299999952316284);
-    let s2d_level_offset = textureSampleLevel(image_2d, sampler_reg, tc, 2.299999952316284, vec2<i32>(3, 1));
+    let s2d_level = textureSampleLevel(image_2d, sampler_reg, tc, 2.3);
+    let s2d_level_offset = textureSampleLevel(image_2d, sampler_reg, tc, 2.3, vec2<i32>(3, 1));
     let s2d_bias_offset = textureSampleBias(image_2d, sampler_reg, tc, 2.0, vec2<i32>(3, 1));
     return ((((s1d + s2d) + s2d_offset) + s2d_level) + s2d_level_offset);
 }

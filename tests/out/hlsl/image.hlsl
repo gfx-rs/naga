@@ -236,8 +236,8 @@ float4 texture_sample() : SV_Target0
     float4 s1d = image_1d.Sample(sampler_reg, tc.x);
     float4 s2d = image_2d.Sample(sampler_reg, tc);
     float4 s2d_offset = image_2d.Sample(sampler_reg, tc, int2(3, 1));
-    float4 s2d_level = image_2d.SampleLevel(sampler_reg, tc, 2.299999952316284);
-    float4 s2d_level_offset = image_2d.SampleLevel(sampler_reg, tc, 2.299999952316284, int2(3, 1));
+    float4 s2d_level = image_2d.SampleLevel(sampler_reg, tc, 2.3);
+    float4 s2d_level_offset = image_2d.SampleLevel(sampler_reg, tc, 2.3, int2(3, 1));
     float4 s2d_bias_offset = image_2d.SampleBias(sampler_reg, tc, 2.0, int2(3, 1));
     return ((((s1d + s2d) + s2d_offset) + s2d_level) + s2d_level_offset);
 }

@@ -1,6 +1,8 @@
+enable binding_array;
+
 struct UniformIndex {
     index: u32
-};
+}
 
 @group(0) @binding(0)
 var texture_array_unbounded: binding_array<texture_2d<f32>>;
@@ -23,7 +25,7 @@ var<uniform> uni: UniformIndex;
 
 struct FragmentIn {
     @location(0) index: u32,
-};
+}
 
 @fragment
 fn main(fragment_in: FragmentIn) -> @location(0) vec4<f32> {
@@ -34,9 +36,9 @@ fn main(fragment_in: FragmentIn) -> @location(0) vec4<f32> {
     var i2 = vec2<i32>(0);
     var v1 = 0.0;
     var v4 = vec4<f32>(0.0);
-    
+
     // This example is arranged in the order of the texture definitions in the wgsl spec
-    // 
+    //
     // The first function uses texture_array_unbounded, the rest use texture_array_bounded to make sure
     // they both show up in the output. Functions that need depth use texture_array_2darray.
     //
@@ -52,11 +54,11 @@ fn main(fragment_in: FragmentIn) -> @location(0) vec4<f32> {
 
     v4 += textureGather(0, texture_array_bounded[0], samp[0], uv);
     v4 += textureGather(0, texture_array_bounded[uniform_index], samp[uniform_index], uv);
-    v4 += textureGather(0, texture_array_bounded[non_uniform_index], samp[non_uniform_index], uv); 
+    v4 += textureGather(0, texture_array_bounded[non_uniform_index], samp[non_uniform_index], uv);
 
     v4 += textureGatherCompare(texture_array_depth[0], samp_comp[0], uv, 0.0);
     v4 += textureGatherCompare(texture_array_depth[uniform_index], samp_comp[uniform_index], uv, 0.0);
-    v4 += textureGatherCompare(texture_array_depth[non_uniform_index], samp_comp[non_uniform_index], uv, 0.0); 
+    v4 += textureGatherCompare(texture_array_depth[non_uniform_index], samp_comp[non_uniform_index], uv, 0.0);
 
     v4 += textureLoad(texture_array_unbounded[0], pix, 0);
     v4 += textureLoad(texture_array_unbounded[uniform_index], pix, 0);

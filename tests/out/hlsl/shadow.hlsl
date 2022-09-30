@@ -1,4 +1,4 @@
-static const float3 c_ambient = float3(0.05000000074505806, 0.05000000074505806, 0.05000000074505806);
+static const float3 c_ambient = float3(0.05, 0.05, 0.05);
 static const uint c_max_lights = 10;
 
 struct Globals {
@@ -65,14 +65,14 @@ VertexOutput_vs_main vs_main(int4 position : LOC0, int4 normal : LOC1)
     VertexOutput out_ = (VertexOutput)0;
 
     float4x4 w = u_entity.world;
-    float4x4 _expr7 = u_entity.world;
-    float4 world_pos = mul(float4(position), _expr7);
+    float4x4 _expr5 = u_entity.world;
+    float4 world_pos = mul(float4(position), _expr5);
     out_.world_normal = mul(float3(normal.xyz), float3x3(w[0].xyz, w[1].xyz, w[2].xyz));
     out_.world_position = world_pos;
-    float4x4 _expr25 = u_globals.view_proj;
-    out_.proj_position = mul(world_pos, _expr25);
-    VertexOutput _expr27 = out_;
-    const VertexOutput vertexoutput = _expr27;
+    float4x4 _expr26 = u_globals.view_proj;
+    out_.proj_position = mul(world_pos, _expr26);
+    VertexOutput _expr31 = out_;
+    const VertexOutput vertexoutput = _expr31;
     const VertexOutput_vs_main vertexoutput_1 = { vertexoutput.world_normal, vertexoutput.world_position, vertexoutput.proj_position };
     return vertexoutput_1;
 }
@@ -88,67 +88,79 @@ Light ConstructLight(float4x4 arg0, float4 arg1, float4 arg2) {
 float4 fs_main(FragmentInput_fs_main fragmentinput_fs_main) : SV_Target0
 {
     VertexOutput in_ = { fragmentinput_fs_main.proj_position_1, fragmentinput_fs_main.world_normal_1, fragmentinput_fs_main.world_position_1 };
-    float3 color = float3(0.05000000074505806, 0.05000000074505806, 0.05000000074505806);
-    uint i = 0u;
+    float3 color = (float3)0;
+    uint i = (uint)0;
 
     float3 normal_1 = normalize(in_.world_normal);
-    bool loop_init = true;
-    while(true) {
-        if (!loop_init) {
-            uint _expr20 = i;
-            i = (_expr20 + 1u);
+    color = float3(0.05, 0.05, 0.05);
+    {
+        i = 0u;
+        bool loop_init = true;
+        while(true) {
+            if (!loop_init) {
+                uint _expr46 = i;
+                i = (_expr46 + 1u);
+            }
+            loop_init = false;
+            uint _expr8 = i;
+            uint _expr12 = u_globals.num_lights.x;
+            if ((_expr8 < min(_expr12, c_max_lights))) {
+            } else {
+                break;
+            }
+            {
+                uint _expr18 = i;
+                Light light = ConstructLight(float4x4(asfloat(s_lights.Load4(_expr18*96+0+0)), asfloat(s_lights.Load4(_expr18*96+0+16)), asfloat(s_lights.Load4(_expr18*96+0+32)), asfloat(s_lights.Load4(_expr18*96+0+48))), asfloat(s_lights.Load4(_expr18*96+64)), asfloat(s_lights.Load4(_expr18*96+80)));
+                uint _expr23 = i;
+                const float _e21 = fetch_shadow(_expr23, mul(in_.world_position, light.proj));
+                float3 light_dir = normalize((light.pos.xyz - in_.world_position.xyz));
+                float diffuse = max(0.0, dot(normal_1, light_dir));
+                float3 _expr43 = color;
+                color = (_expr43 + ((_e21 * diffuse) * light.color.xyz));
+            }
         }
-        loop_init = false;
-        uint _expr14 = i;
-        uint _expr17 = u_globals.num_lights.x;
-        if ((_expr14 < min(_expr17, c_max_lights))) {
-        } else {
-            break;
-        }
-        uint _expr23 = i;
-        Light light = ConstructLight(float4x4(asfloat(s_lights.Load4(_expr23*96+0+0)), asfloat(s_lights.Load4(_expr23*96+0+16)), asfloat(s_lights.Load4(_expr23*96+0+32)), asfloat(s_lights.Load4(_expr23*96+0+48))), asfloat(s_lights.Load4(_expr23*96+64)), asfloat(s_lights.Load4(_expr23*96+80)));
-        uint _expr26 = i;
-        const float _e30 = fetch_shadow(_expr26, mul(in_.world_position, light.proj));
-        float3 light_dir = normalize((light.pos.xyz - in_.world_position.xyz));
-        float diffuse = max(0.0, dot(normal_1, light_dir));
-        float3 _expr40 = color;
-        color = (_expr40 + ((_e30 * diffuse) * light.color.xyz));
     }
-    float3 _expr46 = color;
-    float4 _expr50 = u_entity.color;
-    return (float4(_expr46, 1.0) * _expr50);
+    float3 _expr50 = color;
+    float4 _expr55 = u_entity.color;
+    return (float4(_expr50, 1.0) * _expr55);
 }
 
 float4 fs_main_without_storage(FragmentInput_fs_main_without_storage fragmentinput_fs_main_without_storage) : SV_Target0
 {
     VertexOutput in_1 = { fragmentinput_fs_main_without_storage.proj_position_2, fragmentinput_fs_main_without_storage.world_normal_2, fragmentinput_fs_main_without_storage.world_position_2 };
-    float3 color_1 = float3(0.05000000074505806, 0.05000000074505806, 0.05000000074505806);
-    uint i_1 = 0u;
+    float3 color_1 = (float3)0;
+    uint i_1 = (uint)0;
 
     float3 normal_2 = normalize(in_1.world_normal);
-    bool loop_init_1 = true;
-    while(true) {
-        if (!loop_init_1) {
-            uint _expr20 = i_1;
-            i_1 = (_expr20 + 1u);
+    color_1 = float3(0.05, 0.05, 0.05);
+    {
+        i_1 = 0u;
+        bool loop_init_1 = true;
+        while(true) {
+            if (!loop_init_1) {
+                uint _expr46 = i_1;
+                i_1 = (_expr46 + 1u);
+            }
+            loop_init_1 = false;
+            uint _expr8 = i_1;
+            uint _expr12 = u_globals.num_lights.x;
+            if ((_expr8 < min(_expr12, c_max_lights))) {
+            } else {
+                break;
+            }
+            {
+                uint _expr18 = i_1;
+                Light light_1 = u_lights[_expr18];
+                uint _expr23 = i_1;
+                const float _e21 = fetch_shadow(_expr23, mul(in_1.world_position, light_1.proj));
+                float3 light_dir_1 = normalize((light_1.pos.xyz - in_1.world_position.xyz));
+                float diffuse_1 = max(0.0, dot(normal_2, light_dir_1));
+                float3 _expr43 = color_1;
+                color_1 = (_expr43 + ((_e21 * diffuse_1) * light_1.color.xyz));
+            }
         }
-        loop_init_1 = false;
-        uint _expr14 = i_1;
-        uint _expr17 = u_globals.num_lights.x;
-        if ((_expr14 < min(_expr17, c_max_lights))) {
-        } else {
-            break;
-        }
-        uint _expr23 = i_1;
-        Light light_1 = u_lights[_expr23];
-        uint _expr26 = i_1;
-        const float _e30 = fetch_shadow(_expr26, mul(in_1.world_position, light_1.proj));
-        float3 light_dir_1 = normalize((light_1.pos.xyz - in_1.world_position.xyz));
-        float diffuse_1 = max(0.0, dot(normal_2, light_dir_1));
-        float3 _expr40 = color_1;
-        color_1 = (_expr40 + ((_e30 * diffuse_1) * light_1.color.xyz));
     }
-    float3 _expr46 = color_1;
-    float4 _expr50 = u_entity.color;
-    return (float4(_expr46, 1.0) * _expr50);
+    float3 _expr50 = color_1;
+    float4 _expr55 = u_entity.color;
+    return (float4(_expr50, 1.0) * _expr55);
 }

@@ -472,10 +472,10 @@ fn convert_wgsl() {
         ),
         ("extra", Targets::SPIRV | Targets::METAL | Targets::WGSL),
         ("push-constants", Targets::GLSL | Targets::HLSL),
-        (
-            "operators",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-        ),
+        // (
+        //     "operators",
+        //     Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
+        // ),
         (
             "functions",
             Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
@@ -485,10 +485,10 @@ fn convert_wgsl() {
             "interpolate",
             Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
         ),
-        (
-            "access",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-        ),
+        // (
+        //     "access",
+        //     Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
+        // ),
         (
             "padding",
             Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
@@ -507,32 +507,31 @@ fn convert_wgsl() {
             "interface",
             Targets::SPIRV | Targets::METAL | Targets::HLSL | Targets::WGSL,
         ),
-        (
-            "globals",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-        ),
+        // (
+        //     "globals",
+        //     Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
+        // ),
         ("bounds-check-zero", Targets::SPIRV | Targets::METAL),
         ("bounds-check-zero-atomic", Targets::METAL),
         ("bounds-check-restrict", Targets::SPIRV | Targets::METAL),
-        (
-            "bounds-check-image-restrict",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL,
-        ),
-        (
-            "bounds-check-image-rzsw",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL,
-        ),
-        ("policy-mix", Targets::SPIRV | Targets::METAL),
+        // (
+        //     "bounds-check-image-restrict",
+        //     Targets::SPIRV | Targets::METAL | Targets::GLSL,
+        // ),
+        // (
+        //     "bounds-check-image-rzsw",
+        //     Targets::SPIRV | Targets::METAL | Targets::GLSL,
+        // ),
+        // ("policy-mix", Targets::SPIRV | Targets::METAL),
         (
             "texture-arg",
             Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
         ),
         ("cubeArrayShadow", Targets::GLSL),
-        (
-            "math-functions",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-        ),
-        ("cubeArrayShadow", Targets::GLSL),
+        // (
+        //     "math-functions",
+        //     Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
+        // ),
         (
             "binding-arrays",
             Targets::WGSL | Targets::HLSL | Targets::METAL | Targets::SPIRV,

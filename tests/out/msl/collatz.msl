@@ -8,47 +8,55 @@ struct _mslBufferSizes {
     uint size0;
 };
 
-typedef uint type_1[1];
+typedef uint u32_;
+typedef u32_ arrayu32_[1];
 struct PrimeIndices {
-    type_1 data;
+    arrayu32_ data;
 };
+typedef metal::uint3 vec3u32_;
+typedef device PrimeIndices& ptrstoragePrimeIndices;
 
-uint collatz_iterations(
-    uint n_base
+u32_ collatz_iterations(
+    u32_ n_base
 ) {
-    uint n = {};
-    uint i = 0u;
+    u32_ n = {};
+    u32_ i = {};
     n = n_base;
+    i = 0u;
     while(true) {
-        uint _e5 = n;
+        u32_ _e5 = n;
         if (_e5 > 1u) {
         } else {
             break;
         }
-        uint _e8 = n;
-        if ((_e8 % 2u) == 0u) {
-            uint _e13 = n;
-            n = _e13 / 2u;
-        } else {
-            uint _e17 = n;
-            n = (3u * _e17) + 1u;
+        {
+            u32_ _e9 = n;
+            if ((_e9 % 2u) == 0u) {
+                u32_ _e15 = n;
+                n = _e15 / 2u;
+            } else {
+                {
+                    u32_ _e21 = n;
+                    n = (3u * _e21) + 1u;
+                }
+            }
+            u32_ _e27 = i;
+            i = _e27 + 1u;
         }
-        uint _e21 = i;
-        i = _e21 + 1u;
     }
-    uint _e24 = i;
-    return _e24;
+    u32_ _e32 = i;
+    return _e32;
 }
 
 struct main_Input {
 };
 kernel void main_(
-  metal::uint3 global_id [[thread_position_in_grid]]
+  vec3u32_ global_id [[thread_position_in_grid]]
 , device PrimeIndices& v_indices [[user(fake0)]]
 , constant _mslBufferSizes& _buffer_sizes [[user(fake0)]]
 ) {
-    uint _e8 = v_indices.data[global_id.x];
-    uint _e9 = collatz_iterations(_e8);
-    v_indices.data[global_id.x] = _e9;
+    u32_ _e6 = v_indices.data[global_id.x];
+    u32_ _e0 = collatz_iterations(_e6);
+    v_indices.data[global_id.x] = _e0;
     return;
 }

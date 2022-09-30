@@ -21,8 +21,8 @@ fn vert_main() -> FragmentInput {
     out.perspective = vec4<f32>(729.0, 1000.0, 1331.0, 1728.0);
     out.perspective_centroid = 2197.0;
     out.perspective_sample = 2744.0;
-    let _e30 = out;
-    return _e30;
+    let _e38 = out;
+    return _e38;
 }
 
 @fragment 

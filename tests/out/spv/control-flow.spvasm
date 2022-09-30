@@ -101,10 +101,10 @@ OpStore %37 %3
 OpBranch %53
 %57 = OpLabel
 OpStore %37 %6
-OpBranch %58
+OpBranch %53
 %58 = OpLabel
 OpStore %37 %7
-OpBranch %54
+OpBranch %53
 %54 = OpLabel
 OpStore %37 %8
 OpBranch %53
@@ -127,7 +127,7 @@ OpStore %37 %3
 OpReturn
 %67 = OpLabel
 OpStore %37 %6
-OpBranch %68
+OpReturn
 %68 = OpLabel
 OpReturn
 %64 = OpLabel

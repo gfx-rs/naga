@@ -4,15 +4,18 @@
 
 using metal::uint;
 
-constexpr constant float c_scale = 1.2000000476837158;
+constexpr constant float c_scale = 1.2;
+typedef float f32_;
+typedef metal::float2 vec2f32_;
+typedef metal::float4 vec4f32_;
 struct VertexOutput {
-    metal::float2 uv;
-    metal::float4 position;
+    vec2f32_ uv;
+    vec4f32_ position;
 };
 
 struct vert_mainInput {
-    metal::float2 pos [[attribute(0)]];
-    metal::float2 uv [[attribute(1)]];
+    vec2f32_ pos [[attribute(0)]];
+    vec2f32_ uv [[attribute(1)]];
 };
 struct vert_mainOutput {
     metal::float2 uv [[user(loc0), center_perspective]];
@@ -29,7 +32,7 @@ vertex vert_mainOutput vert_main(
 
 
 struct frag_mainInput {
-    metal::float2 uv_1 [[user(loc0), center_perspective]];
+    vec2f32_ uv_1 [[user(loc0), center_perspective]];
 };
 struct frag_mainOutput {
     metal::float4 member_1 [[color(0)]];

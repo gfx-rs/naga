@@ -749,7 +749,7 @@ impl<'a> Resolver<'a> {
                         StmtKind::Continuing(mut c) => {
                             let break_if = if let Some(break_if) = c.stmts.pop() {
                                 match break_if.kind {
-                                    StmtKind::BreakIf(b) => Some(self.expr(b)),
+                                    StmtKind::BreakIf(b) => Some(b),
                                     _ => {
                                         c.stmts.push(break_if);
                                         None
@@ -759,7 +759,7 @@ impl<'a> Resolver<'a> {
                                 None
                             };
 
-                            (Some(self.block(c)), break_if)
+                            (Some(c), break_if)
                         }
                         _ => {
                             block.stmts.push(continuing);
@@ -770,7 +770,14 @@ impl<'a> Resolver<'a> {
                     (None, None)
                 };
 
-                let body = self.block(block);
+                self.scopes.push(FxHashMap::default());
+                let body = self.block_inner(block);
+                self.scopes.push(FxHashMap::default());
+                let continuing = continuing.map(|x| self.block_inner(x));
+                let break_if = break_if.map(|x| self.expr(x));
+                self.scopes.pop();
+                self.scopes.pop();
+
                 ir::StmtKind::Loop(ir::Loop {
                     body,
                     continuing,
@@ -954,6 +961,7 @@ impl<'a> Resolver<'a> {
                     if assign.op.is_none() {
                         ir::ExprStatementKind::Assign(ir::AssignExpr {
                             target: ir::AssignTarget::Phony,
+                            op: None,
                             value: Box::new(self.expr(*assign.rhs)),
                         })
                     } else {
@@ -966,21 +974,11 @@ impl<'a> Resolver<'a> {
                     let lhs = Box::new(self.expr(*assign.lhs));
                     let rhs = Box::new(self.expr(*assign.rhs));
 
-                    let value = match assign.op {
-                        Some(op) => Box::new(ir::Expr {
-                            kind: ir::ExprKind::Binary(ir::BinaryExpr {
-                                lhs: lhs.clone(),
-                                op,
-                                rhs,
-                            }),
-                            span: expr.span,
-                        }),
-                        None => rhs,
-                    };
-
-                    let target = ir::AssignTarget::Expr(lhs);
-
-                    ir::ExprStatementKind::Assign(ir::AssignExpr { target, value })
+                    ir::ExprStatementKind::Assign(ir::AssignExpr {
+                        target: ir::AssignTarget::Expr(lhs),
+                        op: assign.op,
+                        value: rhs,
+                    })
                 }
             }
             ExprKind::Postfix(postfix) => {
@@ -989,18 +987,18 @@ impl<'a> Resolver<'a> {
 
                 let target = ir::AssignTarget::Expr(expr.clone());
                 let value = Box::new(ir::Expr {
-                    kind: ir::ExprKind::Binary(ir::BinaryExpr {
-                        op: BinaryOperator::Add,
-                        rhs: Box::new(ir::Expr {
-                            kind: ir::ExprKind::Literal(ast::Literal::AbstractInt(1)),
-                            span,
-                        }),
-                        lhs: expr,
-                    }),
+                    kind: ir::ExprKind::Literal(ast::Literal::AbstractInt(1)),
                     span,
                 });
 
-                ir::ExprStatementKind::Assign(ir::AssignExpr { target, value })
+                ir::ExprStatementKind::Assign(ir::AssignExpr {
+                    target,
+                    op: Some(match postfix.op {
+                        ast::PostfixOp::Increment => BinaryOperator::Add,
+                        ast::PostfixOp::Decrement => BinaryOperator::Subtract,
+                    }),
+                    value,
+                })
             }
             _ => {
                 self.diagnostics

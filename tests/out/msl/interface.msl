@@ -4,27 +4,33 @@
 
 using metal::uint;
 
+typedef metal::float4 vec4f32_;
+typedef float f32_;
 struct VertexOutput {
-    metal::float4 position;
-    float _varying;
+    vec4f32_ position;
+    f32_ _varying;
 };
+typedef uint u32_;
 struct FragmentOutput {
-    float depth;
-    uint sample_mask;
-    float color;
+    f32_ depth;
+    u32_ sample_mask;
+    f32_ color;
 };
-struct type_4 {
-    uint inner[1];
+typedef bool bool_;
+typedef int i32_;
+struct arrayu321_ {
+    u32_ inner[1];
 };
+typedef metal::uint3 vec3u32_;
 struct Input1_ {
-    uint index;
+    u32_ index;
 };
 struct Input2_ {
-    uint index;
+    u32_ index;
 };
 
 struct vertex_Input {
-    uint color [[attribute(10)]];
+    u32_ color [[attribute(10)]];
 };
 struct vertex_Output {
     metal::float4 position [[position, invariant]];
@@ -33,18 +39,18 @@ struct vertex_Output {
 };
 vertex vertex_Output vertex_(
   vertex_Input varyings [[stage_in]]
-, uint vertex_index [[vertex_id]]
-, uint instance_index [[instance_id]]
+, u32_ vertex_index [[vertex_id]]
+, u32_ instance_index [[instance_id]]
 ) {
     const auto color = varyings.color;
-    uint tmp = (vertex_index + instance_index) + color;
+    u32_ tmp = (vertex_index + instance_index) + color;
     const auto _tmp = VertexOutput {metal::float4(1.0), static_cast<float>(tmp)};
     return vertex_Output { _tmp.position, _tmp._varying, 1.0 };
 }
 
 
 struct fragment_Input {
-    float _varying [[user(loc1), center_perspective]];
+    f32_ _varying [[user(loc1), center_perspective]];
 };
 struct fragment_Output {
     float depth [[depth(any)]];
@@ -53,13 +59,13 @@ struct fragment_Output {
 };
 fragment fragment_Output fragment_(
   fragment_Input varyings_1 [[stage_in]]
-, metal::float4 position [[position]]
-, bool front_facing [[front_facing]]
-, uint sample_index [[sample_id]]
-, uint sample_mask [[sample_mask]]
+, vec4f32_ position [[position]]
+, bool_ front_facing [[front_facing]]
+, u32_ sample_index [[sample_id]]
+, u32_ sample_mask [[sample_mask]]
 ) {
     const VertexOutput in = { position, varyings_1._varying };
-    uint mask = sample_mask & (1u << sample_index);
+    u32_ mask = sample_mask & (1u << sample_index);
     float color_1 = front_facing ? 1.0 : 0.0;
     const auto _tmp = FragmentOutput {in._varying, mask, color_1};
     return fragment_Output { _tmp.depth, _tmp.sample_mask, _tmp.color };
@@ -69,12 +75,12 @@ fragment fragment_Output fragment_(
 struct compute_Input {
 };
 kernel void compute_(
-  metal::uint3 global_id [[thread_position_in_grid]]
-, metal::uint3 local_id [[thread_position_in_threadgroup]]
-, uint local_index [[thread_index_in_threadgroup]]
-, metal::uint3 wg_id [[threadgroup_position_in_grid]]
-, metal::uint3 num_wgs [[threadgroups_per_grid]]
-, threadgroup type_4& output
+  vec3u32_ global_id [[thread_position_in_grid]]
+, vec3u32_ local_id [[thread_position_in_threadgroup]]
+, u32_ local_index [[thread_index_in_threadgroup]]
+, vec3u32_ wg_id [[threadgroup_position_in_grid]]
+, vec3u32_ num_wgs [[threadgroups_per_grid]]
+, threadgroup arrayu321_& output
 ) {
     output.inner[0] = (((global_id.x + local_id.x) + local_index) + wg_id.x) + num_wgs.x;
     return;
@@ -88,12 +94,13 @@ struct vertex_two_structsOutput {
     float _point_size [[point_size]];
 };
 vertex vertex_two_structsOutput vertex_two_structs(
-  uint index_1 [[vertex_id]]
-, uint index_2 [[instance_id]]
+  u32_ index_1 [[vertex_id]]
+, u32_ index_2 [[instance_id]]
 ) {
     const Input1_ in1_ = { index_1 };
     const Input2_ in2_ = { index_2 };
-    uint index = 2u;
-    uint _e9 = index;
+    u32_ index = {};
+    index = 2u;
+    u32_ _e9 = index;
     return vertex_two_structsOutput { metal::float4(static_cast<float>(in1_.index), static_cast<float>(in2_.index), static_cast<float>(_e9), 0.0), 1.0 };
 }

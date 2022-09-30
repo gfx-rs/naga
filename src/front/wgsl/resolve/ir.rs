@@ -353,6 +353,7 @@ pub struct UnaryExpr {
 #[derive(Clone, Debug)]
 pub struct AssignExpr {
     pub target: AssignTarget,
+    pub op: Option<crate::BinaryOperator>,
     pub value: Box<Expr>,
 }
 

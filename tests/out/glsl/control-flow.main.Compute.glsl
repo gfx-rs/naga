@@ -57,10 +57,10 @@ void main() {
             break;
         case 3:
             pos = 2;
-            /* fallthrough */
+            break;
         case 4:
             pos = 3;
-            /* fallthrough */
+            break;
         default:
             pos = 4;
             break;
@@ -71,8 +71,8 @@ void main() {
         default:
             break;
     }
-    int _e11 = pos;
-    switch(_e11) {
+    int _e17 = pos;
+    switch(_e17) {
         case 1:
             pos = 0;
             break;
@@ -81,7 +81,7 @@ void main() {
             return;
         case 3:
             pos = 2;
-            /* fallthrough */
+            return;
         case 4:
             return;
         default:

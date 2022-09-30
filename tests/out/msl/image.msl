@@ -4,12 +4,24 @@
 
 using metal::uint;
 
-constant metal::int2 const_type_9_ = {3, 1};
+typedef metal::uint3 vec3u32_;
+typedef metal::int2 vec2i32_;
+typedef int i32_;
+typedef metal::uint4 vec4u32_;
+typedef float f32_;
+typedef metal::float4 vec4f32_;
+typedef metal::int3 vec3i32_;
+typedef metal::float2 vec2f32_;
+constant vec2i32_ const_vec2i32_ = {3, 1};
+constant vec2i32_ const_vec2i32_1 = {3, 1};
+constant vec2i32_ const_vec2i32_2 = {3, 1};
+constant vec2i32_ const_vec2i32_3 = {3, 1};
+constant vec2i32_ const_vec2i32_4 = {3, 1};
 
 struct main_Input {
 };
 kernel void main_(
-  metal::uint3 local_id [[thread_position_in_threadgroup]]
+  vec3u32_ local_id [[thread_position_in_threadgroup]]
 , metal::texture2d<uint, metal::access::sample> image_mipmapped_src [[user(fake0)]]
 , metal::texture2d_ms<uint, metal::access::read> image_multisampled_src [[user(fake0)]]
 , metal::texture2d<uint, metal::access::read> image_storage_src [[user(fake0)]]
@@ -32,7 +44,7 @@ kernel void main_(
 struct depth_loadInput {
 };
 kernel void depth_load(
-  metal::uint3 local_id_1 [[thread_position_in_threadgroup]]
+  vec3u32_ local_id_1 [[thread_position_in_threadgroup]]
 , metal::depth2d_ms<float, metal::access::read> image_depth_multisampled_src [[user(fake0)]]
 , metal::texture2d<uint, metal::access::read> image_storage_src [[user(fake0)]]
 , metal::texture1d<uint, metal::access::write> image_dst [[user(fake0)]]
@@ -110,10 +122,10 @@ fragment texture_sampleOutput texture_sample(
     metal::float2 tc = metal::float2(0.5);
     metal::float4 s1d = image_1d.sample(sampler_reg, tc.x);
     metal::float4 s2d = image_2d.sample(sampler_reg, tc);
-    metal::float4 s2d_offset = image_2d.sample(sampler_reg, tc, const_type_9_);
-    metal::float4 s2d_level = image_2d.sample(sampler_reg, tc, metal::level(2.299999952316284));
-    metal::float4 s2d_level_offset = image_2d.sample(sampler_reg, tc, metal::level(2.299999952316284), const_type_9_);
-    metal::float4 s2d_bias_offset = image_2d.sample(sampler_reg, tc, metal::bias(2.0), const_type_9_);
+    metal::float4 s2d_offset = image_2d.sample(sampler_reg, tc, const_vec2i32_);
+    metal::float4 s2d_level = image_2d.sample(sampler_reg, tc, metal::level(2.3));
+    metal::float4 s2d_level_offset = image_2d.sample(sampler_reg, tc, metal::level(2.3), const_vec2i32_1);
+    metal::float4 s2d_bias_offset = image_2d.sample(sampler_reg, tc, metal::bias(2.0), const_vec2i32_2);
     return texture_sampleOutput { (((s1d + s2d) + s2d_offset) + s2d_level) + s2d_level_offset };
 }
 
@@ -145,9 +157,9 @@ fragment gatherOutput gather(
 ) {
     metal::float2 tc_2 = metal::float2(0.5);
     metal::float4 s2d_1 = image_2d.gather(sampler_reg, tc_2, int2(0), metal::component::y);
-    metal::float4 s2d_offset_1 = image_2d.gather(sampler_reg, tc_2, const_type_9_, metal::component::w);
+    metal::float4 s2d_offset_1 = image_2d.gather(sampler_reg, tc_2, const_vec2i32_3, metal::component::w);
     metal::float4 s2d_depth_1 = image_2d_depth.gather_compare(sampler_cmp, tc_2, 0.5);
-    metal::float4 s2d_depth_offset = image_2d_depth.gather_compare(sampler_cmp, tc_2, 0.5, const_type_9_);
+    metal::float4 s2d_depth_offset = image_2d_depth.gather_compare(sampler_cmp, tc_2, 0.5, const_vec2i32_4);
     return gatherOutput { ((s2d_1 + s2d_offset_1) + s2d_depth_1) + s2d_depth_offset };
 }
 

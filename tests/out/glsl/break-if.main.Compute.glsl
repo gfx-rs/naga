@@ -22,14 +22,15 @@ void breakIfEmpty() {
 void breakIfEmptyBody(bool a) {
     bool b = false;
     bool c = false;
+    bool _e9 = c;
+    bool unnamed = (a == _e9);
     bool loop_init_1 = true;
     while(true) {
         if (!loop_init_1) {
             b = a;
-            bool _e2 = b;
-            c = (a != _e2);
-            bool _e5 = c;
-            bool unnamed = (a == _e5);
+            bool _e4 = b;
+            bool c_1 = (a != _e4);
+            c = c_1;
             if (unnamed) {
                 break;
             }
@@ -42,19 +43,20 @@ void breakIfEmptyBody(bool a) {
 void breakIf(bool a_1) {
     bool d = false;
     bool e = false;
+    bool _e9 = e;
+    bool unnamed_1 = (a_1 == _e9);
     bool loop_init_2 = true;
     while(true) {
         if (!loop_init_2) {
-            bool _e5 = e;
-            bool unnamed_1 = (a_1 == _e5);
             if (unnamed_1) {
                 break;
             }
         }
         loop_init_2 = false;
         d = a_1;
-        bool _e2 = d;
-        e = (a_1 != _e2);
+        bool _e4 = d;
+        bool e_1 = (a_1 != _e4);
+        e = e_1;
     }
     return;
 }

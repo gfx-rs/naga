@@ -14,17 +14,22 @@ struct _mslBufferSizes {
     uint size0;
 };
 
-struct type_1 {
-    metal::atomic_uint inner[10];
+typedef metal::atomic_uint atomicu32_;
+typedef int i32_;
+struct arrayatomicu3210_ {
+    atomicu32_ inner[10];
 };
-typedef metal::atomic_uint type_2[1];
+typedef atomicu32_ arrayatomicu32_[1];
 struct Globals {
-    metal::atomic_uint a;
-    type_1 b;
-    type_2 c;
+    atomicu32_ a;
+    arrayatomicu3210_ b;
+    arrayatomicu32_ c;
 };
+typedef uint u32_;
+typedef device Globals& ptrstorageGlobals;
+typedef device atomicu32_& ptrstorageatomicu32_;
 
-uint fetch_add_atomic(
+u32_ fetch_add_atomic(
     device Globals& globals,
     constant _mslBufferSizes& _buffer_sizes
 ) {
@@ -32,8 +37,8 @@ uint fetch_add_atomic(
     return _e3;
 }
 
-uint fetch_add_atomic_static_sized_array(
-    int i,
+u32_ fetch_add_atomic_static_sized_array(
+    i32_ i,
     device Globals& globals,
     constant _mslBufferSizes& _buffer_sizes
 ) {
@@ -41,8 +46,8 @@ uint fetch_add_atomic_static_sized_array(
     return _e5;
 }
 
-uint fetch_add_atomic_dynamic_sized_array(
-    int i_1,
+u32_ fetch_add_atomic_dynamic_sized_array(
+    i32_ i_1,
     device Globals& globals,
     constant _mslBufferSizes& _buffer_sizes
 ) {

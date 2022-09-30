@@ -30,7 +30,7 @@ impl Display for TypeInnerFormatter<'_> {
                 columns as u8,
                 VectorSizeFormatter { size: rows },
                 ScalarFormatter {
-                    kind: crate::ScalarKind::Float,
+                    kind: ScalarKind::Float,
                     width
                 }
             ),
@@ -98,10 +98,8 @@ impl Display for TypeInnerFormatter<'_> {
                         "array<{}, {}>",
                         base,
                         match self.constants[c].inner {
-                            crate::ConstantInner::Scalar {
-                                value: crate::ScalarValue::Uint(u),
-                                ..
-                            } => u,
+                            crate::ConstantInner::Scalar { value, .. } =>
+                                ScalarValueFormatter { value },
                             _ => panic!("Array size should be a constant"),
                         }
                     ),
@@ -220,10 +218,8 @@ impl Display for TypeInnerFormatter<'_> {
                         "binding_array<{}, {}>",
                         base,
                         match self.constants[c].inner {
-                            crate::ConstantInner::Scalar {
-                                value: crate::ScalarValue::Uint(u),
-                                ..
-                            } => u,
+                            crate::ConstantInner::Scalar { value, .. } =>
+                                ScalarValueFormatter { value },
                             _ => panic!("Array size should be a constant"),
                         }
                     ),
@@ -280,5 +276,20 @@ impl Display for DeclData {
                 DeclData::Error => "error",
             }
         )
+    }
+}
+
+struct ScalarValueFormatter {
+    value: crate::ScalarValue,
+}
+
+impl Display for ScalarValueFormatter {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self.value {
+            crate::ScalarValue::Sint(i) => write!(f, "{}", i),
+            crate::ScalarValue::Uint(u) => write!(f, "{}", u),
+            crate::ScalarValue::Float(v) => write!(f, "{}", v),
+            crate::ScalarValue::Bool(b) => write!(f, "{}", b),
+        }
     }
 }

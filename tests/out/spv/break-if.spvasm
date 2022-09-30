@@ -39,21 +39,21 @@ OpFunctionEnd
 %16 = OpVariable  %14  Function %17
 OpBranch %22
 %22 = OpLabel
-OpBranch %23
-%23 = OpLabel
-OpLoopMerge %24 %26 None
+%23 = OpLoad  %4  %16
+%24 = OpLogicalEqual  %4  %19 %23
 OpBranch %25
 %25 = OpLabel
-OpBranch %26
-%26 = OpLabel
+OpLoopMerge %26 %28 None
+OpBranch %27
+%27 = OpLabel
+OpBranch %28
+%28 = OpLabel
 OpStore %13 %19
-%27 = OpLoad  %4  %13
-%28 = OpLogicalNotEqual  %4  %19 %27
-OpStore %16 %28
-%29 = OpLoad  %4  %16
-%30 = OpLogicalEqual  %4  %19 %29
-OpBranchConditional %30 %24 %23
-%24 = OpLabel
+%29 = OpLoad  %4  %13
+%30 = OpLogicalNotEqual  %4  %19 %29
+OpStore %16 %30
+OpBranchConditional %24 %26 %25
+%26 = OpLabel
 OpReturn
 OpFunctionEnd
 %37 = OpFunction  %2  None %21
@@ -63,21 +63,21 @@ OpFunctionEnd
 %33 = OpVariable  %14  Function %34
 OpBranch %38
 %38 = OpLabel
-OpBranch %39
-%39 = OpLabel
-OpLoopMerge %40 %42 None
+%39 = OpLoad  %4  %33
+%40 = OpLogicalEqual  %4  %36 %39
 OpBranch %41
 %41 = OpLabel
+OpLoopMerge %42 %44 None
+OpBranch %43
+%43 = OpLabel
 OpStore %31 %36
-%43 = OpLoad  %4  %31
-%44 = OpLogicalNotEqual  %4  %36 %43
-OpStore %33 %44
-OpBranch %42
+%45 = OpLoad  %4  %31
+%46 = OpLogicalNotEqual  %4  %36 %45
+OpStore %33 %46
+OpBranch %44
+%44 = OpLabel
+OpBranchConditional %40 %42 %41
 %42 = OpLabel
-%45 = OpLoad  %4  %33
-%46 = OpLogicalEqual  %4  %36 %45
-OpBranchConditional %46 %40 %39
-%40 = OpLabel
 OpReturn
 OpFunctionEnd
 %48 = OpFunction  %2  None %7

@@ -10,6 +10,11 @@ OpEntryPoint Vertex %46 "vert_main" %30 %32 %34 %36 %38 %40 %41 %42 %43
 OpEntryPoint Fragment %109 "frag_main" %88 %91 %94 %97 %100 %103 %105 %107
 OpExecutionMode %109 OriginUpperLeft
 OpSource GLSL 450
+OpName %22 "vec4<f32>"
+OpName %9 "u32"
+OpName %4 "f32"
+OpName %23 "vec2<f32>"
+OpName %24 "vec3<f32>"
 OpMemberName %25 0 "position"
 OpMemberName %25 1 "_flat"
 OpMemberName %25 2 "_linear"
@@ -19,7 +24,8 @@ OpMemberName %25 5 "perspective"
 OpMemberName %25 6 "perspective_centroid"
 OpMemberName %25 7 "perspective_sample"
 OpName %25 "FragmentInput"
-OpName %26 "out"
+OpName %26 "ptr<function, FragmentInput>"
+OpName %27 "out"
 OpName %30 "position"
 OpName %32 "_flat"
 OpName %34 "_linear"
@@ -103,7 +109,7 @@ OpDecorate %107 Sample
 %23 = OpTypeVector %4 2
 %24 = OpTypeVector %4 3
 %25 = OpTypeStruct %22 %9 %4 %23 %24 %22 %4 %4
-%27 = OpTypePointer Function %25
+%26 = OpTypePointer Function %25
 %28 = OpConstantNull  %25
 %31 = OpTypePointer Output %22
 %30 = OpVariable  %31  Output
@@ -122,15 +128,15 @@ OpDecorate %107 Sample
 %43 = OpVariable  %44  Output
 %45 = OpConstant  %4  1.0
 %47 = OpTypeFunction %2
-%49 = OpTypePointer Function %22
+%50 = OpTypePointer Function %22
 %51 = OpConstant  %9  0
 %53 = OpTypePointer Function %9
 %54 = OpConstant  %9  1
 %56 = OpTypePointer Function %4
 %57 = OpConstant  %9  2
-%59 = OpTypePointer Function %23
+%60 = OpTypePointer Function %23
 %61 = OpConstant  %9  3
-%63 = OpTypePointer Function %24
+%64 = OpTypePointer Function %24
 %65 = OpConstant  %9  4
 %68 = OpConstant  %9  5
 %70 = OpConstant  %9  6
@@ -150,31 +156,31 @@ OpDecorate %107 Sample
 %107 = OpVariable  %95  Input
 %46 = OpFunction  %2  None %47
 %29 = OpLabel
-%26 = OpVariable  %27  Function %28
+%27 = OpVariable  %26  Function %28
 OpStore %43 %45
 OpBranch %48
 %48 = OpLabel
-%50 = OpCompositeConstruct  %22  %3 %5 %6 %7
-%52 = OpAccessChain  %49  %26 %51
-OpStore %52 %50
-%55 = OpAccessChain  %53  %26 %54
+%49 = OpCompositeConstruct  %22  %3 %5 %6 %7
+%52 = OpAccessChain  %50  %27 %51
+OpStore %52 %49
+%55 = OpAccessChain  %53  %27 %54
 OpStore %55 %8
-%58 = OpAccessChain  %56  %26 %57
+%58 = OpAccessChain  %56  %27 %57
 OpStore %58 %10
-%60 = OpCompositeConstruct  %23  %11 %12
-%62 = OpAccessChain  %59  %26 %61
-OpStore %62 %60
-%64 = OpCompositeConstruct  %24  %13 %14 %15
-%66 = OpAccessChain  %63  %26 %65
-OpStore %66 %64
+%59 = OpCompositeConstruct  %23  %11 %12
+%62 = OpAccessChain  %60  %27 %61
+OpStore %62 %59
+%63 = OpCompositeConstruct  %24  %13 %14 %15
+%66 = OpAccessChain  %64  %27 %65
+OpStore %66 %63
 %67 = OpCompositeConstruct  %22  %16 %17 %18 %19
-%69 = OpAccessChain  %49  %26 %68
+%69 = OpAccessChain  %50  %27 %68
 OpStore %69 %67
-%71 = OpAccessChain  %56  %26 %70
+%71 = OpAccessChain  %56  %27 %70
 OpStore %71 %20
-%73 = OpAccessChain  %56  %26 %72
+%73 = OpAccessChain  %56  %27 %72
 OpStore %73 %21
-%74 = OpLoad  %25  %26
+%74 = OpLoad  %25  %27
 %75 = OpCompositeExtract  %22  %74 0
 OpStore %30 %75
 %76 = OpAccessChain  %44  %30 %54

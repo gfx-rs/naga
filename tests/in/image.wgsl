@@ -1,3 +1,5 @@
+enable storage_image_read;
+
 @group(0) @binding(0)
 var image_mipmapped_src: texture_2d<u32>;
 @group(0) @binding(3)

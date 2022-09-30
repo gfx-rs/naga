@@ -14,38 +14,43 @@ struct _mslBufferSizes {
     uint size0;
 };
 
-struct type_1 {
-    float inner[10];
+typedef float f32_;
+typedef int i32_;
+struct arrayf3210_ {
+    f32_ inner[10];
 };
-typedef float type_4[1];
+typedef metal::float4 vec4f32_;
+typedef metal::float3x4 mat3x4f32_;
+typedef f32_ arrayf32_[1];
 struct Globals {
-    type_1 a;
+    arrayf3210_ a;
     char _pad1[8];
-    metal::float4 v;
-    metal::float3x4 m;
-    type_4 d;
+    vec4f32_ v;
+    mat3x4f32_ m;
+    arrayf32_ d;
 };
+typedef device Globals& ptrstorageGlobals;
 
-float index_array(
-    int i,
+f32_ index_array(
+    i32_ i,
     device Globals const& globals,
     constant _mslBufferSizes& _buffer_sizes
 ) {
-    float _e4 = uint(i) < 10 ? globals.a.inner[i] : DefaultConstructible();
+    f32_ _e4 = uint(i) < 10 ? globals.a.inner[i] : DefaultConstructible();
     return _e4;
 }
 
-float index_dynamic_array(
-    int i_1,
+f32_ index_dynamic_array(
+    i32_ i_1,
     device Globals const& globals,
     constant _mslBufferSizes& _buffer_sizes
 ) {
-    float _e4 = uint(i_1) < 1 + (_buffer_sizes.size0 - 112 - 4) / 4 ? globals.d[i_1] : DefaultConstructible();
+    f32_ _e4 = uint(i_1) < 1 + (_buffer_sizes.size0 - 112 - 4) / 4 ? globals.d[i_1] : DefaultConstructible();
     return _e4;
 }
 
-float index_vector(
-    int i_2,
+f32_ index_vector(
+    i32_ i_2,
     device Globals const& globals,
     constant _mslBufferSizes& _buffer_sizes
 ) {
@@ -53,15 +58,15 @@ float index_vector(
     return _e4;
 }
 
-float index_vector_by_value(
-    metal::float4 v,
-    int i_3
+f32_ index_vector_by_value(
+    vec4f32_ v,
+    i32_ i_3
 ) {
     return uint(i_3) < 4 ? v[i_3] : DefaultConstructible();
 }
 
-metal::float4 index_matrix(
-    int i_4,
+vec4f32_ index_matrix(
+    i32_ i_4,
     device Globals const& globals,
     constant _mslBufferSizes& _buffer_sizes
 ) {
@@ -69,9 +74,9 @@ metal::float4 index_matrix(
     return _e4;
 }
 
-float index_twice(
-    int i_5,
-    int j,
+f32_ index_twice(
+    i32_ i_5,
+    i32_ j,
     device Globals const& globals,
     constant _mslBufferSizes& _buffer_sizes
 ) {
@@ -79,29 +84,29 @@ float index_twice(
     return _e6;
 }
 
-float index_expensive(
-    int i_6,
+f32_ index_expensive(
+    i32_ i_6,
     device Globals const& globals,
     constant _mslBufferSizes& _buffer_sizes
 ) {
     int _e9 = static_cast<int>(metal::sin(static_cast<float>(i_6) / 100.0) * 100.0);
-    float _e11 = uint(_e9) < 10 ? globals.a.inner[_e9] : DefaultConstructible();
+    f32_ _e11 = uint(_e9) < 10 ? globals.a.inner[_e9] : DefaultConstructible();
     return _e11;
 }
 
-float index_in_bounds(
+f32_ index_in_bounds(
     device Globals const& globals,
     constant _mslBufferSizes& _buffer_sizes
 ) {
-    float _e4 = globals.a.inner[9];
-    float _e8 = globals.v.w;
-    float _e15 = globals.m[2].w;
-    return (_e4 + _e8) + _e15;
+    f32_ _e4 = globals.a.inner[9];
+    float _e9 = globals.v[3];
+    float _e17 = globals.m[2][3];
+    return (_e4 + _e9) + _e17;
 }
 
 void set_array(
-    int i_7,
-    float v_1,
+    i32_ i_7,
+    f32_ v_1,
     device Globals& globals,
     constant _mslBufferSizes& _buffer_sizes
 ) {
@@ -112,8 +117,8 @@ void set_array(
 }
 
 void set_dynamic_array(
-    int i_8,
-    float v_2,
+    i32_ i_8,
+    f32_ v_2,
     device Globals& globals,
     constant _mslBufferSizes& _buffer_sizes
 ) {
@@ -124,8 +129,8 @@ void set_dynamic_array(
 }
 
 void set_vector(
-    int i_9,
-    float v_3,
+    i32_ i_9,
+    f32_ v_3,
     device Globals& globals,
     constant _mslBufferSizes& _buffer_sizes
 ) {
@@ -136,8 +141,8 @@ void set_vector(
 }
 
 void set_matrix(
-    int i_10,
-    metal::float4 v_4,
+    i32_ i_10,
+    vec4f32_ v_4,
     device Globals& globals,
     constant _mslBufferSizes& _buffer_sizes
 ) {
@@ -148,9 +153,9 @@ void set_matrix(
 }
 
 void set_index_twice(
-    int i_11,
-    int j_1,
-    float v_5,
+    i32_ i_11,
+    i32_ j_1,
+    f32_ v_5,
     device Globals& globals,
     constant _mslBufferSizes& _buffer_sizes
 ) {
@@ -161,8 +166,8 @@ void set_index_twice(
 }
 
 void set_expensive(
-    int i_12,
-    float v_6,
+    i32_ i_12,
+    f32_ v_6,
     device Globals& globals,
     constant _mslBufferSizes& _buffer_sizes
 ) {
@@ -174,12 +179,12 @@ void set_expensive(
 }
 
 void set_in_bounds(
-    float v_7,
+    f32_ v_7,
     device Globals& globals,
     constant _mslBufferSizes& _buffer_sizes
 ) {
     globals.a.inner[9] = v_7;
-    globals.v.w = v_7;
-    globals.m[2].w = v_7;
+    globals.v[3] = v_7;
+    globals.m[2][3] = v_7;
     return;
 }

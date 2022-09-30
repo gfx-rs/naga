@@ -4,12 +4,12 @@ var Texture: texture_2d<f32>;
 var Sampler: sampler;
 
 fn test(Passed_Texture: texture_2d<f32>, Passed_Sampler: sampler) -> vec4<f32> {
-    let _e7 = textureSample(Passed_Texture, Passed_Sampler, vec2<f32>(0.0, 0.0));
-    return _e7;
+    let _e5 = textureSample(Passed_Texture, Passed_Sampler, vec2<f32>(0.0, 0.0));
+    return _e5;
 }
 
 @fragment 
 fn main() -> @location(0) vec4<f32> {
-    let _e2 = test(Texture, Sampler);
-    return _e2;
+    let _e0 = test(Texture, Sampler);
+    return _e0;
 }

@@ -8,7 +8,7 @@
                 bits: 7,
             ),
             uniformity: (
-                non_uniform_result: Some(5),
+                non_uniform_result: Some(32),
                 requirements: (
                     bits: 0,
                 ),
@@ -28,16 +28,9 @@
                             bits: 0,
                         ),
                     ),
-                    ref_count: 0,
-                    assignable_global: Some(1),
-                    ty: Value(Pointer(
-                        base: 3,
-                        space: Storage(
-                            access: (
-                                bits: 3,
-                            ),
-                        ),
-                    )),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(1),
                 ),
                 (
                     uniformity: (
@@ -48,17 +41,6 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
-                    ty: Handle(1),
-                ),
-                (
-                    uniformity: (
-                        non_uniform_result: Some(3),
-                        requirements: (
-                            bits: 0,
-                        ),
-                    ),
-                    ref_count: 7,
-                    assignable_global: None,
                     ty: Value(Pointer(
                         base: 1,
                         space: Function,
@@ -71,11 +53,25 @@
                             bits: 0,
                         ),
                     ),
-                    ref_count: 0,
+                    ref_count: 1,
                     assignable_global: None,
                     ty: Value(Scalar(
                         kind: Uint,
                         width: 4,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(4),
+                        requirements: (
+                            bits: 0,
+                        ),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Pointer(
+                        base: 1,
+                        space: Function,
                     )),
                 ),
                 (
@@ -85,7 +81,7 @@
                             bits: 0,
                         ),
                     ),
-                    ref_count: 3,
+                    ref_count: 1,
                     assignable_global: None,
                     ty: Value(Pointer(
                         base: 1,
@@ -94,7 +90,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(3),
+                        non_uniform_result: Some(5),
                         requirements: (
                             bits: 0,
                         ),
@@ -119,7 +115,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(3),
+                        non_uniform_result: Some(5),
                         requirements: (
                             bits: 0,
                         ),
@@ -133,7 +129,21 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(3),
+                        non_uniform_result: Some(9),
+                        requirements: (
+                            bits: 0,
+                        ),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Pointer(
+                        base: 1,
+                        space: Function,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(9),
                         requirements: (
                             bits: 0,
                         ),
@@ -158,7 +168,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(3),
+                        non_uniform_result: Some(9),
                         requirements: (
                             bits: 0,
                         ),
@@ -183,7 +193,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(3),
+                        non_uniform_result: Some(9),
                         requirements: (
                             bits: 0,
                         ),
@@ -197,7 +207,21 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(3),
+                        non_uniform_result: Some(15),
+                        requirements: (
+                            bits: 0,
+                        ),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Pointer(
+                        base: 1,
+                        space: Function,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(15),
                         requirements: (
                             bits: 0,
                         ),
@@ -222,7 +246,71 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(3),
+                        non_uniform_result: Some(15),
+                        requirements: (
+                            bits: 0,
+                        ),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(1),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(19),
+                        requirements: (
+                            bits: 0,
+                        ),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Pointer(
+                        base: 1,
+                        space: Function,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (
+                            bits: 0,
+                        ),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Scalar(
+                        kind: Uint,
+                        width: 4,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(21),
+                        requirements: (
+                            bits: 0,
+                        ),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Pointer(
+                        base: 1,
+                        space: Function,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(21),
+                        requirements: (
+                            bits: 0,
+                        ),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(1),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(21),
                         requirements: (
                             bits: 0,
                         ),
@@ -247,7 +335,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(3),
+                        non_uniform_result: Some(21),
                         requirements: (
                             bits: 0,
                         ),
@@ -258,7 +346,35 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(3),
+                        non_uniform_result: Some(26),
+                        requirements: (
+                            bits: 0,
+                        ),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Pointer(
+                        base: 1,
+                        space: Function,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(27),
+                        requirements: (
+                            bits: 0,
+                        ),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Pointer(
+                        base: 1,
+                        space: Function,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(27),
                         requirements: (
                             bits: 0,
                         ),
@@ -283,7 +399,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(3),
+                        non_uniform_result: Some(27),
                         requirements: (
                             bits: 0,
                         ),
@@ -294,43 +410,35 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(5),
+                        non_uniform_result: Some(31),
                         requirements: (
                             bits: 0,
                         ),
                     ),
                     ref_count: 1,
                     assignable_global: None,
-                    ty: Handle(1),
-                ),
-                (
-                    uniformity: (
-                        non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
-                    ),
-                    ref_count: 1,
-                    assignable_global: None,
-                    ty: Value(Scalar(
-                        kind: Uint,
-                        width: 4,
+                    ty: Value(Pointer(
+                        base: 1,
+                        space: Function,
                     )),
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(5),
+                        non_uniform_result: Some(32),
                         requirements: (
                             bits: 0,
                         ),
                     ),
                     ref_count: 1,
                     assignable_global: None,
-                    ty: Handle(1),
+                    ty: Value(Pointer(
+                        base: 1,
+                        space: Function,
+                    )),
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(5),
+                        non_uniform_result: Some(32),
                         requirements: (
                             bits: 0,
                         ),
@@ -352,7 +460,7 @@
                 bits: 7,
             ),
             uniformity: (
-                non_uniform_result: Some(5),
+                non_uniform_result: Some(32),
                 requirements: (
                     bits: 0,
                 ),
@@ -367,12 +475,23 @@
             expressions: [
                 (
                     uniformity: (
-                        non_uniform_result: Some(1),
+                        non_uniform_result: Some(32),
                         requirements: (
                             bits: 0,
                         ),
                     ),
-                    ref_count: 2,
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(1),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(2),
+                        requirements: (
+                            bits: 0,
+                        ),
+                    ),
+                    ref_count: 1,
                     assignable_global: Some(1),
                     ty: Value(Pointer(
                         base: 3,
@@ -390,31 +509,31 @@
                             bits: 0,
                         ),
                     ),
-                    ref_count: 2,
+                    ref_count: 1,
+                    assignable_global: Some(1),
+                    ty: Value(Pointer(
+                        base: 2,
+                        space: Storage(
+                            access: (
+                                bits: 3,
+                            ),
+                        ),
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(4),
+                        requirements: (
+                            bits: 0,
+                        ),
+                    ),
+                    ref_count: 1,
                     assignable_global: None,
                     ty: Handle(4),
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(1),
-                        requirements: (
-                            bits: 0,
-                        ),
-                    ),
-                    ref_count: 1,
-                    assignable_global: Some(1),
-                    ty: Value(Pointer(
-                        base: 2,
-                        space: Storage(
-                            access: (
-                                bits: 3,
-                            ),
-                        ),
-                    )),
-                ),
-                (
-                    uniformity: (
-                        non_uniform_result: Some(2),
+                        non_uniform_result: Some(4),
                         requirements: (
                             bits: 0,
                         ),
@@ -428,7 +547,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(1),
+                        non_uniform_result: Some(2),
                         requirements: (
                             bits: 0,
                         ),
@@ -446,7 +565,36 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(1),
+                        non_uniform_result: Some(2),
+                        requirements: (
+                            bits: 0,
+                        ),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(1),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(8),
+                        requirements: (
+                            bits: 0,
+                        ),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(1),
+                    ty: Value(Pointer(
+                        base: 3,
+                        space: Storage(
+                            access: (
+                                bits: 3,
+                            ),
+                        ),
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(8),
                         requirements: (
                             bits: 0,
                         ),
@@ -464,7 +612,18 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(2),
+                        non_uniform_result: Some(10),
+                        requirements: (
+                            bits: 0,
+                        ),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(4),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(10),
                         requirements: (
                             bits: 0,
                         ),
@@ -478,7 +637,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(1),
+                        non_uniform_result: Some(8),
                         requirements: (
                             bits: 0,
                         ),
@@ -493,28 +652,6 @@
                             ),
                         ),
                     )),
-                ),
-                (
-                    uniformity: (
-                        non_uniform_result: Some(1),
-                        requirements: (
-                            bits: 0,
-                        ),
-                    ),
-                    ref_count: 1,
-                    assignable_global: None,
-                    ty: Handle(1),
-                ),
-                (
-                    uniformity: (
-                        non_uniform_result: Some(5),
-                        requirements: (
-                            bits: 0,
-                        ),
-                    ),
-                    ref_count: 1,
-                    assignable_global: None,
-                    ty: Handle(1),
                 ),
             ],
             sampling: [],

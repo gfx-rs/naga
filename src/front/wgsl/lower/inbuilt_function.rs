@@ -126,7 +126,7 @@ impl Lowerer<'_> {
                 width,
                 comparison: false,
             };
-            let result = this.emit_expr(result, span, b, f);
+            let result = f.expressions.append(result, span);
 
             let stmt = crate::Statement::Atomic {
                 pointer,
@@ -336,10 +336,10 @@ impl Lowerer<'_> {
                 texture_query(self, crate::ImageQuery::NumSamples, b, fun)?
             }
             InbuiltFunction::TextureLoad => {
-                if args.len() < 2 || args.len() > 4 {
+                if args.len() < 2 {
                     self.errors.push(
                         WgslError::new(format!(
-                            "expected 2, 3 or 4 arguments, found {}",
+                            "expected at least 2 arguments, found {}",
                             args.len()
                         ))
                         .marker(span),
@@ -355,20 +355,29 @@ impl Lowerer<'_> {
                 let (arrayed, multi) = self.get_texture_data(image, args[0].span, fun)?;
                 let (array_index, sample, level) = if arrayed {
                     let array_index = args.get(2).and_then(|x| self.expr(x, b, fun));
-                    let (sample, level) = if multi {
-                        let sample = args.get(3).and_then(|x| self.expr(x, b, fun));
-                        (sample, None)
-                    } else {
-                        let level = args.get(3).and_then(|x| self.expr(x, b, fun));
-                        (None, level)
-                    };
-                    (array_index, sample, level)
+                    let level = args.get(3).and_then(|x| self.expr(x, b, fun));
+                    if args.len() > 4 {
+                        self.errors
+                            .push(WgslError::new("too many arguments").marker(span));
+                        return None;
+                    }
+                    (array_index, None, level)
                 } else {
                     let (sample, level) = if multi {
                         let sample = args.get(2).and_then(|x| self.expr(x, b, fun));
+                        if args.len() > 3 {
+                            self.errors
+                                .push(WgslError::new("too many arguments").marker(span));
+                            return None;
+                        }
                         (sample, None)
                     } else {
                         let level = args.get(2).and_then(|x| self.expr(x, b, fun));
+                        if args.len() > 3 {
+                            self.errors
+                                .push(WgslError::new("too many arguments").marker(span));
+                            return None;
+                        }
                         (None, level)
                     };
                     (None, sample, level)
@@ -542,7 +551,7 @@ impl Lowerer<'_> {
                     coordinate: sample.coordinate,
                     array_index: sample.array_index,
                     offset,
-                    level: crate::SampleLevel::Auto,
+                    level: crate::SampleLevel::Zero,
                     depth_ref: None,
                 }
             }
@@ -566,7 +575,7 @@ impl Lowerer<'_> {
                     coordinate: sample.coordinate,
                     array_index: sample.array_index,
                     offset,
-                    level: crate::SampleLevel::Auto,
+                    level: crate::SampleLevel::Zero,
                     depth_ref: Some(depth_ref),
                 }
             }
@@ -662,7 +671,7 @@ impl Lowerer<'_> {
                     width,
                     comparison: true,
                 };
-                let result = self.emit_expr(result, span, b, fun);
+                let result = fun.expressions.append(result, span);
 
                 let stmt = crate::Statement::Atomic {
                     pointer,
@@ -808,22 +817,23 @@ impl Lowerer<'_> {
 
         let component_or_img = args.next().unwrap();
         let img_or_sampler = args.next().unwrap();
+
         let img_or_sampler_span = img_or_sampler.span;
         let img_or_sampler = self.expr(img_or_sampler, b, fun)?;
 
         let (component, (image, image_span), sampler) = match self.type_of(img_or_sampler, fun)? {
             TypeInner::Sampler { .. } => {
-                // component is present.
+                // component not is present.
+                let image = self.expr(component_or_img, b, fun)?;
+                let sampler = img_or_sampler;
+                (0, (image, component_or_img.span), sampler)
+            }
+            _ => {
+                // component not present.
                 let component = self.eval.as_positive_int(component_or_img)?;
                 let image = (img_or_sampler, img_or_sampler_span);
                 let sampler = self.expr(args.next().unwrap(), b, fun)?;
                 (component, image, sampler)
-            }
-            _ => {
-                // component is not present.
-                let image = self.expr(component_or_img, b, fun)?;
-                let sampler = img_or_sampler;
-                (0, (image, component_or_img.span), sampler)
             }
         };
         let coordinate = self.expr(args.next().unwrap(), b, fun)?;

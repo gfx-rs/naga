@@ -1,14 +1,14 @@
 (
     types: [
         (
-            name: None,
+            name: Some("u32"),
             inner: Scalar(
                 kind: Uint,
                 width: 4,
             ),
         ),
         (
-            name: None,
+            name: Some("array<u32>"),
             inner: Array(
                 base: 1,
                 size: Dynamic,
@@ -30,11 +30,22 @@
             ),
         ),
         (
-            name: None,
+            name: Some("vec3<u32>"),
             inner: Vector(
                 size: Tri,
                 kind: Uint,
                 width: 4,
+            ),
+        ),
+        (
+            name: Some("ptr<storage, PrimeIndices>"),
+            inner: Pointer(
+                base: 3,
+                space: Storage(
+                    access: (
+                        bits: 3,
+                    ),
+                ),
             ),
         ),
     ],
@@ -68,7 +79,39 @@
             specialization: None,
             inner: Scalar(
                 width: 4,
+                value: Uint(0),
+            ),
+        ),
+        (
+            name: None,
+            specialization: None,
+            inner: Scalar(
+                width: 4,
+                value: Uint(2),
+            ),
+        ),
+        (
+            name: None,
+            specialization: None,
+            inner: Scalar(
+                width: 4,
                 value: Uint(3),
+            ),
+        ),
+        (
+            name: None,
+            specialization: None,
+            inner: Scalar(
+                width: 4,
+                value: Uint(1),
+            ),
+        ),
+        (
+            name: None,
+            specialization: None,
+            inner: Scalar(
+                width: 4,
+                value: Uint(1),
             ),
         ),
     ],
@@ -111,17 +154,17 @@
                 (
                     name: Some("i"),
                     ty: 1,
-                    init: Some(1),
+                    init: None,
                 ),
             ],
             expressions: [
-                GlobalVariable(1),
                 FunctionArgument(0),
                 LocalVariable(1),
                 Constant(1),
                 LocalVariable(2),
+                LocalVariable(1),
                 Load(
-                    pointer: 3,
+                    pointer: 5,
                 ),
                 Constant(2),
                 Binary(
@@ -129,63 +172,78 @@
                     left: 6,
                     right: 7,
                 ),
+                LocalVariable(1),
                 Load(
-                    pointer: 3,
+                    pointer: 9,
                 ),
                 Constant(3),
                 Binary(
                     op: Modulo,
-                    left: 9,
-                    right: 10,
-                ),
-                Constant(1),
-                Binary(
-                    op: Equal,
-                    left: 11,
-                    right: 12,
-                ),
-                Load(
-                    pointer: 3,
-                ),
-                Constant(3),
-                Binary(
-                    op: Divide,
-                    left: 14,
-                    right: 15,
+                    left: 10,
+                    right: 11,
                 ),
                 Constant(4),
+                Binary(
+                    op: Equal,
+                    left: 12,
+                    right: 13,
+                ),
+                LocalVariable(1),
                 Load(
-                    pointer: 3,
+                    pointer: 15,
+                ),
+                Constant(5),
+                Binary(
+                    op: Divide,
+                    left: 16,
+                    right: 17,
+                ),
+                LocalVariable(1),
+                Constant(6),
+                LocalVariable(1),
+                Load(
+                    pointer: 21,
                 ),
                 Binary(
                     op: Multiply,
-                    left: 17,
-                    right: 18,
+                    left: 20,
+                    right: 22,
                 ),
-                Constant(2),
+                Constant(7),
                 Binary(
                     op: Add,
-                    left: 19,
-                    right: 20,
+                    left: 23,
+                    right: 24,
                 ),
+                LocalVariable(1),
+                LocalVariable(2),
                 Load(
-                    pointer: 5,
+                    pointer: 27,
                 ),
-                Constant(2),
+                Constant(8),
                 Binary(
                     op: Add,
-                    left: 22,
-                    right: 23,
+                    left: 28,
+                    right: 29,
                 ),
+                LocalVariable(2),
+                LocalVariable(2),
                 Load(
-                    pointer: 5,
+                    pointer: 32,
                 ),
             ],
-            named_expressions: {},
+            named_expressions: {
+                1: "n",
+                3: "i",
+            },
             body: [
                 Store(
-                    pointer: 3,
-                    value: 2,
+                    pointer: 2,
+                    value: 1,
+                ),
+                Store(
+                    pointer: 4,
+                    value: 3,
                 ),
                 Loop(
                     body: [
@@ -204,71 +262,79 @@
                                 Break,
                             ],
                         ),
-                        Emit((
-                            start: 8,
-                            end: 9,
-                        )),
-                        Emit((
-                            start: 10,
-                            end: 11,
-                        )),
-                        Emit((
-                            start: 12,
-                            end: 13,
-                        )),
-                        If(
-                            condition: 13,
-                            accept: [
-                                Emit((
-                                    start: 13,
-                                    end: 14,
-                                )),
-                                Emit((
-                                    start: 15,
-                                    end: 16,
-                                )),
-                                Store(
-                                    pointer: 3,
-                                    value: 16,
-                                ),
-                            ],
-                            reject: [
-                                Emit((
-                                    start: 17,
-                                    end: 19,
-                                )),
-                                Emit((
-                                    start: 20,
-                                    end: 21,
-                                )),
-                                Store(
-                                    pointer: 3,
-                                    value: 21,
-                                ),
-                            ],
-                        ),
-                        Emit((
-                            start: 21,
-                            end: 22,
-                        )),
-                        Emit((
-                            start: 23,
-                            end: 24,
-                        )),
-                        Store(
-                            pointer: 5,
-                            value: 24,
-                        ),
+                        Block([
+                            Emit((
+                                start: 9,
+                                end: 10,
+                            )),
+                            Emit((
+                                start: 11,
+                                end: 12,
+                            )),
+                            Emit((
+                                start: 13,
+                                end: 14,
+                            )),
+                            If(
+                                condition: 14,
+                                accept: [
+                                    Emit((
+                                        start: 15,
+                                        end: 16,
+                                    )),
+                                    Emit((
+                                        start: 17,
+                                        end: 18,
+                                    )),
+                                    Store(
+                                        pointer: 19,
+                                        value: 18,
+                                    ),
+                                ],
+                                reject: [
+                                    Block([
+                                        Emit((
+                                            start: 21,
+                                            end: 22,
+                                        )),
+                                        Emit((
+                                            start: 22,
+                                            end: 23,
+                                        )),
+                                        Emit((
+                                            start: 24,
+                                            end: 25,
+                                        )),
+                                        Store(
+                                            pointer: 26,
+                                            value: 25,
+                                        ),
+                                    ]),
+                                ],
+                            ),
+                            Emit((
+                                start: 27,
+                                end: 28,
+                            )),
+                            Emit((
+                                start: 29,
+                                end: 30,
+                            )),
+                            Store(
+                                pointer: 31,
+                                value: 30,
+                            ),
+                        ]),
                     ],
                     continuing: [],
                     break_if: None,
                 ),
                 Emit((
-                    start: 24,
-                    end: 25,
+                    start: 32,
+                    end: 33,
                 )),
                 Return(
-                    value: Some(25),
+                    value: Some(33),
                 ),
             ],
         ),
@@ -291,53 +357,79 @@
                 result: None,
                 local_variables: [],
                 expressions: [
+                    CallResult(1),
                     GlobalVariable(1),
-                    FunctionArgument(0),
-                    AccessIndex(
-                        base: 1,
-                        index: 0,
-                    ),
                     AccessIndex(
                         base: 2,
+                        index: 0,
+                    ),
+                    FunctionArgument(0),
+                    AccessIndex(
+                        base: 4,
                         index: 0,
                     ),
                     Access(
                         base: 3,
-                        index: 4,
+                        index: 5,
                     ),
+                    Load(
+                        pointer: 6,
+                    ),
+                    GlobalVariable(1),
                     AccessIndex(
-                        base: 1,
+                        base: 8,
                         index: 0,
                     ),
+                    FunctionArgument(0),
                     AccessIndex(
-                        base: 2,
+                        base: 10,
                         index: 0,
                     ),
                     Access(
-                        base: 6,
-                        index: 7,
+                        base: 9,
+                        index: 11,
                     ),
-                    Load(
-                        pointer: 8,
-                    ),
-                    CallResult(1),
                 ],
                 named_expressions: {},
                 body: [
                     Emit((
                         start: 2,
-                        end: 9,
+                        end: 3,
+                    )),
+                    Emit((
+                        start: 4,
+                        end: 5,
+                    )),
+                    Emit((
+                        start: 5,
+                        end: 6,
+                    )),
+                    Emit((
+                        start: 6,
+                        end: 7,
                     )),
                     Call(
                         function: 1,
                         arguments: [
-                            9,
+                            7,
                         ],
-                        result: Some(10),
+                        result: Some(1),
                     ),
+                    Emit((
+                        start: 8,
+                        end: 9,
+                    )),
+                    Emit((
+                        start: 10,
+                        end: 11,
+                    )),
+                    Emit((
+                        start: 11,
+                        end: 12,
+                    )),
                     Store(
-                        pointer: 5,
-                        value: 10,
+                        pointer: 12,
+                        value: 1,
                     ),
                     Return(
                         value: None,

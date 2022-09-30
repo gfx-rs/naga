@@ -170,6 +170,7 @@ fn storage_image_formats() {
         &[Ca::Shader],
         &[Ca::StorageImageExtendedFormats],
         r#"
+            enable storage_image_read;
             @group(0) @binding(0)
             var image_rg32f: texture_storage_2d<rgba16uint, read>;
         "#,
@@ -178,6 +179,7 @@ fn storage_image_formats() {
     require(
         &[Ca::StorageImageExtendedFormats],
         r#"
+            enable storage_image_read;
             @group(0) @binding(0)
             var image_rg32f: texture_storage_2d<rg32float, read>;
         "#,

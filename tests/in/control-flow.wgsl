@@ -24,11 +24,9 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
         }
         case 3: {
             pos = 2;
-            fallthrough;
         }
         case 4: {
             pos = 3;
-            fallthrough;
         }
         default: {
             pos = 4;
@@ -54,7 +52,6 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
         }
         case 3: {
             pos = 2;
-            fallthrough;
         }
         case 4: {}
         default: {

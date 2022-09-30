@@ -27,121 +27,127 @@ void main(uint3 global_invocation_id : SV_DispatchThreadID)
     float2 cMass = (float2)0;
     float2 cVel = (float2)0;
     float2 colVel = (float2)0;
-    int cMassCount = 0;
-    int cVelCount = 0;
+    int cMassCount = (int)0;
+    int cVelCount = (int)0;
     float2 pos = (float2)0;
     float2 vel = (float2)0;
-    uint i = 0u;
+    uint i = (uint)0;
 
     uint index = global_invocation_id.x;
     if ((index >= NUM_PARTICLES)) {
         return;
     }
-    float2 _expr10 = asfloat(particlesSrc.Load2(0+index*16+0));
-    vPos = _expr10;
-    float2 _expr15 = asfloat(particlesSrc.Load2(8+index*16+0));
-    vVel = _expr15;
-    cMass = float2(0.0, 0.0);
-    cVel = float2(0.0, 0.0);
-    colVel = float2(0.0, 0.0);
+    float2 vPos_1 = asfloat(particlesSrc.Load2(0+index*16+0));
+    vPos = vPos_1;
+    float2 vVel_1 = asfloat(particlesSrc.Load2(8+index*16+0));
+    vVel = vVel_1;
+    float2 cMass_1 = float2(0.0, 0.0);
+    cMass = cMass_1;
+    float2 cVel_1 = float2(0.0, 0.0);
+    cVel = cVel_1;
+    float2 colVel_1 = float2(0.0, 0.0);
+    colVel = colVel_1;
+    cMassCount = 0;
+    cVelCount = 0;
+    i = 0u;
     bool loop_init = true;
     while(true) {
         if (!loop_init) {
-            uint _expr86 = i;
-            i = (_expr86 + 1u);
+            uint _expr116 = i;
+            i = (_expr116 + 1u);
         }
         loop_init = false;
-        uint _expr37 = i;
-        if ((_expr37 >= NUM_PARTICLES)) {
+        uint _expr35 = i;
+        if ((_expr35 >= NUM_PARTICLES)) {
             break;
         }
         uint _expr39 = i;
         if ((_expr39 == index)) {
             continue;
         }
-        uint _expr42 = i;
-        float2 _expr45 = asfloat(particlesSrc.Load2(0+_expr42*16+0));
-        pos = _expr45;
-        uint _expr47 = i;
-        float2 _expr50 = asfloat(particlesSrc.Load2(8+_expr47*16+0));
-        vel = _expr50;
-        float2 _expr51 = pos;
-        float2 _expr52 = vPos;
-        float _expr55 = params.rule1Distance;
-        if ((distance(_expr51, _expr52) < _expr55)) {
-            float2 _expr57 = cMass;
-            float2 _expr58 = pos;
-            cMass = (_expr57 + _expr58);
-            int _expr60 = cMassCount;
-            cMassCount = (_expr60 + 1);
+        uint _expr44 = i;
+        float2 _expr47 = asfloat(particlesSrc.Load2(0+_expr44*16+0));
+        pos = _expr47;
+        uint _expr52 = i;
+        float2 _expr55 = asfloat(particlesSrc.Load2(8+_expr52*16+0));
+        vel = _expr55;
+        float2 _expr58 = pos;
+        float2 _expr60 = vPos;
+        float _expr64 = params.rule1Distance;
+        if ((distance(_expr58, _expr60) < _expr64)) {
+            float2 _expr67 = cMass;
+            float2 _expr69 = pos;
+            cMass = (_expr67 + _expr69);
+            int _expr73 = cMassCount;
+            cMassCount = (_expr73 + 1);
         }
-        float2 _expr63 = pos;
-        float2 _expr64 = vPos;
-        float _expr67 = params.rule2Distance;
-        if ((distance(_expr63, _expr64) < _expr67)) {
-            float2 _expr69 = colVel;
-            float2 _expr70 = pos;
-            float2 _expr71 = vPos;
-            colVel = (_expr69 - (_expr70 - _expr71));
+        float2 _expr78 = pos;
+        float2 _expr80 = vPos;
+        float _expr84 = params.rule2Distance;
+        if ((distance(_expr78, _expr80) < _expr84)) {
+            float2 _expr87 = colVel;
+            float2 _expr89 = pos;
+            float2 _expr91 = vPos;
+            colVel = (_expr87 - (_expr89 - _expr91));
         }
-        float2 _expr74 = pos;
-        float2 _expr75 = vPos;
-        float _expr78 = params.rule3Distance;
-        if ((distance(_expr74, _expr75) < _expr78)) {
-            float2 _expr80 = cVel;
-            float2 _expr81 = vel;
-            cVel = (_expr80 + _expr81);
-            int _expr83 = cVelCount;
-            cVelCount = (_expr83 + 1);
+        float2 _expr96 = pos;
+        float2 _expr98 = vPos;
+        float _expr102 = params.rule3Distance;
+        if ((distance(_expr96, _expr98) < _expr102)) {
+            float2 _expr105 = cVel;
+            float2 _expr107 = vel;
+            cVel = (_expr105 + _expr107);
+            int _expr111 = cVelCount;
+            cVelCount = (_expr111 + 1);
         }
     }
-    int _expr89 = cMassCount;
-    if ((_expr89 > 0)) {
-        float2 _expr92 = cMass;
-        int _expr93 = cMassCount;
-        float2 _expr97 = vPos;
-        cMass = ((_expr92 / (float(_expr93)).xx) - _expr97);
+    int _expr121 = cMassCount;
+    if ((_expr121 > 0)) {
+        float2 _expr125 = cMass;
+        int _expr127 = cMassCount;
+        float2 _expr132 = vPos;
+        cMass = ((_expr125 / (float(_expr127)).xx) - _expr132);
     }
-    int _expr99 = cVelCount;
-    if ((_expr99 > 0)) {
-        float2 _expr102 = cVel;
-        int _expr103 = cVelCount;
-        cVel = (_expr102 / (float(_expr103)).xx);
+    int _expr136 = cVelCount;
+    if ((_expr136 > 0)) {
+        float2 _expr140 = cVel;
+        int _expr142 = cVelCount;
+        cVel = (_expr140 / (float(_expr142)).xx);
     }
-    float2 _expr107 = vVel;
-    float2 _expr108 = cMass;
-    float _expr110 = params.rule1Scale;
-    float2 _expr113 = colVel;
-    float _expr115 = params.rule2Scale;
-    float2 _expr118 = cVel;
-    float _expr120 = params.rule3Scale;
-    vVel = (((_expr107 + (_expr108 * _expr110)) + (_expr113 * _expr115)) + (_expr118 * _expr120));
-    float2 _expr123 = vVel;
-    float2 _expr125 = vVel;
-    vVel = (normalize(_expr123) * clamp(length(_expr125), 0.0, 0.10000000149011612));
-    float2 _expr131 = vPos;
-    float2 _expr132 = vVel;
-    float _expr134 = params.deltaT;
-    vPos = (_expr131 + (_expr132 * _expr134));
-    float _expr138 = vPos.x;
-    if ((_expr138 < -1.0)) {
+    float2 _expr148 = vVel;
+    float2 _expr150 = cMass;
+    float _expr153 = params.rule1Scale;
+    float2 _expr157 = colVel;
+    float _expr160 = params.rule2Scale;
+    float2 _expr164 = cVel;
+    float _expr167 = params.rule3Scale;
+    vVel = (((_expr148 + (_expr150 * _expr153)) + (_expr157 * _expr160)) + (_expr164 * _expr167));
+    float2 _expr172 = vVel;
+    float2 _expr175 = vVel;
+    vVel = (normalize(_expr172) * clamp(length(_expr175), 0.0, 0.1));
+    float2 _expr183 = vPos;
+    float2 _expr185 = vVel;
+    float _expr188 = params.deltaT;
+    vPos = (_expr183 + (_expr185 * _expr188));
+    float _expr194 = vPos.x;
+    if ((_expr194 < -1.0)) {
         vPos.x = 1.0;
     }
-    float _expr144 = vPos.x;
-    if ((_expr144 > 1.0)) {
+    float _expr203 = vPos.x;
+    if ((_expr203 > 1.0)) {
         vPos.x = -1.0;
     }
-    float _expr150 = vPos.y;
-    if ((_expr150 < -1.0)) {
+    float _expr212 = vPos.y;
+    if ((_expr212 < -1.0)) {
         vPos.y = 1.0;
     }
-    float _expr156 = vPos.y;
-    if ((_expr156 > 1.0)) {
+    float _expr221 = vPos.y;
+    if ((_expr221 > 1.0)) {
         vPos.y = -1.0;
     }
-    float2 _expr164 = vPos;
-    particlesDst.Store2(0+index*16+0, asuint(_expr164));
-    float2 _expr168 = vVel;
-    particlesDst.Store2(8+index*16+0, asuint(_expr168));
+    float2 _expr229 = vPos;
+    particlesDst.Store2(0+index*16+0, asuint(_expr229));
+    float2 _expr235 = vVel;
+    particlesDst.Store2(8+index*16+0, asuint(_expr235));
     return;
 }

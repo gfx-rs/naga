@@ -1,3 +1,5 @@
+enable f64;
+
 struct PushConstants {
     index: u32,
     double: vec2<f64>,

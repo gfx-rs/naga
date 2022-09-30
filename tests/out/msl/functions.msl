@@ -4,16 +4,19 @@
 
 using metal::uint;
 
+typedef metal::float2 vec2f32_;
+typedef int i32_;
+typedef uint u32_;
 
-metal::float2 test_fma(
+vec2f32_ test_fma(
 ) {
-    metal::float2 a = metal::float2(2.0, 2.0);
-    metal::float2 b = metal::float2(0.5, 0.5);
-    metal::float2 c = metal::float2(0.5, 0.5);
+    vec2f32_ a = metal::float2(2.0, 2.0);
+    vec2f32_ b = metal::float2(0.5, 0.5);
+    vec2f32_ c = metal::float2(0.5, 0.5);
     return metal::fma(a, b, c);
 }
 
-int test_integer_dot_product(
+i32_ test_integer_dot_product(
 ) {
     metal::int2 a_2_ = metal::int2(1);
     metal::int2 b_2_ = metal::int2(1);
@@ -29,7 +32,7 @@ int test_integer_dot_product(
 
 kernel void main_(
 ) {
-    metal::float2 _e0 = test_fma();
-    int _e1 = test_integer_dot_product();
+    vec2f32_ _e0 = test_fma();
+    i32_ _e1 = test_integer_dot_product();
     return;
 }
