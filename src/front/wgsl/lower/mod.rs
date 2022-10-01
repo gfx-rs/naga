@@ -682,16 +682,15 @@ impl<'a> Lowerer<'a> {
                                 Some(&TypeInner::Vector { size, .. }) => Some(size),
                                 _ => None,
                             };
-                            match (left_size, self.type_of(right, fun)) {
-                                (Some(size), Some(&TypeInner::Scalar { .. })) => {
-                                    right = self.emit_expr(
-                                        crate::Expression::Splat { size, value: right },
-                                        assign.value.span,
-                                        b,
-                                        fun,
-                                    );
-                                }
-                                _ => {}
+                            if let (Some(size), Some(&TypeInner::Scalar { .. })) =
+                                (left_size, self.type_of(right, fun))
+                            {
+                                right = self.emit_expr(
+                                    crate::Expression::Splat { size, value: right },
+                                    assign.value.span,
+                                    b,
+                                    fun,
+                                );
                             }
                         }
 

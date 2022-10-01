@@ -30,11 +30,11 @@ impl Lowerer<'_> {
         b: &mut crate::Block,
         fun: &mut crate::Function,
     ) -> Option<Handle<crate::Expression>> {
-        let args = self.to_constructor_args(args, b, fun);
+        let args = self.make_constructor_args(args, b, fun);
 
         match *ty {
             Constructible::Scalar { kind, width } => {
-                let this_ty = self.to_ty(ty, span).unwrap();
+                let this_ty = self.make_ty(ty, span).unwrap();
                 match args {
                     ConstructorArgs::None => self.make_zero_value(this_ty, span, b, fun),
                     ConstructorArgs::One { expr, .. } => {
@@ -52,7 +52,7 @@ impl Lowerer<'_> {
                 }
             }
             Constructible::Vector { kind, width, size } => {
-                let this_ty = self.to_ty(ty, span).unwrap();
+                let this_ty = self.make_ty(ty, span).unwrap();
                 match args {
                     ConstructorArgs::None => self.make_zero_value(this_ty, span, b, fun),
                     _ => self.construct_vector(args, span, this_ty, size, kind, width, b, fun),
@@ -63,19 +63,19 @@ impl Lowerer<'_> {
                 rows,
                 width,
             } => {
-                let this_ty = self.to_ty(ty, span).unwrap();
+                let this_ty = self.make_ty(ty, span).unwrap();
                 match args {
                     ConstructorArgs::None => self.make_zero_value(this_ty, span, b, fun),
                     _ => self.construct_matrix(args, span, this_ty, rows, columns, width, b, fun),
                 }
             }
             Constructible::Array { .. } => {
-                let this_ty = self.to_ty(ty, span)?;
+                let this_ty = self.make_ty(ty, span)?;
 
                 match args {
-                    ConstructorArgs::None => return self.make_zero_value(this_ty, span, b, fun),
+                    ConstructorArgs::None => self.make_zero_value(this_ty, span, b, fun),
                     ConstructorArgs::One { .. } | ConstructorArgs::Many { .. } => {
-                        let components = args.to_vec();
+                        let components = args.into_vec();
                         let expr = crate::Expression::Compose {
                             ty: this_ty,
                             components,
@@ -87,8 +87,8 @@ impl Lowerer<'_> {
             Constructible::PartialVector { size } => {
                 match args {
                     ConstructorArgs::None => {
-                        self.to_ty(ty, span); // Errors with an inference error.
-                        return None;
+                        self.make_ty(ty, span); // Errors with an inference error.
+                        None
                     }
                     ConstructorArgs::One { ty: base, .. }
                     | ConstructorArgs::Many { ty: base, .. } => {
@@ -112,8 +112,8 @@ impl Lowerer<'_> {
             Constructible::PartialMatrix { columns, rows } => {
                 match args {
                     ConstructorArgs::None => {
-                        self.to_ty(ty, span); // Errors with an inference error.
-                        return None;
+                        self.make_ty(ty, span); // Errors with an inference error.
+                        None
                     }
                     ConstructorArgs::One { ty: base, .. }
                     | ConstructorArgs::Many { ty: base, .. } => {
@@ -149,12 +149,12 @@ impl Lowerer<'_> {
             Constructible::PartialArray => {
                 match args {
                     ConstructorArgs::None => {
-                        self.to_ty(ty, span); // Errors with an inference error.
-                        return None;
+                        self.make_ty(ty, span); // Errors with an inference error.
+                        None
                     }
                     ConstructorArgs::One { ty: base, .. }
                     | ConstructorArgs::Many { ty: base, .. } => {
-                        let args = args.to_vec();
+                        let args = args.into_vec();
                         let len = args.len() as u32;
 
                         let size = crate::Constant {
@@ -187,7 +187,7 @@ impl Lowerer<'_> {
             Constructible::Type(ty) => match args {
                 ConstructorArgs::None => self.make_zero_value(ty, span, b, fun),
                 _ => {
-                    let components = args.to_vec();
+                    let components = args.into_vec();
                     let expr = crate::Expression::Compose { ty, components };
                     Some(self.emit_expr(expr, span, b, fun))
                 }
@@ -195,7 +195,7 @@ impl Lowerer<'_> {
         }
     }
 
-    fn to_constructor_args(
+    fn make_constructor_args(
         &mut self,
         args: &[Expr],
         b: &mut crate::Block,
@@ -240,7 +240,7 @@ impl Lowerer<'_> {
         out
     }
 
-    fn to_ty(&mut self, ty: &Constructible, span: crate::Span) -> Option<Handle<Type>> {
+    fn make_ty(&mut self, ty: &Constructible, span: crate::Span) -> Option<Handle<Type>> {
         Some(match *ty {
             Constructible::Scalar { kind, width } => {
                 self.register_type(TypeInner::Scalar { kind, width })
@@ -360,8 +360,8 @@ impl Lowerer<'_> {
                 ConstantInner::Composite {
                     ty,
                     components: tys
-                        .into_iter()
-                        .map(|ty| self.make_zero_value_of_type(ty, span))
+                        .iter()
+                        .map(|&ty| self.make_zero_value_of_type(ty, span))
                         .collect::<Option<_>>()?,
                 }
             }
@@ -414,6 +414,7 @@ impl Lowerer<'_> {
         Some(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn construct_vector(
         &mut self,
         args: ConstructorArgs,
@@ -465,6 +466,7 @@ impl Lowerer<'_> {
         Some(self.emit_expr(expr, span, b, fun))
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn construct_matrix(
         &mut self,
         args: ConstructorArgs,
@@ -577,7 +579,7 @@ enum ConstructorArgs {
 }
 
 impl ConstructorArgs {
-    fn to_vec(self) -> Vec<Handle<crate::Expression>> {
+    fn into_vec(self) -> Vec<Handle<crate::Expression>> {
         match self {
             ConstructorArgs::None => Vec::new(),
             ConstructorArgs::One { expr, .. } => vec![expr],
