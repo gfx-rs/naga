@@ -24,7 +24,7 @@ pub enum AccessMode {
 
 impl ToStaticString for AccessMode {
     fn to_static_str(&self) -> &'static str {
-        match self {
+        match *self {
             AccessMode::Read => "read",
             AccessMode::Write => "write",
             AccessMode::ReadWrite => "read_write",
@@ -38,12 +38,12 @@ impl Display for AccessMode {
     }
 }
 
-impl Into<crate::StorageAccess> for AccessMode {
-    fn into(self) -> crate::StorageAccess {
-        match self {
-            AccessMode::Read => crate::StorageAccess::LOAD,
-            AccessMode::Write => crate::StorageAccess::STORE,
-            AccessMode::ReadWrite => crate::StorageAccess::LOAD | crate::StorageAccess::STORE,
+impl From<AccessMode> for crate::StorageAccess {
+    fn from(access: AccessMode) -> Self {
+        match access {
+            AccessMode::Read => Self::LOAD,
+            AccessMode::Write => Self::STORE,
+            AccessMode::ReadWrite => Self::LOAD | Self::STORE,
         }
     }
 }
@@ -61,7 +61,7 @@ pub enum AddressSpace {
 
 impl ToStaticString for AddressSpace {
     fn to_static_str(&self) -> &'static str {
-        match self {
+        match *self {
             AddressSpace::Function => "function",
             AddressSpace::Private => "private",
             AddressSpace::Storage => "storage",
@@ -79,18 +79,18 @@ impl Display for AddressSpace {
     }
 }
 
-impl Into<crate::AddressSpace> for AddressSpace {
-    fn into(self) -> crate::AddressSpace {
-        match self {
-            AddressSpace::Function => crate::AddressSpace::Function,
-            AddressSpace::Private => crate::AddressSpace::Private,
-            AddressSpace::Storage => crate::AddressSpace::Storage {
+impl From<AddressSpace> for crate::AddressSpace {
+    fn from(space: AddressSpace) -> Self {
+        match space {
+            AddressSpace::Function => Self::Function,
+            AddressSpace::Private => Self::Private,
+            AddressSpace::Storage => Self::Storage {
                 access: crate::StorageAccess::LOAD,
             },
-            AddressSpace::Uniform => crate::AddressSpace::Uniform,
-            AddressSpace::Workgroup => crate::AddressSpace::WorkGroup,
-            AddressSpace::Handle => crate::AddressSpace::Handle,
-            AddressSpace::PushConstant => crate::AddressSpace::PushConstant,
+            AddressSpace::Uniform => Self::Uniform,
+            AddressSpace::Workgroup => Self::WorkGroup,
+            AddressSpace::Handle => Self::Handle,
+            AddressSpace::PushConstant => Self::PushConstant,
         }
     }
 }
@@ -122,7 +122,7 @@ pub enum AttributeType {
 
 impl Display for AttributeType {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
+        match *self {
             AttributeType::Align(_) => write!(f, "align"),
             AttributeType::Binding(_) => write!(f, "binding"),
             AttributeType::Builtin(_) => write!(f, "builtin"),
@@ -162,7 +162,7 @@ pub enum Builtin {
 
 impl ToStaticString for Builtin {
     fn to_static_str(&self) -> &'static str {
-        match self {
+        match *self {
             Builtin::FragDepth => "frag_depth",
             Builtin::FrontFacing => "front_facing",
             Builtin::GlobalInvocationId => "global_invocation_id",
@@ -187,23 +187,23 @@ impl Display for Builtin {
     }
 }
 
-impl Into<BuiltIn> for Builtin {
-    fn into(self) -> BuiltIn {
-        match self {
-            Builtin::FragDepth => BuiltIn::FragDepth,
-            Builtin::FrontFacing => BuiltIn::FrontFacing,
-            Builtin::GlobalInvocationId => BuiltIn::GlobalInvocationId,
-            Builtin::InstanceIndex => BuiltIn::InstanceIndex,
-            Builtin::LocalInvocationId => BuiltIn::LocalInvocationId,
-            Builtin::LocalInvocationIndex => BuiltIn::LocalInvocationIndex,
-            Builtin::NumWorkgroups => BuiltIn::NumWorkGroups,
-            Builtin::Position => BuiltIn::Position { invariant: false },
-            Builtin::SampleIndex => BuiltIn::SampleIndex,
-            Builtin::SampleMask => BuiltIn::SampleMask,
-            Builtin::VertexIndex => BuiltIn::VertexIndex,
-            Builtin::WorkgroupId => BuiltIn::WorkGroupId,
-            Builtin::PrimitiveIndex => BuiltIn::PrimitiveIndex,
-            Builtin::ViewIndex => BuiltIn::ViewIndex,
+impl From<Builtin> for BuiltIn {
+    fn from(bt: Builtin) -> Self {
+        match bt {
+            Builtin::FragDepth => Self::FragDepth,
+            Builtin::FrontFacing => Self::FrontFacing,
+            Builtin::GlobalInvocationId => Self::GlobalInvocationId,
+            Builtin::InstanceIndex => Self::InstanceIndex,
+            Builtin::LocalInvocationId => Self::LocalInvocationId,
+            Builtin::LocalInvocationIndex => Self::LocalInvocationIndex,
+            Builtin::NumWorkgroups => Self::NumWorkGroups,
+            Builtin::Position => Self::Position { invariant: false },
+            Builtin::SampleIndex => Self::SampleIndex,
+            Builtin::SampleMask => Self::SampleMask,
+            Builtin::VertexIndex => Self::VertexIndex,
+            Builtin::WorkgroupId => Self::WorkGroupId,
+            Builtin::PrimitiveIndex => Self::PrimitiveIndex,
+            Builtin::ViewIndex => Self::ViewIndex,
         }
     }
 }
@@ -217,7 +217,7 @@ pub enum InterpolationSample {
 
 impl ToStaticString for InterpolationSample {
     fn to_static_str(&self) -> &'static str {
-        match self {
+        match *self {
             InterpolationSample::Center => "center",
             InterpolationSample::Centroid => "centroid",
             InterpolationSample::Sample => "sample",
@@ -231,12 +231,12 @@ impl Display for InterpolationSample {
     }
 }
 
-impl Into<Sampling> for InterpolationSample {
-    fn into(self) -> Sampling {
-        match self {
-            InterpolationSample::Center => Sampling::Center,
-            InterpolationSample::Centroid => Sampling::Centroid,
-            InterpolationSample::Sample => Sampling::Sample,
+impl From<InterpolationSample> for Sampling {
+    fn from(sample: InterpolationSample) -> Self {
+        match sample {
+            InterpolationSample::Center => Self::Center,
+            InterpolationSample::Centroid => Self::Centroid,
+            InterpolationSample::Sample => Self::Sample,
         }
     }
 }
@@ -250,7 +250,7 @@ pub enum InterpolationType {
 
 impl ToStaticString for InterpolationType {
     fn to_static_str(&self) -> &'static str {
-        match self {
+        match *self {
             InterpolationType::Flat => "flat",
             InterpolationType::Linear => "linear",
             InterpolationType::Perspective => "perspective",
@@ -264,12 +264,12 @@ impl Display for InterpolationType {
     }
 }
 
-impl Into<Interpolation> for InterpolationType {
-    fn into(self) -> Interpolation {
-        match self {
-            InterpolationType::Flat => Interpolation::Flat,
-            InterpolationType::Linear => Interpolation::Linear,
-            InterpolationType::Perspective => Interpolation::Perspective,
+impl From<InterpolationType> for Interpolation {
+    fn from(it: InterpolationType) -> Self {
+        match it {
+            InterpolationType::Flat => Self::Flat,
+            InterpolationType::Linear => Self::Linear,
+            InterpolationType::Perspective => Self::Perspective,
         }
     }
 }
@@ -286,7 +286,7 @@ pub enum PrimitiveType {
 
 impl ToStaticString for PrimitiveType {
     fn to_static_str(&self) -> &'static str {
-        match self {
+        match *self {
             PrimitiveType::I32 => "i32",
             PrimitiveType::U32 => "u32",
             PrimitiveType::F64 => "f64",
@@ -303,9 +303,9 @@ impl Display for PrimitiveType {
     }
 }
 
-impl Into<(ScalarKind, Bytes)> for PrimitiveType {
-    fn into(self) -> (ScalarKind, Bytes) {
-        match self {
+impl From<PrimitiveType> for (ScalarKind, Bytes) {
+    fn from(ty: PrimitiveType) -> (ScalarKind, Bytes) {
+        match ty {
             PrimitiveType::I32 => (ScalarKind::Sint, 4),
             PrimitiveType::U32 => (ScalarKind::Uint, 4),
             PrimitiveType::F64 => (ScalarKind::Float, 8),
@@ -325,7 +325,7 @@ pub enum VecType {
 
 impl ToStaticString for VecType {
     fn to_static_str(&self) -> &'static str {
-        match self {
+        match *self {
             VecType::Vec2 => "vec2",
             VecType::Vec3 => "vec3",
             VecType::Vec4 => "vec4",
@@ -339,12 +339,12 @@ impl Display for VecType {
     }
 }
 
-impl Into<VectorSize> for VecType {
-    fn into(self) -> VectorSize {
-        match self {
-            VecType::Vec2 => VectorSize::Bi,
-            VecType::Vec3 => VectorSize::Tri,
-            VecType::Vec4 => VectorSize::Quad,
+impl From<VecType> for VectorSize {
+    fn from(ty: VecType) -> Self {
+        match ty {
+            VecType::Vec2 => Self::Bi,
+            VecType::Vec3 => Self::Tri,
+            VecType::Vec4 => Self::Quad,
         }
     }
 }
@@ -364,7 +364,7 @@ pub enum MatType {
 
 impl ToStaticString for MatType {
     fn to_static_str(&self) -> &'static str {
-        match self {
+        match *self {
             MatType::Mat2x2 => "mat2x2",
             MatType::Mat2x3 => "mat2x3",
             MatType::Mat2x4 => "mat2x4",
@@ -384,9 +384,9 @@ impl Display for MatType {
     }
 }
 
-impl Into<(VectorSize, VectorSize)> for MatType {
-    fn into(self) -> (VectorSize, VectorSize) {
-        match self {
+impl From<MatType> for (VectorSize, VectorSize) {
+    fn from(ty: MatType) -> (VectorSize, VectorSize) {
+        match ty {
             MatType::Mat2x2 => (VectorSize::Bi, VectorSize::Bi),
             MatType::Mat2x3 => (VectorSize::Bi, VectorSize::Tri),
             MatType::Mat2x4 => (VectorSize::Bi, VectorSize::Quad),
@@ -414,7 +414,7 @@ pub enum SampledTextureType {
 
 impl ToStaticString for SampledTextureType {
     fn to_static_str(&self) -> &'static str {
-        match self {
+        match *self {
             SampledTextureType::Texture1d => "texture_1d",
             SampledTextureType::Texture1dArray => "texture_1d_array",
             SampledTextureType::Texture2d => "texture_2d",
@@ -433,9 +433,9 @@ impl Display for SampledTextureType {
     }
 }
 
-impl Into<(ImageDimension, bool, bool)> for SampledTextureType {
-    fn into(self) -> (ImageDimension, bool, bool) {
-        match self {
+impl From<SampledTextureType> for (ImageDimension, bool, bool) {
+    fn from(ty: SampledTextureType) -> (ImageDimension, bool, bool) {
+        match ty {
             SampledTextureType::Texture1d => (ImageDimension::D1, false, false),
             SampledTextureType::Texture1dArray => (ImageDimension::D1, true, false),
             SampledTextureType::Texture2d => (ImageDimension::D2, false, false),
@@ -459,7 +459,7 @@ pub enum DepthTextureType {
 
 impl ToStaticString for DepthTextureType {
     fn to_static_str(&self) -> &'static str {
-        match self {
+        match *self {
             DepthTextureType::Depth2d => "texture_depth_2d",
             DepthTextureType::Depth2dArray => "texture_depth_2d_array",
             DepthTextureType::DepthCube => "texture_depth_cube",
@@ -475,9 +475,9 @@ impl Display for DepthTextureType {
     }
 }
 
-impl Into<(ImageDimension, bool, bool)> for DepthTextureType {
-    fn into(self) -> (ImageDimension, bool, bool) {
-        match self {
+impl From<DepthTextureType> for (ImageDimension, bool, bool) {
+    fn from(ty: DepthTextureType) -> (ImageDimension, bool, bool) {
+        match ty {
             DepthTextureType::Depth2d => (ImageDimension::D2, false, false),
             DepthTextureType::Depth2dArray => (ImageDimension::D2, true, false),
             DepthTextureType::DepthCube => (ImageDimension::Cube, false, false),
@@ -495,7 +495,7 @@ pub enum SamplerType {
 
 impl ToStaticString for SamplerType {
     fn to_static_str(&self) -> &'static str {
-        match self {
+        match *self {
             SamplerType::Sampler => "sampler",
             SamplerType::SamplerComparison => "sampler_comparison",
         }
@@ -508,9 +508,9 @@ impl Display for SamplerType {
     }
 }
 
-impl Into<bool> for SamplerType {
-    fn into(self) -> bool {
-        match self {
+impl From<SamplerType> for bool {
+    fn from(ty: SamplerType) -> bool {
+        match ty {
             SamplerType::Sampler => false,
             SamplerType::SamplerComparison => true,
         }
@@ -528,7 +528,7 @@ pub enum StorageTextureType {
 
 impl ToStaticString for StorageTextureType {
     fn to_static_str(&self) -> &'static str {
-        match self {
+        match *self {
             StorageTextureType::Storage1d => "texture_storage_1d",
             StorageTextureType::Storage1dArray => "texture_storage_1d_array",
             StorageTextureType::Storage2d => "texture_storage_2d",
@@ -544,9 +544,9 @@ impl Display for StorageTextureType {
     }
 }
 
-impl Into<(ImageDimension, bool)> for StorageTextureType {
-    fn into(self) -> (ImageDimension, bool) {
-        match self {
+impl From<StorageTextureType> for (ImageDimension, bool) {
+    fn from(ty: StorageTextureType) -> (ImageDimension, bool) {
+        match ty {
             StorageTextureType::Storage1d => (ImageDimension::D1, false),
             StorageTextureType::Storage1dArray => (ImageDimension::D1, true),
             StorageTextureType::Storage2d => (ImageDimension::D2, false),
@@ -578,7 +578,7 @@ pub enum TexelFormat {
 
 impl ToStaticString for TexelFormat {
     fn to_static_str(&self) -> &'static str {
-        match self {
+        match *self {
             TexelFormat::R32Float => "r32float",
             TexelFormat::R32Sint => "r32sint",
             TexelFormat::R32Uint => "r32uint",
@@ -605,25 +605,25 @@ impl Display for TexelFormat {
     }
 }
 
-impl Into<StorageFormat> for TexelFormat {
-    fn into(self) -> StorageFormat {
-        match self {
-            TexelFormat::R32Float => StorageFormat::R32Float,
-            TexelFormat::R32Sint => StorageFormat::R32Sint,
-            TexelFormat::R32Uint => StorageFormat::R32Uint,
-            TexelFormat::Rg32Float => StorageFormat::Rg32Float,
-            TexelFormat::Rg32Sint => StorageFormat::Rg32Sint,
-            TexelFormat::Rg32Uint => StorageFormat::Rg32Uint,
-            TexelFormat::Rgba16Float => StorageFormat::Rgba16Float,
-            TexelFormat::Rgba16Sint => StorageFormat::Rgba16Sint,
-            TexelFormat::Rgba16Uint => StorageFormat::Rgba16Uint,
-            TexelFormat::Rgba32Float => StorageFormat::Rgba32Float,
-            TexelFormat::Rgba32Sint => StorageFormat::Rgba32Sint,
-            TexelFormat::Rgba32Uint => StorageFormat::Rgba32Uint,
-            TexelFormat::Rgba8Sint => StorageFormat::Rgba8Sint,
-            TexelFormat::Rgba8Uint => StorageFormat::Rgba8Uint,
-            TexelFormat::Rgba8Unorm => StorageFormat::Rgba8Unorm,
-            TexelFormat::Rgba8Snorm => StorageFormat::Rgba8Snorm,
+impl From<TexelFormat> for StorageFormat {
+    fn from(fmt: TexelFormat) -> Self {
+        match fmt {
+            TexelFormat::R32Float => Self::R32Float,
+            TexelFormat::R32Sint => Self::R32Sint,
+            TexelFormat::R32Uint => Self::R32Uint,
+            TexelFormat::Rg32Float => Self::Rg32Float,
+            TexelFormat::Rg32Sint => Self::Rg32Sint,
+            TexelFormat::Rg32Uint => Self::Rg32Uint,
+            TexelFormat::Rgba16Float => Self::Rgba16Float,
+            TexelFormat::Rgba16Sint => Self::Rgba16Sint,
+            TexelFormat::Rgba16Uint => Self::Rgba16Uint,
+            TexelFormat::Rgba32Float => Self::Rgba32Float,
+            TexelFormat::Rgba32Sint => Self::Rgba32Sint,
+            TexelFormat::Rgba32Uint => Self::Rgba32Uint,
+            TexelFormat::Rgba8Sint => Self::Rgba8Sint,
+            TexelFormat::Rgba8Uint => Self::Rgba8Uint,
+            TexelFormat::Rgba8Unorm => Self::Rgba8Unorm,
+            TexelFormat::Rgba8Snorm => Self::Rgba8Snorm,
         }
     }
 }
@@ -637,7 +637,7 @@ pub enum ConservativeDepth {
 
 impl ToStaticString for ConservativeDepth {
     fn to_static_str(&self) -> &'static str {
-        match self {
+        match *self {
             ConservativeDepth::GreaterEqual => "greater_equal",
             ConservativeDepth::LessEqual => "less_equal",
             ConservativeDepth::Unchanged => "unchanged",
@@ -651,12 +651,12 @@ impl Display for ConservativeDepth {
     }
 }
 
-impl Into<crate::ConservativeDepth> for ConservativeDepth {
-    fn into(self) -> crate::ConservativeDepth {
-        match self {
-            ConservativeDepth::GreaterEqual => crate::ConservativeDepth::GreaterEqual,
-            ConservativeDepth::LessEqual => crate::ConservativeDepth::LessEqual,
-            ConservativeDepth::Unchanged => crate::ConservativeDepth::Unchanged,
+impl From<ConservativeDepth> for crate::ConservativeDepth {
+    fn from(depth: ConservativeDepth) -> Self {
+        match depth {
+            ConservativeDepth::GreaterEqual => Self::GreaterEqual,
+            ConservativeDepth::LessEqual => Self::LessEqual,
+            ConservativeDepth::Unchanged => Self::Unchanged,
         }
     }
 }

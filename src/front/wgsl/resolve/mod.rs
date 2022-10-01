@@ -319,7 +319,7 @@ impl<'a> Resolver<'a> {
         builtin: &mut Option<Span>,
     ) {
         match attrib.ty {
-            AttributeType::Builtin(b) => match out {
+            AttributeType::Builtin(b) => match *out {
                 Some(ir::Binding::Builtin(_)) if inv.is_none() => {
                     self.diagnostics
                         .push(WgslError::new("duplicate attribute").marker(attrib.span));
@@ -334,7 +334,7 @@ impl<'a> Resolver<'a> {
                     *builtin = Some(attrib.span);
                 }
             },
-            AttributeType::Location(l) => match out {
+            AttributeType::Location(l) => match *out {
                 Some(ir::Binding::Builtin(_)) => {
                     self.diagnostics.push(
                         WgslError::new("this attribute is not allowed here").marker(attrib.span),
@@ -357,7 +357,7 @@ impl<'a> Resolver<'a> {
                     });
                 }
             },
-            AttributeType::Interpolate(i, s) => match out {
+            AttributeType::Interpolate(i, s) => match *out {
                 Some(ir::Binding::Builtin(_)) => {
                     self.diagnostics.push(
                         WgslError::new("this attribute is not allowed here").marker(attrib.span),
@@ -383,12 +383,12 @@ impl<'a> Resolver<'a> {
                     });
                 }
             },
-            AttributeType::Invariant => match out {
+            AttributeType::Invariant => match *out {
                 Some(ir::Binding::Builtin(_)) if builtin.is_none() => {
                     self.diagnostics
                         .push(WgslError::new("duplicate attribute").marker(attrib.span));
                 }
-                Some(ir::Binding::Builtin(ref mut b)) => match b {
+                Some(ir::Binding::Builtin(ref mut b)) => match *b {
                     crate::BuiltIn::Position { ref mut invariant } => {
                         *invariant = true;
                         *inv = Some(attrib.span);
@@ -470,8 +470,8 @@ impl<'a> Resolver<'a> {
 
                     out = ir::ShaderStage::Compute(
                         Some(self.expr(x)),
-                        y.map(|x| self.expr(x)),
-                        z.map(|x| self.expr(x)),
+                        y.map(|x| Box::new(self.expr(x))),
+                        z.map(|x| Box::new(self.expr(x))),
                     );
                 }
                 AttributeType::ConservativeDepth(depth) => {
@@ -579,7 +579,7 @@ impl<'a> Resolver<'a> {
                 InbuiltType::BindingArray { .. }
                 | InbuiltType::Sampler { .. }
                 | InbuiltType::Image { .. },
-            ) = &ty.kind
+            ) = ty.kind
             {
                 // Infer handle if its a resource type.
                 AddressSpace::Handle
@@ -637,8 +637,8 @@ impl<'a> Resolver<'a> {
 
     fn ty(&mut self, ty: ast::Type) -> ir::Type {
         let span = ty.span;
-        let t = match &ty.kind {
-            ast::TypeKind::Ident(ident, generics) => Some((*ident, generics.len() == 0)),
+        let t = match ty.kind {
+            ast::TypeKind::Ident(ident, ref generics) => Some((ident, generics.is_empty())),
             _ => None,
         };
         let kind = if let Some(inbuilt) = self.inbuilt(ty) {
@@ -693,7 +693,7 @@ impl<'a> Resolver<'a> {
     fn stmt(&mut self, stmt: ast::Stmt) -> Option<ir::Stmt> {
         let kind = match stmt.kind {
             StmtKind::Block(block) => ir::StmtKind::Block(self.block(block)),
-            StmtKind::Expr(expr) => ir::StmtKind::Expr(self.expr_statement(expr)?.kind),
+            StmtKind::Expr(expr) => ir::StmtKind::Expr(Box::new(self.expr_statement(expr)?.kind)),
             StmtKind::Break => ir::StmtKind::Break,
             StmtKind::Continue => ir::StmtKind::Continue,
             StmtKind::Discard => ir::StmtKind::Discard,
@@ -718,12 +718,12 @@ impl<'a> Resolver<'a> {
                 let block = self.block_inner(for_.block);
                 self.pop_scope();
 
-                ir::StmtKind::For(ir::For {
+                ir::StmtKind::For(Box::new(ir::For {
                     init,
                     cond,
                     update,
                     block,
-                })
+                }))
             }
             StmtKind::If(if_) => {
                 let cond = self.expr(if_.cond);
@@ -732,7 +732,7 @@ impl<'a> Resolver<'a> {
 
                 if !matches!(
                     else_.as_ref().map(|x| &x.kind),
-                    Some(ir::StmtKind::If(_) | ir::StmtKind::Block(_)) | None
+                    Some(&ir::StmtKind::If(_) | &ir::StmtKind::Block(_)) | None
                 ) {
                     self.diagnostics.push(
                         WgslError::new("`else` must be followed by `if` or block")
@@ -851,19 +851,16 @@ impl<'a> Resolver<'a> {
                 ir::ExprKind::Error
             }
             ExprKind::Literal(l) => {
-                match l {
-                    ast::Literal::F16(_) => {
-                        self.tu
-                            .features
-                            .require(Feature::Float16, expr.span, &mut self.diagnostics)
-                    }
-                    _ => {}
+                if let ast::Literal::F16(_) = l {
+                    self.tu
+                        .features
+                        .require(Feature::Float16, expr.span, self.diagnostics)
                 }
                 ir::ExprKind::Literal(l)
             }
             ExprKind::Ident(ident) => {
                 self.verify_ident(ident.name);
-                if ident.generics.len() != 0 {
+                if !ident.generics.is_empty() {
                     self.diagnostics
                         .push(WgslError::new("generics not allowed here").marker(expr.span));
                 }
@@ -957,7 +954,7 @@ impl<'a> Resolver<'a> {
                 ir::ExprStatementKind::Call(ir::CallExpr { target, args })
             }
             ExprKind::Assign(assign) => {
-                if let ExprKind::Underscore = &assign.lhs.kind {
+                if let ExprKind::Underscore = assign.lhs.kind {
                     if assign.op.is_none() {
                         ir::ExprStatementKind::Assign(ir::AssignExpr {
                             target: ir::AssignTarget::Phony,
@@ -985,7 +982,7 @@ impl<'a> Resolver<'a> {
                 let span = postfix.expr.span;
                 let expr = Box::new(self.expr(*postfix.expr));
 
-                let target = ir::AssignTarget::Expr(expr.clone());
+                let target = ir::AssignTarget::Expr(expr);
                 let value = Box::new(ir::Expr {
                     kind: ir::ExprKind::Literal(ast::Literal::AbstractInt(1)),
                     span,
@@ -1023,7 +1020,7 @@ impl<'a> Resolver<'a> {
                         id: decl,
                         usage: name.span,
                     });
-                    if ident.generics.len() != 0 {
+                    if !ident.generics.is_empty() {
                         self.diagnostics
                             .push(WgslError::new("unexpected generics").marker(target.span));
                     }
@@ -1082,7 +1079,7 @@ impl<'a> Resolver<'a> {
     fn inbuilt(&mut self, ty: ast::Type) -> Option<InbuiltType> {
         let span = ty.span;
         let no_generics = |this: &mut Self, generics: Vec<ast::Type>, name: &str| {
-            if generics.len() != 0 {
+            if !generics.is_empty() {
                 this.diagnostics.push(
                     WgslError::new(format!("`{}` cannot have generic parameters", name))
                         .marker(span),
@@ -1095,25 +1092,20 @@ impl<'a> Resolver<'a> {
                 if ident.name == self.kws.atomic {
                     if generics.len() != 1 {
                         self.diagnostics.push(
-                            WgslError::new(format!(
-                                "`atomic` must have exactly one generic parameter"
-                            ))
-                            .marker(ty.span),
+                            WgslError::new("`atomic` must have exactly one generic parameter")
+                                .marker(ty.span),
                         );
                     }
 
-                    if let Some(InbuiltType::Scalar { kind, width }) = generics
-                        .into_iter()
-                        .next()
-                        .map(|x| self.inbuilt(x))
-                        .flatten()
+                    if let Some(InbuiltType::Scalar { kind, width }) =
+                        generics.into_iter().next().and_then(|x| self.inbuilt(x))
                     {
                         InbuiltType::Atomic { kind, width }
                     } else {
                         self.diagnostics.push(
-                            WgslError::new(format!(
+                            WgslError::new(
                                 "`atomic` must have a scalar type as its generic parameter",
-                            ))
+                            )
                             .marker(ty.span),
                         );
                         InbuiltType::Atomic {
@@ -1143,7 +1135,7 @@ impl<'a> Resolver<'a> {
 
                     let to = to.unwrap_or_else(|| {
                         self.diagnostics
-                            .push(WgslError::new(format!("expected type")).marker(span));
+                            .push(WgslError::new("expected type").marker(span));
                         ir::Type {
                             kind: ir::TypeKind::Inbuilt(InbuiltType::Scalar {
                                 kind: ScalarKind::Sint,
@@ -1155,7 +1147,7 @@ impl<'a> Resolver<'a> {
 
                     let address_space = address_space.map(|x| x.0).unwrap_or_else(|| {
                         self.diagnostics
-                            .push(WgslError::new(format!("expected address space")).marker(span));
+                            .push(WgslError::new("expected address space").marker(span));
                         AddressSpace::Function
                     });
 
@@ -1259,7 +1251,7 @@ impl<'a> Resolver<'a> {
                             self.tu.features.require(
                                 Feature::StorageImageRead,
                                 span,
-                                &mut self.diagnostics,
+                                self.diagnostics,
                             );
                         }
                         access.into()
@@ -1297,11 +1289,9 @@ impl<'a> Resolver<'a> {
                     }
                 } else {
                     // Is `binding_array`
-                    self.tu.features.require(
-                        Feature::BindingArray,
-                        array.span,
-                        &mut self.diagnostics,
-                    );
+                    self.tu
+                        .features
+                        .require(Feature::BindingArray, array.span, self.diagnostics);
 
                     InbuiltType::BindingArray {
                         of: Box::new(self.ty(*of)),
@@ -1321,7 +1311,7 @@ impl<'a> Resolver<'a> {
         span: Span,
     ) -> Option<InbuiltType> {
         let ty = if let Some(prim) = self.primitive.get(ident.name) {
-            if generics.len() != 0 {
+            if !generics.is_empty() {
                 self.diagnostics.push(
                     WgslError::new(format!(
                         "`{}` cannot have generic parameters",
@@ -1335,12 +1325,12 @@ impl<'a> Resolver<'a> {
                 PrimitiveType::F64 => {
                     self.tu
                         .features
-                        .require(Feature::Float64, ident.span, &mut self.diagnostics)
+                        .require(Feature::Float64, ident.span, self.diagnostics)
                 }
                 PrimitiveType::F16 => {
                     self.tu
                         .features
-                        .require(Feature::Float16, ident.span, &mut self.diagnostics)
+                        .require(Feature::Float16, ident.span, self.diagnostics)
                 }
                 _ => {}
             }
@@ -1357,11 +1347,8 @@ impl<'a> Resolver<'a> {
                 );
             }
 
-            if let Some(InbuiltType::Scalar { kind, width }) = generics
-                .into_iter()
-                .next()
-                .map(|x| self.inbuilt(x))
-                .flatten()
+            if let Some(InbuiltType::Scalar { kind, width }) =
+                generics.into_iter().next().and_then(|x| self.inbuilt(x))
             {
                 InbuiltType::Vector {
                     kind,
@@ -1392,11 +1379,8 @@ impl<'a> Resolver<'a> {
                 );
             }
 
-            if let Some(InbuiltType::Scalar { width, kind }) = generics
-                .into_iter()
-                .next()
-                .map(|x| self.inbuilt(x))
-                .flatten()
+            if let Some(InbuiltType::Scalar { width, kind }) =
+                generics.into_iter().next().and_then(|x| self.inbuilt(x))
             {
                 if kind != ScalarKind::Float {
                     self.diagnostics.push(
@@ -1447,9 +1431,9 @@ impl<'a> Resolver<'a> {
                 Some(())
             }
         };
-        let expr_as_ident = |this: &mut Self, expr: &ast::Expr| match &expr.kind {
-            ExprKind::Ident(i) => {
-                if i.generics.len() != 0 || i.array_len.is_some() {
+        let expr_as_ident = |this: &mut Self, expr: &ast::Expr| match expr.kind {
+            ExprKind::Ident(ref i) => {
+                if !i.generics.is_empty() || i.array_len.is_some() {
                     this.diagnostics
                         .push(WgslError::new("expected identifier").marker(expr.span));
                 }
@@ -1466,7 +1450,7 @@ impl<'a> Resolver<'a> {
                 .map(|_| AttributeType::Binding(attrib.exprs.into_iter().next().unwrap())),
             x if x == self.kws.builtin => args(self, 1).and_then(|_| {
                 expr_as_ident(self, &attrib.exprs[0])
-                    .and_then(|ident| self.builtin(ident).map(|x| AttributeType::Builtin(x)))
+                    .and_then(|ident| self.builtin(ident).map(AttributeType::Builtin))
             }),
             x if x == self.kws.compute => args(self, 0).map(|_| AttributeType::Compute),
             x if x == self.kws.const_ => args(self, 0).map(|_| AttributeType::Const),
@@ -1477,7 +1461,7 @@ impl<'a> Resolver<'a> {
                 args(self, 1).map(|_| AttributeType::Id(attrib.exprs.into_iter().next().unwrap()))
             }
             x if x == self.kws.interpolate => {
-                if attrib.exprs.len() < 1 || attrib.exprs.len() > 2 {
+                if attrib.exprs.is_empty() || attrib.exprs.len() > 2 {
                     self.diagnostics
                         .push(WgslError::new("expected 1 or 2 arguments").marker(attrib.span));
                     None
@@ -1510,7 +1494,7 @@ impl<'a> Resolver<'a> {
             }
             x if x == self.kws.vertex => args(self, 0).map(|_| AttributeType::Vertex),
             x if x == self.kws.workgroup_size => {
-                if attrib.exprs.len() < 1 || attrib.exprs.len() > 3 {
+                if attrib.exprs.is_empty() || attrib.exprs.len() > 3 {
                     self.diagnostics
                         .push(WgslError::new("expected 1, 2, or 3 arguments").marker(attrib.span));
                     None
@@ -1624,13 +1608,13 @@ impl<'a> Resolver<'a> {
     }
 
     fn ty_to_ident(&mut self, ty: ast::Type, expected: &str) -> Option<Ident> {
-        match &ty.kind {
-            ast::TypeKind::Ident(ident, generics) => {
-                if generics.len() != 0 {
+        match ty.kind {
+            ast::TypeKind::Ident(ident, ref generics) => {
+                if !generics.is_empty() {
                     self.diagnostics
                         .push(WgslError::new(format!("expected {}", expected)).marker(ty.span));
                 }
-                Some(*ident)
+                Some(ident)
             }
             ast::TypeKind::Array(..) => {
                 self.diagnostics
@@ -1657,9 +1641,9 @@ impl<'a> Resolver<'a> {
 
     fn resolve_access(&mut self, ident: Ident) -> ir::ExprKind {
         for scope in self.scopes.iter_mut().rev() {
-            if let Some((id, _, used)) = scope.get_mut(&ident.name) {
+            if let Some(&mut (id, _, ref mut used)) = scope.get_mut(&ident.name) {
                 *used = true;
-                return ir::ExprKind::Local(*id);
+                return ir::ExprKind::Local(id);
             }
         }
 

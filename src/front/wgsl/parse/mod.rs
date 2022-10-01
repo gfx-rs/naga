@@ -21,9 +21,7 @@ impl chumsky::Span for Span {
         range.into()
     }
 
-    fn context(&self) -> Self::Context {
-        ()
-    }
+    fn context(&self) -> Self::Context {}
 
     fn start(&self) -> Self::Offset {
         self.to_range().unwrap().start
@@ -52,7 +50,7 @@ pub fn parse(
     }
     .parse(source);
 
-    for x in errors.into_iter().map(|x| error_to_diagnostic(x)) {
+    for x in errors.into_iter().map(error_to_diagnostic) {
         diagnostics.push(x);
     }
 
@@ -212,7 +210,6 @@ impl Parser<'_> {
                         )
                     }),
                 ident
-                    .clone()
                     .then(
                         ty.separated_by(just(TokenKind::Comma))
                             .delimited_by(just(TokenKind::Less), just(TokenKind::Greater))
@@ -225,7 +222,7 @@ impl Parser<'_> {
 
         let let_ = |k: &'static str| {
             kw(k)
-                .ignore_then(ident.clone())
+                .ignore_then(ident)
                 .then(just(TokenKind::Colon).ignore_then(ty.clone()).or_not())
                 .then(just(TokenKind::Equal).ignore_then(expr.clone()))
                 .map(|((name, ty), val)| Let { name, ty, val })
@@ -237,12 +234,12 @@ impl Parser<'_> {
         let var_no_attribs = kw("var")
             .ignore_then(
                 just(TokenKind::Less)
-                    .ignore_then(ident.clone().or_not())
-                    .then(just(TokenKind::Comma).ignore_then(ident.clone()).or_not())
+                    .ignore_then(ident.or_not())
+                    .then(just(TokenKind::Comma).ignore_then(ident).or_not())
                     .then_ignore(just(TokenKind::Greater))
                     .or_not(),
             )
-            .then(ident.clone())
+            .then(ident)
             .then(just(TokenKind::Colon).ignore_then(ty.clone()).or_not())
             .then(just(TokenKind::Equal).ignore_then(expr.clone()).or_not())
             .map(|(((access, name), ty), val)| {
@@ -271,10 +268,10 @@ impl Parser<'_> {
             kw("true").to(Literal::Bool(true)),
             kw("false").to(Literal::Bool(false)),
             just(TokenKind::IntLit).map_with_span(|_, span| {
-                parse_int(get_text(source, span), span, *diagnostics.borrow_mut())
+                parse_int(get_text(source, span), span, &mut diagnostics.borrow_mut())
             }),
             just(TokenKind::FloatLit).map_with_span(|_, span| {
-                parse_float(get_text(source, span), span, *diagnostics.borrow_mut())
+                parse_float(get_text(source, span), span, &mut diagnostics.borrow_mut())
             }),
         ));
 
@@ -342,7 +339,7 @@ impl Parser<'_> {
                         .delimited_by(just(TokenKind::LBracket), just(TokenKind::RBracket))
                         .map_with_span(|index, span| (CallIndexAccess::Index(index), span)),
                     just(TokenKind::Period)
-                        .ignore_then(ident.clone())
+                        .ignore_then(ident)
                         .map_with_span(|ident, span| (CallIndexAccess::Access(ident), span)),
                     just(TokenKind::PlusPlus)
                         .to(PostfixOp::Increment)
@@ -500,7 +497,7 @@ impl Parser<'_> {
         expr.define(assign);
 
         let attrib = just(TokenKind::Attr)
-            .ignore_then(ident.clone())
+            .ignore_then(ident)
             .then(
                 expr.clone()
                     .separated_by(just(TokenKind::Comma))
@@ -518,7 +515,7 @@ impl Parser<'_> {
 
         let arg = attribs
             .clone()
-            .then(ident.clone())
+            .then(ident)
             .then(just(TokenKind::Colon).ignore_then(ty.clone()))
             .map_with_span(|((attribs, name), ty), span| Arg {
                 attribs,
@@ -531,7 +528,7 @@ impl Parser<'_> {
         let fn_ = attribs
             .clone()
             .then_ignore(kw("fn"))
-            .then(ident.clone())
+            .then(ident)
             .then(
                 arg.clone()
                     .separated_by(just(TokenKind::Comma))
@@ -565,7 +562,7 @@ impl Parser<'_> {
         let over = attribs
             .clone()
             .then_ignore(kw("override"))
-            .then(ident.clone())
+            .then(ident)
             .then(just(TokenKind::Colon).ignore_then(ty.clone()).or_not())
             .then(just(TokenKind::Equal).ignore_then(expr.clone()).or_not())
             .then_ignore(just(TokenKind::Semicolon))
@@ -584,7 +581,7 @@ impl Parser<'_> {
             .boxed();
 
         let struct_ = kw("struct")
-            .ignore_then(ident.clone())
+            .ignore_then(ident)
             .then(
                 arg.separated_by(just(TokenKind::Comma))
                     .allow_trailing()
@@ -594,7 +591,7 @@ impl Parser<'_> {
             .boxed();
 
         let type_ = kw("type")
-            .ignore_then(ident.clone())
+            .ignore_then(ident)
             .then(just(TokenKind::Equal).ignore_then(ty.clone()))
             .then_ignore(just(TokenKind::Semicolon))
             .map(|(name, ty)| TypeDecl { name, ty })
@@ -619,7 +616,7 @@ impl Parser<'_> {
         .boxed();
 
         let enable = kw("enable")
-            .ignore_then(ident.clone())
+            .ignore_then(ident)
             .then_ignore(just(TokenKind::Semicolon))
             .map_with_span(|name, span| Enable { name, span })
             .boxed();
@@ -704,7 +701,7 @@ fn parse_float(text: &str, span: Span, diagnostics: &mut Vec<WgslError>) -> Lite
             (
                 hexf_parse::parse_hexf32(value, false)
                     .ok()
-                    .map(|x| Literal::F32(x)),
+                    .map(Literal::F32),
                 "f32",
             )
         } else if width == b'h' {
@@ -716,21 +713,19 @@ fn parse_float(text: &str, span: Span, diagnostics: &mut Vec<WgslError>) -> Lite
             (
                 hexf_parse::parse_hexf64(value, false)
                     .ok()
-                    .map(|x| Literal::AbstractFloat(x)),
+                    .map(Literal::AbstractFloat),
                 "f64",
             )
         }
+    } else if width == b'f' {
+        let num = f32::from_str(value).unwrap();
+        (num.is_finite().then(|| Literal::F32(num)), "f32")
+    } else if width == b'h' {
+        let num = f16::from_f32(f32::from_str(value).unwrap());
+        (num.is_finite().then(|| Literal::F16(num)), "f16")
     } else {
-        if width == b'f' {
-            let num = f32::from_str(value).unwrap();
-            (num.is_finite().then(|| Literal::F32(num)), "f32")
-        } else if width == b'h' {
-            let num = f16::from_f32(f32::from_str(value).unwrap());
-            (num.is_finite().then(|| Literal::F16(num)), "f16")
-        } else {
-            let num = f64::from_str(value).unwrap();
-            (num.is_finite().then(|| Literal::AbstractFloat(num)), "f64")
-        }
+        let num = f64::from_str(value).unwrap();
+        (num.is_finite().then(|| Literal::AbstractFloat(num)), "f64")
     };
 
     value.unwrap_or_else(|| {
@@ -744,7 +739,7 @@ fn parse_float(text: &str, span: Span, diagnostics: &mut Vec<WgslError>) -> Lite
 fn error_to_diagnostic(error: Simple<TokenKind, Span>) -> WgslError {
     let span = error.span();
 
-    match error.reason() {
+    match *error.reason() {
         SimpleReason::Unexpected => {
             let expected = error.expected();
             match error.found() {
@@ -761,21 +756,18 @@ fn error_to_diagnostic(error: Simple<TokenKind, Span>) -> WgslError {
             }
         }
         SimpleReason::Unclosed { span, delimiter } => {
-            WgslError::new(format!("unclosed `{}`", delimiter)).marker(*span)
+            WgslError::new(format!("unclosed `{}`", delimiter)).marker(span)
         }
-        SimpleReason::Custom(message) => WgslError::new(message).marker(span),
+        SimpleReason::Custom(ref message) => WgslError::new(message).marker(span),
     }
 }
 
 fn comma_sep<'a>(to: &mut String, toks: impl ExactSizeIterator<Item = &'a Option<TokenKind>>) {
     let mut toks = toks.filter_map(|x| x.as_ref().copied());
-    match toks.next() {
-        Some(x) => {
-            write!(to, "`{}`", x).unwrap();
-            for x in toks {
-                write!(to, ", `{}`", x).unwrap();
-            }
+    if let Some(tok) = toks.next() {
+        write!(to, "`{}`", tok).unwrap();
+        for tok in toks {
+            write!(to, ", `{}`", tok).unwrap();
         }
-        None => return,
     }
 }

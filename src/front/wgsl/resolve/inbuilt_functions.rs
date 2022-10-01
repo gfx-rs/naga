@@ -127,7 +127,7 @@ impl Display for InbuiltFunction {
 
 impl ToStaticString for InbuiltFunction {
     fn to_static_str(&self) -> &'static str {
-        match self {
+        match *self {
             InbuiltFunction::Abs => "abs",
             InbuiltFunction::Acos => "acos",
             InbuiltFunction::All => "all",

@@ -29,15 +29,15 @@ pub fn generate_index(tu: &TranslationUnit, diagnostics: &mut Vec<WgslError>) ->
     };
 
     for decl in tu.decls.iter() {
-        let prev = match &decl.kind {
-            GlobalDeclKind::Fn(f) => index.insert(f.name),
-            GlobalDeclKind::Override(o) => index.insert(o.name),
-            GlobalDeclKind::Var(v) => index.insert(v.inner.name),
-            GlobalDeclKind::Const(c) => index.insert(c.name),
-            GlobalDeclKind::Struct(s) => index.insert(s.name),
-            GlobalDeclKind::Type(ty) => index.insert(ty.name),
+        let prev = match decl.kind {
+            GlobalDeclKind::Fn(ref f) => index.insert(f.name),
+            GlobalDeclKind::Override(ref o) => index.insert(o.name),
+            GlobalDeclKind::Var(ref v) => index.insert(v.inner.name),
+            GlobalDeclKind::Const(ref c) => index.insert(c.name),
+            GlobalDeclKind::Struct(ref s) => index.insert(s.name),
+            GlobalDeclKind::Type(ref ty) => index.insert(ty.name),
             GlobalDeclKind::StaticAssert(_) => None,
-            GlobalDeclKind::Let(l) => {
+            GlobalDeclKind::Let(ref l) => {
                 diagnostics.push(
                     WgslError::new("global `let`s are deprecated")
                         .marker(decl.span)

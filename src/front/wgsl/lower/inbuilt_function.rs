@@ -311,7 +311,7 @@ impl Lowerer<'_> {
             }
             InbuiltFunction::TextureDimensions => {
                 require_generics(self, 0)?;
-                if args.len() < 1 || args.len() > 2 {
+                if args.is_empty() || args.len() > 2 {
                     self.errors.push(
                         WgslError::new(format!("expected 1 or 2 arguments, found {}", args.len()))
                             .marker(span),
@@ -781,8 +781,7 @@ impl Lowerer<'_> {
 
         let (arrayed, _) = self.get_texture_data(image, img.span, fun)?;
         let array_index = if arrayed {
-            let array_index = args.next().and_then(|x| self.expr(x, b, fun));
-            array_index
+            args.next().and_then(|x| self.expr(x, b, fun))
         } else {
             None
         };
@@ -821,7 +820,7 @@ impl Lowerer<'_> {
         let img_or_sampler_span = img_or_sampler.span;
         let img_or_sampler = self.expr(img_or_sampler, b, fun)?;
 
-        let (component, (image, image_span), sampler) = match self.type_of(img_or_sampler, fun)? {
+        let (component, (image, image_span), sampler) = match *self.type_of(img_or_sampler, fun)? {
             TypeInner::Sampler { .. } => {
                 // component not is present.
                 let image = self.expr(component_or_img, b, fun)?;
@@ -840,8 +839,7 @@ impl Lowerer<'_> {
 
         let (arrayed, _) = self.get_texture_data(image, image_span, fun)?;
         let array_index = if arrayed {
-            let array_index = args.next().and_then(|x| self.expr(x, b, fun));
-            array_index
+            args.next().and_then(|x| self.expr(x, b, fun))
         } else {
             None
         };

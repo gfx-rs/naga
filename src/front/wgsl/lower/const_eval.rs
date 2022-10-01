@@ -1,27 +1,18 @@
 use crate::front::wgsl::parse::ast::Literal;
-use crate::front::wgsl::resolve::ir::{
-    CallExpr, Expr, ExprKind, FnTarget, InbuiltType, TranslationUnit,
-};
-use crate::front::wgsl::text::Interner;
+use crate::front::wgsl::resolve::ir::{CallExpr, Expr, ExprKind, FnTarget, InbuiltType};
 use crate::front::wgsl::WgslError;
 use crate::UnaryOperator;
 use std::convert::TryInto;
 use std::fmt::Display;
 use std::ops::{Neg, Not};
 
-pub struct Evaluator<'a> {
-    intern: &'a Interner,
-    module: &'a TranslationUnit,
+pub struct Evaluator {
     errors: Vec<WgslError>,
 }
 
-impl<'a> Evaluator<'a> {
-    pub fn new(module: &'a TranslationUnit, intern: &'a Interner) -> Self {
-        Self {
-            intern,
-            module,
-            errors: Vec::new(),
-        }
+impl Evaluator {
+    pub const fn new() -> Self {
+        Self { errors: Vec::new() }
     }
 
     pub fn eval(&mut self, expr: &Expr) -> Option<Value> {
@@ -33,14 +24,14 @@ impl<'a> Evaluator<'a> {
         };
 
         match expr.kind {
-            ExprKind::Error => return None,
-            ExprKind::Literal(ref l) => Some(Value::Scalar(match l {
-                Literal::Bool(b) => ScalarValue::Bool(*b),
-                Literal::AbstractInt(i) => ScalarValue::AbstractInt(*i),
-                Literal::AbstractFloat(f) => ScalarValue::AbstractFloat(*f),
-                Literal::I32(i) => ScalarValue::I32(*i),
-                Literal::U32(u) => ScalarValue::U32(*u),
-                Literal::F32(f) => ScalarValue::F32(*f),
+            ExprKind::Error => None,
+            ExprKind::Literal(ref l) => Some(Value::Scalar(match *l {
+                Literal::Bool(b) => ScalarValue::Bool(b),
+                Literal::AbstractInt(i) => ScalarValue::AbstractInt(i),
+                Literal::AbstractFloat(f) => ScalarValue::AbstractFloat(f),
+                Literal::I32(i) => ScalarValue::I32(i),
+                Literal::U32(u) => ScalarValue::U32(u),
+                Literal::F32(f) => ScalarValue::F32(f),
                 Literal::F16(_) => {
                     unsupported(self);
                     return None;
@@ -135,11 +126,10 @@ impl<'a> Evaluator<'a> {
                 match x {
                     Ok(x) => Some(x),
                     Err(_) => {
-                        self.errors.push(WgslError {
-                            message: format!("integer value is too large"),
-                            labels: vec![(expr.span.into(), format!("has value {}", i))],
-                            notes: vec![],
-                        });
+                        self.errors.push(
+                            WgslError::new("integer value is too large")
+                                .label(expr.span, format!("has value {}", i)),
+                        );
                         None
                     }
                 }
@@ -149,21 +139,19 @@ impl<'a> Evaluator<'a> {
                 match x {
                     Ok(x) => Some(x),
                     Err(_) => {
-                        self.errors.push(WgslError {
-                            message: format!("integer value is too large"),
-                            labels: vec![(expr.span.into(), format!("has value {}", i))],
-                            notes: vec![],
-                        });
+                        self.errors.push(
+                            WgslError::new("integer value is too large")
+                                .label(expr.span, format!("has value {}", i)),
+                        );
                         None
                     }
                 }
             }
             _ => {
-                self.errors.push(WgslError {
-                    message: "expected a positive integer".to_string(),
-                    labels: vec![(expr.span.into(), format!("has type {}", value.ty()))],
-                    notes: vec![],
-                });
+                self.errors.push(
+                    WgslError::new("expected a positive integer")
+                        .label(expr.span, format!("has type {}", value.ty())),
+                );
                 None
             }
         }
@@ -178,11 +166,10 @@ impl<'a> Evaluator<'a> {
                 match x {
                     Ok(x) => Some(x),
                     Err(_) => {
-                        self.errors.push(WgslError {
-                            message: format!("integer value is too large"),
-                            labels: vec![(expr.span.into(), format!("has value {}", u))],
-                            notes: vec![],
-                        });
+                        self.errors.push(
+                            WgslError::new("integer value is too large")
+                                .label(expr.span, format!("has value {}", u)),
+                        );
                         None
                     }
                 }
@@ -193,21 +180,19 @@ impl<'a> Evaluator<'a> {
                 match x {
                     Ok(x) => Some(x),
                     Err(_) => {
-                        self.errors.push(WgslError {
-                            message: format!("integer value is too large"),
-                            labels: vec![(expr.span.into(), format!("has value {}", i))],
-                            notes: vec![],
-                        });
+                        self.errors.push(
+                            WgslError::new("integer value is too large")
+                                .label(expr.span, format!("has value {}", i)),
+                        );
                         None
                     }
                 }
             }
             _ => {
-                self.errors.push(WgslError {
-                    message: "expected an integer".to_string(),
-                    labels: vec![(expr.span.into(), format!("has type {}", value.ty()))],
-                    notes: vec![],
-                });
+                self.errors.push(
+                    WgslError::new("expected an integer")
+                        .label(expr.span, format!("has type {}", value.ty())),
+                );
                 None
             }
         }
@@ -219,16 +204,17 @@ impl<'a> Evaluator<'a> {
         match value {
             Value::Scalar(ScalarValue::Bool(b)) => Some(b),
             _ => {
-                self.errors.push(WgslError {
-                    message: "expected a boolean".to_string(),
-                    labels: vec![(expr.span.into(), format!("has type {}", value.ty()))],
-                    notes: vec![],
-                });
+                self.errors.push(
+                    WgslError::new("expected a boolean")
+                        .label(expr.span, format!("has type {}", value.ty())),
+                );
                 None
             }
         }
     }
 
+    // `const` functions cannot evaluate destructors.
+    #[allow(clippy::missing_const_for_fn)]
     pub fn finish(self) -> Vec<WgslError> {
         self.errors
     }
@@ -255,16 +241,16 @@ impl Value {
         }
     }
 
-    pub fn ty(&self) -> ValueType {
+    pub const fn ty(&self) -> ValueType {
         ValueType { src: self }
     }
 }
 
 impl Display for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
+        match *self {
             Value::Scalar(s) => write!(f, "{}", s),
-            Value::Vector(v) => {
+            Value::Vector(ref v) => {
                 write!(f, "vec{}(", v.len())?;
                 for (i, s) in v.iter().enumerate() {
                     if i != 0 {
@@ -286,19 +272,17 @@ pub enum ScalarValue {
     U32(u32),
     AbstractFloat(f64),
     F32(f32),
-    F64(f64),
 }
 
 impl Display for ScalarValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
+        match *self {
             ScalarValue::Bool(b) => write!(f, "{}", b),
             ScalarValue::AbstractInt(i) => write!(f, "{}", i),
             ScalarValue::I32(i) => write!(f, "{}", i),
             ScalarValue::U32(u) => write!(f, "{}", u),
             ScalarValue::AbstractFloat(x) => write!(f, "{}", x),
             ScalarValue::F32(x) => write!(f, "{}", x),
-            ScalarValue::F64(x) => write!(f, "{}", x),
         }
     }
 }
@@ -326,14 +310,13 @@ impl Neg for ScalarValue {
             ScalarValue::I32(i) => Some(ScalarValue::I32(-i)),
             ScalarValue::AbstractFloat(f) => Some(ScalarValue::AbstractFloat(-f)),
             ScalarValue::F32(f) => Some(ScalarValue::F32(-f)),
-            ScalarValue::F64(f) => Some(ScalarValue::F64(-f)),
             _ => None,
         }
     }
 }
 
 impl ScalarValue {
-    fn ty(&self) -> ScalarValueType {
+    const fn ty(&self) -> ScalarValueType {
         ScalarValueType { src: self }
     }
 }
@@ -344,14 +327,13 @@ pub struct ScalarValueType<'a> {
 
 impl Display for ScalarValueType<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self.src {
+        match *self.src {
             ScalarValue::Bool(_) => write!(f, "bool"),
             ScalarValue::AbstractInt(_) => write!(f, "{{integer}}"),
             ScalarValue::I32(_) => write!(f, "i32"),
             ScalarValue::U32(_) => write!(f, "u32"),
             ScalarValue::AbstractFloat(_) => write!(f, "{{float}}"),
             ScalarValue::F32(_) => write!(f, "f32"),
-            ScalarValue::F64(_) => write!(f, "f64"),
         }
     }
 }
@@ -362,9 +344,9 @@ pub struct ValueType<'a> {
 
 impl Display for ValueType<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self.src {
+        match *self.src {
             Value::Scalar(s) => write!(f, "{}", s.ty()),
-            Value::Vector(v) => {
+            Value::Vector(ref v) => {
                 write!(f, "vec{}<{}>", v.len(), v[0].ty())
             }
         }

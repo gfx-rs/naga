@@ -25,7 +25,7 @@ pub enum Feature {
 
 impl ToStaticString for Feature {
     fn to_static_str(&self) -> &'static str {
-        match self {
+        match *self {
             Feature::Float16 => "f16",
             Feature::Float64 => "f64",
             Feature::PrimitiveIndex => "primitive_index",
@@ -62,10 +62,6 @@ impl EnabledFeatures {
             features: FxHashSet::default(),
             matcher: Matcher::new(intern),
         }
-    }
-
-    pub fn is_enabled(&self, feature: Feature) -> bool {
-        self.features.contains(&feature)
     }
 
     pub fn enable(&mut self, enable: Enable, intern: &Interner, diagnostics: &mut Vec<WgslError>) {

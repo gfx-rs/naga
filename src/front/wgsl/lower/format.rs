@@ -100,14 +100,14 @@ impl Display for TypeInnerFormatter<'_> {
                         match self.constants[c].inner {
                             crate::ConstantInner::Scalar { value, .. } =>
                                 ScalarValueFormatter { value },
-                            _ => panic!("Array size should be a constant"),
+                            _ => unreachable!("Array size should be a constant"),
                         }
                     ),
                     crate::ArraySize::Dynamic => write!(f, "array<{}>", base),
                 }
             }
             TypeInner::Struct { .. } => {
-                panic!("TypeInner::Struct should not be formatted by the frontend")
+                unreachable!("TypeInner::Struct should not be formatted by the frontend")
             }
             TypeInner::Image {
                 dim,
@@ -220,7 +220,7 @@ impl Display for TypeInnerFormatter<'_> {
                         match self.constants[c].inner {
                             crate::ConstantInner::Scalar { value, .. } =>
                                 ScalarValueFormatter { value },
-                            _ => panic!("Array size should be a constant"),
+                            _ => unreachable!("Array size should be a constant"),
                         }
                     ),
                     crate::ArraySize::Dynamic => write!(f, "binding_array<{}>", base),
@@ -265,7 +265,7 @@ impl Display for DeclData {
         write!(
             f,
             "{}",
-            match self {
+            match *self {
                 DeclData::Function(_) => "function",
                 DeclData::Global(_) => "variable",
                 DeclData::Const(_) => "const",

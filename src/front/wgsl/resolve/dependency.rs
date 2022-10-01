@@ -56,7 +56,7 @@ impl<'a> DependencySolver<'a> {
                 if dep_id == id {
                     self.diagnostics.push(
                         WgslError::new("recursive declarations are not allowed")
-                            .marker(decl_ident_span(&decl))
+                            .marker(decl_ident_span(decl))
                             .label(dep.usage, "uses itself here"),
                     )
                 } else {
@@ -70,7 +70,7 @@ impl<'a> DependencySolver<'a> {
                         .iter()
                         .rev()
                         .enumerate()
-                        .find(|(_, dep)| dep.id.0 as usize == dep_id)
+                        .find(|&(_, dep)| dep.id.0 as usize == dep_id)
                         .map(|x| x.0)
                         .unwrap_or(0);
 
@@ -108,13 +108,13 @@ impl<'a> DependencySolver<'a> {
 }
 
 fn decl_ident_span(decl: &Decl) -> Span {
-    match &decl.kind {
-        DeclKind::Fn(f) => f.name.span,
-        DeclKind::Struct(s) => s.name.span,
-        DeclKind::Type(t) => t.name.span,
-        DeclKind::Const(c) => c.name.span,
-        DeclKind::Override(o) => o.name.span,
-        DeclKind::Var(v) => v.inner.name.span,
+    match decl.kind {
+        DeclKind::Fn(ref f) => f.name.span,
+        DeclKind::Struct(ref s) => s.name.span,
+        DeclKind::Type(ref t) => t.name.span,
+        DeclKind::Const(ref c) => c.name.span,
+        DeclKind::Override(ref o) => o.name.span,
+        DeclKind::Var(ref v) => v.inner.name.span,
         DeclKind::StaticAssert(_) => unreachable!(),
     }
 }

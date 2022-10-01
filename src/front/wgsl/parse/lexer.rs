@@ -166,7 +166,7 @@ impl Debug for TokenKind {
         write!(
             f,
             "{}",
-            match self {
+            match *self {
                 IntLit => "{integer}",
                 FloatLit => "{float}",
                 Word => "<word>",

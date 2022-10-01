@@ -53,7 +53,7 @@ impl WgslError {
     pub fn labels(&self) -> impl Iterator<Item = (Span, &str)> + ExactSizeIterator + '_ {
         self.labels
             .iter()
-            .map(|&(ref span, ref msg)| (span.clone(), msg.as_ref()))
+            .map(|&(span, ref msg)| (span, msg.as_ref()))
     }
 
     pub fn message(&self) -> &str {

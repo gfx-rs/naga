@@ -24,14 +24,10 @@ impl TranslationUnit {
             .iter()
             .map(move |id| (*id, &self.decls[id.0 as usize]))
     }
-
-    pub fn get(&self, id: DeclId) -> &Decl {
-        &self.decls[id.0 as usize]
-    }
 }
 
 impl TranslationUnit {
-    pub fn new(features: EnabledFeatures) -> Self {
+    pub const fn new(features: EnabledFeatures) -> Self {
         Self {
             features,
             decls: Vec::new(),
@@ -95,7 +91,7 @@ pub enum ShaderStage {
     None,
     Vertex,
     Fragment(Option<crate::EarlyDepthTest>),
-    Compute(Option<Expr>, Option<Expr>, Option<Expr>),
+    Compute(Option<Expr>, Option<Box<Expr>>, Option<Box<Expr>>),
 }
 
 #[derive(Clone, Debug)]
@@ -240,12 +236,12 @@ pub struct Stmt {
 
 #[derive(Clone, Debug)]
 pub enum StmtKind {
-    Expr(ExprStatementKind),
+    Expr(Box<ExprStatementKind>),
     Block(Block),
     Break,
     Continue,
     Discard,
-    For(For),
+    For(Box<For>),
     If(If),
     Loop(Loop),
     Return(Option<Expr>),
