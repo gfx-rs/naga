@@ -347,41 +347,31 @@ impl Lowerer<'_> {
                     return None;
                 }
 
-                // Argument order: image, coordinate, array_index?, (level | sample)?.
+                // Argument order: image, coordinate, array_index?, level? sample?.
 
-                let image = self.expr(&args[0], b, fun)?;
-                let coordinate = self.expr(&args[1], b, fun)?;
+                let mut args = args.iter();
 
-                let (arrayed, multi) = self.get_texture_data(image, args[0].span, fun)?;
-                let (array_index, sample, level) = if arrayed {
-                    let array_index = args.get(2).and_then(|x| self.expr(x, b, fun));
-                    let level = args.get(3).and_then(|x| self.expr(x, b, fun));
-                    if args.len() > 4 {
-                        self.errors
-                            .push(WgslError::new("too many arguments").marker(span));
-                        return None;
-                    }
-                    (array_index, None, level)
-                } else {
-                    let (sample, level) = if multi {
-                        let sample = args.get(2).and_then(|x| self.expr(x, b, fun));
-                        if args.len() > 3 {
-                            self.errors
-                                .push(WgslError::new("too many arguments").marker(span));
-                            return None;
-                        }
-                        (sample, None)
-                    } else {
-                        let level = args.get(2).and_then(|x| self.expr(x, b, fun));
-                        if args.len() > 3 {
-                            self.errors
-                                .push(WgslError::new("too many arguments").marker(span));
-                            return None;
-                        }
-                        (None, level)
-                    };
-                    (None, sample, level)
-                };
+                let image_expr = args.next().unwrap();
+                let image = self.expr(image_expr, b, fun)?;
+                let coordinate = self.expr(args.next().unwrap(), b, fun)?;
+
+                let (class, arrayed) = self.get_texture_data(image, image_expr.span, fun)?;
+
+                let array_index = arrayed.then(|| self.expr(args.next()?, b, fun)).flatten();
+                let level = class
+                    .is_mipmapped()
+                    .then(|| self.expr(args.next()?, b, fun))
+                    .flatten();
+                let sample = class
+                    .is_multisampled()
+                    .then(|| self.expr(args.next()?, b, fun))
+                    .flatten();
+
+                if args.next().is_some() {
+                    self.errors
+                        .push(WgslError::new("too many arguments").marker(span));
+                    return None;
+                }
 
                 crate::Expression::ImageLoad {
                     image,
@@ -722,6 +712,9 @@ impl Lowerer<'_> {
                 b.push(stmt, span);
                 return None;
             }
+            InbuiltFunction::OuterProduct => {
+                math_function(self, crate::MathFunction::Outer, b, fun)?
+            }
             _ => {
                 self.errors
                     .push(WgslError::new("unimplemented inbuilt function").marker(span));
@@ -737,13 +730,10 @@ impl Lowerer<'_> {
         image: Handle<crate::Expression>,
         span: crate::Span,
         fun: &crate::Function,
-    ) -> Option<(bool, bool)> {
+    ) -> Option<(ImageClass, bool)> {
         let ty = self.type_handle_of(image, fun)?;
         match self.data.module.types[ty].inner {
-            TypeInner::Image { class, arrayed, .. } => Some(match class {
-                ImageClass::Sampled { multi, .. } | ImageClass::Depth { multi } => (arrayed, multi),
-                ImageClass::Storage { .. } => (arrayed, false),
-            }),
+            TypeInner::Image { class, arrayed, .. } => Some((class, arrayed)),
             _ => {
                 self.errors.push(
                     WgslError::new("expected a texture")
@@ -779,7 +769,7 @@ impl Lowerer<'_> {
         let sampler = self.expr(args.next().unwrap(), b, fun)?;
         let coordinate = self.expr(args.next().unwrap(), b, fun)?;
 
-        let (arrayed, _) = self.get_texture_data(image, img.span, fun)?;
+        let (_, arrayed) = self.get_texture_data(image, img.span, fun)?;
         let array_index = if arrayed {
             args.next().and_then(|x| self.expr(x, b, fun))
         } else {
@@ -837,7 +827,7 @@ impl Lowerer<'_> {
         };
         let coordinate = self.expr(args.next().unwrap(), b, fun)?;
 
-        let (arrayed, _) = self.get_texture_data(image, image_span, fun)?;
+        let (_, arrayed) = self.get_texture_data(image, image_span, fun)?;
         let array_index = if arrayed {
             args.next().and_then(|x| self.expr(x, b, fun))
         } else {

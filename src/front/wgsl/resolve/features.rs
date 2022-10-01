@@ -78,11 +78,11 @@ impl EnabledFeatures {
         }
     }
 
-    pub fn require(&mut self, feature: Feature, span: Span, diagnostics: &mut Vec<WgslError>) {
-        if !self.features.contains(&feature) {
-            diagnostics
-                .push(WgslError::new(format!("feature `{}` is not enabled", feature)).marker(span));
-            self.features.insert(feature); // Only error once.
-        }
+    pub fn require(&mut self, _: Feature, _: Span, _: &mut Vec<WgslError>) {
+        // if !self.features.contains(&feature) {
+        //     diagnostics
+        //         .push(WgslError::new(format!("feature `{}` is not enabled", feature)).marker(span));
+        //     self.features.insert(feature); // Only error once.
+        // }
     }
 }

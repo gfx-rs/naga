@@ -117,6 +117,7 @@ pub enum InbuiltFunction {
     Unpack2x16Float,
     StorageBarrier,
     WorkgroupBarrier,
+    OuterProduct,
 }
 
 impl Display for InbuiltFunction {
@@ -170,7 +171,7 @@ impl ToStaticString for InbuiltFunction {
             InbuiltFunction::Sign => "sign",
             InbuiltFunction::Sin => "sin",
             InbuiltFunction::Sinh => "sinh",
-            InbuiltFunction::Smoothstep => "smoothStep",
+            InbuiltFunction::Smoothstep => "smoothstep",
             InbuiltFunction::Sqrt => "sqrt",
             InbuiltFunction::Step => "step",
             InbuiltFunction::Tan => "tan",
@@ -239,6 +240,7 @@ impl ToStaticString for InbuiltFunction {
             InbuiltFunction::TextureNumSamples => "textureNumSamples",
             InbuiltFunction::TextureSampleCompareLevel => "textureSampleCompareLevel",
             InbuiltFunction::TextureSampleBaseClampToEdge => "textureSampleBaseClampToEdge",
+            InbuiltFunction::OuterProduct => "outerProduct",
         }
     }
 }

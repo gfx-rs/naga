@@ -191,13 +191,15 @@ impl Parser<'_> {
                 .map_with_span(|stmts, span| Block { stmts, span }),
         );
 
+        let mut shift = Recursive::declare();
+
         let ty = recursive(|ty: Recursive<_, Type, _>| {
             choice((
                 kw("array")
                     .or(kw("binding_array"))
                     .then_ignore(just(TokenKind::Less))
                     .then(ty.clone())
-                    .then(just(TokenKind::Comma).ignore_then(expr.clone()).or_not())
+                    .then(just(TokenKind::Comma).ignore_then(shift.clone()).or_not())
                     .then_ignore(just(TokenKind::Greater))
                     .map(|((span, ty), len)| {
                         TypeKind::Array(
@@ -280,7 +282,7 @@ impl Parser<'_> {
             .then(
                 just(TokenKind::Less)
                     .ignore_then(ty.clone())
-                    .then(just(TokenKind::Comma).ignore_then(expr.clone()).or_not())
+                    .then(just(TokenKind::Comma).ignore_then(shift.clone()).or_not())
                     .then_ignore(just(TokenKind::Greater))
                     .or_not(),
             )
@@ -427,7 +429,7 @@ impl Parser<'_> {
                 TokenKind::Minus => BinaryOperator::Subtract,
             },
         );
-        let shift = binary(
+        shift.define(binary(
             sum,
             select! {
                 TokenKind::ShiftLeft => BinaryOperator::ShiftLeft,
@@ -442,7 +444,8 @@ impl Parser<'_> {
                         Err(Simple::custom(span, "you should not be seeing this"))
                     }
                 })),
-        );
+        ));
+
         let comparison = binary(
             shift,
             select! {
