@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
-use crate::front::wgsl::{ast::*, resolve::ir::DeclId, text::Text, WgslError};
+use crate::front::wgsl::parse::ast::*;
+use crate::front::wgsl::{resolve::ir::DeclId, text::Text, WgslError};
 use crate::Span;
 
 pub struct Index {

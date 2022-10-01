@@ -1,4 +1,4 @@
-use crate::front::wgsl::ast::Literal;
+use crate::front::wgsl::parse::ast::Literal;
 use crate::front::wgsl::resolve::ir::{
     CallExpr, Expr, ExprKind, FnTarget, InbuiltType, TranslationUnit,
 };

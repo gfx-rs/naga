@@ -4,8 +4,8 @@ use aho_corasick::{AhoCorasick, AhoCorasickBuilder};
 use rustc_hash::FxHashMap;
 use strum::{EnumIter, IntoEnumIterator};
 
+use crate::front::wgsl::parse::ast::Expr;
 use crate::{
-    front::wgsl::ast::Expr,
     front::wgsl::text::{Interner, Text},
     BuiltIn, Bytes, ImageDimension, Interpolation, Sampling, ScalarKind, Span, StorageFormat,
     VectorSize,

@@ -14,8 +14,6 @@ use codespan_reporting::files::SimpleFile;
 use codespan_reporting::term;
 use termcolor::{ColorChoice, NoColor, StandardStream};
 
-mod ast;
-mod lexer;
 mod lower;
 mod parse;
 mod resolve;

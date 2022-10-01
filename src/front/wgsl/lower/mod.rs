@@ -1,6 +1,6 @@
-use crate::front::wgsl::ast::Literal;
 use crate::front::wgsl::lower::const_eval::{Evaluator, ScalarValue, Value};
 use crate::front::wgsl::lower::format::TypeInnerFormatter;
+use crate::front::wgsl::parse::ast::Literal;
 use crate::front::wgsl::resolve::ir::{
     Arg, AssignTarget, Binding, Block, CallExpr, CaseSelector, Decl, DeclId, DeclKind, Expr,
     ExprKind, ExprStatementKind, Fn, FnTarget, InbuiltType, Let, LocalId, ShaderStage, Stmt,

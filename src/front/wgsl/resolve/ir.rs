@@ -2,10 +2,8 @@ use std::hash::Hash;
 
 use crate::{FastHashSet, Span};
 
-use crate::front::wgsl::{
-    ast::{Ident, Literal},
-    resolve::{features::EnabledFeatures, inbuilt_functions::InbuiltFunction},
-};
+use crate::front::wgsl::parse::ast::{Ident, Literal};
+use crate::front::wgsl::resolve::{features::EnabledFeatures, inbuilt_functions::InbuiltFunction};
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Hash)]
 pub struct DeclId(pub u32);

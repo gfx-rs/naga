@@ -2,16 +2,16 @@ use std::convert::TryInto;
 use std::ops::Range;
 use std::{cell::RefCell, fmt::Write, str::FromStr};
 
+use ast::*;
 use chumsky::{error::SimpleReason, prelude::*, Parser as CParser, Stream};
 use half::f16;
+use lexer::{Lexer, Token, TokenKind};
 
-use crate::front::wgsl::{
-    ast::*,
-    lexer::{Lexer, Token, TokenKind},
-    text::Interner,
-    WgslError,
-};
+use crate::front::wgsl::{text::Interner, WgslError};
 use crate::{BinaryOperator, Span};
+
+pub mod ast;
+mod lexer;
 
 impl chumsky::Span for Span {
     type Context = ();
@@ -661,11 +661,9 @@ fn parse_int(text: &str, span: Span, diagnostics: &mut Vec<WgslError>) -> Litera
                 match i32 {
                     Ok(value) => Literal::I32(value),
                     Err(_) => {
-                        diagnostics.push(WgslError {
-                            message: "integer literal is too large for i32".to_string(),
-                            labels: vec![(span, "".to_string())],
-                            notes: vec![],
-                        });
+                        diagnostics.push(
+                            WgslError::new("integer literal is too large for i32").marker(span),
+                        );
                         Literal::I32(0)
                     }
                 }
@@ -674,11 +672,9 @@ fn parse_int(text: &str, span: Span, diagnostics: &mut Vec<WgslError>) -> Litera
                 match u32 {
                     Ok(value) => Literal::U32(value),
                     Err(_) => {
-                        diagnostics.push(WgslError {
-                            message: "integer literal is too large for u32".to_string(),
-                            labels: vec![(span, "".to_string())],
-                            notes: vec![],
-                        });
+                        diagnostics.push(
+                            WgslError::new("integer literal is too large for u32").marker(span),
+                        );
                         Literal::U32(0)
                     }
                 }
@@ -687,11 +683,7 @@ fn parse_int(text: &str, span: Span, diagnostics: &mut Vec<WgslError>) -> Litera
             }
         }
         Err(_) => {
-            diagnostics.push(WgslError {
-                message: "integer literal too large".to_string(),
-                labels: vec![(span, "".to_string())],
-                notes: vec![],
-            });
+            diagnostics.push(WgslError::new("integer literal is too large").marker(span));
             Literal::AbstractInt(0)
         }
     }
@@ -706,32 +698,47 @@ fn parse_float(text: &str, span: Span, diagnostics: &mut Vec<WgslError>) -> Lite
         text
     };
 
-    let value = if ty == "0x" {
+    let (value, ty) = if ty == "0x" {
         let value = &value[2..];
-        hexf_parse::parse_hexf64(value, false).ok()
+        if width == b'f' {
+            (
+                hexf_parse::parse_hexf32(value, false)
+                    .ok()
+                    .map(|x| Literal::F32(x)),
+                "f32",
+            )
+        } else if width == b'h' {
+            diagnostics.push(
+                WgslError::new("hexadecimal `f16` literals are not supported yet").marker(span),
+            );
+            return Literal::F16(f16::from_f64(0.0));
+        } else {
+            (
+                hexf_parse::parse_hexf64(value, false)
+                    .ok()
+                    .map(|x| Literal::AbstractFloat(x)),
+                "f64",
+            )
+        }
     } else {
-        f64::from_str(value).ok()
+        if width == b'f' {
+            let num = f32::from_str(value).unwrap();
+            (num.is_finite().then(|| Literal::F32(num)), "f32")
+        } else if width == b'h' {
+            let num = f16::from_f32(f32::from_str(value).unwrap());
+            (num.is_finite().then(|| Literal::F16(num)), "f16")
+        } else {
+            let num = f64::from_str(value).unwrap();
+            (num.is_finite().then(|| Literal::AbstractFloat(num)), "f64")
+        }
     };
 
-    match value {
-        Some(value) => {
-            if width == b'f' {
-                Literal::F32(value as f32)
-            } else if width == b'h' {
-                Literal::F16(f16::from_f64(value))
-            } else {
-                Literal::AbstractFloat(value)
-            }
-        }
-        None => {
-            diagnostics.push(WgslError {
-                message: "float literal could not be parsed".to_string(),
-                labels: vec![(span, "".to_string())],
-                notes: vec![],
-            });
-            Literal::AbstractFloat(0.0)
-        }
-    }
+    value.unwrap_or_else(|| {
+        diagnostics.push(
+            WgslError::new(format!("float literal is not representable by `{}`", ty)).marker(span),
+        );
+        Literal::AbstractFloat(0.0)
+    })
 }
 
 fn error_to_diagnostic(error: Simple<TokenKind, Span>) -> WgslError {
@@ -741,36 +748,22 @@ fn error_to_diagnostic(error: Simple<TokenKind, Span>) -> WgslError {
         SimpleReason::Unexpected => {
             let expected = error.expected();
             match error.found() {
-                Some(tok) => WgslError {
-                    message: format!("unexpected `{}`", tok),
-                    labels: vec![(span, {
-                        let mut s = "expected one of ".to_string();
-                        comma_sep(&mut s, expected);
-                        s
-                    })],
-                    notes: vec![],
-                },
-                None => WgslError {
-                    message: "unexpected end of file".to_string(),
-                    labels: vec![(span, {
-                        let mut s = "expected one of ".to_string();
-                        comma_sep(&mut s, expected);
-                        s
-                    })],
-                    notes: vec![],
-                },
+                Some(tok) => WgslError::new(format!("unexpected `{}`", tok)).label(span, {
+                    let mut s = "expected one of ".to_string();
+                    comma_sep(&mut s, expected);
+                    s
+                }),
+                None => WgslError::new("unexpected end of file").label(span, {
+                    let mut s = "expected one of ".to_string();
+                    comma_sep(&mut s, expected);
+                    s
+                }),
             }
         }
-        SimpleReason::Unclosed { span, delimiter } => WgslError {
-            message: format!("unclosed `{}`", delimiter),
-            labels: vec![(*span, "unclosed".to_string())],
-            notes: vec![],
-        },
-        SimpleReason::Custom(message) => WgslError {
-            message: message.to_string(),
-            labels: vec![(span, "".to_string())],
-            notes: vec![],
-        },
+        SimpleReason::Unclosed { span, delimiter } => {
+            WgslError::new(format!("unclosed `{}`", delimiter)).marker(*span)
+        }
+        SimpleReason::Custom(message) => WgslError::new(message).marker(span),
     }
 }
 

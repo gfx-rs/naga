@@ -3,8 +3,8 @@ use std::fmt::{Debug, Display};
 use rustc_hash::FxHashSet;
 use strum::EnumIter;
 
+use crate::front::wgsl::parse::ast::Enable;
 use crate::front::wgsl::{
-    ast::Enable,
     resolve::inbuilt::{Matcher, ToStaticString},
     text::Interner,
     WgslError,

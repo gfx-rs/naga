@@ -1,12 +1,12 @@
 use aho_corasick::AhoCorasick;
 use rustc_hash::{FxHashMap, FxHashSet};
 
-use crate::front::wgsl::ast::UnaryOp;
+use crate::front::wgsl::parse::ast;
+use crate::front::wgsl::parse::ast::UnaryOp;
+use crate::front::wgsl::parse::ast::{ExprKind, GlobalDeclKind, Ident, StmtKind, VarDecl};
 use crate::front::wgsl::resolve::inbuilt::Attribute;
 use crate::front::wgsl::WgslError;
 use crate::{
-    front::wgsl::ast,
-    front::wgsl::ast::{ExprKind, GlobalDeclKind, Ident, StmtKind, VarDecl},
     front::wgsl::resolve::{
         features::{EnabledFeatures, Feature},
         inbuilt::{
