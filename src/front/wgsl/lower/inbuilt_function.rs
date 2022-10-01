@@ -1,11 +1,11 @@
-use crate::front::wgsl::lower::Lowerer;
+use crate::front::wgsl::lower::{CallError, Lowerer};
 use crate::front::wgsl::resolve::inbuilt_functions::InbuiltFunction;
 use crate::front::wgsl::resolve::ir::{Expr, Type};
 use crate::front::wgsl::WgslError;
 use crate::{Handle, ImageClass, TypeInner};
 
 impl Lowerer<'_> {
-    pub fn inbuilt_function(
+    pub(super) fn inbuilt_function(
         &mut self,
         f: InbuiltFunction,
         generics: &[Type],
@@ -13,7 +13,7 @@ impl Lowerer<'_> {
         span: crate::Span,
         b: &mut crate::Block,
         fun: &mut crate::Function,
-    ) -> Option<Handle<crate::Expression>> {
+    ) -> Result<Handle<crate::Expression>, CallError> {
         let require_args = |this: &mut Self, n| {
             if args.len() != n {
                 this.errors.push(
@@ -25,9 +25,9 @@ impl Lowerer<'_> {
                     ))
                     .marker(span),
                 );
-                return None;
+                return Err(CallError::Error);
             }
-            Some(())
+            Ok(())
         };
 
         let require_generics = |this: &mut Self, n| {
@@ -43,10 +43,10 @@ impl Lowerer<'_> {
                 );
 
                 if generics.len() < n {
-                    return None;
+                    return Err(CallError::Error);
                 }
             }
-            Some(())
+            Ok(())
         };
 
         let math_function = |this: &mut Self,
@@ -57,9 +57,9 @@ impl Lowerer<'_> {
             require_generics(this, 0)?;
 
             let mut args = args.iter().filter_map(|arg| this.expr(arg, b, f));
-            Some(crate::Expression::Math {
+            Ok(crate::Expression::Math {
                 fun,
-                arg: args.next()?,
+                arg: args.next().ok_or(CallError::Error)?,
                 arg1: args.next(),
                 arg2: args.next(),
                 arg3: args.next(),
@@ -73,15 +73,15 @@ impl Lowerer<'_> {
             require_args(this, 1)?;
             require_generics(this, 0)?;
 
-            Some(crate::Expression::ImageQuery {
-                image: this.expr(&args[0], b, f)?,
+            Ok(crate::Expression::ImageQuery {
+                image: this.expr(&args[0], b, f).ok_or(CallError::Error)?,
                 query,
             })
         };
 
         let get_atomic_ptr =
             |this: &mut Self, pointer: Handle<crate::Expression>, f: &crate::Function| {
-                let ptr_ty = this.type_handle_of(pointer, f)?;
+                let ptr_ty = this.type_handle_of(pointer, f).ok_or(CallError::Error)?;
                 let ty = match this.data.module.types[ptr_ty].inner {
                     TypeInner::Pointer { base, .. } => base,
                     _ => {
@@ -90,12 +90,12 @@ impl Lowerer<'_> {
                                 .marker(args[0].span)
                                 .label(args[0].span, format!("found `{}`", this.fmt_type(ptr_ty))),
                         );
-                        return None;
+                        return Err(CallError::Error);
                     }
                 };
 
                 match this.data.module.types[ty].inner {
-                    TypeInner::Atomic { kind, width } => Some((kind, width)),
+                    TypeInner::Atomic { kind, width } => Ok((kind, width)),
                     _ => {
                         this.errors.push(
                             WgslError::new("expected pointer to atomic")
@@ -105,7 +105,7 @@ impl Lowerer<'_> {
                                     format!("found pointer to `{}`", this.fmt_type(ty)),
                                 ),
                         );
-                        None
+                        Err(CallError::Error)
                     }
                 }
             };
@@ -117,8 +117,8 @@ impl Lowerer<'_> {
             require_args(this, 2)?;
             require_generics(this, 0)?;
 
-            let pointer = this.expr(&args[0], b, f)?;
-            let value = this.expr(&args[1], b, f)?;
+            let pointer = this.expr(&args[0], b, f).ok_or(CallError::Error)?;
+            let value = this.expr(&args[1], b, f).ok_or(CallError::Error)?;
 
             let (kind, width) = get_atomic_ptr(this, pointer, f)?;
             let result = crate::Expression::AtomicResult {
@@ -135,7 +135,7 @@ impl Lowerer<'_> {
                 result,
             };
             b.push(stmt, span);
-            Some(result)
+            Ok(result)
         };
 
         let expr = match f {
@@ -143,7 +143,7 @@ impl Lowerer<'_> {
                 require_args(self, 1)?;
                 require_generics(self, 1)?;
 
-                let to = self.ty(&generics[0])?;
+                let to = self.ty(&generics[0]).ok_or(CallError::Error)?;
                 let kind = match self.data.module.types[to].inner {
                     TypeInner::Scalar { kind, .. } => kind,
                     TypeInner::Vector { kind, .. } => kind,
@@ -152,12 +152,12 @@ impl Lowerer<'_> {
                             WgslError::new("invalid `bitcast` type")
                                 .label(generics[0].span, "expected scalar or vector"),
                         );
-                        return None;
+                        return Err(CallError::Error);
                     }
                 };
 
                 crate::Expression::As {
-                    expr: self.expr(&args[0], b, fun)?,
+                    expr: self.expr(&args[0], b, fun).ok_or(CallError::Error)?,
                     kind,
                     convert: None,
                 }
@@ -168,7 +168,7 @@ impl Lowerer<'_> {
 
                 crate::Expression::Relational {
                     fun: crate::RelationalFunction::All,
-                    argument: self.expr(&args[0], b, fun)?,
+                    argument: self.expr(&args[0], b, fun).ok_or(CallError::Error)?,
                 }
             }
             InbuiltFunction::Any => {
@@ -177,7 +177,7 @@ impl Lowerer<'_> {
 
                 crate::Expression::Relational {
                     fun: crate::RelationalFunction::Any,
-                    argument: self.expr(&args[0], b, fun)?,
+                    argument: self.expr(&args[0], b, fun).ok_or(CallError::Error)?,
                 }
             }
             InbuiltFunction::Select => {
@@ -185,16 +185,16 @@ impl Lowerer<'_> {
                 require_generics(self, 0)?;
 
                 crate::Expression::Select {
-                    condition: self.expr(&args[2], b, fun)?,
-                    accept: self.expr(&args[1], b, fun)?,
-                    reject: self.expr(&args[0], b, fun)?,
+                    condition: self.expr(&args[2], b, fun).ok_or(CallError::Error)?,
+                    accept: self.expr(&args[1], b, fun).ok_or(CallError::Error)?,
+                    reject: self.expr(&args[0], b, fun).ok_or(CallError::Error)?,
                 }
             }
             InbuiltFunction::ArrayLength => {
                 require_args(self, 1)?;
                 require_generics(self, 0)?;
 
-                crate::Expression::ArrayLength(self.expr(&args[0], b, fun)?)
+                crate::Expression::ArrayLength(self.expr(&args[0], b, fun).ok_or(CallError::Error)?)
             }
             InbuiltFunction::Abs => math_function(self, crate::MathFunction::Abs, b, fun)?,
             InbuiltFunction::Acos => math_function(self, crate::MathFunction::Acos, b, fun)?,
@@ -286,7 +286,7 @@ impl Lowerer<'_> {
 
                 crate::Expression::Derivative {
                     axis: crate::DerivativeAxis::X,
-                    expr: self.expr(&args[0], b, fun)?,
+                    expr: self.expr(&args[0], b, fun).ok_or(CallError::Error)?,
                 }
             }
             InbuiltFunction::Dpdy | InbuiltFunction::DpdyCoarse | InbuiltFunction::DpdyFine => {
@@ -295,7 +295,7 @@ impl Lowerer<'_> {
 
                 crate::Expression::Derivative {
                     axis: crate::DerivativeAxis::Y,
-                    expr: self.expr(&args[0], b, fun)?,
+                    expr: self.expr(&args[0], b, fun).ok_or(CallError::Error)?,
                 }
             }
             InbuiltFunction::Fwidth
@@ -306,7 +306,7 @@ impl Lowerer<'_> {
 
                 crate::Expression::Derivative {
                     axis: crate::DerivativeAxis::Width,
-                    expr: self.expr(&args[0], b, fun)?,
+                    expr: self.expr(&args[0], b, fun).ok_or(CallError::Error)?,
                 }
             }
             InbuiltFunction::TextureDimensions => {
@@ -316,10 +316,10 @@ impl Lowerer<'_> {
                         WgslError::new(format!("expected 1 or 2 arguments, found {}", args.len()))
                             .marker(span),
                     );
-                    return None;
+                    return Err(CallError::Error);
                 }
 
-                let image = self.expr(&args[0], b, fun)?;
+                let image = self.expr(&args[0], b, fun).ok_or(CallError::Error)?;
                 let level = args.get(1).and_then(|e| self.expr(e, b, fun));
                 crate::Expression::ImageQuery {
                     image,
@@ -344,7 +344,7 @@ impl Lowerer<'_> {
                         ))
                         .marker(span),
                     );
-                    return None;
+                    return Err(CallError::Error);
                 }
 
                 // Argument order: image, coordinate, array_index?, level? sample?.
@@ -352,10 +352,14 @@ impl Lowerer<'_> {
                 let mut args = args.iter();
 
                 let image_expr = args.next().unwrap();
-                let image = self.expr(image_expr, b, fun)?;
-                let coordinate = self.expr(args.next().unwrap(), b, fun)?;
+                let image = self.expr(image_expr, b, fun).ok_or(CallError::Error)?;
+                let coordinate = self
+                    .expr(args.next().unwrap(), b, fun)
+                    .ok_or(CallError::Error)?;
 
-                let (class, arrayed) = self.get_texture_data(image, image_expr.span, fun)?;
+                let (class, arrayed) = self
+                    .get_texture_data(image, image_expr.span, fun)
+                    .ok_or(CallError::Error)?;
 
                 let array_index = arrayed.then(|| self.expr(args.next()?, b, fun)).flatten();
                 let level = class
@@ -370,7 +374,6 @@ impl Lowerer<'_> {
                 if args.next().is_some() {
                     self.errors
                         .push(WgslError::new("too many arguments").marker(span));
-                    return None;
                 }
 
                 crate::Expression::ImageLoad {
@@ -384,7 +387,9 @@ impl Lowerer<'_> {
             InbuiltFunction::TextureSample => {
                 require_generics(self, 0)?;
                 let mut args = args.iter();
-                let sample = self.texture_sample_base(span, &mut args, b, fun)?;
+                let sample = self
+                    .texture_sample_base(span, &mut args, b, fun)
+                    .ok_or(CallError::Error)?;
                 let offset = self.texture_sample_offset(&mut args);
 
                 if args.next().is_some() {
@@ -406,9 +411,12 @@ impl Lowerer<'_> {
             InbuiltFunction::TextureSampleBias => {
                 require_generics(self, 0)?;
                 let mut args = args.iter();
-                let sample = self.texture_sample_base(span, &mut args, b, fun)?;
-                let bias =
-                    self.require_arg(span, "bias", &mut args, |this, x| this.expr(x, b, fun))?;
+                let sample = self
+                    .texture_sample_base(span, &mut args, b, fun)
+                    .ok_or(CallError::Error)?;
+                let bias = self
+                    .require_arg(span, "bias", &mut args, |this, x| this.expr(x, b, fun))
+                    .ok_or(CallError::Error)?;
                 let offset = self.texture_sample_offset(&mut args);
 
                 if args.next().is_some() {
@@ -430,9 +438,12 @@ impl Lowerer<'_> {
             InbuiltFunction::TextureSampleCompare => {
                 require_generics(self, 0)?;
                 let mut args = args.iter();
-                let sample = self.texture_sample_base(span, &mut args, b, fun)?;
-                let depth_ref =
-                    self.require_arg(span, "depth_ref", &mut args, |this, x| this.expr(x, b, fun))?;
+                let sample = self
+                    .texture_sample_base(span, &mut args, b, fun)
+                    .ok_or(CallError::Error)?;
+                let depth_ref = self
+                    .require_arg(span, "depth_ref", &mut args, |this, x| this.expr(x, b, fun))
+                    .ok_or(CallError::Error)?;
                 let offset = self.texture_sample_offset(&mut args);
 
                 if args.next().is_some() {
@@ -454,9 +465,12 @@ impl Lowerer<'_> {
             InbuiltFunction::TextureSampleCompareLevel => {
                 require_generics(self, 0)?;
                 let mut args = args.iter();
-                let sample = self.texture_sample_base(span, &mut args, b, fun)?;
-                let depth_ref =
-                    self.require_arg(span, "depth_ref", &mut args, |this, x| this.expr(x, b, fun))?;
+                let sample = self
+                    .texture_sample_base(span, &mut args, b, fun)
+                    .ok_or(CallError::Error)?;
+                let depth_ref = self
+                    .require_arg(span, "depth_ref", &mut args, |this, x| this.expr(x, b, fun))
+                    .ok_or(CallError::Error)?;
                 let offset = self.texture_sample_offset(&mut args);
 
                 if args.next().is_some() {
@@ -478,9 +492,15 @@ impl Lowerer<'_> {
             InbuiltFunction::TextureSampleGrad => {
                 require_generics(self, 0)?;
                 let mut args = args.iter();
-                let sample = self.texture_sample_base(span, &mut args, b, fun)?;
-                let x = self.require_arg(span, "ddx", &mut args, |this, x| this.expr(x, b, fun))?;
-                let y = self.require_arg(span, "ddy", &mut args, |this, x| this.expr(x, b, fun))?;
+                let sample = self
+                    .texture_sample_base(span, &mut args, b, fun)
+                    .ok_or(CallError::Error)?;
+                let x = self
+                    .require_arg(span, "ddx", &mut args, |this, x| this.expr(x, b, fun))
+                    .ok_or(CallError::Error)?;
+                let y = self
+                    .require_arg(span, "ddy", &mut args, |this, x| this.expr(x, b, fun))
+                    .ok_or(CallError::Error)?;
                 let offset = self.texture_sample_offset(&mut args);
 
                 if args.next().is_some() {
@@ -502,9 +522,12 @@ impl Lowerer<'_> {
             InbuiltFunction::TextureSampleLevel => {
                 require_generics(self, 0)?;
                 let mut args = args.iter();
-                let sample = self.texture_sample_base(span, &mut args, b, fun)?;
-                let level =
-                    self.require_arg(span, "level", &mut args, |this, x| this.expr(x, b, fun))?;
+                let sample = self
+                    .texture_sample_base(span, &mut args, b, fun)
+                    .ok_or(CallError::Error)?;
+                let level = self
+                    .require_arg(span, "level", &mut args, |this, x| this.expr(x, b, fun))
+                    .ok_or(CallError::Error)?;
                 let offset = self.texture_sample_offset(&mut args);
 
                 if args.next().is_some() {
@@ -526,7 +549,9 @@ impl Lowerer<'_> {
             InbuiltFunction::TextureGather => {
                 require_generics(self, 0)?;
                 let mut args = args.iter();
-                let sample = self.texture_gather_base(span, &mut args, b, fun)?;
+                let sample = self
+                    .texture_gather_base(span, &mut args, b, fun)
+                    .ok_or(CallError::Error)?;
                 let offset = self.texture_sample_offset(&mut args);
 
                 if args.next().is_some() {
@@ -548,9 +573,12 @@ impl Lowerer<'_> {
             InbuiltFunction::TextureGatherCompare => {
                 require_generics(self, 0)?;
                 let mut args = args.iter();
-                let sample = self.texture_gather_base(span, &mut args, b, fun)?;
-                let depth_ref =
-                    self.require_arg(span, "depth_ref", &mut args, |this, x| this.expr(x, b, fun))?;
+                let sample = self
+                    .texture_gather_base(span, &mut args, b, fun)
+                    .ok_or(CallError::Error)?;
+                let depth_ref = self
+                    .require_arg(span, "depth_ref", &mut args, |this, x| this.expr(x, b, fun))
+                    .ok_or(CallError::Error)?;
                 let offset = self.texture_sample_offset(&mut args);
 
                 if args.next().is_some() {
@@ -575,18 +603,20 @@ impl Lowerer<'_> {
                         WgslError::new(format!("expected 3 or 4 arguments, found {}", args.len()))
                             .marker(span),
                     );
-                    return None;
+                    return Err(CallError::Error);
                 }
                 require_generics(self, 0)?;
 
-                let image = self.expr(&args[0], b, fun)?;
-                let coordinate = self.expr(&args[1], b, fun)?;
+                let image = self.expr(&args[0], b, fun).ok_or(CallError::Error)?;
+                let coordinate = self.expr(&args[1], b, fun).ok_or(CallError::Error)?;
                 let array_index = if args.len() == 4 {
-                    Some(self.expr(&args[2], b, fun)?)
+                    Some(self.expr(&args[2], b, fun).ok_or(CallError::Error)?)
                 } else {
                     None
                 };
-                let value = self.expr(args.last().unwrap(), b, fun)?;
+                let value = self
+                    .expr(args.last().unwrap(), b, fun)
+                    .ok_or(CallError::Error)?;
 
                 let stmt = crate::Statement::ImageStore {
                     image,
@@ -595,13 +625,13 @@ impl Lowerer<'_> {
                     value,
                 };
                 b.push(stmt, span);
-                return None;
+                return Err(CallError::Error);
             }
             InbuiltFunction::AtomicLoad => {
                 require_args(self, 1)?;
                 require_generics(self, 0)?;
 
-                let pointer = self.expr(&args[0], b, fun)?;
+                let pointer = self.expr(&args[0], b, fun).ok_or(CallError::Error)?;
                 get_atomic_ptr(self, pointer, fun)?;
 
                 crate::Expression::Load { pointer }
@@ -610,13 +640,13 @@ impl Lowerer<'_> {
                 require_args(self, 2)?;
                 require_generics(self, 0)?;
 
-                let pointer = self.expr(&args[0], b, fun)?;
-                let value = self.expr(&args[1], b, fun)?;
+                let pointer = self.expr(&args[0], b, fun).ok_or(CallError::Error)?;
+                let value = self.expr(&args[1], b, fun).ok_or(CallError::Error)?;
                 get_atomic_ptr(self, pointer, fun)?;
 
                 let stmt = crate::Statement::Store { pointer, value };
                 b.push(stmt, span);
-                return None;
+                return Err(CallError::NoReturn);
             }
             InbuiltFunction::AtomicAdd => {
                 return atomic_function(self, crate::AtomicFunction::Add, b, fun);
@@ -651,9 +681,9 @@ impl Lowerer<'_> {
                 require_args(self, 3)?;
                 require_generics(self, 0)?;
 
-                let pointer = self.expr(&args[0], b, fun)?;
+                let pointer = self.expr(&args[0], b, fun).ok_or(CallError::Error)?;
                 let compare = self.expr(&args[1], b, fun);
-                let value = self.expr(&args[2], b, fun)?;
+                let value = self.expr(&args[2], b, fun).ok_or(CallError::Error)?;
 
                 let (kind, width) = get_atomic_ptr(self, pointer, fun)?;
                 let result = crate::Expression::AtomicResult {
@@ -670,7 +700,7 @@ impl Lowerer<'_> {
                     result,
                 };
                 b.push(stmt, span);
-                return Some(result);
+                return Ok(result);
             }
             InbuiltFunction::Pack4x8Snorm => {
                 math_function(self, crate::MathFunction::Pack4x8snorm, b, fun)?
@@ -705,12 +735,12 @@ impl Lowerer<'_> {
             InbuiltFunction::StorageBarrier => {
                 let stmt = crate::Statement::Barrier(crate::Barrier::STORAGE);
                 b.push(stmt, span);
-                return None;
+                return Err(CallError::NoReturn);
             }
             InbuiltFunction::WorkgroupBarrier => {
                 let stmt = crate::Statement::Barrier(crate::Barrier::WORK_GROUP);
                 b.push(stmt, span);
-                return None;
+                return Err(CallError::NoReturn);
             }
             InbuiltFunction::OuterProduct => {
                 math_function(self, crate::MathFunction::Outer, b, fun)?
@@ -718,11 +748,11 @@ impl Lowerer<'_> {
             _ => {
                 self.errors
                     .push(WgslError::new("unimplemented inbuilt function").marker(span));
-                return None;
+                return Err(CallError::NoReturn);
             }
         };
 
-        Some(self.emit_expr(expr, span, b, fun))
+        Ok(self.emit_expr(expr, span, b, fun))
     }
 
     fn get_texture_data(

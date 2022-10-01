@@ -64,6 +64,11 @@ enum InferenceExpression {
     AbstractFloat(f64),
 }
 
+enum CallError {
+    NoReturn,
+    Error,
+}
+
 impl<'a> Lowerer<'a> {
     pub fn new(module: &'a TranslationUnit, intern: &'a Interner) -> Self {
         Self {
@@ -630,7 +635,15 @@ impl<'a> Lowerer<'a> {
                 }
             },
             ExprStatementKind::Call(ref call) => {
-                self.call(call, span, b, fun);
+                if let Ok(_) = self.call(call, span, b, fun) {
+                    self.errors.push(
+                        WgslError::new(
+                            "functions that return values cannot be in statement position",
+                        )
+                        .marker(span)
+                        .note("consider assigning to nothing: `_ = ...;`"),
+                    );
+                }
             }
             ExprStatementKind::Assign(ref assign) => {
                 let rhs = if let Some(rhs) = self.expr_load(&assign.value, b, fun) {
@@ -877,16 +890,17 @@ impl<'a> Lowerer<'a> {
             }
             ExprKind::Call(ref call) => {
                 return match self.call(call, e.span, b, fun) {
-                    Some(expr) => Some(RefExpression {
+                    Ok(expr) => Some(RefExpression {
                         handle: InferenceExpression::Concrete(expr),
                         is_ref: false,
                     }),
-                    None => {
+                    Err(CallError::NoReturn) => {
                         self.errors.push(
                             WgslError::new("function does not return any value").marker(e.span),
                         );
                         None
                     }
+                    Err(CallError::Error) => None,
                 }
             }
             ExprKind::Index(ref base, ref index) => {
@@ -1226,11 +1240,11 @@ impl<'a> Lowerer<'a> {
         span: crate::Span,
         b: &mut crate::Block,
         fun: &mut crate::Function,
-    ) -> Option<Handle<crate::Expression>> {
+    ) -> Result<Handle<crate::Expression>, CallError> {
         match call.target {
-            CallTarget::Construction(ref ty) => {
-                self.construct(ty, &call.args, call.target_span, b, fun)
-            }
+            CallTarget::Construction(ref ty) => self
+                .construct(ty, &call.args, call.target_span, b, fun)
+                .ok_or(CallError::Error),
             CallTarget::Decl(id) => match self.data.decl_map[&id] {
                 DeclData::Function(function) => {
                     let result = if self.data.module.functions[function].result.is_some() {
@@ -1257,7 +1271,7 @@ impl<'a> Lowerer<'a> {
                             ))
                             .marker(span),
                         );
-                        return None;
+                        return Err(CallError::Error);
                     }
 
                     let stmt = crate::Statement::Call {
@@ -1275,28 +1289,28 @@ impl<'a> Lowerer<'a> {
                     };
                     b.push(stmt, span);
 
-                    result
+                    result.ok_or(CallError::NoReturn)
                 }
                 DeclData::Const(_) | DeclData::Global(_) => {
                     self.errors.push(
                         WgslError::new("cannot call a value").label(span, "expected function"),
                     );
-                    None
+                    Err(CallError::Error)
                 }
-                DeclData::Type(ty) => {
-                    self.construct(&Constructible::Type(ty), &call.args, span, b, fun)
-                }
+                DeclData::Type(ty) => self
+                    .construct(&Constructible::Type(ty), &call.args, span, b, fun)
+                    .ok_or(CallError::Error),
                 DeclData::EntryPoint => {
                     self.errors
                         .push(WgslError::new("cannot call entry point").marker(span));
-                    None
+                    Err(CallError::Error)
                 }
-                DeclData::Assert | DeclData::Override | DeclData::Error => None,
+                DeclData::Assert | DeclData::Override | DeclData::Error => Err(CallError::Error),
             },
             CallTarget::InbuiltFunction(inbuilt, ref generics) => {
                 self.inbuilt_function(inbuilt, generics, &call.args, span, b, fun)
             }
-            CallTarget::Error => None,
+            CallTarget::Error => Err(CallError::Error),
         }
     }
 
