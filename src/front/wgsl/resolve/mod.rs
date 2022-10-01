@@ -12,12 +12,12 @@ use crate::{
         inbuilt::{
             reserved_matcher, AccessMode, AddressSpace, AttributeType, Builtin, ConservativeDepth,
             DepthTextureType, InterpolationSample, InterpolationType, MatType, Matcher,
-            PrimitiveType, SampledTextureType, SamplerType, StorageTextureType, TexelFormat,
+            SampledTextureType, SamplerType, ScalarType, StorageTextureType, TexelFormat,
             ToStaticString, VecType,
         },
         inbuilt_functions::InbuiltFunction,
         index::Index,
-        ir::{DeclDependency, DeclId, FnTarget, InbuiltType, LocalId},
+        ir::{CallTarget, DeclDependency, DeclId, InbuiltType, LocalId},
     },
     front::wgsl::text::{Interner, Text},
     BinaryOperator, ImageClass, ScalarKind, Span, StorageAccess, UnaryOperator,
@@ -50,7 +50,7 @@ pub fn resolve(
         builtin: Matcher::new(intern),
         interpolation_sample: Matcher::new(intern),
         interpolation_type: Matcher::new(intern),
-        primitive: Matcher::new(intern),
+        scalar: Matcher::new(intern),
         vec: Matcher::new(intern),
         mat: Matcher::new(intern),
         sampled_texture: Matcher::new(intern),
@@ -91,7 +91,7 @@ struct Resolver<'a> {
     builtin: Matcher<Builtin>,
     interpolation_sample: Matcher<InterpolationSample>,
     interpolation_type: Matcher<InterpolationType>,
-    primitive: Matcher<PrimitiveType>,
+    scalar: Matcher<ScalarType>,
     vec: Matcher<VecType>,
     mat: Matcher<MatType>,
     sampled_texture: Matcher<SampledTextureType>,
@@ -893,9 +893,14 @@ impl<'a> Resolver<'a> {
                 ir::ExprKind::Error
             }
             ExprKind::Call(call) => {
+                let target_span = call.target.span;
                 let target = self.call_target(*call.target);
                 let args = call.args.into_iter().map(|x| self.expr(x)).collect();
-                ir::ExprKind::Call(ir::CallExpr { target, args })
+                ir::ExprKind::Call(ir::CallExpr {
+                    target,
+                    target_span,
+                    args,
+                })
             }
             ExprKind::Index(on, with) => {
                 ir::ExprKind::Index(Box::new(self.expr(*on)), Box::new(self.expr(*with)))
@@ -949,9 +954,14 @@ impl<'a> Resolver<'a> {
                 })
             }
             ExprKind::Call(call) => {
+                let target_span = call.target.span;
                 let target = self.call_target(*call.target);
                 let args = call.args.into_iter().map(|x| self.expr(x)).collect();
-                ir::ExprStatementKind::Call(ir::CallExpr { target, args })
+                ir::ExprStatementKind::Call(ir::CallExpr {
+                    target,
+                    target_span,
+                    args,
+                })
             }
             ExprKind::Assign(assign) => {
                 if let ExprKind::Underscore = assign.lhs.kind {
@@ -1010,7 +1020,7 @@ impl<'a> Resolver<'a> {
         })
     }
 
-    fn call_target(&mut self, target: ast::Expr) -> FnTarget {
+    fn call_target(&mut self, target: ast::Expr) -> CallTarget {
         match target.kind {
             ExprKind::Ident(ident) => {
                 let name = ident.name;
@@ -1024,53 +1034,150 @@ impl<'a> Resolver<'a> {
                         self.diagnostics
                             .push(WgslError::new("unexpected generics").marker(target.span));
                     }
-                    FnTarget::Decl(decl)
+                    CallTarget::Decl(decl)
                 } else if let Some(inbuilt) = self.inbuilt_function.get(name.name) {
-                    FnTarget::InbuiltFunction(
+                    CallTarget::InbuiltFunction(
                         inbuilt,
                         ident.generics.into_iter().map(|x| self.ty(x)).collect(),
                     )
                 } else if let Some(ty) = self.constructible_inbuilt(ident, target.span) {
-                    FnTarget::InbuiltType(Box::new(ty))
+                    CallTarget::Construction(ty)
                 } else {
                     self.diagnostics
                         .push(WgslError::new("undefined function").marker(name.span));
-                    FnTarget::Error
+                    CallTarget::Error
                 }
             }
             _ => {
                 self.diagnostics
                     .push(WgslError::new("invalid function call target").marker(target.span));
-                FnTarget::Error
+                CallTarget::Error
             }
         }
     }
 
-    fn constructible_inbuilt(&mut self, ident: ast::IdentExpr, span: Span) -> Option<InbuiltType> {
+    fn constructible_inbuilt(
+        &mut self,
+        ident: ast::IdentExpr,
+        span: Span,
+    ) -> Option<ir::Constructible> {
         let name = ident.name.name;
+        let name_span = ident.name.span;
         Some(if name == self.kws.array {
             if ident.generics.len() > 1 {
                 self.diagnostics
-                    .push(WgslError::new("too many generics for `array`").marker(ident.name.span));
+                    .push(WgslError::new("too many generics for `array`").marker(span));
             }
-            let of = ident
-                .generics
-                .into_iter()
-                .next()
-                .map(|x| self.ty(x))
-                .unwrap_or(ir::Type {
-                    kind: ir::TypeKind::Inbuilt(InbuiltType::Infer),
-                    span: ident.name.span,
-                });
-            let len = ident.array_len.map(|x| self.expr(*x));
-            InbuiltType::Array {
-                of: Box::new(of),
-                len,
+            let base = ident.generics.into_iter().next().map(|x| self.ty(x));
+
+            if let Some(base) = base {
+                let len = ident
+                    .array_len
+                    .map(|x| Box::new(self.expr(*x)))
+                    .unwrap_or_else(|| {
+                        self.diagnostics
+                            .push(WgslError::new("expected array length").marker(name_span));
+                        Box::new(ir::Expr {
+                            kind: ir::ExprKind::Error,
+                            span,
+                        })
+                    });
+                ir::Constructible::Array {
+                    base: Box::new(base),
+                    len,
+                }
+            } else {
+                ir::Constructible::PartialArray
             }
-        } else if let Some(inbuilt) =
-            self.constructible_non_array_inbuilt(ident.name, ident.generics, span)
-        {
-            inbuilt
+        } else if let Some(scalar) = self.scalar.get(name) {
+            if !ident.generics.is_empty() {
+                self.diagnostics.push(
+                    WgslError::new(format!(
+                        "`{}` cannot have generic parameters",
+                        scalar.to_static_str()
+                    ))
+                    .marker(span),
+                );
+            }
+
+            match scalar {
+                ScalarType::F64 => {
+                    self.tu
+                        .features
+                        .require(Feature::Float64, span, self.diagnostics)
+                }
+                ScalarType::F16 => {
+                    self.tu
+                        .features
+                        .require(Feature::Float16, span, self.diagnostics)
+                }
+                _ => {}
+            }
+
+            let (kind, width) = scalar.into();
+            ir::Constructible::Scalar { kind, width }
+        } else if let Some(comp) = self.vec.get(name) {
+            let name = comp.to_static_str();
+            if ident.generics.len() > 1 {
+                self.diagnostics
+                    .push(WgslError::new(format!("too many generics for `{}`", name)).marker(span));
+            }
+
+            let ty = ident.generics.into_iter().next();
+            let size = comp.into();
+            match ty {
+                Some(ty) => {
+                    if let Some(InbuiltType::Scalar { kind, width }) = self.inbuilt(ty) {
+                        ir::Constructible::Vector { kind, width, size }
+                    } else {
+                        self.diagnostics.push(
+                            WgslError::new(format!(
+                                "`{}` must have a scalar type as its generic parameter",
+                                name
+                            ))
+                            .marker(span),
+                        );
+                        ir::Constructible::PartialVector { size }
+                    }
+                }
+                None => ir::Constructible::PartialVector { size },
+            }
+        } else if let Some(comp) = self.mat.get(name) {
+            let name = comp.to_static_str();
+            if ident.generics.len() > 1 {
+                self.diagnostics
+                    .push(WgslError::new(format!("too many generics for `{}`", name)).marker(span));
+            }
+
+            let ty = ident.generics.into_iter().next();
+            let (columns, rows) = comp.into();
+            match ty {
+                Some(ty) => {
+                    if let Some(InbuiltType::Scalar {
+                        kind: ScalarKind::Float,
+                        width,
+                    }) = self.inbuilt(ty)
+                    {
+                        ir::Constructible::Matrix {
+                            columns,
+                            rows,
+                            width,
+                        }
+                    } else {
+                        self.diagnostics.push(
+                            WgslError::new(format!(
+                                "`{}` must have a floating-point type as its generic parameter",
+                                name
+                            ))
+                            .marker(span),
+                        );
+
+                        let (columns, rows) = comp.into();
+                        ir::Constructible::PartialMatrix { columns, rows }
+                    }
+                }
+                None => ir::Constructible::PartialMatrix { columns, rows },
+            }
         } else {
             return None;
         })
@@ -1089,7 +1196,100 @@ impl<'a> Resolver<'a> {
 
         let ty = match ty.kind {
             ast::TypeKind::Ident(ident, generics) => {
-                if ident.name == self.kws.atomic {
+                if let Some(scalar) = self.scalar.get(ident.name) {
+                    no_generics(self, generics, scalar.to_static_str());
+
+                    match scalar {
+                        ScalarType::F64 => {
+                            self.tu
+                                .features
+                                .require(Feature::Float64, ident.span, self.diagnostics)
+                        }
+                        ScalarType::F16 => {
+                            self.tu
+                                .features
+                                .require(Feature::Float16, ident.span, self.diagnostics)
+                        }
+                        _ => {}
+                    }
+
+                    let (kind, width) = scalar.into();
+                    InbuiltType::Scalar { kind, width }
+                } else if let Some(comp) = self.vec.get(ident.name) {
+                    let name = comp.to_static_str();
+
+                    if generics.len() != 1 {
+                        self.diagnostics.push(
+                            WgslError::new(format!(
+                                "`{}` must have exactly 1 generic parameter",
+                                name
+                            ))
+                            .marker(span),
+                        );
+                    }
+
+                    if let Some(InbuiltType::Scalar { kind, width }) =
+                        generics.into_iter().next().and_then(|x| self.inbuilt(x))
+                    {
+                        InbuiltType::Vector {
+                            kind,
+                            width,
+                            size: comp.into(),
+                        }
+                    } else {
+                        self.diagnostics.push(
+                            WgslError::new(format!(
+                                "`{}` must have a scalar type as its generic parameter",
+                                name
+                            ))
+                            .marker(span),
+                        );
+                        InbuiltType::Vector {
+                            kind: ScalarKind::Sint,
+                            width: 4,
+                            size: comp.into(),
+                        }
+                    }
+                } else if let Some(comp) = self.mat.get(ident.name) {
+                    let name = comp.to_static_str();
+
+                    if generics.len() != 1 {
+                        self.diagnostics.push(
+                            WgslError::new(format!(
+                                "`{}` must have exactly 1 generic parameter",
+                                name
+                            ))
+                            .marker(span),
+                        );
+                    }
+
+                    let (columns, rows) = comp.into();
+                    if let Some(InbuiltType::Scalar {
+                        width,
+                        kind: ScalarKind::Float,
+                    }) = generics.into_iter().next().and_then(|x| self.inbuilt(x))
+                    {
+                        InbuiltType::Matrix {
+                            columns,
+                            rows,
+                            width,
+                        }
+                    } else {
+                        self.diagnostics.push(
+                            WgslError::new(format!(
+                                "`{}` must have a floating-point type as its generic parameter",
+                                name
+                            ))
+                            .marker(span),
+                        );
+
+                        InbuiltType::Matrix {
+                            columns,
+                            rows,
+                            width: 4,
+                        }
+                    }
+                } else if ident.name == self.kws.atomic {
                     if generics.len() != 1 {
                         self.diagnostics.push(
                             WgslError::new("`atomic` must have exactly one generic parameter")
@@ -1273,10 +1473,6 @@ impl<'a> Resolver<'a> {
                     InbuiltType::Sampler {
                         comparison: s.into(),
                     }
-                } else if let Some(inbuilt) =
-                    self.constructible_non_array_inbuilt(ident, generics, span)
-                {
-                    inbuilt
                 } else {
                     return None;
                 }
@@ -1299,123 +1495,6 @@ impl<'a> Resolver<'a> {
                     }
                 }
             }
-        };
-
-        Some(ty)
-    }
-
-    fn constructible_non_array_inbuilt(
-        &mut self,
-        ident: Ident,
-        generics: Vec<ast::Type>,
-        span: Span,
-    ) -> Option<InbuiltType> {
-        let ty = if let Some(prim) = self.primitive.get(ident.name) {
-            if !generics.is_empty() {
-                self.diagnostics.push(
-                    WgslError::new(format!(
-                        "`{}` cannot have generic parameters",
-                        prim.to_static_str()
-                    ))
-                    .marker(span),
-                );
-            }
-
-            match prim {
-                PrimitiveType::F64 => {
-                    self.tu
-                        .features
-                        .require(Feature::Float64, ident.span, self.diagnostics)
-                }
-                PrimitiveType::F16 => {
-                    self.tu
-                        .features
-                        .require(Feature::Float16, ident.span, self.diagnostics)
-                }
-                _ => {}
-            }
-
-            let (kind, width) = prim.into();
-            InbuiltType::Scalar { kind, width }
-        } else if let Some(comp) = self.vec.get(ident.name) {
-            let name = comp.to_static_str();
-
-            if generics.len() != 1 {
-                self.diagnostics.push(
-                    WgslError::new(format!("`{}` must have exactly 1 generic parameter", name))
-                        .marker(span),
-                );
-            }
-
-            if let Some(InbuiltType::Scalar { kind, width }) =
-                generics.into_iter().next().and_then(|x| self.inbuilt(x))
-            {
-                InbuiltType::Vector {
-                    kind,
-                    width,
-                    size: comp.into(),
-                }
-            } else {
-                self.diagnostics.push(
-                    WgslError::new(format!(
-                        "`{}` must have a scalar type as its generic parameter",
-                        name
-                    ))
-                    .marker(span),
-                );
-                InbuiltType::Vector {
-                    kind: ScalarKind::Sint,
-                    width: 4,
-                    size: comp.into(),
-                }
-            }
-        } else if let Some(comp) = self.mat.get(ident.name) {
-            let name = comp.to_static_str();
-
-            if generics.len() != 1 {
-                self.diagnostics.push(
-                    WgslError::new(format!("`{}` must have exactly 1 generic parameter", name))
-                        .marker(span),
-                );
-            }
-
-            if let Some(InbuiltType::Scalar { width, kind }) =
-                generics.into_iter().next().and_then(|x| self.inbuilt(x))
-            {
-                if kind != ScalarKind::Float {
-                    self.diagnostics.push(
-                        WgslError::new(format!(
-                            "`{}` must have a floating point type as its generic parameter",
-                            name
-                        ))
-                        .marker(span),
-                    );
-                }
-
-                let (columns, rows) = comp.into();
-                InbuiltType::Matrix {
-                    columns,
-                    rows,
-                    width,
-                }
-            } else {
-                self.diagnostics.push(
-                    WgslError::new(format!(
-                        "`{}` must have a floating-point type as its generic parameter",
-                        name
-                    ))
-                    .marker(span),
-                );
-
-                let (columns, rows) = comp.into();
-                InbuiltType::Matrix {
-                    columns,
-                    rows,
-                    width: 4,
-                }
-            }
-        } else {
-            return None;
         };
 
         Some(ty)

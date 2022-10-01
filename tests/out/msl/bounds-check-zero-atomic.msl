@@ -15,9 +15,8 @@ struct _mslBufferSizes {
 };
 
 typedef metal::atomic_uint atomicu32_;
-typedef int i32_;
 struct arrayatomicu3210_ {
-    atomicu32_ inner[10];
+    atomicu32_ inner[10u];
 };
 typedef atomicu32_ arrayatomicu32_[1];
 struct Globals {
@@ -28,6 +27,7 @@ struct Globals {
 typedef uint u32_;
 typedef device Globals& ptrstorageGlobals;
 typedef device atomicu32_& ptrstorageatomicu32_;
+typedef int i32_;
 
 u32_ fetch_add_atomic(
     device Globals& globals,

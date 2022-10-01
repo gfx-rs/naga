@@ -13,9 +13,8 @@ struct Test {
     S a;
     f32_ b;
 };
-typedef int i32_;
 struct arrayvec3f322_ {
-    vec3f32_ inner[2];
+    vec3f32_ inner[2u];
 };
 struct Test2_ {
     arrayvec3f322_ a;

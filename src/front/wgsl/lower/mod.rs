@@ -2,9 +2,9 @@ use crate::front::wgsl::lower::const_eval::{Evaluator, ScalarValue, Value};
 use crate::front::wgsl::lower::format::TypeInnerFormatter;
 use crate::front::wgsl::parse::ast::Literal;
 use crate::front::wgsl::resolve::ir::{
-    Arg, AssignTarget, Binding, Block, CallExpr, CaseSelector, Decl, DeclId, DeclKind, Expr,
-    ExprKind, ExprStatementKind, Fn, FnTarget, InbuiltType, Let, LocalId, ShaderStage, Stmt,
-    StmtKind, Struct, TranslationUnit, Type, TypeKind, Var, VarDeclKind,
+    Arg, AssignTarget, Binding, Block, CallExpr, CallTarget, CaseSelector, Constructible, Decl,
+    DeclId, DeclKind, Expr, ExprKind, ExprStatementKind, Fn, InbuiltType, Let, LocalId,
+    ShaderStage, Stmt, StmtKind, Struct, TranslationUnit, Type, TypeKind, Var, VarDeclKind,
 };
 use crate::front::wgsl::text::Interner;
 use crate::front::wgsl::WgslError;
@@ -15,19 +15,24 @@ use std::convert::TryInto;
 use std::fmt::Display;
 
 mod const_eval;
+mod construction;
 mod format;
 mod inbuilt_function;
 
-pub struct Lowerer<'a> {
+struct EvaluationData<'a> {
+    tu: &'a TranslationUnit,
+    decl_map: FastHashMap<DeclId, DeclData>,
     module: crate::Module,
+}
+
+pub struct Lowerer<'a> {
     eval: Evaluator,
     intern: &'a Interner,
-    tu: &'a TranslationUnit,
     errors: Vec<WgslError>,
-    decl_map: FastHashMap<DeclId, DeclData>,
     layouter: Layouter,
     typifier: Typifier,
     locals: FastHashMap<LocalId, LocalData>,
+    data: EvaluationData<'a>,
 }
 
 enum DeclData {
@@ -62,27 +67,29 @@ enum InferenceExpression {
 impl<'a> Lowerer<'a> {
     pub fn new(module: &'a TranslationUnit, intern: &'a Interner) -> Self {
         Self {
-            module: crate::Module::default(),
             eval: Evaluator::new(),
             intern,
-            tu: module,
             errors: Vec::new(),
-            decl_map: FastHashMap::default(),
             layouter: Layouter::default(),
             typifier: Typifier::default(),
             locals: FastHashMap::default(),
+            data: EvaluationData {
+                tu: module,
+                decl_map: FastHashMap::default(),
+                module: crate::Module::default(),
+            },
         }
     }
 
     pub fn lower(mut self) -> Result<crate::Module, Vec<WgslError>> {
-        for (id, decl) in self.tu.decls_ordered() {
+        for (id, decl) in self.data.tu.decls_ordered() {
             let data = self.decl(decl);
-            self.decl_map.insert(id, data);
+            self.data.decl_map.insert(id, data);
         }
 
         let eval_errors = self.eval.finish();
         if self.errors.is_empty() && eval_errors.is_empty() {
-            Ok(self.module)
+            Ok(self.data.module)
         } else {
             self.errors.extend(eval_errors);
             Err(self.errors)
@@ -111,7 +118,7 @@ impl<'a> Lowerer<'a> {
                 handle.map(DeclData::Const).unwrap_or(DeclData::Error)
             }
             DeclKind::StaticAssert(ref expr) => {
-                let value = self.eval.as_bool(expr).unwrap_or(true);
+                let value = self.eval.as_bool(&self.data, expr).unwrap_or(true);
                 if !value {
                     self.errors
                         .push(WgslError::new("static assertion failed").marker(decl.span));
@@ -167,7 +174,7 @@ impl<'a> Lowerer<'a> {
 
         let entry = match f.stage {
             ShaderStage::None => {
-                return Some(self.module.functions.append(fun, span));
+                return Some(self.data.module.functions.append(fun, span));
             }
             ShaderStage::Vertex => crate::EntryPoint {
                 name,
@@ -189,20 +196,20 @@ impl<'a> Lowerer<'a> {
                 early_depth_test: None,
                 workgroup_size: [
                     x.as_ref()
-                        .and_then(|x| self.eval.as_positive_int(x))
+                        .and_then(|x| self.eval.as_positive_int(&self.data, x))
                         .unwrap_or(1),
                     y.as_ref()
-                        .and_then(|y| self.eval.as_positive_int(y))
+                        .and_then(|y| self.eval.as_positive_int(&self.data, y))
                         .unwrap_or(1),
                     z.as_ref()
-                        .and_then(|z| self.eval.as_positive_int(z))
+                        .and_then(|z| self.eval.as_positive_int(&self.data, z))
                         .unwrap_or(1),
                 ],
                 function: fun,
             },
         };
 
-        self.module.entry_points.push(entry);
+        self.data.module.entry_points.push(entry);
         None
     }
 
@@ -212,7 +219,7 @@ impl<'a> Lowerer<'a> {
             .inner
             .val
             .as_ref()
-            .and_then(|x| self.eval.eval(x).map(move |v| (v, x.span)));
+            .and_then(|x| self.eval.eval(&self.data, x).map(move |v| (v, x.span)));
 
         let ty = self
             .ty(&v.inner.ty)
@@ -229,8 +236,8 @@ impl<'a> Lowerer<'a> {
 
         let binding = if let Some(ref binding) = v.attribs.binding {
             if let Some(ref group) = v.attribs.group {
-                let binding = self.eval.as_positive_int(binding).unwrap_or(0);
-                let group = self.eval.as_positive_int(group).unwrap_or(0);
+                let binding = self.eval.as_positive_int(&self.data, binding).unwrap_or(0);
+                let group = self.eval.as_positive_int(&self.data, group).unwrap_or(0);
                 Some(crate::ResourceBinding { binding, group })
             } else {
                 self.errors.push(
@@ -251,7 +258,7 @@ impl<'a> Lowerer<'a> {
             init: init.map(|(v, span)| self.val_to_const(v, span)),
         };
 
-        Some(self.module.global_variables.append(var, span))
+        Some(self.data.module.global_variables.append(var, span))
     }
 
     fn struct_(&mut self, s: &Struct, span: crate::Span) -> Option<Handle<crate::Type>> {
@@ -271,7 +278,7 @@ impl<'a> Lowerer<'a> {
                 .and_then(|x| self.binding(x, field.name.span, ty));
 
             self.layouter
-                .update(&self.module.types, &self.module.constants)
+                .update(&self.data.module.types, &self.data.module.constants)
                 .unwrap();
 
             let min_align = self.layouter[ty].alignment;
@@ -281,12 +288,12 @@ impl<'a> Lowerer<'a> {
                 .attribs
                 .align
                 .as_ref()
-                .and_then(|x| self.eval.as_positive_int(x));
+                .and_then(|x| self.eval.as_positive_int(&self.data, x));
             let size = field
                 .attribs
                 .size
                 .as_ref()
-                .and_then(|x| self.eval.as_positive_int(x))
+                .and_then(|x| self.eval.as_positive_int(&self.data, x))
                 .unwrap_or(min_size);
 
             if size < min_size {
@@ -341,19 +348,19 @@ impl<'a> Lowerer<'a> {
             },
         };
 
-        Some(self.module.types.insert(ty, span))
+        Some(self.data.module.types.insert(ty, span))
     }
 
     fn const_(&mut self, c: &Let, span: crate::Span) -> Option<Handle<crate::Constant>> {
         let ident = self.intern.resolve(c.name.name).to_string();
-        let value = self.eval.eval(&c.val)?;
+        let value = self.eval.eval(&self.data, &c.val)?;
 
         let constant = crate::Constant {
             name: Some(ident),
             specialization: None,
             inner: self.val_to_const_inner(value, span),
         };
-        Some(self.module.constants.append(constant, span))
+        Some(self.data.module.constants.append(constant, span))
     }
 
     fn arg(&mut self, arg: &Arg) -> Option<crate::FunctionArgument> {
@@ -471,7 +478,7 @@ impl<'a> Lowerer<'a> {
                 value: e.as_ref().and_then(|x| self.expr(x, b, fun)),
             },
             StmtKind::StaticAssert(ref expr) => {
-                if let Some(value) = self.eval.as_bool(expr) {
+                if let Some(value) = self.eval.as_bool(&self.data, expr) {
                     if !value {
                         self.errors
                             .push(WgslError::new("static assertion failed").marker(expr.span));
@@ -495,7 +502,7 @@ impl<'a> Lowerer<'a> {
                             .filter_map(|sel| {
                                 let value = match *sel {
                                     CaseSelector::Expr(ref e) => {
-                                        let value = self.eval.as_int(e)?;
+                                        let value = self.eval.as_int(&self.data, e)?;
                                         crate::SwitchValue::Integer(value)
                                     }
                                     CaseSelector::Default => crate::SwitchValue::Default,
@@ -659,26 +666,36 @@ impl<'a> Lowerer<'a> {
                     }
 
                     let value = if let Some(op) = assign.op {
-                        let lhs =
+                        let left =
                             self.emit_expr(crate::Expression::Load { pointer: lc }, span, b, fun);
-                        let rhs = if let Some(rhs) =
-                            self.unify_exprs(lhs, rhs, assign.value.span, b, fun)
+                        let mut right = if let Some(rhs) =
+                            self.unify_exprs(left, rhs, assign.value.span, b, fun)
                         {
                             rhs
                         } else {
                             return;
                         };
 
-                        self.emit_expr(
-                            crate::Expression::Binary {
-                                left: lhs,
-                                op,
-                                right: rhs,
-                            },
-                            span,
-                            b,
-                            fun,
-                        )
+                        // Insert splats if required (only on the right side).
+                        if op != crate::BinaryOperator::Multiply {
+                            let left_size = match self.type_of(left, fun) {
+                                Some(&TypeInner::Vector { size, .. }) => Some(size),
+                                _ => None,
+                            };
+                            match (left_size, self.type_of(right, fun)) {
+                                (Some(size), Some(&TypeInner::Scalar { .. })) => {
+                                    right = self.emit_expr(
+                                        crate::Expression::Splat { size, value: right },
+                                        assign.value.span,
+                                        b,
+                                        fun,
+                                    );
+                                }
+                                _ => {}
+                            }
+                        }
+
+                        self.emit_expr(crate::Expression::Binary { left, op, right }, span, b, fun)
                     } else {
                         self.concretize(rhs, assign.value.span, b, fun)
                     };
@@ -769,7 +786,7 @@ impl<'a> Lowerer<'a> {
                 };
 
                 (
-                    crate::Expression::Constant(self.module.constants.append(
+                    crate::Expression::Constant(self.data.module.constants.fetch_or_append(
                         crate::Constant {
                             name: None,
                             inner,
@@ -790,7 +807,7 @@ impl<'a> Lowerer<'a> {
                 }
                 LocalData::FunctionArg(arg) => (crate::Expression::FunctionArgument(arg), false),
             },
-            ExprKind::Global(global) => match *self.decl_map.get(&global)? {
+            ExprKind::Global(global) => match *self.data.decl_map.get(&global)? {
                 DeclData::Function(_) | DeclData::EntryPoint => {
                     self.errors.push(
                         WgslError::new("function cannot be used as an expression")
@@ -800,7 +817,7 @@ impl<'a> Lowerer<'a> {
                     return None;
                 }
                 DeclData::Global(var) => {
-                    let space = self.module.global_variables[var].space;
+                    let space = self.data.module.global_variables[var].space;
                     (
                         crate::Expression::GlobalVariable(var),
                         !matches!(space, crate::AddressSpace::Handle),
@@ -876,13 +893,35 @@ impl<'a> Lowerer<'a> {
             ExprKind::Index(ref base, ref index) => {
                 let base_ref = self.expr_base(base, b, fun)?;
                 let index = self.expr(index, b, fun)?;
-                (
-                    crate::Expression::Access {
-                        base: self.concretize(base_ref.handle, base.span, b, fun),
-                        index,
-                    },
-                    base_ref.is_ref,
-                )
+
+                let base = self.concretize(base_ref.handle, base.span, b, fun);
+
+                // TODO: Remove this when the SPIR-V backend can see through constant expressions.
+                let expr = if let crate::Expression::Constant(c) = fun.expressions[index] {
+                    match self.data.module.constants[c].inner {
+                        crate::ConstantInner::Scalar { value, .. } => match value {
+                            crate::ScalarValue::Uint(u) => {
+                                if let Ok(index) = u.try_into() {
+                                    crate::Expression::AccessIndex { base, index }
+                                } else {
+                                    crate::Expression::Access { base, index }
+                                }
+                            }
+                            crate::ScalarValue::Sint(i) => {
+                                if let Ok(index) = i.try_into() {
+                                    crate::Expression::AccessIndex { base, index }
+                                } else {
+                                    crate::Expression::Access { base, index }
+                                }
+                            }
+                            _ => crate::Expression::Access { base, index },
+                        },
+                        _ => crate::Expression::Access { base, index },
+                    }
+                } else {
+                    crate::Expression::Access { base, index }
+                };
+                (expr, base_ref.is_ref)
             }
             ExprKind::AddrOf(ref e) => {
                 let expr = self.expr_base(e, b, fun)?;
@@ -933,7 +972,7 @@ impl<'a> Lowerer<'a> {
 
                 let ty = self.type_handle_of(e_c, fun)?;
                 let (ty, is_ptr) = if expr.is_ref {
-                    match self.module.types[ty].inner {
+                    match self.data.module.types[ty].inner {
                         TypeInner::Pointer { base, .. } => (base, true),
                         TypeInner::ValuePointer {
                             size: Some(size),
@@ -957,7 +996,7 @@ impl<'a> Lowerer<'a> {
                     );
                 };
 
-                match self.module.types[ty].inner {
+                match self.data.module.types[ty].inner {
                     TypeInner::Vector { .. } => {
                         let mem = self.intern.resolve(m.name);
                         return if mem.len() == 1 {
@@ -1140,7 +1179,7 @@ impl<'a> Lowerer<'a> {
                         ))
                         .marker(m.span);
 
-                        if self.module.types[ty].inner.pointer_space().is_some() {
+                        if self.data.module.types[ty].inner.pointer_space().is_some() {
                             error
                                 .notes
                                 .push("consider dereferencing the pointer first".to_string());
@@ -1190,141 +1229,12 @@ impl<'a> Lowerer<'a> {
         fun: &mut crate::Function,
     ) -> Option<Handle<crate::Expression>> {
         match call.target {
-            FnTarget::InbuiltType(ref ty) => match **ty {
-                InbuiltType::Scalar { kind, width } => {
-                    if call.args.len() != 1 {
-                        self.errors.push(
-                            WgslError::new(format!(
-                                "expected 1 argument, found {}",
-                                call.args.len()
-                            ))
-                            .marker(span),
-                        );
-                        return None;
-                    }
-
-                    let expr = crate::Expression::As {
-                        expr: self.expr(&call.args[0], b, fun)?,
-                        kind,
-                        convert: Some(width),
-                    };
-                    Some(self.emit_expr(expr, span, b, fun))
-                }
-                InbuiltType::Vector { size, kind, width } => {
-                    let expr = if call.args.len() == 1 {
-                        let value = self.expr(&call.args[0], b, fun)?;
-                        match *self.type_of(value, fun)? {
-                            TypeInner::Vector { size: old_size, .. } => {
-                                if size != old_size {
-                                    self.errors.push(
-                                        WgslError::new(
-                                            "cannot cast between vectors of different sizes",
-                                        )
-                                        .marker(span),
-                                    );
-                                    return None;
-                                }
-
-                                crate::Expression::As {
-                                    expr: value,
-                                    kind,
-                                    convert: Some(width),
-                                }
-                            }
-                            _ => crate::Expression::Splat { size, value },
-                        }
-                    } else {
-                        crate::Expression::Compose {
-                            ty: self.register_type(TypeInner::Vector { size, kind, width }),
-                            components: call
-                                .args
-                                .iter()
-                                .filter_map(|arg| self.expr(arg, b, fun))
-                                .collect(),
-                        }
-                    };
-
-                    Some(self.emit_expr(expr, span, b, fun))
-                }
-                InbuiltType::Matrix {
-                    columns,
-                    rows,
-                    width,
-                } => {
-                    let expr = crate::Expression::Compose {
-                        ty: self.register_type(TypeInner::Matrix {
-                            columns,
-                            rows,
-                            width,
-                        }),
-                        components: call
-                            .args
-                            .iter()
-                            .filter_map(|arg| self.expr(arg, b, fun))
-                            .collect(),
-                    };
-                    Some(self.emit_expr(expr, span, b, fun))
-                }
-                InbuiltType::Array { ref of, ref len } => {
-                    let (len, lspan) = len
-                        .as_ref()
-                        .and_then(|x| self.eval.as_positive_int(x).map(|l| (l, x.span)))
-                        .unwrap_or((call.args.len() as _, span));
-                    let size = self.module.constants.append(
-                        crate::Constant {
-                            name: None,
-                            inner: crate::ConstantInner::Scalar {
-                                value: crate::ScalarValue::Uint(len as _),
-                                width: 4,
-                            },
-                            specialization: None,
-                        },
-                        lspan,
-                    );
-
-                    let base = self.ty(of);
-
-                    let first = call.args.first().and_then(|x| self.expr(x, b, fun));
-                    let (base, first) = if let Some(base) = base {
-                        (base, first)
-                    } else if let Some(first) = first {
-                        let base = self.type_handle_of(first, fun)?;
-                        (base, Some(first))
-                    } else {
-                        self.errors.push(
-                            WgslError::new("cannot infer the type of an empty array").marker(span),
-                        );
-                        return None;
-                    };
-
-                    let _ = self
-                        .layouter
-                        .update(&self.module.types, &self.module.constants);
-                    let ty = self.register_type(TypeInner::Array {
-                        base,
-                        size: crate::ArraySize::Constant(size),
-                        stride: self.layouter[base].to_stride(),
-                    });
-
-                    let expr = crate::Expression::Compose {
-                        ty,
-                        components: first
-                            .into_iter()
-                            .chain(
-                                call.args
-                                    .iter()
-                                    .skip(1)
-                                    .filter_map(|arg| self.expr(arg, b, fun)),
-                            )
-                            .collect(),
-                    };
-                    Some(self.emit_expr(expr, span, b, fun))
-                }
-                _ => unreachable!("got unconstructible inbuilt type"),
-            },
-            FnTarget::Decl(id) => match self.decl_map[&id] {
+            CallTarget::Construction(ref ty) => {
+                self.construct(ty, &call.args, call.target_span, b, fun)
+            }
+            CallTarget::Decl(id) => match self.data.decl_map[&id] {
                 DeclData::Function(function) => {
-                    let result = if self.module.functions[function].result.is_some() {
+                    let result = if self.data.module.functions[function].result.is_some() {
                         let expr = fun
                             .expressions
                             .append(crate::Expression::CallResult(function), span);
@@ -1332,7 +1242,7 @@ impl<'a> Lowerer<'a> {
                     } else {
                         None
                     };
-                    let target_args: Vec<_> = self.module.functions[function]
+                    let target_args: Vec<_> = self.data.module.functions[function]
                         .arguments
                         .iter()
                         .map(|x| x.ty)
@@ -1375,15 +1285,7 @@ impl<'a> Lowerer<'a> {
                     None
                 }
                 DeclData::Type(ty) => {
-                    let expr = crate::Expression::Compose {
-                        ty,
-                        components: call
-                            .args
-                            .iter()
-                            .filter_map(|arg| self.expr(arg, b, fun))
-                            .collect(),
-                    };
-                    Some(self.emit_expr(expr, span, b, fun))
+                    self.construct(&Constructible::Type(ty), &call.args, span, b, fun)
                 }
                 DeclData::EntryPoint => {
                     self.errors
@@ -1392,10 +1294,10 @@ impl<'a> Lowerer<'a> {
                 }
                 DeclData::Assert | DeclData::Override | DeclData::Error => None,
             },
-            FnTarget::InbuiltFunction(inbuilt, ref generics) => {
+            CallTarget::InbuiltFunction(inbuilt, ref generics) => {
                 self.inbuilt_function(inbuilt, generics, &call.args, span, b, fun)
             }
-            FnTarget::Error => None,
+            CallTarget::Error => None,
         }
     }
 
@@ -1414,11 +1316,11 @@ impl<'a> Lowerer<'a> {
             } => {
                 if let Some(ref loc) = *location {
                     let mut binding = crate::Binding::Location {
-                        location: self.eval.as_positive_int(loc)?,
+                        location: self.eval.as_positive_int(&self.data, loc)?,
                         interpolation,
                         sampling,
                     };
-                    binding.apply_default_interpolation(&self.module.types[ty].inner);
+                    binding.apply_default_interpolation(&self.data.module.types[ty].inner);
 
                     Some(binding)
                 } else {
@@ -1440,11 +1342,11 @@ impl<'a> Lowerer<'a> {
             expr,
             &fun.expressions,
             &ResolveContext {
-                constants: &self.module.constants,
-                types: &self.module.types,
-                global_vars: &self.module.global_variables,
+                constants: &self.data.module.constants,
+                types: &self.data.module.types,
+                global_vars: &self.data.module.global_variables,
                 local_vars: &fun.local_variables,
-                functions: &self.module.functions,
+                functions: &self.data.module.functions,
                 arguments: &fun.arguments,
             },
         ) {
@@ -1456,7 +1358,7 @@ impl<'a> Lowerer<'a> {
             }
         }
 
-        Some(self.typifier.get(expr, &self.module.types))
+        Some(self.typifier.get(expr, &self.data.module.types))
     }
 
     fn type_handle_of(
@@ -1473,7 +1375,7 @@ impl<'a> Lowerer<'a> {
     }
 
     fn fmt_type(&self, ty: Handle<crate::Type>) -> impl Display + '_ {
-        self.module.types[ty]
+        self.data.module.types[ty]
             .name
             .as_ref()
             .expect("type without name")
@@ -1509,13 +1411,13 @@ impl<'a> Lowerer<'a> {
                     InbuiltType::Array { ref of, ref len } => {
                         let base = self.ty(of)?;
                         self.layouter
-                            .update(&self.module.types, &self.module.constants)
+                            .update(&self.data.module.types, &self.data.module.constants)
                             .unwrap();
                         TypeInner::Array {
                             base,
                             size: len
                                 .as_ref()
-                                .and_then(|x| self.constant(x).map(crate::ArraySize::Constant))
+                                .and_then(|x| self.array_size(x))
                                 .unwrap_or(crate::ArraySize::Dynamic),
                             stride: self.layouter[base].to_stride(),
                         }
@@ -1526,7 +1428,7 @@ impl<'a> Lowerer<'a> {
                             base,
                             size: len
                                 .as_ref()
-                                .and_then(|x| self.constant(x).map(crate::ArraySize::Constant))
+                                .and_then(|x| self.array_size(x))
                                 .unwrap_or(crate::ArraySize::Dynamic),
                         }
                     }
@@ -1540,7 +1442,7 @@ impl<'a> Lowerer<'a> {
 
                 Some(self.register_type(inner))
             }
-            TypeKind::User(ref id) => match self.decl_map[id] {
+            TypeKind::User(ref id) => match self.data.decl_map[id] {
                 DeclData::Type(handle) => Some(handle),
                 ref x => {
                     self.errors.push(
@@ -1553,13 +1455,13 @@ impl<'a> Lowerer<'a> {
     }
 
     fn register_type(&mut self, inner: TypeInner) -> Handle<crate::Type> {
-        self.module.types.insert(
+        self.data.module.types.insert(
             crate::Type {
                 name: Some(
                     TypeInnerFormatter {
                         ty: &inner,
-                        types: &self.module.types,
-                        constants: &self.module.constants,
+                        types: &self.data.module.types,
+                        constants: &self.data.module.constants,
                     }
                     .to_string(),
                 ),
@@ -1570,13 +1472,13 @@ impl<'a> Lowerer<'a> {
     }
 
     fn constant(&mut self, expr: &Expr) -> Option<Handle<crate::Constant>> {
-        let value = self.eval.eval(expr)?;
+        let value = self.eval.eval(&self.data, expr)?;
         Some(self.val_to_const(value, expr.span))
     }
 
     fn val_to_const(&mut self, value: Value, span: crate::Span) -> Handle<crate::Constant> {
         let inner = self.val_to_const_inner(value, span);
-        self.module.constants.append(
+        self.data.module.constants.fetch_or_append(
             crate::Constant {
                 name: None,
                 specialization: None,
@@ -1602,7 +1504,7 @@ impl<'a> Lowerer<'a> {
                     .into_iter()
                     .map(|scalar| {
                         let inner = scalar_to_const(self, scalar);
-                        self.module.constants.append(
+                        self.data.module.constants.fetch_or_append(
                             crate::Constant {
                                 name: None,
                                 specialization: None,
@@ -1611,6 +1513,13 @@ impl<'a> Lowerer<'a> {
                             span,
                         )
                     })
+                    .collect(),
+            },
+            Value::Struct { handle, values, .. } => crate::ConstantInner::Composite {
+                ty: handle,
+                components: values
+                    .into_iter()
+                    .map(|value| self.val_to_const(value, span))
                     .collect(),
             },
         }
@@ -1640,6 +1549,7 @@ impl<'a> Lowerer<'a> {
                     width,
                 })
             }
+            Value::Struct { handle, .. } => handle,
         }
     }
 
@@ -1673,7 +1583,7 @@ impl<'a> Lowerer<'a> {
             },
         };
 
-        let c = self.module.constants.append(
+        let c = self.data.module.constants.fetch_or_append(
             crate::Constant {
                 name: None,
                 specialization: None,
@@ -1704,12 +1614,12 @@ impl<'a> Lowerer<'a> {
         b: &mut crate::Block,
         fun: &mut crate::Function,
     ) -> Option<Handle<crate::Expression>> {
-        match self.module.types[ty].inner {
+        match self.data.module.types[ty].inner {
             TypeInner::Scalar { kind, width } => match kind {
                 crate::ScalarKind::Float => match to {
                     InferenceExpression::Concrete(handle) => Some(handle),
                     InferenceExpression::AbstractInt(i) => {
-                        let c = self.module.constants.append(
+                        let c = self.data.module.constants.fetch_or_append(
                             crate::Constant {
                                 name: None,
                                 specialization: None,
@@ -1723,7 +1633,7 @@ impl<'a> Lowerer<'a> {
                         Some(self.emit_expr(crate::Expression::Constant(c), span, b, fun))
                     }
                     InferenceExpression::AbstractFloat(f) => {
-                        let c = self.module.constants.append(
+                        let c = self.data.module.constants.fetch_or_append(
                             crate::Constant {
                                 name: None,
                                 specialization: None,
@@ -1749,7 +1659,7 @@ impl<'a> Lowerer<'a> {
                                 return None;
                             }
                         };
-                        let c = self.module.constants.append(
+                        let c = self.data.module.constants.fetch_or_append(
                             crate::Constant {
                                 name: None,
                                 specialization: None,

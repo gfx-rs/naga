@@ -17,9 +17,8 @@ struct FragmentOutput {
     f32_ color;
 };
 typedef bool bool_;
-typedef int i32_;
 struct arrayu321_ {
-    u32_ inner[1];
+    u32_ inner[1u];
 };
 typedef metal::uint3 vec3u32_;
 struct Input1_ {

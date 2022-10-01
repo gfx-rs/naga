@@ -1384,7 +1384,7 @@ pub enum Expression {
     },
     /// Cast a simple type to another kind.
     As {
-        /// Source expression, which can only be a scalar or a vector.
+        /// Source expression, which can only be a scalar, vector, or matrix.
         expr: Handle<Expression>,
         /// Target scalar kind.
         kind: ScalarKind,

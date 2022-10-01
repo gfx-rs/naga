@@ -4,12 +4,15 @@
 
 using metal::uint;
 
+typedef int i32_;
 typedef metal::int2 vec2i32_;
 typedef metal::int3 vec3i32_;
 typedef metal::int4 vec4i32_;
+typedef uint u32_;
 typedef metal::uint2 vec2u32_;
 typedef metal::uint3 vec3u32_;
 typedef metal::uint4 vec4u32_;
+typedef float f32_;
 typedef metal::float2 vec2f32_;
 typedef metal::float3 vec3f32_;
 typedef metal::float4 vec4f32_;

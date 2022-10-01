@@ -9,9 +9,8 @@ struct _mslBufferSizes {
 };
 
 typedef float f32_;
-typedef int i32_;
 struct arrayf3210_ {
-    f32_ inner[10];
+    f32_ inner[10u];
 };
 typedef metal::float4 vec4f32_;
 typedef metal::float3x4 mat3x4f32_;
@@ -23,6 +22,7 @@ struct Globals {
     mat3x4f32_ m;
     arrayf32_ d;
 };
+typedef int i32_;
 typedef device Globals& ptrstorageGlobals;
 
 f32_ index_array(
@@ -92,8 +92,8 @@ f32_ index_in_bounds(
     constant _mslBufferSizes& _buffer_sizes
 ) {
     f32_ _e4 = globals.a.inner[9];
-    float _e9 = globals.v[3];
-    float _e17 = globals.m[2][3];
+    float _e9 = globals.v.w;
+    float _e17 = globals.m[2].w;
     return (_e4 + _e9) + _e17;
 }
 
@@ -164,7 +164,7 @@ void set_in_bounds(
     constant _mslBufferSizes& _buffer_sizes
 ) {
     globals.a.inner[9] = v_7;
-    globals.v[3] = v_7;
-    globals.m[2][3] = v_7;
+    globals.v.w = v_7;
+    globals.m[2].w = v_7;
     return;
 }

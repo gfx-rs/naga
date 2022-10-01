@@ -82,7 +82,7 @@ impl Lowerer<'_> {
         let get_atomic_ptr =
             |this: &mut Self, pointer: Handle<crate::Expression>, f: &crate::Function| {
                 let ptr_ty = this.type_handle_of(pointer, f)?;
-                let ty = match this.module.types[ptr_ty].inner {
+                let ty = match this.data.module.types[ptr_ty].inner {
                     TypeInner::Pointer { base, .. } => base,
                     _ => {
                         this.errors.push(
@@ -94,7 +94,7 @@ impl Lowerer<'_> {
                     }
                 };
 
-                match this.module.types[ty].inner {
+                match this.data.module.types[ty].inner {
                     TypeInner::Atomic { kind, width } => Some((kind, width)),
                     _ => {
                         this.errors.push(
@@ -144,7 +144,7 @@ impl Lowerer<'_> {
                 require_generics(self, 1)?;
 
                 let to = self.ty(&generics[0])?;
-                let kind = match self.module.types[to].inner {
+                let kind = match self.data.module.types[to].inner {
                     TypeInner::Scalar { kind, .. } => kind,
                     TypeInner::Vector { kind, .. } => kind,
                     _ => {
@@ -739,7 +739,7 @@ impl Lowerer<'_> {
         fun: &crate::Function,
     ) -> Option<(bool, bool)> {
         let ty = self.type_handle_of(image, fun)?;
-        match self.module.types[ty].inner {
+        match self.data.module.types[ty].inner {
             TypeInner::Image { class, arrayed, .. } => Some(match class {
                 ImageClass::Sampled { multi, .. } | ImageClass::Depth { multi } => (arrayed, multi),
                 ImageClass::Storage { .. } => (arrayed, false),
@@ -829,7 +829,7 @@ impl Lowerer<'_> {
             }
             _ => {
                 // component not present.
-                let component = self.eval.as_positive_int(component_or_img)?;
+                let component = self.eval.as_positive_int(&self.data, component_or_img)?;
                 let image = (img_or_sampler, img_or_sampler_span);
                 let sampler = self.expr(args.next().unwrap(), b, fun)?;
                 (component, image, sampler)

@@ -5,18 +5,17 @@
 using metal::uint;
 
 typedef metal::uint3 vec3u32_;
+typedef metal::uint2 vec2u32_;
 typedef metal::int2 vec2i32_;
 typedef int i32_;
+typedef uint u32_;
 typedef metal::uint4 vec4u32_;
 typedef float f32_;
 typedef metal::float4 vec4f32_;
 typedef metal::int3 vec3i32_;
 typedef metal::float2 vec2f32_;
+typedef metal::float3 vec3f32_;
 constant vec2i32_ const_vec2i32_ = {3, 1};
-constant vec2i32_ const_vec2i32_1 = {3, 1};
-constant vec2i32_ const_vec2i32_2 = {3, 1};
-constant vec2i32_ const_vec2i32_3 = {3, 1};
-constant vec2i32_ const_vec2i32_4 = {3, 1};
 
 struct main_Input {
 };
@@ -124,8 +123,8 @@ fragment texture_sampleOutput texture_sample(
     metal::float4 s2d = image_2d.sample(sampler_reg, tc);
     metal::float4 s2d_offset = image_2d.sample(sampler_reg, tc, const_vec2i32_);
     metal::float4 s2d_level = image_2d.sample(sampler_reg, tc, metal::level(2.3));
-    metal::float4 s2d_level_offset = image_2d.sample(sampler_reg, tc, metal::level(2.3), const_vec2i32_1);
-    metal::float4 s2d_bias_offset = image_2d.sample(sampler_reg, tc, metal::bias(2.0), const_vec2i32_2);
+    metal::float4 s2d_level_offset = image_2d.sample(sampler_reg, tc, metal::level(2.3), const_vec2i32_);
+    metal::float4 s2d_bias_offset = image_2d.sample(sampler_reg, tc, metal::bias(2.0), const_vec2i32_);
     return texture_sampleOutput { (((s1d + s2d) + s2d_offset) + s2d_level) + s2d_level_offset };
 }
 
@@ -157,9 +156,9 @@ fragment gatherOutput gather(
 ) {
     metal::float2 tc_2 = metal::float2(0.5);
     metal::float4 s2d_1 = image_2d.gather(sampler_reg, tc_2, int2(0), metal::component::y);
-    metal::float4 s2d_offset_1 = image_2d.gather(sampler_reg, tc_2, const_vec2i32_3, metal::component::w);
+    metal::float4 s2d_offset_1 = image_2d.gather(sampler_reg, tc_2, const_vec2i32_, metal::component::w);
     metal::float4 s2d_depth_1 = image_2d_depth.gather_compare(sampler_cmp, tc_2, 0.5);
-    metal::float4 s2d_depth_offset = image_2d_depth.gather_compare(sampler_cmp, tc_2, 0.5, const_vec2i32_4);
+    metal::float4 s2d_depth_offset = image_2d_depth.gather_compare(sampler_cmp, tc_2, 0.5, const_vec2i32_);
     return gatherOutput { ((s2d_1 + s2d_offset_1) + s2d_depth_1) + s2d_depth_offset };
 }
 

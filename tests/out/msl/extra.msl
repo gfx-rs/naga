@@ -17,6 +17,7 @@ struct FragmentIn {
     u32_ primitive_index;
 };
 typedef constant PushConstants& ptrpush_constantPushConstants;
+typedef float f32_;
 typedef metal::float3 vec3f32_;
 
 struct main_Input {

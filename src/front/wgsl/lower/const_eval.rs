@@ -1,7 +1,8 @@
+use crate::front::wgsl::lower::{DeclData, EvaluationData};
 use crate::front::wgsl::parse::ast::Literal;
-use crate::front::wgsl::resolve::ir::{CallExpr, Expr, ExprKind, FnTarget, InbuiltType};
+use crate::front::wgsl::resolve::ir::{CallExpr, CallTarget, Constructible, Expr, ExprKind};
 use crate::front::wgsl::WgslError;
-use crate::UnaryOperator;
+use crate::{Handle, UnaryOperator};
 use std::convert::TryInto;
 use std::fmt::Display;
 use std::ops::{Neg, Not};
@@ -15,7 +16,7 @@ impl Evaluator {
         Self { errors: Vec::new() }
     }
 
-    pub fn eval(&mut self, expr: &Expr) -> Option<Value> {
+    pub(super) fn eval(&mut self, data: &EvaluationData, expr: &Expr) -> Option<Value> {
         let unsupported = |this: &mut Self| {
             this.errors.push(
                 WgslError::new("this operation is not supported in a const context yet")
@@ -38,7 +39,7 @@ impl Evaluator {
                 }
             })),
             ExprKind::Unary(ref u) => {
-                let rhs = self.eval(&u.expr)?;
+                let rhs = self.eval(data, &u.expr)?;
                 let ty = rhs.ty().to_string();
 
                 let ret = match u.op {
@@ -56,10 +57,11 @@ impl Evaluator {
                 ret
             }
             ExprKind::Call(CallExpr {
-                target: FnTarget::InbuiltType(ref ty),
+                target: CallTarget::Construction(ref ty),
                 ref args,
-            }) => match **ty {
-                InbuiltType::Vector { size, .. } => {
+                ..
+            }) => match *ty {
+                Constructible::Vector { size, .. } | Constructible::PartialVector { size } => {
                     if args.len() != size as usize && args.len() != 1 {
                         self.errors.push(
                             WgslError::new(format!(
@@ -74,7 +76,7 @@ impl Evaluator {
 
                     let mut out = Vec::with_capacity(size as usize);
                     for expr in args {
-                        let arg = self.eval(expr)?;
+                        let arg = self.eval(data, expr)?;
                         match arg {
                             Value::Scalar(scalar) => out.push(scalar),
                             _ => {
@@ -102,6 +104,28 @@ impl Evaluator {
                     None
                 }
             },
+            ExprKind::Call(CallExpr {
+                target: CallTarget::Decl(id),
+                ref args,
+                ..
+            }) => match data.decl_map[&id] {
+                DeclData::Type(ty) => {
+                    let ty_val = &data.module.types[ty];
+                    let values = args
+                        .iter()
+                        .map(|x| self.eval(data, x))
+                        .collect::<Option<Vec<_>>>()?;
+                    Some(Value::Struct {
+                        ty: ty_val.name.clone().unwrap(),
+                        handle: ty,
+                        values,
+                    })
+                }
+                _ => {
+                    unsupported(self);
+                    None
+                }
+            },
             ExprKind::Binary(_)
             | ExprKind::Call(_)
             | ExprKind::Index(_, _)
@@ -116,8 +140,8 @@ impl Evaluator {
         }
     }
 
-    pub fn as_positive_int(&mut self, expr: &Expr) -> Option<u32> {
-        let value = self.eval(expr)?;
+    pub(super) fn as_positive_int(&mut self, data: &EvaluationData, expr: &Expr) -> Option<u32> {
+        let value = self.eval(data, expr)?;
 
         match value {
             Value::Scalar(ScalarValue::U32(u)) => Some(u),
@@ -157,8 +181,8 @@ impl Evaluator {
         }
     }
 
-    pub fn as_int(&mut self, expr: &Expr) -> Option<i32> {
-        let value = self.eval(expr)?;
+    pub(super) fn as_int(&mut self, data: &EvaluationData, expr: &Expr) -> Option<i32> {
+        let value = self.eval(data, expr)?;
 
         match value {
             Value::Scalar(ScalarValue::U32(u)) => {
@@ -198,8 +222,8 @@ impl Evaluator {
         }
     }
 
-    pub fn as_bool(&mut self, expr: &Expr) -> Option<bool> {
-        let value = self.eval(expr)?;
+    pub(super) fn as_bool(&mut self, data: &EvaluationData, expr: &Expr) -> Option<bool> {
+        let value = self.eval(data, expr)?;
 
         match value {
             Value::Scalar(ScalarValue::Bool(b)) => Some(b),
@@ -224,12 +248,17 @@ impl Evaluator {
 pub enum Value {
     Scalar(ScalarValue),
     Vector(Vec<ScalarValue>),
+    Struct {
+        ty: String,
+        handle: Handle<crate::Type>,
+        values: Vec<Value>,
+    },
 }
 
 impl Value {
     fn map<F>(self, mut f: F) -> Option<Self>
     where
-        F: FnMut(ScalarValue) -> Option<ScalarValue>,
+        F: FnMut(ScalarValue) -> Option<ScalarValue> + Copy,
     {
         match self {
             Value::Scalar(s) => f(s).map(Value::Scalar),
@@ -238,6 +267,11 @@ impl Value {
                 .map(f)
                 .collect::<Option<Vec<_>>>()
                 .map(Value::Vector),
+            Value::Struct { ty, handle, values } => values
+                .into_iter()
+                .map(move |x| x.map(f))
+                .collect::<Option<Vec<_>>>()
+                .map(|values| Value::Struct { ty, handle, values }),
         }
     }
 
@@ -253,6 +287,18 @@ impl Display for Value {
             Value::Vector(ref v) => {
                 write!(f, "vec{}(", v.len())?;
                 for (i, s) in v.iter().enumerate() {
+                    if i != 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{}", s)?;
+                }
+                write!(f, ")")
+            }
+            Value::Struct {
+                ref ty, ref values, ..
+            } => {
+                write!(f, "{}(", ty)?;
+                for (i, s) in values.iter().enumerate() {
                     if i != 0 {
                         write!(f, ", ")?;
                     }
@@ -349,6 +395,7 @@ impl Display for ValueType<'_> {
             Value::Vector(ref v) => {
                 write!(f, "vec{}<{}>", v.len(), v[0].ty())
             }
+            Value::Struct { ref ty, .. } => write!(f, "{}", ty),
         }
     }
 }

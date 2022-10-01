@@ -1,7 +1,7 @@
 ; SPIR-V
 ; Version: 1.1
 ; Generator: rspirv
-; Bound: 50
+; Bound: 49
 OpCapability Shader
 %1 = OpExtInstImport "GLSL.std.450"
 OpMemoryModel Logical GLSL450
@@ -14,7 +14,6 @@ OpName %6 "f32"
 OpMemberName %9 0 "a"
 OpMemberName %9 1 "b"
 OpName %9 "Test"
-OpName %4 "i32"
 OpName %10 "array<vec3<f32>, 2>"
 OpMemberName %11 0 "a"
 OpMemberName %11 1 "b"
@@ -55,7 +54,7 @@ OpDecorate %25 Block
 OpMemberDecorate %25 0 Offset 0
 OpDecorate %28 BuiltIn Position
 %2 = OpTypeVoid
-%4 = OpTypeInt 32 1
+%4 = OpTypeInt 32 0
 %3 = OpConstant  %4  2
 %6 = OpTypeFloat 32
 %5 = OpConstant  %6  1.0
@@ -82,27 +81,26 @@ OpDecorate %28 BuiltIn Position
 %29 = OpTypePointer Output %14
 %28 = OpVariable  %29  Output
 %31 = OpTypeFunction %2
-%33 = OpTypeInt 32 0
-%32 = OpConstant  %33  0
-%39 = OpTypePointer Uniform %6
-%40 = OpConstant  %33  1
+%32 = OpConstant  %4  0
+%38 = OpTypePointer Uniform %6
+%39 = OpConstant  %4  1
 %30 = OpFunction  %2  None %31
 %27 = OpLabel
-%34 = OpAccessChain  %15  %18 %32
-%35 = OpAccessChain  %16  %21 %32
-%36 = OpAccessChain  %17  %24 %32
-OpBranch %37
-%37 = OpLabel
-%38 = OpCompositeConstruct  %14  %5 %5 %5 %5
-%41 = OpAccessChain  %39  %34 %40
-%42 = OpLoad  %6  %41
-%43 = OpVectorTimesScalar  %14  %38 %42
-%44 = OpAccessChain  %39  %35 %40
-%45 = OpLoad  %6  %44
-%46 = OpVectorTimesScalar  %14  %43 %45
-%47 = OpAccessChain  %39  %36 %40
-%48 = OpLoad  %6  %47
-%49 = OpVectorTimesScalar  %14  %46 %48
-OpStore %28 %49
+%33 = OpAccessChain  %15  %18 %32
+%34 = OpAccessChain  %16  %21 %32
+%35 = OpAccessChain  %17  %24 %32
+OpBranch %36
+%36 = OpLabel
+%37 = OpCompositeConstruct  %14  %5 %5 %5 %5
+%40 = OpAccessChain  %38  %33 %39
+%41 = OpLoad  %6  %40
+%42 = OpVectorTimesScalar  %14  %37 %41
+%43 = OpAccessChain  %38  %34 %39
+%44 = OpLoad  %6  %43
+%45 = OpVectorTimesScalar  %14  %42 %44
+%46 = OpAccessChain  %38  %35 %39
+%47 = OpLoad  %6  %46
+%48 = OpVectorTimesScalar  %14  %45 %47
+OpStore %28 %48
 OpReturn
 OpFunctionEnd

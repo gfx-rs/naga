@@ -79,39 +79,7 @@
             specialization: None,
             inner: Scalar(
                 width: 4,
-                value: Uint(0),
-            ),
-        ),
-        (
-            name: None,
-            specialization: None,
-            inner: Scalar(
-                width: 4,
-                value: Uint(2),
-            ),
-        ),
-        (
-            name: None,
-            specialization: None,
-            inner: Scalar(
-                width: 4,
                 value: Uint(3),
-            ),
-        ),
-        (
-            name: None,
-            specialization: None,
-            inner: Scalar(
-                width: 4,
-                value: Uint(1),
-            ),
-        ),
-        (
-            name: None,
-            specialization: None,
-            inner: Scalar(
-                width: 4,
-                value: Uint(1),
             ),
         ),
     ],
@@ -182,7 +150,7 @@
                     left: 10,
                     right: 11,
                 ),
-                Constant(4),
+                Constant(1),
                 Binary(
                     op: Equal,
                     left: 12,
@@ -192,14 +160,14 @@
                 Load(
                     pointer: 15,
                 ),
-                Constant(5),
+                Constant(3),
                 Binary(
                     op: Divide,
                     left: 16,
                     right: 17,
                 ),
                 LocalVariable(1),
-                Constant(6),
+                Constant(4),
                 LocalVariable(1),
                 Load(
                     pointer: 21,
@@ -209,7 +177,7 @@
                     left: 20,
                     right: 22,
                 ),
-                Constant(7),
+                Constant(2),
                 Binary(
                     op: Add,
                     left: 23,
@@ -220,7 +188,7 @@
                 Load(
                     pointer: 27,
                 ),
-                Constant(8),
+                Constant(2),
                 Binary(
                     op: Add,
                     left: 28,

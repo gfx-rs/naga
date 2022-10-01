@@ -11,6 +11,7 @@ OpSource GLSL 450
 OpName %5 "texture_2d<float>"
 OpName %6 "sampler"
 OpName %7 "vec4<f32>"
+OpName %4 "f32"
 OpName %8 "vec2<f32>"
 OpName %9 "Texture"
 OpName %11 "Sampler"

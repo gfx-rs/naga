@@ -29,6 +29,7 @@ struct VertexOutput {
 typedef metal::int4 vec4i32_;
 typedef constant Entity& ptruniformEntity;
 typedef metal::float3x3 mat3x3f32_;
+typedef metal::int3 vec3i32_;
 typedef thread VertexOutput& ptrfunctionVertexOutput;
 typedef constant Globals& ptruniformGlobals;
 struct Light {
@@ -37,13 +38,13 @@ struct Light {
     vec4f32_ color;
 };
 typedef Light arrayLight[1];
-typedef int i32_;
 struct arrayLight10_ {
-    Light inner[10];
+    Light inner[10u];
 };
 typedef uint u32_;
 typedef float f32_;
 typedef metal::float2 vec2f32_;
+typedef int i32_;
 typedef constant vec4u32_& ptruniformvec4u32_;
 constant vec3f32_ c_ambient = {0.05, 0.05, 0.05};
 

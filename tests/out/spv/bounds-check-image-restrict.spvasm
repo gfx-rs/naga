@@ -11,6 +11,23 @@ OpMemoryModel Logical GLSL450
 OpEntryPoint Fragment %222 "fragment_shader" %220
 OpExecutionMode %222 OriginUpperLeft
 OpSource GLSL 450
+OpName %7 "texture_1d<float>"
+OpName %4 "i32"
+OpName %8 "vec4<f32>"
+OpName %9 "texture_2d<float>"
+OpName %10 "vec2<i32>"
+OpName %11 "texture_2d_array<float>"
+OpName %12 "texture_3d<float>"
+OpName %13 "vec3<i32>"
+OpName %14 "texture_multisampled_2d<float>"
+OpName %15 "texture_depth_2d"
+OpName %6 "f32"
+OpName %16 "texture_depth_2d_array"
+OpName %17 "texture_depth_multisampled_2d"
+OpName %18 "texture_storage_1d<rgba8unorm, write>"
+OpName %19 "texture_storage_2d<rgba8unorm, write>"
+OpName %20 "texture_storage_2d_array<rgba8unorm, write>"
+OpName %21 "texture_storage_3d<rgba8unorm, write>"
 OpName %25 "image_1d"
 OpName %27 "image_2d"
 OpName %29 "image_2d_array"

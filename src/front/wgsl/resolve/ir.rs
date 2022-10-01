@@ -359,16 +359,48 @@ pub enum AssignTarget {
 
 #[derive(Clone, Debug)]
 pub struct CallExpr {
-    pub target: FnTarget,
+    pub target: CallTarget,
+    pub target_span: Span,
     pub args: Vec<Expr>,
 }
 
 #[derive(Clone, Debug)]
-pub enum FnTarget {
+pub enum CallTarget {
     Decl(DeclId),
     InbuiltFunction(InbuiltFunction, Vec<Type>),
-    InbuiltType(Box<InbuiltType>),
+    Construction(Constructible),
     Error,
+}
+
+#[derive(Clone, Debug)]
+pub enum Constructible {
+    Scalar {
+        kind: crate::ScalarKind,
+        width: crate::Bytes,
+    },
+    PartialVector {
+        size: crate::VectorSize,
+    },
+    Vector {
+        size: crate::VectorSize,
+        kind: crate::ScalarKind,
+        width: crate::Bytes,
+    },
+    PartialMatrix {
+        columns: crate::VectorSize,
+        rows: crate::VectorSize,
+    },
+    Matrix {
+        columns: crate::VectorSize,
+        rows: crate::VectorSize,
+        width: crate::Bytes,
+    },
+    PartialArray,
+    Array {
+        base: Box<Type>,
+        len: Box<Expr>,
+    },
+    Type(crate::Handle<crate::Type>),
 }
 
 #[derive(Clone, Debug)]

@@ -17,7 +17,7 @@ struct Input2_ {
     @builtin(instance_index) index: u32,
 }
 
-var<workgroup> output: array<u32,1>;
+var<workgroup> output: array<u32,1u>;
 
 @vertex 
 fn vertex(@builtin(vertex_index) vertex_index: u32, @builtin(instance_index) instance_index: u32, @location(10) color: u32) -> VertexOutput {

@@ -5,6 +5,7 @@
 using metal::uint;
 
 typedef metal::float4 vec4f32_;
+typedef float f32_;
 typedef metal::float2 vec2f32_;
 
 vec4f32_ test(

@@ -275,7 +275,7 @@ impl From<InterpolationType> for Interpolation {
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Hash, EnumIter)]
-pub enum PrimitiveType {
+pub enum ScalarType {
     I32,
     U32,
     F64,
@@ -284,34 +284,34 @@ pub enum PrimitiveType {
     Bool,
 }
 
-impl ToStaticString for PrimitiveType {
+impl ToStaticString for ScalarType {
     fn to_static_str(&self) -> &'static str {
         match *self {
-            PrimitiveType::I32 => "i32",
-            PrimitiveType::U32 => "u32",
-            PrimitiveType::F64 => "f64",
-            PrimitiveType::F32 => "f32",
-            PrimitiveType::F16 => "f16",
-            PrimitiveType::Bool => "bool",
+            ScalarType::I32 => "i32",
+            ScalarType::U32 => "u32",
+            ScalarType::F64 => "f64",
+            ScalarType::F32 => "f32",
+            ScalarType::F16 => "f16",
+            ScalarType::Bool => "bool",
         }
     }
 }
 
-impl Display for PrimitiveType {
+impl Display for ScalarType {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{}", self.to_static_str())
     }
 }
 
-impl From<PrimitiveType> for (ScalarKind, Bytes) {
-    fn from(ty: PrimitiveType) -> (ScalarKind, Bytes) {
+impl From<ScalarType> for (ScalarKind, Bytes) {
+    fn from(ty: ScalarType) -> (ScalarKind, Bytes) {
         match ty {
-            PrimitiveType::I32 => (ScalarKind::Sint, 4),
-            PrimitiveType::U32 => (ScalarKind::Uint, 4),
-            PrimitiveType::F64 => (ScalarKind::Float, 8),
-            PrimitiveType::F32 => (ScalarKind::Float, 4),
-            PrimitiveType::F16 => (ScalarKind::Float, 2),
-            PrimitiveType::Bool => (ScalarKind::Bool, 1),
+            ScalarType::I32 => (ScalarKind::Sint, 4),
+            ScalarType::U32 => (ScalarKind::Uint, 4),
+            ScalarType::F64 => (ScalarKind::Float, 8),
+            ScalarType::F32 => (ScalarKind::Float, 4),
+            ScalarType::F16 => (ScalarKind::Float, 2),
+            ScalarType::Bool => (ScalarKind::Bool, 1),
         }
     }
 }

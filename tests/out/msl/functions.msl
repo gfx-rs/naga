@@ -5,8 +5,12 @@
 using metal::uint;
 
 typedef metal::float2 vec2f32_;
+typedef float f32_;
 typedef int i32_;
+typedef metal::int2 vec2i32_;
 typedef uint u32_;
+typedef metal::uint3 vec3u32_;
+typedef metal::int4 vec4i32_;
 
 vec2f32_ test_fma(
 ) {

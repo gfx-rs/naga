@@ -14,12 +14,12 @@ typedef uint u32_;
 struct UniformIndex {
     u32_ index;
 };
-typedef int i32_;
 struct FragmentIn {
     u32_ index;
 };
 typedef metal::float4 vec4f32_;
 typedef constant UniformIndex& ptruniformUniformIndex;
+typedef int i32_;
 typedef metal::int2 vec2i32_;
 typedef float f32_;
 typedef metal::float2 vec2f32_;
@@ -33,13 +33,13 @@ struct main_Output {
 fragment main_Output main_(
   main_Input varyings [[stage_in]]
 , metal::array<metal::texture2d<float, metal::access::sample>, 10> texture_array_unbounded [[texture(0)]]
-, metal::array<metal::texture2d<float, metal::access::sample>, 5> texture_array_bounded [[user(fake0)]]
-, metal::array<metal::texture2d_array<float, metal::access::sample>, 5> texture_array_2darray [[user(fake0)]]
-, metal::array<metal::texture2d_ms<float, metal::access::read>, 5> texture_array_multisampled [[user(fake0)]]
-, metal::array<metal::depth2d<float, metal::access::sample>, 5> texture_array_depth [[user(fake0)]]
-, metal::array<metal::texture2d<float, metal::access::write>, 5> texture_array_storage [[user(fake0)]]
-, metal::array<metal::sampler, 5> samp [[user(fake0)]]
-, metal::array<metal::sampler, 5> samp_comp [[user(fake0)]]
+, metal::array<metal::texture2d<float, metal::access::sample>, 5u> texture_array_bounded [[user(fake0)]]
+, metal::array<metal::texture2d_array<float, metal::access::sample>, 5u> texture_array_2darray [[user(fake0)]]
+, metal::array<metal::texture2d_ms<float, metal::access::read>, 5u> texture_array_multisampled [[user(fake0)]]
+, metal::array<metal::depth2d<float, metal::access::sample>, 5u> texture_array_depth [[user(fake0)]]
+, metal::array<metal::texture2d<float, metal::access::write>, 5u> texture_array_storage [[user(fake0)]]
+, metal::array<metal::sampler, 5u> samp [[user(fake0)]]
+, metal::array<metal::sampler, 5u> samp_comp [[user(fake0)]]
 , constant UniformIndex& uni [[user(fake0)]]
 ) {
     const FragmentIn fragment_in = { varyings.index };
