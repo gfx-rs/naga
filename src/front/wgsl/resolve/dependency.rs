@@ -10,7 +10,7 @@ pub struct DependencyContext {
 }
 
 impl DependencyContext {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             visited: Vec::new(),
             temp_visited: Vec::new(),
