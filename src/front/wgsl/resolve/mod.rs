@@ -1,9 +1,11 @@
 use aho_corasick::AhoCorasick;
 use rustc_hash::{FxHashMap, FxHashSet};
+use std::ops::{Deref, DerefMut};
 
 use crate::front::wgsl::parse::ast;
 use crate::front::wgsl::parse::ast::UnaryOp;
 use crate::front::wgsl::parse::ast::{ExprKind, GlobalDeclKind, Ident, StmtKind, VarDecl};
+use crate::front::wgsl::resolve::dependency::DependencyContext;
 use crate::front::wgsl::resolve::inbuilt::Attribute;
 use crate::front::wgsl::WgslError;
 use crate::{
@@ -30,61 +32,9 @@ pub mod inbuilt_functions;
 mod index;
 pub mod ir;
 
-pub fn resolve(
-    tu: ast::TranslationUnit,
-    intern: &mut Interner,
-    diagnostics: &mut Vec<WgslError>,
-) -> ir::TranslationUnit {
-    let index = index::generate_index(&tu, diagnostics);
-
-    let mut out = ir::TranslationUnit::new(EnabledFeatures::new(intern));
-
-    for enable in tu.enables {
-        out.features.enable(enable, intern, diagnostics);
-    }
-
-    let mut resolver = Resolver {
-        kws: Box::new(Kws::init(intern)),
-        access_mode: Matcher::new(intern),
-        address_space: Matcher::new(intern),
-        builtin: Matcher::new(intern),
-        interpolation_sample: Matcher::new(intern),
-        interpolation_type: Matcher::new(intern),
-        scalar: Matcher::new(intern),
-        vec: Matcher::new(intern),
-        mat: Matcher::new(intern),
-        sampled_texture: Matcher::new(intern),
-        depth_texture: Matcher::new(intern),
-        sampler: Matcher::new(intern),
-        storage_texture: Matcher::new(intern),
-        texel_format: Matcher::new(intern),
-        conservative_depth: Matcher::new(intern),
-        inbuilt_function: Matcher::new(intern),
-        tu: &mut out,
-        index,
-        diagnostics,
-        intern,
-        reserved_matcher: reserved_matcher(),
-        locals: 0,
-        in_function: false,
-        scopes: Vec::new(),
-        dependencies: FxHashSet::default(),
-    };
-
-    for decl in tu.decls {
-        resolver.decl(decl);
-    }
-
-    dependency::resolve_all_dependencies(&mut out, diagnostics);
-
-    out
-}
-
-struct Resolver<'a> {
+pub struct ResolveContext {
+    dependency_context: DependencyContext,
     index: Index,
-    tu: &'a mut ir::TranslationUnit,
-    diagnostics: &'a mut Vec<WgslError>,
-    intern: &'a mut Interner,
     reserved_matcher: AhoCorasick,
     access_mode: Matcher<AccessMode>,
     address_space: Matcher<AddressSpace>,
@@ -106,6 +56,96 @@ struct Resolver<'a> {
     in_function: bool,
     scopes: Vec<FxHashMap<Text, (LocalId, Span, bool)>>,
     dependencies: FxHashSet<DeclDependency>,
+}
+
+impl ResolveContext {
+    pub fn new(intern: &mut Interner) -> Self {
+        Self {
+            dependency_context: DependencyContext::new(),
+            index: Index::new(),
+            kws: Box::new(Kws::init(intern)),
+            access_mode: Matcher::new(intern),
+            address_space: Matcher::new(intern),
+            builtin: Matcher::new(intern),
+            interpolation_sample: Matcher::new(intern),
+            interpolation_type: Matcher::new(intern),
+            scalar: Matcher::new(intern),
+            vec: Matcher::new(intern),
+            mat: Matcher::new(intern),
+            sampled_texture: Matcher::new(intern),
+            depth_texture: Matcher::new(intern),
+            sampler: Matcher::new(intern),
+            storage_texture: Matcher::new(intern),
+            texel_format: Matcher::new(intern),
+            conservative_depth: Matcher::new(intern),
+            inbuilt_function: Matcher::new(intern),
+            reserved_matcher: reserved_matcher(),
+            locals: 0,
+            in_function: false,
+            scopes: Vec::new(),
+            dependencies: FxHashSet::default(),
+        }
+    }
+
+    pub fn reset(&mut self) {
+        self.locals = 0;
+        self.in_function = false;
+        self.scopes.clear();
+        self.dependencies.clear();
+    }
+
+    pub fn resolve(
+        &mut self,
+        tu: ast::TranslationUnit,
+        intern: &mut Interner,
+        diagnostics: &mut Vec<WgslError>,
+    ) -> ir::TranslationUnit {
+        self.reset();
+
+        self.index.generate(&tu, diagnostics);
+
+        let mut out = ir::TranslationUnit::new(EnabledFeatures::new(intern));
+
+        for enable in tu.enables {
+            out.features.enable(enable, intern, diagnostics);
+        }
+
+        let mut resolver = Resolver {
+            tu: &mut out,
+            intern,
+            diagnostics,
+            ctx: self,
+        };
+
+        for decl in tu.decls {
+            resolver.decl(decl);
+        }
+
+        self.dependency_context.resolve(&mut out, diagnostics);
+
+        out
+    }
+}
+
+struct Resolver<'a> {
+    tu: &'a mut ir::TranslationUnit,
+    diagnostics: &'a mut Vec<WgslError>,
+    intern: &'a mut Interner,
+    ctx: &'a mut ResolveContext,
+}
+
+impl Deref for Resolver<'_> {
+    type Target = ResolveContext;
+
+    fn deref(&self) -> &Self::Target {
+        self.ctx
+    }
+}
+
+impl DerefMut for Resolver<'_> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.ctx
+    }
 }
 
 impl<'a> Resolver<'a> {
@@ -218,10 +258,10 @@ impl<'a> Resolver<'a> {
     fn arg(&mut self, arg: ast::Arg) -> ir::Arg {
         self.verify_ident(arg.name);
 
-        let args = self.scopes.last_mut().expect("no scope");
         let id = LocalId(self.locals);
-        self.locals += 1;
+        let args = self.scopes.last_mut().expect("no scope");
         let old = args.insert(arg.name.name, (id, arg.span, false));
+        self.locals += 1;
         if let Some((_, span, _)) = old {
             self.diagnostics.push(
                 WgslError::new("duplicate argument name")

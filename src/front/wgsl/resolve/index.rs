@@ -10,6 +10,13 @@ pub struct Index {
 }
 
 impl Index {
+    pub fn new() -> Self {
+        Self {
+            decls: HashMap::new(),
+            spans: Vec::new(),
+        }
+    }
+
     fn insert(&mut self, ident: Ident) -> Option<Span> {
         let id = self.spans.len() as u32;
         let old = self.decls.insert(ident.name, DeclId(id));
@@ -20,43 +27,43 @@ impl Index {
     pub fn get(&self, ident: Text) -> Option<DeclId> {
         self.decls.get(&ident).copied()
     }
-}
 
-pub fn generate_index(tu: &TranslationUnit, diagnostics: &mut Vec<WgslError>) -> Index {
-    let mut index = Index {
-        decls: HashMap::new(),
-        spans: Vec::new(),
-    };
-
-    for decl in tu.decls.iter() {
-        let prev = match decl.kind {
-            GlobalDeclKind::Fn(ref f) => index.insert(f.name),
-            GlobalDeclKind::Override(ref o) => index.insert(o.name),
-            GlobalDeclKind::Var(ref v) => index.insert(v.inner.name),
-            GlobalDeclKind::Const(ref c) => index.insert(c.name),
-            GlobalDeclKind::Struct(ref s) => index.insert(s.name),
-            GlobalDeclKind::Type(ref ty) => index.insert(ty.name),
-            GlobalDeclKind::StaticAssert(_) => None,
-            GlobalDeclKind::Let(ref l) => {
-                diagnostics.push(
-                    WgslError::new("global `let`s are deprecated")
-                        .marker(decl.span)
-                        .note("consider making it a `const`"),
-                );
-                index.insert(l.name)
-            }
-        };
-
-        if let Some(prev) = prev {
-            diagnostics.push(
-                WgslError::new("duplicate declaration")
-                    .label(prev, "previously declared here")
-                    .label(decl_ident_span(decl), "redeclared here"),
-            );
-        }
+    pub fn reset(&mut self) {
+        self.decls.clear();
+        self.spans.clear();
     }
 
-    index
+    pub fn generate(&mut self, tu: &TranslationUnit, diagnostics: &mut Vec<WgslError>) {
+        self.reset();
+
+        for decl in tu.decls.iter() {
+            let prev = match decl.kind {
+                GlobalDeclKind::Fn(ref f) => self.insert(f.name),
+                GlobalDeclKind::Override(ref o) => self.insert(o.name),
+                GlobalDeclKind::Var(ref v) => self.insert(v.inner.name),
+                GlobalDeclKind::Const(ref c) => self.insert(c.name),
+                GlobalDeclKind::Struct(ref s) => self.insert(s.name),
+                GlobalDeclKind::Type(ref ty) => self.insert(ty.name),
+                GlobalDeclKind::StaticAssert(_) => None,
+                GlobalDeclKind::Let(ref l) => {
+                    diagnostics.push(
+                        WgslError::new("global `let`s are deprecated")
+                            .marker(decl.span)
+                            .note("consider making it a `const`"),
+                    );
+                    self.insert(l.name)
+                }
+            };
+
+            if let Some(prev) = prev {
+                diagnostics.push(
+                    WgslError::new("duplicate declaration")
+                        .label(prev, "previously declared here")
+                        .label(decl_ident_span(decl), "redeclared here"),
+                );
+            }
+        }
+    }
 }
 
 fn decl_ident_span(decl: &GlobalDecl) -> Span {

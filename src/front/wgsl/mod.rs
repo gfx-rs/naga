@@ -6,7 +6,7 @@ Frontend for [WGSL][wgsl] (WebGPU Shading Language).
 
 use crate::front::wgsl::lower::Lowerer;
 use crate::front::wgsl::parse::parse;
-use crate::front::wgsl::resolve::resolve;
+use crate::front::wgsl::resolve::ResolveContext;
 use crate::front::wgsl::text::Interner;
 use crate::{SourceLocation, Span};
 use codespan_reporting::diagnostic::{Diagnostic, Label};
@@ -127,16 +127,35 @@ impl std::error::Error for WgslError {
     }
 }
 
-pub fn parse_str(source: &str) -> Result<crate::Module, Vec<WgslError>> {
-    let mut intern = Interner::new();
-    let mut diags = Vec::new();
+pub struct WgslContext {
+    interner: Interner,
+    resolve: ResolveContext,
+}
 
-    let ast = parse(source, &mut intern, &mut diags);
-    let module = resolve(ast, &mut intern, &mut diags);
+impl WgslContext {
+    pub fn new() -> Self {
+        let mut intern = Interner::new();
 
-    if !diags.is_empty() {
-        return Err(diags);
+        Self {
+            resolve: ResolveContext::new(&mut intern),
+            interner: intern,
+        }
     }
 
-    Lowerer::new(&module, &intern).lower()
+    pub fn parse(&mut self, source: &str) -> Result<crate::Module, Vec<WgslError>> {
+        let mut diags = Vec::new();
+
+        let ast = parse(source, &mut self.interner, &mut diags);
+        let module = self.resolve.resolve(ast, &mut self.interner, &mut diags);
+
+        if !diags.is_empty() {
+            return Err(diags);
+        }
+
+        Lowerer::new(&module, &self.interner).lower()
+    }
+}
+
+pub fn parse_str(source: &str) -> Result<crate::Module, Vec<WgslError>> {
+    WgslContext::new().parse(source)
 }

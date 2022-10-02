@@ -2,56 +2,73 @@ use crate::front::wgsl::resolve::ir::{Decl, DeclDependency, DeclId, DeclKind, Tr
 use crate::front::wgsl::WgslError;
 use crate::Span;
 
-pub fn resolve_all_dependencies(module: &mut TranslationUnit, diagnostics: &mut Vec<WgslError>) {
-    let order = DependencySolver::new(module, diagnostics).solve();
-    module.dependency_order = order;
-}
-
-struct DependencySolver<'a> {
-    module: &'a TranslationUnit,
-    diagnostics: &'a mut Vec<WgslError>,
+pub struct DependencyContext {
     visited: Vec<bool>,
     temp_visited: Vec<bool>,
     path: Vec<DeclDependency>,
     out: Vec<DeclId>,
 }
 
-impl<'a> DependencySolver<'a> {
-    fn new(module: &'a TranslationUnit, diagnostics: &'a mut Vec<WgslError>) -> Self {
-        let len = module.decls.len();
+impl DependencyContext {
+    pub fn new() -> Self {
         Self {
-            module,
-            diagnostics,
-            visited: vec![false; len],
-            temp_visited: vec![false; len],
-            path: Vec::with_capacity(len),
-            out: Vec::with_capacity(len),
+            visited: Vec::new(),
+            temp_visited: Vec::new(),
+            path: Vec::new(),
+            out: Vec::new(),
         }
     }
 
-    fn solve(mut self) -> Vec<DeclId> {
+    pub fn resolve(&mut self, module: &mut TranslationUnit, diagnostics: &mut Vec<WgslError>) {
+        self.reset_for(module);
+        let solver = DependencySolver {
+            module,
+            diagnostics,
+            ctx: self,
+        };
+        solver.solve();
+        module.dependency_order = std::mem::take(&mut self.out);
+    }
+
+    pub fn reset_for(&mut self, module: &TranslationUnit) {
+        self.visited.clear();
+        self.visited.resize(module.decls.len(), false);
+        self.temp_visited.clear();
+        self.temp_visited.resize(module.decls.len(), false);
+        self.path.clear();
+        self.path.reserve(module.decls.len());
+        self.out.reserve(module.decls.len());
+    }
+}
+
+struct DependencySolver<'a> {
+    module: &'a TranslationUnit,
+    diagnostics: &'a mut Vec<WgslError>,
+    ctx: &'a mut DependencyContext,
+}
+
+impl<'a> DependencySolver<'a> {
+    fn solve(mut self) {
         for id in 0..self.module.decls.len() {
-            if self.visited[id] {
+            if self.ctx.visited[id] {
                 continue;
             }
             self.dfs(id);
         }
-
-        self.out
     }
 
     fn dfs(&mut self, id: usize) {
         let decl = &self.module.decls[id];
-        if self.visited[id] {
+        if self.ctx.visited[id] {
             return;
         }
 
-        self.temp_visited[id] = true;
+        self.ctx.temp_visited[id] = true;
         for dep in decl.dependencies.iter() {
             let dep_id = dep.id.0 as usize;
-            self.path.push(*dep);
+            self.ctx.path.push(*dep);
 
-            if self.temp_visited[dep_id] {
+            if self.ctx.temp_visited[dep_id] {
                 // found a cycle.
                 if dep_id == id {
                     self.diagnostics.push(
@@ -66,6 +83,7 @@ impl<'a> DependencySolver<'a> {
                     );
 
                     let start_at = self
+                        .ctx
                         .path
                         .iter()
                         .rev()
@@ -74,8 +92,8 @@ impl<'a> DependencySolver<'a> {
                         .map(|x| x.0)
                         .unwrap_or(0);
 
-                    let last = self.path.len() - start_at - 1;
-                    for (i, curr_dep) in self.path[start_at..].iter().enumerate() {
+                    let last = self.ctx.path.len() - start_at - 1;
+                    for (i, curr_dep) in self.ctx.path[start_at..].iter().enumerate() {
                         let curr_id = curr_dep.id.0 as usize;
                         let curr_decl = &self.module.decls[curr_id];
 
@@ -94,16 +112,16 @@ impl<'a> DependencySolver<'a> {
 
                     self.diagnostics.push(error);
                 }
-            } else if !self.visited[dep_id] {
+            } else if !self.ctx.visited[dep_id] {
                 self.dfs(dep_id);
             }
 
-            self.path.pop();
+            self.ctx.path.pop();
         }
 
-        self.temp_visited[id] = false;
-        self.visited[id] = true;
-        self.out.push(DeclId(id as _));
+        self.ctx.temp_visited[id] = false;
+        self.ctx.visited[id] = true;
+        self.ctx.out.push(DeclId(id as _));
     }
 }
 
