@@ -1171,7 +1171,7 @@ impl<'a> Resolver<'a> {
                                 "`{}` must have a floating-point type as its generic parameter",
                                 name
                             ))
-                            .label(span, format!("eg. `f32`")),
+                            .label(span, "eg. `f32`"),
                         );
 
                         let (columns, rows) = comp.into();
@@ -1292,7 +1292,7 @@ impl<'a> Resolver<'a> {
                                 "`{}` must have a floating-point type as its generic parameter",
                                 name
                             ))
-                            .label(span, format!("eg. `f32`")),
+                            .label(span, "eg. `f32`"),
                         );
 
                         InbuiltType::Matrix {
