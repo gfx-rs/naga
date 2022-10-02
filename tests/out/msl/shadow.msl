@@ -46,6 +46,8 @@ typedef float f32_;
 typedef metal::float2 vec2f32_;
 typedef int i32_;
 typedef constant vec4u32_& ptruniformvec4u32_;
+typedef device arrayLight& ptrstoragearrayLight;
+typedef constant arrayLight10_& ptruniformarrayLight10_;
 constant vec3f32_ c_ambient = {0.05, 0.05, 0.05};
 
 f32_ fetch_shadow(

@@ -4,6 +4,37 @@ use crate::{
 };
 use std::fmt::{Display, Formatter};
 
+pub struct Pluralizer<T> {
+    inner: T,
+    count: isize,
+}
+
+impl<T: Display> Display for Pluralizer<T> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}{}",
+            self.inner,
+            if self.count == 1 { "" } else { "s" }
+        )
+    }
+}
+
+pub trait Pluralize {
+    fn pluralize(self, count: isize) -> Pluralizer<Self>
+    where
+        Self: Sized;
+}
+
+impl<T: Display> Pluralize for T {
+    fn pluralize(self, count: isize) -> Pluralizer<Self>
+    where
+        Self: Sized,
+    {
+        Pluralizer { inner: self, count }
+    }
+}
+
 pub struct TypeInnerFormatter<'a> {
     pub ty: &'a TypeInner,
     pub types: &'a crate::UniqueArena<Type>,

@@ -19,6 +19,7 @@ typedef uint u32_;
 typedef int i32_;
 typedef float f32_;
 typedef constant Data& ptruniformData;
+typedef constant mat4x4f32_& ptruniformmat4x4f32_;
 typedef constant metal::float4& ptruniformvec4f32_;
 typedef metal::float3x3 mat3x3f32_;
 

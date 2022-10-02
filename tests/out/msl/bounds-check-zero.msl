@@ -30,6 +30,11 @@ struct Globals {
 };
 typedef int i32_;
 typedef device Globals& ptrstorageGlobals;
+typedef device arrayf3210_& ptrstoragearrayf3210_;
+typedef device arrayf32_& ptrstoragearrayf32_;
+typedef device vec4f32_& ptrstoragevec4f32_;
+typedef device mat3x4f32_& ptrstoragemat3x4f32_;
+typedef device metal::float4& ptrstoragevec4f32_1;
 
 f32_ index_array(
     i32_ i,

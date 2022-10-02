@@ -36,7 +36,12 @@ struct arrayvec4f322_ {
     vec4f32_ inner[2u];
 };
 typedef device InStorage& ptrstorageInStorage;
+typedef device arrayvec4f3210_& ptrstoragearrayvec4f3210_;
 typedef constant InUniform& ptruniformInUniform;
+typedef constant arrayvec4f3220_& ptruniformarrayvec4f3220_;
+typedef threadgroup arrayf3230_& ptrworkgrouparrayf3230_;
+typedef thread arrayf3240_& ptrprivatearrayf3240_;
+typedef thread arrayvec4f322_& ptrfunctionarrayvec4f322_;
 
 vec4f32_ mock_function(
     vec2i32_ c,

@@ -548,6 +548,8 @@ impl<'a> Resolver<'a> {
             }
         }
 
+        self.verify_ident(field.name);
+
         ir::Field {
             attribs,
             name: field.name,
@@ -1169,7 +1171,7 @@ impl<'a> Resolver<'a> {
                                 "`{}` must have a floating-point type as its generic parameter",
                                 name
                             ))
-                            .marker(span),
+                            .label(span, format!("eg. `f32`")),
                         );
 
                         let (columns, rows) = comp.into();
@@ -1178,6 +1180,16 @@ impl<'a> Resolver<'a> {
                 }
                 None => ir::Constructible::PartialMatrix { columns, rows },
             }
+        } else if name == self.kws.atomic
+            || name == self.kws.ptr
+            || self.sampled_texture.get(name).is_some()
+            || self.storage_texture.get(name).is_some()
+            || self.depth_texture.get(name).is_some()
+            || self.sampler.get(name).is_some()
+        {
+            self.diagnostics
+                .push(WgslError::new("cannot construct this type").marker(span));
+            return None;
         } else {
             return None;
         })
@@ -1280,7 +1292,7 @@ impl<'a> Resolver<'a> {
                                 "`{}` must have a floating-point type as its generic parameter",
                                 name
                             ))
-                            .marker(span),
+                            .label(span, format!("eg. `f32`")),
                         );
 
                         InbuiltType::Matrix {
@@ -1390,16 +1402,25 @@ impl<'a> Resolver<'a> {
                         );
                     }
 
-                    let sample_type = generics.into_iter().next().and_then(|x| self.inbuilt(x));
+                    let sample_type = generics
+                        .into_iter()
+                        .next()
+                        .map(|x| (x.span, self.inbuilt(x)))
+                        .and_then(|(span, ty)| ty.map(|x| (x, span)));
                     let kind = match sample_type {
-                        Some(InbuiltType::Scalar { kind, .. }) => kind,
-                        Some(_) => {
+                        Some((InbuiltType::Scalar { kind, width }, span)) => {
+                            if kind == ScalarKind::Bool || width != 4 {
+                                self.diagnostics.push(
+                                    WgslError::new(format!("invalid sample type for `{}`", name))
+                                        .label(span, "must be `u32`, `f32`, or `i32`"),
+                                );
+                            }
+                            kind
+                        }
+                        Some((_, span)) => {
                             self.diagnostics.push(
-                                WgslError::new(format!(
-                                    "`{}` must have a scalar type as its generic parameter",
-                                    name
-                                ))
-                                .marker(ty.span),
+                                WgslError::new(format!("invalid sample type for `{}`", name))
+                                    .label(span, "must be `u32`, `f32`, or `i32`"),
                             );
                             ScalarKind::Float
                         }
@@ -1705,7 +1726,7 @@ impl<'a> Resolver<'a> {
 
     fn verify_ident(&mut self, ident: Ident) {
         let text = self.intern.resolve(ident.name);
-        if let Some(m) = self.reserved_matcher.earliest_find(text) {
+        if let Some(m) = self.reserved_matcher.find(text) {
             if m.len() == text.len() {
                 self.diagnostics.push(
                     WgslError::new("usage of reserved identifier")

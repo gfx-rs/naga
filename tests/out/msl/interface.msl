@@ -21,6 +21,7 @@ struct arrayu321_ {
     u32_ inner[1u];
 };
 typedef metal::uint3 vec3u32_;
+typedef threadgroup arrayu321_& ptrworkgrouparrayu321_;
 struct Input1_ {
     u32_ index;
 };

@@ -152,13 +152,21 @@ impl Evaluator {
                     Err(_) => {
                         self.errors.push(
                             WgslError::new("integer value is too large")
-                                .label(expr.span, format!("has value {}", i)),
+                                .label(expr.span, format!("has value `{}`", i)),
                         );
                         None
                     }
                 }
             }
-            Value::Scalar(ScalarValue::AbstractInt(i)) if i >= 0 => {
+            Value::Scalar(ScalarValue::AbstractInt(i)) => {
+                if i < 0 {
+                    self.errors.push(
+                        WgslError::new("expected a positive integer")
+                            .label(expr.span, format!("has value `{}`", i)),
+                    );
+                    return None;
+                }
+
                 let x: Result<u32, _> = i.try_into();
                 match x {
                     Ok(x) => Some(x),

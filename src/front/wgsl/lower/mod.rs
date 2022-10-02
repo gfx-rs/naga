@@ -1,5 +1,5 @@
 use crate::front::wgsl::lower::const_eval::{Evaluator, ScalarValue, Value};
-use crate::front::wgsl::lower::format::TypeInnerFormatter;
+use crate::front::wgsl::lower::format::{Pluralize, TypeInnerFormatter};
 use crate::front::wgsl::parse::ast::Literal;
 use crate::front::wgsl::resolve::ir::{
     Arg, AssignTarget, Binding, Block, CallExpr, CallTarget, CaseSelector, Constructible, Decl,
@@ -359,6 +359,21 @@ impl<'a> Lowerer<'a> {
     fn const_(&mut self, c: &Let, span: crate::Span) -> Option<Handle<crate::Constant>> {
         let ident = self.intern.resolve(c.name.name).to_string();
         let value = self.eval.eval(&self.data, &c.val)?;
+        let ty = self.ty(&c.ty);
+
+        if let Some(ty) = ty {
+            let inferred = self.val_to_ty(&value);
+            if !self.data.module.types[ty].inner.equivalent(
+                &self.data.module.types[inferred].inner,
+                &self.data.module.types,
+            ) {
+                self.errors.push(
+                    WgslError::new("mismatched types")
+                        .label(c.ty.span, format!("expected {}", self.fmt_type(ty)))
+                        .label(c.val.span, format!("found {}", self.fmt_type(inferred))),
+                );
+            }
+        }
 
         let constant = crate::Constant {
             name: Some(ident),
@@ -565,11 +580,28 @@ impl<'a> Lowerer<'a> {
                 VarDeclKind::Var(ref v) => {
                     let name = self.intern.resolve(v.name.name).to_string();
                     let expr = v.val.as_ref().and_then(|x| self.expr(x, b, fun));
-                    let ty = self
-                        .ty(&v.ty)
-                        .or_else(|| expr.and_then(|x| self.type_handle_of(x, fun)));
+                    let ty = self.ty(&v.ty);
+                    let inferred = expr.and_then(|x| self.type_handle_of(x, fun));
 
                     if let Some(ty) = ty {
+                        if let Some(inferred) = inferred {
+                            if !self.data.module.types[ty].inner.equivalent(
+                                &self.data.module.types[inferred].inner,
+                                &self.data.module.types,
+                            ) {
+                                self.errors.push(
+                                    WgslError::new("mismatched types")
+                                        .label(v.ty.span, format!("expected {}", self.fmt_type(ty)))
+                                        .label(
+                                            v.val.as_ref().unwrap().span,
+                                            format!("found {}", self.fmt_type(inferred)),
+                                        ),
+                                );
+                            }
+                        }
+                    }
+
+                    if let Some(ty) = ty.or(inferred) {
                         let var = fun.local_variables.append(
                             crate::LocalVariable {
                                 name: Some(name.clone()),
@@ -615,7 +647,10 @@ impl<'a> Lowerer<'a> {
                     if let Some(ty) = ty {
                         let inferred = expr.and_then(|x| self.type_handle_of(x, fun));
                         if let Some(inferred) = inferred {
-                            if inferred != ty {
+                            if !self.data.module.types[ty].inner.equivalent(
+                                &self.data.module.types[inferred].inner,
+                                &self.data.module.types,
+                            ) {
                                 self.errors.push(
                                     WgslError::new("mismatched types")
                                         .label(l.ty.span, format!("expected {}", self.fmt_type(ty)))
@@ -635,15 +670,7 @@ impl<'a> Lowerer<'a> {
                 }
             },
             ExprStatementKind::Call(ref call) => {
-                if let Ok(_) = self.call(call, span, b, fun) {
-                    self.errors.push(
-                        WgslError::new(
-                            "functions that return values cannot be in statement position",
-                        )
-                        .marker(span)
-                        .note("consider assigning to nothing: `_ = ...;`"),
-                    );
-                }
+                let _ = self.call(call, span, b, fun);
             }
             ExprStatementKind::Assign(ref assign) => {
                 let rhs = if let Some(rhs) = self.expr_load(&assign.value, b, fun) {
@@ -804,7 +831,7 @@ impl<'a> Lowerer<'a> {
                             inner,
                             specialization: None,
                         },
-                        e.span,
+                        crate::Span::UNDEFINED,
                     )),
                     false,
                 )
@@ -905,34 +932,65 @@ impl<'a> Lowerer<'a> {
             }
             ExprKind::Index(ref base, ref index) => {
                 let base_ref = self.expr_base(base, b, fun)?;
+                let base_c = self.concretize(base_ref.handle, base.span, b, fun);
                 let index = self.expr(index, b, fun)?;
 
-                let base = self.concretize(base_ref.handle, base.span, b, fun);
+                let ty = self.type_handle_of(base_c, fun)?;
+                if self.data.module.types[ty].inner.pointer_space().is_some() && !base_ref.is_ref {
+                    self.errors.push(
+                        WgslError::new("cannot index a pointer")
+                            .label(base.span, format!("found type `{}`", self.fmt_type(ty)))
+                            .note("consider dereferencing first"),
+                    );
+                    return None;
+                }
 
+                // Use `AccessIndex` if possible (`index` is an `Expression::Constant`).
                 // TODO: Remove this when the SPIR-V backend can see through constant expressions.
                 let expr = if let crate::Expression::Constant(c) = fun.expressions[index] {
                     match self.data.module.constants[c].inner {
                         crate::ConstantInner::Scalar { value, .. } => match value {
                             crate::ScalarValue::Uint(u) => {
                                 if let Ok(index) = u.try_into() {
-                                    crate::Expression::AccessIndex { base, index }
+                                    crate::Expression::AccessIndex {
+                                        base: base_c,
+                                        index,
+                                    }
                                 } else {
-                                    crate::Expression::Access { base, index }
+                                    crate::Expression::Access {
+                                        base: base_c,
+                                        index,
+                                    }
                                 }
                             }
                             crate::ScalarValue::Sint(i) => {
                                 if let Ok(index) = i.try_into() {
-                                    crate::Expression::AccessIndex { base, index }
+                                    crate::Expression::AccessIndex {
+                                        base: base_c,
+                                        index,
+                                    }
                                 } else {
-                                    crate::Expression::Access { base, index }
+                                    crate::Expression::Access {
+                                        base: base_c,
+                                        index,
+                                    }
                                 }
                             }
-                            _ => crate::Expression::Access { base, index },
+                            _ => crate::Expression::Access {
+                                base: base_c,
+                                index,
+                            },
                         },
-                        _ => crate::Expression::Access { base, index },
+                        _ => crate::Expression::Access {
+                            base: base_c,
+                            index,
+                        },
                     }
                 } else {
-                    crate::Expression::Access { base, index }
+                    crate::Expression::Access {
+                        base: base_c,
+                        index,
+                    }
                 };
                 (expr, base_ref.is_ref)
             }
@@ -964,14 +1022,13 @@ impl<'a> Lowerer<'a> {
             }
             ExprKind::Deref(ref e) => {
                 let expr = self.expr(e, b, fun)?;
-                if let Some(ty) = self.type_of(expr, fun) {
-                    if ty.pointer_space().is_none() {
-                        self.errors.push(
-                            WgslError::new("cannot dereference this expression")
-                                .label(e.span, "expected pointer"),
-                        );
-                        return None;
-                    }
+                let ty = self.type_handle_of(expr, fun)?;
+                if self.data.module.types[ty].inner.pointer_space().is_none() {
+                    self.errors.push(
+                        WgslError::new("cannot dereference this expression")
+                            .label(e.span, format!("has type `{}`", self.fmt_type(ty))),
+                    );
+                    return None;
                 }
 
                 return Some(RefExpression {
@@ -984,7 +1041,7 @@ impl<'a> Lowerer<'a> {
                 let e_c = self.concretize(expr.handle, e.span, b, fun);
 
                 let ty = self.type_handle_of(e_c, fun)?;
-                let (ty, is_ptr) = if expr.is_ref {
+                let (ty, is_ref) = if expr.is_ref {
                     match self.data.module.types[ty].inner {
                         TypeInner::Pointer { base, .. } => (base, true),
                         TypeInner::ValuePointer {
@@ -1097,9 +1154,9 @@ impl<'a> Lowerer<'a> {
                                 }
                             }
 
-                            // Load the vector for the swizzle.
                             let concrete = self.concretize(expr.handle, e.span, b, fun);
-                            let expr = if is_ptr {
+                            // Load the vector for the swizzle.
+                            let expr = if is_ref {
                                 self.emit_expr(
                                     crate::Expression::Load { pointer: concrete },
                                     e.span,
@@ -1193,9 +1250,7 @@ impl<'a> Lowerer<'a> {
                         .marker(m.span);
 
                         if self.data.module.types[ty].inner.pointer_space().is_some() {
-                            error
-                                .notes
-                                .push("consider dereferencing the pointer first".to_string());
+                            error.notes.push("consider dereferencing first".to_string());
                         }
 
                         self.errors.push(error);
@@ -1261,18 +1316,9 @@ impl<'a> Lowerer<'a> {
                         .map(|x| x.ty)
                         .collect();
 
-                    if call.args.len() != target_args.len() {
-                        self.errors.push(
-                            WgslError::new(format!(
-                                "expected {} argument{}, found {}",
-                                target_args.len(),
-                                if target_args.len() == 1 { "" } else { "s" },
-                                call.args.len()
-                            ))
-                            .marker(span),
-                        );
-                        return Err(CallError::Error);
-                    }
+                    let spans = call.args.iter().map(|x| x.span);
+                    self.check_arg_count(target_args.len(), spans)
+                        .ok_or(CallError::Error)?;
 
                     let stmt = crate::Statement::Call {
                         function,
@@ -1497,7 +1543,7 @@ impl<'a> Lowerer<'a> {
                 specialization: None,
                 inner,
             },
-            span,
+            crate::Span::UNDEFINED,
         )
     }
 
@@ -1523,7 +1569,7 @@ impl<'a> Lowerer<'a> {
                                 specialization: None,
                                 inner,
                             },
-                            span,
+                            crate::Span::UNDEFINED,
                         )
                     })
                     .collect(),
@@ -1602,7 +1648,7 @@ impl<'a> Lowerer<'a> {
                 specialization: None,
                 inner,
             },
-            span,
+            crate::Span::UNDEFINED,
         );
         self.emit_expr(crate::Expression::Constant(c), span, b, fun)
     }
@@ -1641,7 +1687,7 @@ impl<'a> Lowerer<'a> {
                                     value: crate::ScalarValue::Float(i as _),
                                 },
                             },
-                            span,
+                            crate::Span::UNDEFINED,
                         );
                         Some(self.emit_expr(crate::Expression::Constant(c), span, b, fun))
                     }
@@ -1655,7 +1701,7 @@ impl<'a> Lowerer<'a> {
                                     value: crate::ScalarValue::Float(f),
                                 },
                             },
-                            span,
+                            crate::Span::UNDEFINED,
                         );
                         Some(self.emit_expr(crate::Expression::Constant(c), span, b, fun))
                     }
@@ -1681,7 +1727,7 @@ impl<'a> Lowerer<'a> {
                                     value: crate::ScalarValue::Uint(value),
                                 },
                             },
-                            span,
+                            crate::Span::UNDEFINED,
                         );
                         Some(self.emit_expr(crate::Expression::Constant(c), span, b, fun))
                     }
@@ -1695,5 +1741,53 @@ impl<'a> Lowerer<'a> {
             },
             _ => Some(self.concretize(to, span, b, fun)),
         }
+    }
+
+    fn check_arg_count(
+        &mut self,
+        expected: usize,
+        spans: impl ExactSizeIterator<Item = crate::Span>,
+    ) -> Option<()> {
+        if spans.len() != expected {
+            let extra = spans.len() as isize - expected as isize;
+            let span = if spans.len() < expected {
+                crate::Span::total_span(spans)
+            } else {
+                crate::Span::total_span(spans.skip(expected))
+            };
+            let expected = expected as isize;
+
+            self.errors.push(
+                WgslError::new(format!(
+                    "expected {} {}",
+                    expected,
+                    "argument".pluralize(expected),
+                ))
+                .label(
+                    span,
+                    if extra < 0 {
+                        format!("missing {}", "argument".pluralize(-extra))
+                    } else {
+                        format!("extra {}", "argument".pluralize(extra))
+                    },
+                )
+                .note(if extra < 0 {
+                    format!(
+                        "consider adding {} more {}",
+                        -extra,
+                        "argument".pluralize(-extra)
+                    )
+                } else {
+                    format!(
+                        "consider removing the {} extra {}",
+                        extra,
+                        "argument".pluralize(extra)
+                    )
+                }),
+            );
+            return None;
+        }
+
+        Some(())
     }
 }

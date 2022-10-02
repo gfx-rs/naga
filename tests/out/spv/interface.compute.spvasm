@@ -13,8 +13,8 @@ OpMemberDecorate %13 0 Offset 0
 OpMemberDecorate %13 1 Offset 4
 OpMemberDecorate %13 2 Offset 8
 OpDecorate %15 ArrayStride 4
-OpMemberDecorate %17 0 Offset 0
 OpMemberDecorate %18 0 Offset 0
+OpMemberDecorate %19 0 Offset 0
 OpDecorate %22 BuiltIn GlobalInvocationId
 OpDecorate %25 BuiltIn LocalInvocationId
 OpDecorate %27 BuiltIn LocalInvocationIndex
@@ -35,10 +35,10 @@ OpDecorate %32 BuiltIn NumWorkgroups
 %14 = OpTypeBool
 %15 = OpTypeArray %6 %5
 %16 = OpTypeVector %6 3
-%17 = OpTypeStruct %6
+%17 = OpTypePointer Workgroup %15
 %18 = OpTypeStruct %6
-%20 = OpTypePointer Workgroup %15
-%19 = OpVariable  %20  Workgroup
+%19 = OpTypeStruct %6
+%20 = OpVariable  %17  Workgroup
 %23 = OpTypePointer Input %16
 %22 = OpVariable  %23  Input
 %25 = OpVariable  %23  Input
@@ -66,7 +66,7 @@ OpBranch %36
 %42 = OpIAdd  %6  %40 %41
 %43 = OpCompositeExtract  %6  %33 0
 %44 = OpIAdd  %6  %42 %43
-%47 = OpAccessChain  %45  %19 %46
+%47 = OpAccessChain  %45  %20 %46
 OpStore %47 %44
 OpReturn
 OpFunctionEnd

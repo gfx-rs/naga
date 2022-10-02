@@ -48,6 +48,17 @@
                 ),
             ),
         ),
+        (
+            name: Some("ptr<storage, array<u32>>"),
+            inner: Pointer(
+                base: 2,
+                space: Storage(
+                    access: (
+                        bits: 3,
+                    ),
+                ),
+            ),
+        ),
     ],
     constants: [
         (

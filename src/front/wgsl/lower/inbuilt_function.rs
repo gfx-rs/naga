@@ -15,19 +15,8 @@ impl Lowerer<'_> {
         fun: &mut crate::Function,
     ) -> Result<Handle<crate::Expression>, CallError> {
         let require_args = |this: &mut Self, n| {
-            if args.len() != n {
-                this.errors.push(
-                    WgslError::new(format!(
-                        "expected {} argument{}, found {}",
-                        n,
-                        if n == 1 { "" } else { "s" },
-                        args.len()
-                    ))
-                    .marker(span),
-                );
-                return Err(CallError::Error);
-            }
-            Ok(())
+            let spans = args.iter().map(|x| x.span);
+            this.check_arg_count(n, spans).ok_or(CallError::Error)
         };
 
         let require_generics = |this: &mut Self, n| {

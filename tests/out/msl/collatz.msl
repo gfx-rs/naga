@@ -15,6 +15,7 @@ struct PrimeIndices {
 };
 typedef metal::uint3 vec3u32_;
 typedef device PrimeIndices& ptrstoragePrimeIndices;
+typedef device arrayu32_& ptrstoragearrayu32_;
 
 u32_ collatz_iterations(
     u32_ n_base

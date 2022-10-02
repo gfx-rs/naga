@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use aho_corasick::{AhoCorasick, AhoCorasickBuilder};
+use aho_corasick::{AhoCorasick, AhoCorasickBuilder, MatchKind};
 use rustc_hash::FxHashMap;
 use strum::{EnumIter, IntoEnumIterator};
 
@@ -688,5 +688,6 @@ impl<T: ToStaticString + IntoEnumIterator + Copy> Matcher<T> {
 pub fn reserved_matcher() -> AhoCorasick {
     AhoCorasickBuilder::new()
         .anchored(true)
+        .match_kind(MatchKind::LeftmostLongest)
         .build(crate::keywords::wgsl::RESERVED)
 }

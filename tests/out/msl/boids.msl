@@ -32,11 +32,13 @@ struct Particles {
 };
 typedef metal::uint3 vec3u32_;
 typedef device Particles& ptrstorageParticles;
+typedef device arrayParticle& ptrstoragearrayParticle;
 typedef device Particle& ptrstorageParticle;
 typedef int i32_;
 typedef constant SimParams& ptruniformSimParams;
 typedef thread vec2f32_& ptrfunctionvec2f32_;
 typedef device Particles& ptrstorageParticles_1;
+typedef device arrayParticle& ptrstoragearrayParticle_1;
 typedef device Particle& ptrstorageParticle_1;
 
 struct main_Input {

@@ -51,10 +51,23 @@ pub fn generate_index(tu: &TranslationUnit, diagnostics: &mut Vec<WgslError>) ->
             diagnostics.push(
                 WgslError::new("duplicate declaration")
                     .label(prev, "previously declared here")
-                    .label(decl.span, "redeclared here"),
+                    .label(decl_ident_span(decl), "redeclared here"),
             );
         }
     }
 
     index
+}
+
+fn decl_ident_span(decl: &GlobalDecl) -> Span {
+    match decl.kind {
+        GlobalDeclKind::Fn(ref f) => f.name.span,
+        GlobalDeclKind::Struct(ref s) => s.name.span,
+        GlobalDeclKind::Type(ref t) => t.name.span,
+        GlobalDeclKind::Const(ref c) => c.name.span,
+        GlobalDeclKind::Override(ref o) => o.name.span,
+        GlobalDeclKind::Var(ref v) => v.inner.name.span,
+        GlobalDeclKind::Let(ref l) => l.name.span,
+        GlobalDeclKind::StaticAssert(_) => unreachable!(),
+    }
 }

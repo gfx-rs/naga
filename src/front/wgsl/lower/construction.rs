@@ -8,6 +8,13 @@ use crate::{
 impl Lowerer<'_> {
     pub fn array_size(&mut self, len: &Expr) -> Option<ArraySize> {
         let value = self.eval.as_positive_int(&self.data, len)?;
+        if value == 0 {
+            self.errors.push(
+                WgslError::new("expected a positive integer").label(len.span, "has value `0`"),
+            );
+            return None;
+        }
+
         let size = self.data.module.constants.fetch_or_append(
             crate::Constant {
                 name: None,
@@ -17,7 +24,7 @@ impl Lowerer<'_> {
                 },
                 specialization: None,
             },
-            len.span,
+            crate::Span::UNDEFINED,
         );
         Some(ArraySize::Constant(size))
     }
@@ -37,7 +44,18 @@ impl Lowerer<'_> {
                 let this_ty = self.make_ty(ty, span).unwrap();
                 match args {
                     ConstructorArgs::None => self.make_zero_value(this_ty, span, b, fun),
-                    ConstructorArgs::One { expr, .. } => {
+                    ConstructorArgs::One { expr, ty, span } => {
+                        match self.data.module.types[ty].inner {
+                            TypeInner::Scalar { .. } => {}
+                            _ => self.errors.push(
+                                WgslError::new(format!(
+                                    "cannot cast to `{}`",
+                                    self.fmt_type(this_ty)
+                                ))
+                                .label(span, format!("has type `{}`", self.fmt_type(ty))),
+                            ),
+                        }
+
                         let expr = crate::Expression::As {
                             expr,
                             kind,
@@ -46,7 +64,7 @@ impl Lowerer<'_> {
                         Some(self.emit_expr(expr, span, b, fun))
                     }
                     ConstructorArgs::Many { spans, .. } => {
-                        self.check_arg_count(1, &spans, this_ty);
+                        self.check_arg_count(1, spans.iter().copied());
                         None
                     }
                 }
@@ -165,7 +183,11 @@ impl Lowerer<'_> {
                                 width: 4,
                             },
                         };
-                        let size = self.data.module.constants.fetch_or_append(size, span);
+                        let size = self
+                            .data
+                            .module
+                            .constants
+                            .fetch_or_append(size, crate::Span::UNDEFINED);
 
                         self.layouter
                             .update(&self.data.module.types, &self.data.module.constants)
@@ -379,39 +401,8 @@ impl Lowerer<'_> {
                 inner,
                 specialization: None,
             },
-            span,
+            crate::Span::UNDEFINED,
         ))
-    }
-
-    fn check_arg_count(
-        &mut self,
-        expected: usize,
-        spans: &[crate::Span],
-        ty: Handle<Type>,
-    ) -> Option<()> {
-        if spans.len() != expected {
-            let span = if spans.len() < expected {
-                crate::Span::total_span(spans.iter().copied())
-            } else {
-                crate::Span::total_span(spans[expected..].iter().copied())
-            };
-            self.errors.push(
-                WgslError::new(format!(
-                    "expected {} arguments for `{}` constructor",
-                    expected,
-                    self.fmt_type(ty)
-                ))
-                .marker(span)
-                .note(if spans.len() < expected {
-                    format!("consider adding {} more arguments", expected - spans.len())
-                } else {
-                    "consider removing the extra arguments".to_string()
-                }),
-            );
-            return None;
-        }
-
-        Some(())
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -478,87 +469,88 @@ impl Lowerer<'_> {
         b: &mut crate::Block,
         fun: &mut crate::Function,
     ) -> Option<Handle<crate::Expression>> {
-        let expr =
-            match args {
-                ConstructorArgs::None => unreachable!("should be handled by the caller"),
-                ConstructorArgs::One {
-                    expr,
-                    ty: arg_ty,
-                    span: arg_span,
-                } => match self.data.module.types[arg_ty].inner {
-                    TypeInner::Matrix {
-                        rows: from_rows,
-                        columns: from_columns,
-                        width,
-                    } => {
-                        if rows != from_rows || columns != from_columns {
-                            self.errors.push(
-                                WgslError::new("cannot cast between matrices of different sizes")
-                                    .label(span, format!("expected `{}`", self.fmt_type(this_ty)))
-                                    .label(arg_span, format!("found `{}`", self.fmt_type(arg_ty))),
-                            );
-                            return None;
-                        }
-
-                        crate::Expression::As {
-                            expr,
-                            kind: ScalarKind::Float,
-                            convert: Some(width),
-                        }
-                    }
-                    _ => {
+        let expr = match args {
+            ConstructorArgs::None => unreachable!("should be handled by the caller"),
+            ConstructorArgs::One {
+                expr,
+                ty: arg_ty,
+                span: arg_span,
+            } => match self.data.module.types[arg_ty].inner {
+                TypeInner::Matrix {
+                    rows: from_rows,
+                    columns: from_columns,
+                    width,
+                } => {
+                    if rows != from_rows || columns != from_columns {
                         self.errors.push(
-                            WgslError::new("expected matrix to cast")
+                            WgslError::new("cannot cast between matrices of different sizes")
+                                .label(span, format!("expected `{}`", self.fmt_type(this_ty)))
                                 .label(arg_span, format!("found `{}`", self.fmt_type(arg_ty))),
                         );
                         return None;
                     }
-                },
-                ConstructorArgs::Many {
-                    exprs,
-                    ty: arg_ty,
-                    spans,
-                } => match self.data.module.types[arg_ty].inner {
-                    TypeInner::Scalar { .. } => {
-                        self.check_arg_count(columns as usize * rows as usize, &spans, this_ty)?;
 
-                        let column_ty = self.register_type(TypeInner::Vector {
-                            kind: ScalarKind::Float,
-                            width,
-                            size: rows,
-                        });
-                        let rows = rows as usize;
-                        let columns = exprs.chunks(rows).zip(spans.chunks(rows)).map(
-                            |(components, spans)| {
+                    crate::Expression::As {
+                        expr,
+                        kind: ScalarKind::Float,
+                        convert: Some(width),
+                    }
+                }
+                _ => {
+                    self.errors.push(
+                        WgslError::new("expected matrix to cast")
+                            .label(arg_span, format!("found `{}`", self.fmt_type(arg_ty))),
+                    );
+                    return None;
+                }
+            },
+            ConstructorArgs::Many {
+                exprs,
+                ty: arg_ty,
+                spans,
+            } => match self.data.module.types[arg_ty].inner {
+                TypeInner::Scalar { .. } => {
+                    self.check_arg_count(columns as usize * rows as usize, spans.iter().copied())?;
+
+                    let column_ty = self.register_type(TypeInner::Vector {
+                        kind: ScalarKind::Float,
+                        width,
+                        size: rows,
+                    });
+                    let rows = rows as usize;
+                    let columns =
+                        exprs
+                            .chunks(rows)
+                            .zip(spans.chunks(rows))
+                            .map(|(components, spans)| {
                                 let span = crate::Span::total_span(spans.iter().copied());
                                 let expr = crate::Expression::Compose {
                                     ty: column_ty,
                                     components: components.to_vec(),
                                 };
                                 self.emit_expr(expr, span, b, fun)
-                            },
-                        );
-                        crate::Expression::Compose {
-                            ty: this_ty,
-                            components: columns.collect(),
-                        }
+                            });
+                    crate::Expression::Compose {
+                        ty: this_ty,
+                        components: columns.collect(),
                     }
-                    TypeInner::Vector { .. } => {
-                        self.check_arg_count(columns as usize, &spans, this_ty)?;
-                        crate::Expression::Compose {
-                            ty: this_ty,
-                            components: exprs,
-                        }
+                }
+                TypeInner::Vector { .. } => {
+                    self.check_arg_count(columns as usize, spans.iter().copied())?;
+                    crate::Expression::Compose {
+                        ty: this_ty,
+                        components: exprs,
                     }
-                    _ => {
-                        self.errors.push(
-                            WgslError::new("expected scalar or vector to construct matrix")
-                                .label(spans[0], format!("found `{}`", self.fmt_type(arg_ty))),
-                        );
-                        return None;
-                    }
-                },
-            };
+                }
+                _ => {
+                    self.errors.push(
+                        WgslError::new("expected scalar or vector to construct matrix")
+                            .label(spans[0], format!("found `{}`", self.fmt_type(arg_ty))),
+                    );
+                    return None;
+                }
+            },
+        };
 
         Some(self.emit_expr(expr, span, b, fun))
     }

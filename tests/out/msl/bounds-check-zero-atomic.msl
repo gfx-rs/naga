@@ -28,6 +28,8 @@ typedef uint u32_;
 typedef device Globals& ptrstorageGlobals;
 typedef device atomicu32_& ptrstorageatomicu32_;
 typedef int i32_;
+typedef device arrayatomicu3210_& ptrstoragearrayatomicu3210_;
+typedef device arrayatomicu32_& ptrstoragearrayatomicu32_;
 
 u32_ fetch_add_atomic(
     device Globals& globals,

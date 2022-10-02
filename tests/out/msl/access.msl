@@ -45,9 +45,13 @@ struct Baz {
 };
 typedef metal::int2 vec2i32_;
 typedef constant Baz& ptruniformBaz;
+typedef constant mat3x2f32_& ptruniformmat3x2f32_;
+typedef constant metal::float2& ptruniformvec2f32_;
 typedef float f32_;
 typedef metal::float2 vec2f32_;
 typedef thread Baz& ptrfunctionBaz;
+typedef thread mat3x2f32_& ptrfunctionmat3x2f32_;
+typedef thread metal::float2& ptrfunctionvec2f32_;
 typedef metal::float4x2 mat4x2f32_;
 struct arraymat4x2f322_ {
     mat4x2f32_ inner[2u];
@@ -56,7 +60,11 @@ struct MatCx2InArray {
     arraymat4x2f322_ am;
 };
 typedef constant MatCx2InArray& ptruniformMatCx2InArray;
+typedef constant arraymat4x2f322_& ptruniformarraymat4x2f322_;
+typedef constant mat4x2f32_& ptruniformmat4x2f32_;
 typedef thread MatCx2InArray& ptrfunctionMatCx2InArray;
+typedef thread arraymat4x2f322_& ptrfunctionarraymat4x2f322_;
+typedef thread mat4x2f32_& ptrfunctionmat4x2f32_;
 typedef thread f32_& ptrfunctionf32_;
 struct arrayf3210_ {
     f32_ inner[10u];
@@ -66,13 +74,16 @@ struct arrayarrayf32105_ {
 };
 typedef metal::float4 vec4f32_;
 typedef device Bar& ptrstorageBar;
+typedef device mat4x3f32_& ptrstoragemat4x3f32_;
 typedef device metal::float3& ptrstoragevec3f32_;
 typedef metal::float3 vec3f32_;
+typedef device arrayAlignedWrapper& ptrstoragearrayAlignedWrapper;
 typedef device AlignedWrapper& ptrstorageAlignedWrapper;
 typedef device i32_& ptrstoragei32_;
 struct arrayi325_ {
     i32_ inner[5u];
 };
+typedef thread arrayi325_& ptrfunctionarrayi325_;
 typedef metal::int4 vec4i32_;
 typedef device atomici32_& ptrstorageatomici32_;
 typedef threadgroup u32_& ptrworkgroupu32_;
