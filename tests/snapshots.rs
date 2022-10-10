@@ -280,6 +280,7 @@ fn write_output_msl(
 }
 
 #[cfg(feature = "glsl-out")]
+#[allow(clippy::too_many_arguments)]
 fn write_output_glsl(
     module: &naga::Module,
     info: &naga::valid::ModuleInfo,
