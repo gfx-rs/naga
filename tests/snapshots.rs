@@ -227,7 +227,6 @@ fn write_output_spv(
         },
         bounds_check_policies,
         binding_map: params.binding_map.clone(),
-        ..spv::Options::default()
     };
 
     if params.separate_entry_points {
