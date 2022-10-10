@@ -250,21 +250,20 @@ fn backends(c: &mut Criterion) {
                         entry_point: ep.name.clone(),
                         multiview: None,
                     };
-                    match naga::back::glsl::Writer::new(
+                    let _ = naga::back::glsl::Writer::new(
                         &mut string,
                         module,
                         info,
                         &options,
                         &pipeline_options,
                         naga::proc::BoundsCheckPolicies::default(),
-                    ) {
-                        Ok(mut writer) => {
-                            let _ = writer.write(); // can error if unsupported
-                        }
-                        Err(_) => {
-                            // missing features
-                        }
-                    };
+                    )
+                    .map(|mut writer| {
+                        // might be `Err` if unsupported
+                        writer.write()
+                    });
+                    // might be `Err` if missing features
+
                     string.clear();
                 }
             }
