@@ -10,7 +10,7 @@ fn gather_inputs(folder: &str, extension: &str) -> Vec<Box<[u8]>> {
     for file_entry in read_dir {
         match file_entry {
             Ok(entry) => match entry.path().extension() {
-                Some(ostr) if &*ostr == extension => {
+                Some(ostr) if ostr == extension => {
                     let input = fs::read(entry.path()).unwrap_or_default();
                     list.push(input.into_boxed_slice());
                 }
