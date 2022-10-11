@@ -127,9 +127,20 @@ impl<T> Handle<T> {
 )]
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct Range<T> {
-    inner: ops::Range<u32>,
+    pub(crate) inner: ops::Range<u32>,
     #[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(skip))]
     marker: PhantomData<T>,
+}
+
+impl<T> Range<T> {
+    #[cfg(feature = "validate")]
+    pub(crate) const fn erase_type(self) -> Range<()> {
+        let Self { inner, marker: _ } = self;
+        Range {
+            inner,
+            marker: PhantomData,
+        }
+    }
 }
 
 impl<T> Clone for Range<T> {
@@ -326,6 +337,15 @@ impl<T> Arena<T> {
         {
             let _ = handle;
             Span::default()
+        }
+    }
+
+    /// Assert that `handle` is valid for this arena.
+    pub fn check_contains_handle(&self, handle: Handle<T>) -> Result<(), BadHandle> {
+        if handle.index() < self.data.len() {
+            Ok(())
+        } else {
+            Err(BadHandle::new(handle))
         }
     }
 }
@@ -551,6 +571,15 @@ impl<T: Eq + hash::Hash> UniqueArena<T> {
         self.set
             .get_index(handle.index())
             .ok_or_else(|| BadHandle::new(handle))
+    }
+
+    /// Assert that `handle` is valid for this arena.
+    pub fn check_contains_handle(&self, handle: Handle<T>) -> Result<(), BadHandle> {
+        if handle.index() < self.set.len() {
+            Ok(())
+        } else {
+            Err(BadHandle::new(handle))
+        }
     }
 }
 
