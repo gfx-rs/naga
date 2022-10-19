@@ -15,6 +15,15 @@ pub struct BadHandle {
     pub index: usize,
 }
 
+impl BadHandle {
+    fn new<T>(handle: Handle<T>) -> Self {
+        Self {
+            kind: std::any::type_name::<T>(),
+            index: handle.index(),
+        }
+    }
+}
+
 /// A strongly typed reference to an arena item.
 ///
 /// A `Handle` value can be used as an index into an [`Arena`] or [`UniqueArena`].
@@ -282,10 +291,9 @@ impl<T> Arena<T> {
     }
 
     pub fn try_get(&self, handle: Handle<T>) -> Result<&T, BadHandle> {
-        self.data.get(handle.index()).ok_or_else(|| BadHandle {
-            kind: std::any::type_name::<T>(),
-            index: handle.index(),
-        })
+        self.data
+            .get(handle.index())
+            .ok_or_else(|| BadHandle::new(handle))
     }
 
     /// Get a mutable reference to an element in the arena.
@@ -540,10 +548,9 @@ impl<T: Eq + hash::Hash> UniqueArena<T> {
 
     /// Return this arena's value at `handle`, if that is a valid handle.
     pub fn get_handle(&self, handle: Handle<T>) -> Result<&T, BadHandle> {
-        self.set.get_index(handle.index()).ok_or_else(|| BadHandle {
-            kind: std::any::type_name::<T>(),
-            index: handle.index(),
-        })
+        self.set
+            .get_index(handle.index())
+            .ok_or_else(|| BadHandle::new(handle))
     }
 }
 
