@@ -91,9 +91,9 @@ fn parse(input: &str) -> (Result<Number, NumberError>, &str) {
     /// returns `true` and consumes `X` bytes from the given byte buffer
     /// if the given `X` nr of patterns are found at the start of the buffer
     macro_rules! consume {
-        ($bytes:ident, $($($pattern:pat_param)|*),*) => {
+        ($bytes:ident, $($pattern:pat),*) => {
             match $bytes {
-                &[$($($pattern)|*),*, ref rest @ ..] => { $bytes = rest; true },
+                &[$($pattern),*, ref rest @ ..] => { $bytes = rest; true },
                 _ => false,
             }
         };
@@ -103,9 +103,9 @@ fn parse(input: &str) -> (Result<Number, NumberError>, &str) {
     /// if one of the given patterns are found at the start of the buffer
     /// returning the corresponding expr for the matched pattern
     macro_rules! consume_map {
-        ($bytes:ident, [$($($pattern:pat_param)|* => $to:expr),*]) => {
+        ($bytes:ident, [$($pattern:pat_param => $to:expr),*]) => {
             match $bytes {
-                $( &[$($pattern)|*, ref rest @ ..] => { $bytes = rest; Some($to) }, )*
+                $( &[$pattern, ref rest @ ..] => { $bytes = rest; Some($to) }, )*
                 _ => None,
             }
         };
