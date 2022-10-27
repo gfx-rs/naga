@@ -739,8 +739,8 @@ mod tests {
 
         let res3_inner = &constants[res3].inner;
 
-        match res3_inner {
-            &ConstantInner::Composite {
+        match *res3_inner {
+            ConstantInner::Composite {
                 ref ty,
                 ref components,
             } => {
@@ -936,8 +936,8 @@ mod tests {
 
         let res1_inner = &constants[res1].inner;
 
-        match res1_inner {
-            &ConstantInner::Composite {
+        match *res1_inner {
+            ConstantInner::Composite {
                 ref ty,
                 ref components,
             } => {
