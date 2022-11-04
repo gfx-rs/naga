@@ -251,6 +251,16 @@ void assignment() {
     return;
 }
 
+void negation_avoids_prefix_decrement() {
+    int unnamed_148 = -(-2);
+    int unnamed_149 = -(-3);
+    int unnamed_150 = -(-(4));
+    int unnamed_151 = -(-(-5));
+    int unnamed_152 = -(-(-(-(6))));
+    int unnamed_153 = -(-(-(-(-7))));
+    int unnamed_154 = -(-(-(-(-8))));
+}
+
 void main() {
     vec4 _e4 = builtins();
     vec4 _e5 = splat();
