@@ -75,7 +75,9 @@ fn queries() -> @builtin(position) vec4<f32> {
     let dim_3d_lod = textureDimensions(image_3d, 1);
     let dim_2s_ms = textureDimensions(image_aa);
 
-    let sum = dim_1d + dim_2d.y + dim_2d_lod.y + dim_2d_array.y + dim_2d_array_lod.y + dim_cube.y + dim_cube_lod.y + dim_cube_array.y + dim_cube_array_lod.y + dim_3d.z + dim_3d_lod.z;
+    let sum = dim_1d + dim_2d.y + dim_2d_lod.y + dim_2d_array.y + dim_2d_array_lod.y + 
+        dim_cube.y + dim_cube_lod.y + dim_cube_array.y + dim_cube_array_lod.y +
+        dim_3d.z + dim_3d_lod.z;
     return vec4<f32>(f32(sum));
 }
 
