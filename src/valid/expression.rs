@@ -385,13 +385,9 @@ impl super::Validator {
                         multi: false,
                     } => false,
                     crate::ImageClass::Sampled {
-                        kind: crate::ScalarKind::Uint,
+                        kind: crate::ScalarKind::Uint | crate::ScalarKind::Sint,
                         multi: false,
-                    } => false,
-                    crate::ImageClass::Sampled {
-                        kind: crate::ScalarKind::Sint,
-                        multi: false,
-                    } => false,
+                    } if gather.is_some() => false,
                     crate::ImageClass::Depth { multi: false } => true,
                     _ => return Err(ExpressionError::InvalidImageClass(class)),
                 };
