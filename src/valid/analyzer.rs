@@ -571,7 +571,7 @@ impl FunctionInfo {
             E::ImageSample {
                 image,
                 sampler,
-                gather,
+                gather: _,
                 coordinate,
                 array_index,
                 offset: _,
@@ -581,17 +581,15 @@ impl FunctionInfo {
                 let image_storage = GlobalOrArgument::from_expression(expression_arena, image)?;
                 let sampler_storage = GlobalOrArgument::from_expression(expression_arena, sampler)?;
 
-                if gather.is_none() {
-                    match (image_storage, sampler_storage) {
-                        (GlobalOrArgument::Global(image), GlobalOrArgument::Global(sampler)) => {
-                            self.sampling_set.insert(SamplingKey { image, sampler });
-                        }
-                        _ => {
-                            self.sampling.insert(Sampling {
-                                image: image_storage,
-                                sampler: sampler_storage,
-                            });
-                        }
+                match (image_storage, sampler_storage) {
+                    (GlobalOrArgument::Global(image), GlobalOrArgument::Global(sampler)) => {
+                        self.sampling_set.insert(SamplingKey { image, sampler });
+                    }
+                    _ => {
+                        self.sampling.insert(Sampling {
+                            image: image_storage,
+                            sampler: sampler_storage,
+                        });
                     }
                 }
 
