@@ -2080,14 +2080,17 @@ impl<'w> BlockContext<'w> {
                             )
                         }
                         crate::AtomicFunction::Exchange { compare: Some(cmp) } => {
-                            // TODO: look this up from the atomic expression's scalar type so that it works with i32 as well
-                            let scalar_u32 =
-                                self.get_type_id(LookupType::Local(LocalType::Value {
-                                    vector_size: None,
-                                    kind: crate::ScalarKind::Uint,
-                                    width: 4,
-                                    pointer_space: None,
-                                }));
+                            let scalar_type_id = match *value_inner {
+                                crate::TypeInner::Scalar { kind, width } => {
+                                    self.get_type_id(LookupType::Local(LocalType::Value {
+                                        vector_size: None,
+                                        kind,
+                                        width,
+                                        pointer_space: None,
+                                    }))
+                                }
+                                _ => unimplemented!(),
+                            };
                             let bool_type_id =
                                 self.get_type_id(LookupType::Local(LocalType::Value {
                                     vector_size: None,
@@ -2099,7 +2102,7 @@ impl<'w> BlockContext<'w> {
                             let cas_result_id = self.gen_id();
                             let equality_result_id = self.gen_id();
                             let mut cas_instr = Instruction::new(spirv::Op::AtomicCompareExchange);
-                            cas_instr.set_type(scalar_u32);
+                            cas_instr.set_type(scalar_type_id);
                             cas_instr.set_result(cas_result_id);
                             cas_instr.add_operand(pointer_id);
                             cas_instr.add_operand(scope_constant_id);
