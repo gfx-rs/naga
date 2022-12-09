@@ -1404,7 +1404,7 @@ pub enum Expression {
     AtomicResult {
         kind: ScalarKind,
         width: Bytes,
-        comparison: bool,
+        comparison: Option<Handle<Type>>,
     },
     /// Get the length of an array.
     /// The expression must resolve to a pointer to an array with a dynamic size.

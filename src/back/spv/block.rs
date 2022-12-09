@@ -2079,8 +2079,47 @@ impl<'w> BlockContext<'w> {
                                 value_id,
                             )
                         }
-                        crate::AtomicFunction::Exchange { compare: Some(_) } => {
-                            return Err(Error::FeatureNotImplemented("atomic CompareExchange"));
+                        crate::AtomicFunction::Exchange { compare: Some(cmp) } => {
+                            // TODO: look this up from the atomic expression's scalar type so that it works with i32 as well
+                            let scalar_u32 =
+                                self.get_type_id(LookupType::Local(LocalType::Value {
+                                    vector_size: None,
+                                    kind: crate::ScalarKind::Uint,
+                                    width: 4,
+                                    pointer_space: None,
+                                }));
+                            let bool_type_id =
+                                self.get_type_id(LookupType::Local(LocalType::Value {
+                                    vector_size: None,
+                                    kind: crate::ScalarKind::Bool,
+                                    width: crate::BOOL_WIDTH,
+                                    pointer_space: None,
+                                }));
+
+                            let cas_result_id = self.gen_id();
+                            let equality_result_id = self.gen_id();
+                            let mut cas_instr = Instruction::new(spirv::Op::AtomicCompareExchange);
+                            cas_instr.set_type(scalar_u32);
+                            cas_instr.set_result(cas_result_id);
+                            cas_instr.add_operand(pointer_id);
+                            cas_instr.add_operand(scope_constant_id);
+                            cas_instr.add_operand(semantics_id); // semantics if equal
+                            cas_instr.add_operand(semantics_id); // semantics if not equal
+                            cas_instr.add_operand(value_id);
+                            cas_instr.add_operand(self.cached[cmp]);
+                            block.body.push(cas_instr);
+                            block.body.push(Instruction::binary(
+                                spirv::Op::IEqual,
+                                bool_type_id,
+                                equality_result_id,
+                                cas_result_id,
+                                self.cached[cmp],
+                            ));
+                            Instruction::composite_construct(
+                                result_type_id,
+                                id,
+                                &[cas_result_id, equality_result_id],
+                            )
                         }
                     };
 

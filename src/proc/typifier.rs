@@ -649,12 +649,8 @@ impl<'a> ResolveContext<'a> {
                 width,
                 comparison,
             } => {
-                if comparison {
-                    TypeResolution::Value(Ti::Vector {
-                        size: crate::VectorSize::Bi,
-                        kind,
-                        width,
-                    })
+                if let Some(struct_ty) = comparison {
+                    TypeResolution::Handle(struct_ty)
                 } else {
                     TypeResolution::Value(Ti::Scalar { kind, width })
                 }

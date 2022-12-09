@@ -363,11 +363,17 @@ impl super::Validator {
                 .into_other());
         }
         match context.expressions[result] {
-            //TODO: support atomic result with comparison
+            //TODO: does the result of an atomicCompareExchange need additional validation, or does the existing validation for
+            // the struct type it returns suffice?
             crate::Expression::AtomicResult {
                 kind,
                 width,
-                comparison: false,
+                comparison: Some(_),
+            } if kind == ptr_kind && width == ptr_width => {}
+            crate::Expression::AtomicResult {
+                kind,
+                width,
+                comparison: None,
             } if kind == ptr_kind && width == ptr_width => {}
             _ => {
                 return Err(AtomicError::ResultTypeMismatch(result)
