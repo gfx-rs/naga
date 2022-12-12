@@ -1928,21 +1928,12 @@ const fn scalar_kind_str(kind: crate::ScalarKind, width: u8) -> &'static str {
     use crate::ScalarKind as Sk;
 
     match (kind, width) {
-        // Floating point
         (Sk::Float, 8) => "f64",
-        (Sk::Float, _) => "f32",
-        // Signed integer
-        (Sk::Sint, 1) => "i8",
-        (Sk::Sint, 2) => "i16",
-        (Sk::Sint, 8) => "i64",
-        (Sk::Sint, _) => "i32",
-        // Unsigned integer
-        (Sk::Uint, 1) => "u8",
-        (Sk::Uint, 2) => "u16",
-        (Sk::Uint, 8) => "u64",
-        (Sk::Uint, _) => "u32",
-        // Boolean
-        (Sk::Bool, _) => "bool",
+        (Sk::Float, 4) => "f32",
+        (Sk::Sint, 4) => "i32",
+        (Sk::Uint, 4) => "u32",
+        (Sk::Bool, 1) => "bool",
+        _ => unreachable!(),
     }
 }
 
