@@ -1626,9 +1626,14 @@ impl Parser {
 
         let expression = match *ctx.resolve_type(value)? {
             crate::TypeInner::Scalar { kind, width } => crate::Expression::AtomicResult {
-                kind,
-                width,
-                comparison: None,
+                ty: ctx.types.insert(
+                    crate::Type {
+                        name: None,
+                        inner: crate::TypeInner::Scalar { kind, width },
+                    },
+                    NagaSpan::UNDEFINED,
+                ),
+                comparison: false,
             },
             _ => return Err(Error::InvalidAtomicOperandType(value_span)),
         };
@@ -1898,9 +1903,8 @@ impl Parser {
                                 NagaSpan::UNDEFINED,
                             );
                             crate::Expression::AtomicResult {
-                                kind,
-                                width,
-                                comparison: Some(struct_ty),
+                                ty: struct_ty,
+                                comparison: true,
                             }
                         }
                         _ => return Err(Error::InvalidAtomicOperandType(value_span)),

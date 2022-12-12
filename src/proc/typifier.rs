@@ -644,17 +644,7 @@ impl<'a> ResolveContext<'a> {
                 | crate::BinaryOperator::ShiftLeft
                 | crate::BinaryOperator::ShiftRight => past(left)?.clone(),
             },
-            crate::Expression::AtomicResult {
-                kind,
-                width,
-                comparison,
-            } => {
-                if let Some(struct_ty) = comparison {
-                    TypeResolution::Handle(struct_ty)
-                } else {
-                    TypeResolution::Value(Ti::Scalar { kind, width })
-                }
-            }
+            crate::Expression::AtomicResult { ty, .. } => TypeResolution::Handle(ty),
             crate::Expression::Select { accept, .. } => past(accept)?.clone(),
             crate::Expression::Derivative { axis: _, expr } => past(expr)?.clone(),
             crate::Expression::Relational { fun, argument } => match fun {

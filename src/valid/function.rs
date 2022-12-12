@@ -2,6 +2,9 @@
 use crate::arena::{Arena, UniqueArena};
 use crate::arena::{BadHandle, Handle};
 
+#[cfg(feature = "validate")]
+use super::validate_atomic_compare_exchange_struct;
+
 use super::{
     analyzer::{UniformityDisruptor, UniformityRequirements},
     ExpressionError, FunctionInfo, ModuleInfo,
@@ -363,18 +366,26 @@ impl super::Validator {
                 .into_other());
         }
         match context.expressions[result] {
-            //TODO: does the result of an atomicCompareExchange need additional validation, or does the existing validation for
-            // the struct type it returns suffice?
-            crate::Expression::AtomicResult {
-                kind,
-                width,
-                comparison: Some(_),
-            } if kind == ptr_kind && width == ptr_width => {}
-            crate::Expression::AtomicResult {
-                kind,
-                width,
-                comparison: None,
-            } if kind == ptr_kind && width == ptr_width => {}
+            crate::Expression::AtomicResult { ty, comparison }
+                if {
+                    let scalar_predicate = |ty: &crate::TypeInner| {
+                        *ty == crate::TypeInner::Scalar {
+                            kind: ptr_kind,
+                            width: ptr_width,
+                        }
+                    };
+                    match &context.types[ty].inner {
+                        ty if !comparison => scalar_predicate(ty),
+                        &crate::TypeInner::Struct { ref members, .. } if comparison => {
+                            validate_atomic_compare_exchange_struct(
+                                context.types,
+                                members,
+                                scalar_predicate,
+                            )
+                        }
+                        _ => false,
+                    }
+                } => {}
             _ => {
                 return Err(AtomicError::ResultTypeMismatch(result)
                     .with_span_handle(result, context.expressions)
