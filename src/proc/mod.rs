@@ -98,11 +98,6 @@ impl super::TypeInner {
     }
 
     /// Get the size of this type.
-    ///
-    /// # Panics
-    ///
-    /// Panics if `constants` doesn't contain a referenced handle. This may not happen in
-    /// a properly validated IR module.
     pub fn size(&self, constants: &super::Arena<super::Constant>) -> u32 {
         match *self {
             Self::Scalar { kind: _, width } | Self::Atomic { kind: _, width } => width as u32,
