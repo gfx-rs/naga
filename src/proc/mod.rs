@@ -101,7 +101,7 @@ impl super::TypeInner {
     ///
     /// # Panics
     ///
-    /// Panics if the `constants` doesn't contain a referenced handle. This may not happen in
+    /// Panics if `constants` doesn't contain a referenced handle. This may not happen in
     /// a properly validated IR module.
     pub fn size(&self, constants: &super::Arena<super::Constant>) -> u32 {
         match *self {
