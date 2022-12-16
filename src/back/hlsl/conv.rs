@@ -162,6 +162,7 @@ impl crate::BuiltIn {
             Self::VertexIndex => "SV_VertexID",
             // fragment
             Self::FragDepth => "SV_Depth",
+            Self::PointCoord => "VPOS",
             Self::FrontFacing => "SV_IsFrontFace",
             Self::PrimitiveIndex => "SV_PrimitiveID",
             Self::SampleIndex => "SV_SampleIndex",
