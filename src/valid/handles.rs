@@ -417,7 +417,7 @@ impl super::Validator {
                 ref cases,
             } => {
                 validate_expr(selector)?;
-                for crate::SwitchCase {
+                for &crate::SwitchCase {
                     value: _,
                     ref body,
                     fall_through: _,
