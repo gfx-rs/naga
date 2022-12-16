@@ -320,7 +320,7 @@ impl Validator {
         self.reset_types(module.types.len());
 
         #[cfg(feature = "validate")]
-        Self::validate_module_handles(module).map_err(|e| ValidationError::from(e).with_span())?;
+        Self::validate_module_handles(module).map_err(|e| e.with_span())?;
 
         self.layouter
             .update(&module.types, &module.constants)
