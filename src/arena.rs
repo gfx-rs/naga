@@ -127,18 +127,36 @@ impl<T> Handle<T> {
 )]
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct Range<T> {
-    pub(crate) inner: ops::Range<u32>,
+    inner: ops::Range<u32>,
     #[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(skip))]
     marker: PhantomData<T>,
 }
 
 impl<T> Range<T> {
-    #[cfg(feature = "validate")]
     pub(crate) const fn erase_type(self) -> Range<()> {
         let Self { inner, marker: _ } = self;
         Range {
             inner,
             marker: PhantomData,
+        }
+    }
+}
+
+// NOTE: Keep this diagnostic in sync with that of [`BadHandle`].
+#[derive(Clone, Debug, thiserror::Error)]
+#[error("Handle range {range:?} of {kind} is either not present, or inaccessible yet")]
+pub struct BadRangeError {
+    // This error is used for many `Handle` types, but there's no point in making this generic, so
+    // we just flatten them all to `Handle<()>` here.
+    kind: &'static str,
+    range: Range<()>,
+}
+
+impl BadRangeError {
+    pub fn new<T>(range: Range<T>) -> Self {
+        Self {
+            kind: std::any::type_name::<T>(),
+            range: range.erase_type(),
         }
     }
 }
@@ -346,6 +364,22 @@ impl<T> Arena<T> {
             Ok(())
         } else {
             Err(BadHandle::new(handle))
+        }
+    }
+
+    /// Assert that `range` is valid for this arena.
+    pub fn check_contains_range(&self, range: &Range<T>) -> Result<(), BadRangeError> {
+        // Since `range.inner` is a `Range<u32>`, we only need to
+        // check that the start precedes the end, and that the end is
+        // in range.
+        if range.inner.start > range.inner.end
+            || self
+                .check_contains_handle(Handle::new(range.inner.end.try_into().unwrap()))
+                .is_err()
+        {
+            Err(BadRangeError::new(range.clone()))
+        } else {
+            Ok(())
         }
     }
 }

@@ -139,6 +139,7 @@ impl<'a> Index<Handle<crate::Expression>> for ExpressionTypeResolver<'a> {
         if handle < self.root {
             self.info[handle].ty.inner_with(self.types)
         } else {
+            // `Validator::validate_module_handles` should have caught this.
             panic!(
                 "Depends on {:?}, which has not been processed yet",
                 self.root

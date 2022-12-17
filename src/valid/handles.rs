@@ -1,6 +1,9 @@
 //! Implementation of [`super::Validator::validate_module_handles`].
 
-use crate::{arena::BadHandle, Handle, Range};
+use crate::{
+    arena::{BadHandle, BadRangeError},
+    Handle,
+};
 
 #[cfg(feature = "validate")]
 use crate::{Arena, UniqueArena};
@@ -541,26 +544,6 @@ pub struct FwdDepError {
     depends_on_kind: &'static str,
 }
 
-// NOTE: Keep this diagnostic in sync with that of [`BadHandle`].
-#[derive(Clone, Debug, thiserror::Error)]
-#[error("Handle range {range:?} of {kind} is either not present, or inaccessible yet")]
-pub struct BadRangeError {
-    // This error is used for many `Handle` types, but there's no point in making this generic, so
-    // we just flatten them all to `Handle<()>` here.
-    kind: &'static str,
-    range: Range<()>,
-}
-
-#[cfg(feature = "validate")]
-impl BadRangeError {
-    pub fn new<T>(range: Range<T>) -> Self {
-        Self {
-            kind: std::any::type_name::<T>(),
-            range: range.erase_type(),
-        }
-    }
-}
-
 #[cfg(feature = "validate")]
 impl<T> Handle<T> {
     /// Check that `self` is valid within `arena` using [`Arena::check_contains_handle`].
@@ -626,17 +609,8 @@ impl<T> Handle<T> {
 }
 
 #[cfg(feature = "validate")]
-impl<T> Range<T> {
+impl<T> crate::arena::Range<T> {
     pub(self) fn check_valid_for(&self, arena: &Arena<T>) -> Result<(), BadRangeError> {
-        let &Self {
-            inner: std::ops::Range { start, end },
-            ..
-        } = self;
-        for idx in [start, end.checked_sub(1).unwrap()] {
-            arena
-                .check_contains_handle(Handle::new(idx.try_into().unwrap()))
-                .map_err(|_e| BadRangeError::new(self.clone()))?;
-        }
-        Ok(())
+        arena.check_contains_range(self)
     }
 }
