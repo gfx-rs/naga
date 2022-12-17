@@ -27,7 +27,7 @@ fn main(@builtin(local_invocation_id) local_id: vec3<u32>) {
     // store with ivec2 coords.
     textureStore(image_dst, itc.x, value1 + value2 + value4 + value5 + value6);
     // store with uvec2 coords.
-    textureStore(image_dst, vec2<u32>(itc.x), value1 + value2 + value4 + value5 + value6);
+    textureStore(image_dst, u32(itc.x), value1 + value2 + value4 + value5 + value6);
 }
 
 @compute @workgroup_size(16, 1, 1)
