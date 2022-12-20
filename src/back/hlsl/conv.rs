@@ -156,6 +156,9 @@ impl crate::BuiltIn {
             Self::ClipDistance => "SV_ClipDistance",
             Self::CullDistance => "SV_CullDistance",
             Self::InstanceIndex => "SV_InstanceID",
+            // based on this page https://docs.microsoft.com/en-us/windows/uwp/gaming/glsl-to-hlsl-reference#comparing-opengl-es-20-with-direct3d-11
+            // No meaning unless you target Direct3D 9
+            Self::PointSize => "PSIZE",
             Self::VertexIndex => "SV_VertexID",
             // fragment
             Self::FragDepth => "SV_Depth",
