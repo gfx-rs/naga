@@ -156,13 +156,9 @@ impl crate::BuiltIn {
             Self::ClipDistance => "SV_ClipDistance",
             Self::CullDistance => "SV_CullDistance",
             Self::InstanceIndex => "SV_InstanceID",
-            // based on this page https://docs.microsoft.com/en-us/windows/uwp/gaming/glsl-to-hlsl-reference#comparing-opengl-es-20-with-direct3d-11
-            // No meaning unless you target Direct3D 9
-            Self::PointSize => "PSIZE",
             Self::VertexIndex => "SV_VertexID",
             // fragment
             Self::FragDepth => "SV_Depth",
-            Self::PointCoord => "VPOS",
             Self::FrontFacing => "SV_IsFrontFace",
             Self::PrimitiveIndex => "SV_PrimitiveID",
             Self::SampleIndex => "SV_SampleIndex",
@@ -179,7 +175,7 @@ impl crate::BuiltIn {
             Self::BaseInstance | Self::BaseVertex | Self::WorkGroupSize => {
                 return Err(Error::Unimplemented(format!("builtin {:?}", self)))
             }
-            Self::ViewIndex => {
+            Self::ViewIndex | Self::PointCoord | Self::PointSize => {
                 return Err(Error::Custom(format!("Unsupported builtin {:?}", self)))
             }
         })
