@@ -180,11 +180,11 @@ impl VaryingContext<'_> {
                     Bi::PointCoord => (
                         self.stage == St::Fragment && !self.output,
                         *ty_inner
-                        == Ti::Vector {
-                            size: Vs::Bi,
-                            kind: Sk::Float,
-                            width
-                        },
+                            == Ti::Vector {
+                                size: Vs::Bi,
+                                kind: Sk::Float,
+                                width,
+                            },
                     ),
                     Bi::Position { .. } => (
                         match self.stage {
