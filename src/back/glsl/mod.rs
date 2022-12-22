@@ -3148,7 +3148,7 @@ impl<'a, W: Write> Writer<'a, W> {
                     write!(self.out, "ivec2(")?;
                 } else {
                     if vector_size == 1 {
-                        write!(self.out, "float(")?;
+                        write!(self.out, "int(")?;
                     } else {
                         write!(self.out, "ivec{}(", vector_size)?;
                     }

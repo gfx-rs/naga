@@ -21,7 +21,7 @@ layout(rgba8) writeonly uniform highp image3D _group_0_binding_11_fs;
 layout(location = 0) out vec4 _fs2p_location0;
 
 vec4 test_textureLoad_1d(int coords, int level) {
-    vec4 _e3 = (level < textureQueryLevels(_group_0_binding_0_fs) && float(coords) < textureSize(_group_0_binding_0_fs, level) ? texelFetch(_group_0_binding_0_fs, float(coords), level) : vec4(0.0));
+    vec4 _e3 = (level < textureQueryLevels(_group_0_binding_0_fs) && int(coords) < textureSize(_group_0_binding_0_fs, level) ? texelFetch(_group_0_binding_0_fs, int(coords), level) : vec4(0.0));
     return _e3;
 }
 
@@ -46,7 +46,7 @@ vec4 test_textureLoad_multisampled_2d(ivec2 coords_4, int _sample) {
 }
 
 void test_textureStore_1d(int coords_8, vec4 value) {
-    imageStore(_group_0_binding_8_fs, float(coords_8), value);
+    imageStore(_group_0_binding_8_fs, int(coords_8), value);
     return;
 }
 
