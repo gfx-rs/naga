@@ -22,7 +22,7 @@ layout(location = 0) out vec4 _fs2p_location0;
 
 vec4 test_textureLoad_1d(int coords, int level) {
     int _e3_clamped_lod = clamp(level, 0, textureQueryLevels(_group_0_binding_0_fs) - 1);
-    vec4 _e3 = texelFetch(_group_0_binding_0_fs, clamp(ivec1(coords), 0, textureSize(_group_0_binding_0_fs, _e3_clamped_lod) - 1), _e3_clamped_lod);
+    vec4 _e3 = texelFetch(_group_0_binding_0_fs, clamp(float(coords), 0, textureSize(_group_0_binding_0_fs, _e3_clamped_lod) - 1), _e3_clamped_lod);
     return _e3;
 }
 
@@ -51,7 +51,7 @@ vec4 test_textureLoad_multisampled_2d(ivec2 coords_4, int _sample) {
 }
 
 void test_textureStore_1d(int coords_8, vec4 value) {
-    imageStore(_group_0_binding_8_fs, ivec1(coords_8), value);
+    imageStore(_group_0_binding_8_fs, float(coords_8), value);
     return;
 }
 
