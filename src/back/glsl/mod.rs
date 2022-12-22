@@ -3146,12 +3146,10 @@ impl<'a, W: Write> Writer<'a, W> {
             None => {
                 if tex_1d_hack {
                     write!(self.out, "ivec2(")?;
+                } else if vector_size == 1 {
+                    write!(self.out, "int(")?;
                 } else {
-                    if vector_size == 1 {
-                        write!(self.out, "int(")?;
-                    } else {
-                        write!(self.out, "ivec{}(", vector_size)?;
-                    }
+                    write!(self.out, "ivec{}(", vector_size)?;
                 }
                 self.write_expr(coordinate, ctx)?;
                 if tex_1d_hack {
