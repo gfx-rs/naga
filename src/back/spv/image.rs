@@ -330,7 +330,7 @@ impl<'w> BlockContext<'w> {
                 spirv::Op::Bitcast,
                 u32_id,
                 reconciled_id,
-                array_index_i32_id
+                array_index_i32_id,
             ));
             reconciled_id
         } else {
