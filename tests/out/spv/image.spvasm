@@ -262,7 +262,7 @@ OpBranch %88
 %130 = OpCompositeExtract  %13  %79 2
 %131 = OpBitcast  %4  %130
 %132 = OpIAdd  %4  %131 %6
-%133 = OpConvertUToF  %13  %129
+%133 = OpBitcast  %13  %129
 %134 = OpCompositeConstruct  %20  %127 %133
 %135 = OpImageFetch  %98  %85 %134 Lod %132
 %136 = OpCompositeExtract  %13  %79 0
