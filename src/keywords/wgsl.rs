@@ -130,6 +130,7 @@ pub const RESERVED: &[&str] = &[
     "friend",
     "from",
     "fxgroup",
+    "function",
     "get",
     "goto",
     "groupshared",
