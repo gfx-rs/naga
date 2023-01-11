@@ -701,17 +701,17 @@ impl<'a, W: Write> Writer<'a, W> {
             for (handle, constant) in self.module.constants.iter() {
                 if let Some(name) = constant.name.as_ref() {
                     write!(self.out, "const ")?;
-                    match &constant.inner {
+                    match constant.inner {
                         crate::ConstantInner::Scalar { width, value } => {
                             // create a TypeInner to write
                             let inner = TypeInner::Scalar {
-                                width: *width,
+                                width,
                                 kind: value.scalar_kind(),
                             };
                             self.write_value_type(&inner)?;
                         }
                         crate::ConstantInner::Composite { ty, .. } => {
-                            self.write_type(*ty)?;
+                            self.write_type(ty)?;
                         }
                     };
                     write!(self.out, " {} = ", name)?;
