@@ -501,6 +501,20 @@ impl Parser {
                     mutable: false,
                 };
 
+                if let Some(name) = name.as_ref() {
+                    let constant = self.module.constants.try_get(init).unwrap();
+
+                    // add a named copy of the constant
+                    self.module.constants.fetch_or_append(
+                        Constant {
+                            name: Some(name.clone()),
+                            specialization: constant.specialization,
+                            inner: constant.inner.clone(),
+                        },
+                        meta,
+                    );
+                }
+
                 (GlobalOrConstant::Constant(init), lookup)
             }
             StorageQualifier::AddressSpace(mut space) => {
