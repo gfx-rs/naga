@@ -531,17 +531,6 @@ fn constants() {
     assert_eq!(
         constants.next().unwrap().1,
         &Constant {
-            name: None,
-            specialization: None,
-            inner: ConstantInner::Scalar {
-                width: 4,
-                value: ScalarValue::Float(1.0)
-            }
-        }
-    );
-    assert_eq!(
-        constants.next().unwrap().1,
-        &Constant {
             name: Some("a".to_owned()),
             specialization: None,
             inner: ConstantInner::Scalar {

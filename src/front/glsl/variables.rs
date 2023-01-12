@@ -502,17 +502,19 @@ impl Parser {
                 };
 
                 if let Some(name) = name.as_ref() {
-                    let constant = self.module.constants.try_get(init).unwrap();
-
-                    // add a named copy of the constant
-                    self.module.constants.fetch_or_append(
-                        Constant {
+                    let constant = self.module.constants.get_mut(init);
+                    if constant.name.is_none() {
+                        // set the name of the constant
+                        constant.name = Some(name.clone())
+                    } else {
+                        // add a copy of the constant with the new name
+                        let new_const = Constant {
                             name: Some(name.clone()),
                             specialization: constant.specialization,
                             inner: constant.inner.clone(),
-                        },
-                        meta,
-                    );
+                        };
+                        self.module.constants.fetch_or_append(new_const, meta);
+                    }
                 }
 
                 (GlobalOrConstant::Constant(init), lookup)

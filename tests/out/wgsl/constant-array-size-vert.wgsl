@@ -15,7 +15,7 @@ fn function() -> vec4<f32> {
     i = 0;
     loop {
         let _e9 = i;
-        if !((_e9 < 42)) {
+        if !((_e9 < NUM_VECS)) {
             break;
         }
         {
