@@ -213,7 +213,7 @@ impl<'a> ExpressionContext<'a, '_, '_> {
     ///
     /// [`self.typifier`]: ExpressionContext::typifier
     /// [`self.resolved_inner(handle)`]: ExpressionContext::resolved_inner
-    /// [`Typifier`]: crate::front::Typifier
+    /// [`Typifier`]: Typifier
     fn grow_types(&mut self, handle: Handle<crate::Expression>) -> Result<&mut Self, Error<'a>> {
         let resolve_ctx = ResolveContext {
             constants: &self.module.constants,
