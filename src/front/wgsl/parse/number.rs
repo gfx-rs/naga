@@ -147,7 +147,7 @@ fn parse(input: &str) -> (Result<Number, NumberError>, &str) {
 
     impl<'a> ExtractSubStr<'a> {
         /// given an `input` and a `start` (tail of the `input`)
-        /// creates a new [ExtractSubStr]
+        /// creates a new [`ExtractSubStr`](`Self`)
         fn start(input: &'a str, start: &'a [u8]) -> Self {
             let start = input.len() - start.len();
             Self(&input[start..])
