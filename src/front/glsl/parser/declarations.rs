@@ -118,7 +118,8 @@ impl<'source> ParsingContext<'source> {
             let mut components = Vec::new();
             loop {
                 // The type expected to be parsed inside the initializer list
-                let new_ty = element_or_member_type(ty, components.len(), &mut frontend.module.types);
+                let new_ty =
+                    element_or_member_type(ty, components.len(), &mut frontend.module.types);
 
                 components.push(self.parse_initializer(frontend, new_ty, ctx, body)?.0);
 
@@ -155,7 +156,8 @@ impl<'source> ParsingContext<'source> {
         } else {
             let mut stmt = ctx.stmt_ctx();
             let expr = self.parse_assignment(frontend, ctx, &mut stmt, body)?;
-            let (mut init, init_meta) = ctx.lower_expect(stmt, frontend, expr, ExprPos::Rhs, body)?;
+            let (mut init, init_meta) =
+                ctx.lower_expect(stmt, frontend, expr, ExprPos::Rhs, body)?;
 
             let scalar_components = scalar_components(&frontend.module.types[ty].inner);
             if let Some((kind, width)) = scalar_components {

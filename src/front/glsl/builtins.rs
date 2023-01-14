@@ -1688,7 +1688,13 @@ impl MacroCall {
                 args[0]
             }
             MacroCall::SamplerShadow => {
-                sampled_to_depth(&mut frontend.module, ctx, args[0], meta, &mut frontend.errors);
+                sampled_to_depth(
+                    &mut frontend.module,
+                    ctx,
+                    args[0],
+                    meta,
+                    &mut frontend.errors,
+                );
                 frontend.invalidate_expression(ctx, args[0], meta)?;
                 ctx.samplers.insert(args[0], args[1]);
                 args[0]

@@ -169,7 +169,8 @@ impl<'source> ParsingContext<'source> {
                 let selector = {
                     let mut stmt = ctx.stmt_ctx();
                     let expr = self.parse_expression(frontend, ctx, &mut stmt, body)?;
-                    ctx.lower_expect(stmt, frontend, expr, ExprPos::Rhs, body)?.0
+                    ctx.lower_expect(stmt, frontend, expr, ExprPos::Rhs, body)?
+                        .0
                 };
 
                 self.expect(frontend, TokenValue::RightParen)?;
@@ -251,7 +252,12 @@ impl<'source> ParsingContext<'source> {
                                 break
                             }
                             _ => {
-                                self.parse_statement(frontend, ctx, &mut body, &mut case_terminator)?;
+                                self.parse_statement(
+                                    frontend,
+                                    ctx,
+                                    &mut body,
+                                    &mut case_terminator,
+                                )?;
                             }
                         }
                     }
@@ -439,38 +445,39 @@ impl<'source> ParsingContext<'source> {
                 let (mut block, mut continuing) = (Block::new(), Block::new());
 
                 if self.bump_if(frontend, TokenValue::Semicolon).is_none() {
-                    let (expr, expr_meta) =
-                        if self.peek_type_name(frontend) || self.peek_type_qualifier(frontend) {
-                            let mut qualifiers = self.parse_type_qualifiers(frontend)?;
-                            let (ty, mut meta) = self.parse_type_non_void(frontend)?;
-                            let name = self.expect_ident(frontend)?.0;
+                    let (expr, expr_meta) = if self.peek_type_name(frontend)
+                        || self.peek_type_qualifier(frontend)
+                    {
+                        let mut qualifiers = self.parse_type_qualifiers(frontend)?;
+                        let (ty, mut meta) = self.parse_type_non_void(frontend)?;
+                        let name = self.expect_ident(frontend)?.0;
 
-                            self.expect(frontend, TokenValue::Assign)?;
+                        self.expect(frontend, TokenValue::Assign)?;
 
-                            let (value, end_meta) =
-                                self.parse_initializer(frontend, ty, ctx, &mut block)?;
-                            meta.subsume(end_meta);
+                        let (value, end_meta) =
+                            self.parse_initializer(frontend, ty, ctx, &mut block)?;
+                        meta.subsume(end_meta);
 
-                            let decl = VarDeclaration {
-                                qualifiers: &mut qualifiers,
-                                ty,
-                                name: Some(name),
-                                init: None,
-                                meta,
-                            };
-
-                            let pointer = frontend.add_local_var(ctx, &mut block, decl)?;
-
-                            ctx.emit_restart(&mut block);
-
-                            block.push(Statement::Store { pointer, value }, meta);
-
-                            (value, end_meta)
-                        } else {
-                            let mut stmt = ctx.stmt_ctx();
-                            let root = self.parse_expression(frontend, ctx, &mut stmt, &mut block)?;
-                            ctx.lower_expect(stmt, frontend, root, ExprPos::Rhs, &mut block)?
+                        let decl = VarDeclaration {
+                            qualifiers: &mut qualifiers,
+                            ty,
+                            name: Some(name),
+                            init: None,
+                            meta,
                         };
+
+                        let pointer = frontend.add_local_var(ctx, &mut block, decl)?;
+
+                        ctx.emit_restart(&mut block);
+
+                        block.push(Statement::Store { pointer, value }, meta);
+
+                        (value, end_meta)
+                    } else {
+                        let mut stmt = ctx.stmt_ctx();
+                        let root = self.parse_expression(frontend, ctx, &mut stmt, &mut block)?;
+                        ctx.lower_expect(stmt, frontend, root, ExprPos::Rhs, &mut block)?
+                    };
 
                     let condition = ctx.add_expression(
                         Expression::Unary {
@@ -507,7 +514,9 @@ impl<'source> ParsingContext<'source> {
 
                 meta.subsume(self.expect(frontend, TokenValue::RightParen)?.meta);
 
-                if let Some(stmt_meta) = self.parse_statement(frontend, ctx, &mut block, &mut None)? {
+                if let Some(stmt_meta) =
+                    self.parse_statement(frontend, ctx, &mut block, &mut None)?
+                {
                     meta.subsume(stmt_meta);
                 }
 
