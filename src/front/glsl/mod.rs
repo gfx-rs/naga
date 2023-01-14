@@ -1,7 +1,7 @@
 /*!
 Frontend for [GLSL][glsl] (OpenGL Shading Language).
 
-To begin, take a look at the documentation for the [`Parser`](Frontend).
+To begin, take a look at the documentation for the [`Frontend`].
 
 # Supported versions
 ## Vulkan
@@ -197,7 +197,7 @@ impl Frontend {
     /// Parses a shader either outputting a shader [`Module`](Module) or a list
     /// of [`Error`](Error)s.
     ///
-    /// Multiple calls using the same `Parser` and different shaders are supported.
+    /// Multiple calls using the same `Frontend` and different shaders are supported.
     pub fn parse(
         &mut self,
         options: &Options,
