@@ -3,14 +3,14 @@ use super::{
     error::ExpectedToken,
     error::{Error, ErrorKind},
     token::TokenValue,
-    Options, Parser, Span,
+    Frontend, Options, Span,
 };
 use crate::ShaderStage;
 use pp_rs::token::PreprocessorError;
 
 #[test]
 fn version() {
-    let mut parser = Parser::default();
+    let mut parser = Frontend::default();
 
     // invalid versions
     assert_eq!(
@@ -115,7 +115,7 @@ fn version() {
 
 #[test]
 fn control_flow() {
-    let mut parser = Parser::default();
+    let mut parser = Frontend::default();
 
     parser
         .parse(
@@ -208,7 +208,7 @@ fn control_flow() {
 
 #[test]
 fn declarations() {
-    let mut parser = Parser::default();
+    let mut parser = Frontend::default();
 
     parser
         .parse(
@@ -324,7 +324,7 @@ fn declarations() {
 
 #[test]
 fn textures() {
-    let mut parser = Parser::default();
+    let mut parser = Frontend::default();
 
     parser
         .parse(
@@ -346,7 +346,7 @@ fn textures() {
 
 #[test]
 fn functions() {
-    let mut parser = Parser::default();
+    let mut parser = Frontend::default();
 
     parser
         .parse(
@@ -510,7 +510,7 @@ fn functions() {
 #[test]
 fn constants() {
     use crate::{Constant, ConstantInner, ScalarValue};
-    let mut parser = Parser::default();
+    let mut parser = Frontend::default();
 
     let module = parser
         .parse(
@@ -556,7 +556,7 @@ fn constants() {
 
 #[test]
 fn function_overloading() {
-    let mut parser = Parser::default();
+    let mut parser = Frontend::default();
 
     parser
         .parse(
@@ -582,7 +582,7 @@ fn function_overloading() {
 
 #[test]
 fn implicit_conversions() {
-    let mut parser = Parser::default();
+    let mut parser = Frontend::default();
 
     parser
         .parse(
@@ -645,7 +645,7 @@ fn implicit_conversions() {
 
 #[test]
 fn structs() {
-    let mut parser = Parser::default();
+    let mut parser = Frontend::default();
 
     parser
         .parse(
@@ -735,7 +735,7 @@ fn structs() {
 
 #[test]
 fn swizzles() {
-    let mut parser = Parser::default();
+    let mut parser = Frontend::default();
 
     parser
         .parse(
@@ -781,7 +781,7 @@ fn swizzles() {
 
 #[test]
 fn expressions() {
-    let mut parser = Parser::default();
+    let mut parser = Frontend::default();
 
     // Vector indexing
     parser

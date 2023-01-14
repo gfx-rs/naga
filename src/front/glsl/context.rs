@@ -5,7 +5,7 @@ use super::{
     },
     error::{Error, ErrorKind},
     types::{scalar_components, type_power},
-    Parser, Result,
+    Frontend, Result,
 };
 use crate::{
     front::{Emitter, Typifier},
@@ -61,7 +61,7 @@ pub struct Context {
 }
 
 impl Context {
-    pub fn new(parser: &Parser, body: &mut Block) -> Self {
+    pub fn new(parser: &Frontend, body: &mut Block) -> Self {
         let mut this = Context {
             expressions: Arena::new(),
             locals: Arena::new(),
@@ -89,7 +89,7 @@ impl Context {
 
     pub fn add_global(
         &mut self,
-        parser: &Parser,
+        parser: &Frontend,
         name: &str,
         GlobalLookup {
             kind,
@@ -241,7 +241,7 @@ impl Context {
     /// Add function argument to current scope
     pub fn add_function_arg(
         &mut self,
-        parser: &mut Parser,
+        parser: &mut Frontend,
         body: &mut Block,
         name_meta: Option<(String, Span)>,
         ty: Handle<Type>,
@@ -345,7 +345,7 @@ impl Context {
     pub fn lower(
         &mut self,
         mut stmt: StmtContext,
-        parser: &mut Parser,
+        parser: &mut Frontend,
         expr: Handle<HirExpr>,
         pos: ExprPos,
         body: &mut Block,
@@ -366,7 +366,7 @@ impl Context {
     pub fn lower_expect(
         &mut self,
         mut stmt: StmtContext,
-        parser: &mut Parser,
+        parser: &mut Frontend,
         expr: Handle<HirExpr>,
         pos: ExprPos,
         body: &mut Block,
@@ -382,12 +382,12 @@ impl Context {
     /// internal implementation of [`lower_expect`](Self::lower_expect)
     ///
     /// this method is only public because it's used in
-    /// [`function_call`](Parser::function_call), unless you know what
+    /// [`function_call`](Frontend::function_call), unless you know what
     /// you're doing use [`lower_expect`](Self::lower_expect)
     pub fn lower_expect_inner(
         &mut self,
         stmt: &StmtContext,
-        parser: &mut Parser,
+        parser: &mut Frontend,
         expr: Handle<HirExpr>,
         pos: ExprPos,
         body: &mut Block,
@@ -472,7 +472,7 @@ impl Context {
     fn lower_inner(
         &mut self,
         stmt: &StmtContext,
-        parser: &mut Parser,
+        parser: &mut Frontend,
         expr: Handle<HirExpr>,
         pos: ExprPos,
         body: &mut Block,
@@ -1411,7 +1411,7 @@ impl Context {
 
     pub fn expr_scalar_components(
         &mut self,
-        parser: &Parser,
+        parser: &Frontend,
         expr: Handle<Expression>,
         meta: Span,
     ) -> Result<Option<(ScalarKind, crate::Bytes)>> {
@@ -1421,7 +1421,7 @@ impl Context {
 
     pub fn expr_power(
         &mut self,
-        parser: &Parser,
+        parser: &Frontend,
         expr: Handle<Expression>,
         meta: Span,
     ) -> Result<Option<u32>> {
@@ -1451,7 +1451,7 @@ impl Context {
 
     pub fn implicit_conversion(
         &mut self,
-        parser: &Parser,
+        parser: &Frontend,
         expr: &mut Handle<Expression>,
         meta: Span,
         kind: ScalarKind,
@@ -1471,7 +1471,7 @@ impl Context {
 
     pub fn forced_conversion(
         &mut self,
-        parser: &Parser,
+        parser: &Frontend,
         expr: &mut Handle<Expression>,
         meta: Span,
         kind: ScalarKind,
@@ -1490,7 +1490,7 @@ impl Context {
 
     pub fn binary_implicit_conversion(
         &mut self,
-        parser: &Parser,
+        parser: &Frontend,
         left: &mut Handle<Expression>,
         left_meta: Span,
         right: &mut Handle<Expression>,
@@ -1523,7 +1523,7 @@ impl Context {
 
     pub fn implicit_splat(
         &mut self,
-        parser: &Parser,
+        parser: &Frontend,
         expr: &mut Handle<Expression>,
         meta: Span,
         vector_size: Option<VectorSize>,

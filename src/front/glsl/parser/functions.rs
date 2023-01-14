@@ -7,13 +7,13 @@ use crate::{
         parser::ParsingContext,
         token::{Token, TokenValue},
         variables::VarDeclaration,
-        Error, ErrorKind, Parser, Result,
+        Error, ErrorKind, Frontend, Result,
     },
     Block, ConstantInner, Expression, ScalarValue, Statement, SwitchCase, UnaryOperator,
 };
 
 impl<'source> ParsingContext<'source> {
-    pub fn peek_parameter_qualifier(&mut self, parser: &mut Parser) -> bool {
+    pub fn peek_parameter_qualifier(&mut self, parser: &mut Frontend) -> bool {
         self.peek(parser).map_or(false, |t| match t.value {
             TokenValue::In | TokenValue::Out | TokenValue::InOut | TokenValue::Const => true,
             _ => false,
@@ -21,7 +21,7 @@ impl<'source> ParsingContext<'source> {
     }
 
     /// Returns the parsed `ParameterQualifier` or `ParameterQualifier::In`
-    pub fn parse_parameter_qualifier(&mut self, parser: &mut Parser) -> ParameterQualifier {
+    pub fn parse_parameter_qualifier(&mut self, parser: &mut Frontend) -> ParameterQualifier {
         if self.peek_parameter_qualifier(parser) {
             match self.bump(parser).unwrap().value {
                 TokenValue::In => ParameterQualifier::In,
@@ -37,7 +37,7 @@ impl<'source> ParsingContext<'source> {
 
     pub fn parse_statement(
         &mut self,
-        parser: &mut Parser,
+        parser: &mut Frontend,
         ctx: &mut Context,
         body: &mut Block,
         terminator: &mut Option<usize>,
@@ -564,7 +564,7 @@ impl<'source> ParsingContext<'source> {
     pub fn parse_compound_statement(
         &mut self,
         mut meta: Span,
-        parser: &mut Parser,
+        parser: &mut Frontend,
         ctx: &mut Context,
         body: &mut Block,
         terminator: &mut Option<usize>,
@@ -598,7 +598,7 @@ impl<'source> ParsingContext<'source> {
 
     pub fn parse_function_args(
         &mut self,
-        parser: &mut Parser,
+        parser: &mut Frontend,
         context: &mut Context,
         body: &mut Block,
     ) -> Result<()> {

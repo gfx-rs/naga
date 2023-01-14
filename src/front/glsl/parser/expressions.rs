@@ -5,7 +5,7 @@ use crate::{
         error::{ErrorKind, ExpectedToken},
         parser::ParsingContext,
         token::{Token, TokenValue},
-        Error, Parser, Result, Span,
+        Error, Frontend, Result, Span,
     },
     ArraySize, BinaryOperator, Block, Constant, ConstantInner, Handle, ScalarValue, Type,
     TypeInner, UnaryOperator,
@@ -14,7 +14,7 @@ use crate::{
 impl<'source> ParsingContext<'source> {
     pub fn parse_primary(
         &mut self,
-        parser: &mut Parser,
+        parser: &mut Frontend,
         ctx: &mut Context,
         stmt: &mut StmtContext,
         body: &mut Block,
@@ -79,7 +79,7 @@ impl<'source> ParsingContext<'source> {
 
     pub fn parse_function_call_args(
         &mut self,
-        parser: &mut Parser,
+        parser: &mut Frontend,
         ctx: &mut Context,
         stmt: &mut StmtContext,
         body: &mut Block,
@@ -117,7 +117,7 @@ impl<'source> ParsingContext<'source> {
 
     pub fn parse_postfix(
         &mut self,
-        parser: &mut Parser,
+        parser: &mut Frontend,
         ctx: &mut Context,
         stmt: &mut StmtContext,
         body: &mut Block,
@@ -283,7 +283,7 @@ impl<'source> ParsingContext<'source> {
 
     pub fn parse_unary(
         &mut self,
-        parser: &mut Parser,
+        parser: &mut Frontend,
         ctx: &mut Context,
         stmt: &mut StmtContext,
         body: &mut Block,
@@ -337,7 +337,7 @@ impl<'source> ParsingContext<'source> {
 
     pub fn parse_binary(
         &mut self,
-        parser: &mut Parser,
+        parser: &mut Frontend,
         ctx: &mut Context,
         stmt: &mut StmtContext,
         body: &mut Block,
@@ -399,7 +399,7 @@ impl<'source> ParsingContext<'source> {
 
     pub fn parse_conditional(
         &mut self,
-        parser: &mut Parser,
+        parser: &mut Frontend,
         ctx: &mut Context,
         stmt: &mut StmtContext,
         body: &mut Block,
@@ -433,7 +433,7 @@ impl<'source> ParsingContext<'source> {
 
     pub fn parse_assignment(
         &mut self,
-        parser: &mut Parser,
+        parser: &mut Frontend,
         ctx: &mut Context,
         stmt: &mut StmtContext,
         body: &mut Block,
@@ -509,7 +509,7 @@ impl<'source> ParsingContext<'source> {
 
     pub fn parse_expression(
         &mut self,
-        parser: &mut Parser,
+        parser: &mut Frontend,
         ctx: &mut Context,
         stmt: &mut StmtContext,
         body: &mut Block,

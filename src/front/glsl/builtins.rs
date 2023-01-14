@@ -4,7 +4,7 @@ use super::{
         ParameterQualifier,
     },
     context::Context,
-    Error, ErrorKind, Parser, Result,
+    Error, ErrorKind, Frontend, Result,
 };
 use crate::{
     BinaryOperator, Block, Constant, DerivativeAxis, Expression, Handle, ImageClass,
@@ -1676,7 +1676,7 @@ impl MacroCall {
     /// finally returns the final expression with the correct result
     pub fn call(
         &self,
-        parser: &mut Parser,
+        parser: &mut Frontend,
         ctx: &mut Context,
         body: &mut Block,
         args: &mut [Handle<Expression>],
@@ -2202,7 +2202,7 @@ fn texture_call(
 
 /// Helper struct for texture calls with the separate components from the vector argument
 ///
-/// Obtained by calling [`coordinate_components`](Parser::coordinate_components)
+/// Obtained by calling [`coordinate_components`](Frontend::coordinate_components)
 #[derive(Debug)]
 struct CoordComponents {
     coordinate: Handle<Expression>,
@@ -2211,7 +2211,7 @@ struct CoordComponents {
     used_extra: bool,
 }
 
-impl Parser {
+impl Frontend {
     /// Helper function for texture calls, splits the vector argument into it's components
     fn coordinate_components(
         &mut self,

@@ -4,7 +4,7 @@ use crate::{
         error::ExpectedToken,
         parser::ParsingContext,
         token::{Token, TokenValue},
-        Error, ErrorKind, Parser, Result,
+        Error, ErrorKind, Frontend, Result,
     },
     AddressSpace, ArraySize, Handle, Span, Type, TypeInner,
 };
@@ -14,7 +14,7 @@ impl<'source> ParsingContext<'source> {
     /// and modifying the type handle if it exists
     pub fn parse_array_specifier(
         &mut self,
-        parser: &mut Parser,
+        parser: &mut Frontend,
         span: &mut Span,
         ty: &mut Handle<Type>,
     ) -> Result<()> {
@@ -25,7 +25,7 @@ impl<'source> ParsingContext<'source> {
     /// Implementation of [`Self::parse_array_specifier`] for a single array_specifier
     fn parse_array_specifier_single(
         &mut self,
-        parser: &mut Parser,
+        parser: &mut Frontend,
         span: &mut Span,
         ty: &mut Handle<Type>,
     ) -> Result<bool> {
@@ -75,7 +75,7 @@ impl<'source> ParsingContext<'source> {
         }
     }
 
-    pub fn parse_type(&mut self, parser: &mut Parser) -> Result<(Option<Handle<Type>>, Span)> {
+    pub fn parse_type(&mut self, parser: &mut Frontend) -> Result<(Option<Handle<Type>>, Span)> {
         let token = self.bump(parser)?;
         let mut handle = match token.value {
             TokenValue::Void => return Ok((None, token.meta)),
@@ -128,7 +128,7 @@ impl<'source> ParsingContext<'source> {
         Ok((Some(handle), span))
     }
 
-    pub fn parse_type_non_void(&mut self, parser: &mut Parser) -> Result<(Handle<Type>, Span)> {
+    pub fn parse_type_non_void(&mut self, parser: &mut Frontend) -> Result<(Handle<Type>, Span)> {
         let (maybe_ty, meta) = self.parse_type(parser)?;
         let ty = maybe_ty.ok_or_else(|| Error {
             kind: ErrorKind::SemanticError("Type can't be void".into()),
@@ -138,7 +138,7 @@ impl<'source> ParsingContext<'source> {
         Ok((ty, meta))
     }
 
-    pub fn peek_type_qualifier(&mut self, parser: &mut Parser) -> bool {
+    pub fn peek_type_qualifier(&mut self, parser: &mut Frontend) -> bool {
         self.peek(parser).map_or(false, |t| match t.value {
             TokenValue::Invariant
             | TokenValue::Interpolation(_)
@@ -157,7 +157,10 @@ impl<'source> ParsingContext<'source> {
         })
     }
 
-    pub fn parse_type_qualifiers<'a>(&mut self, parser: &mut Parser) -> Result<TypeQualifiers<'a>> {
+    pub fn parse_type_qualifiers<'a>(
+        &mut self,
+        parser: &mut Frontend,
+    ) -> Result<TypeQualifiers<'a>> {
         let mut qualifiers = TypeQualifiers::default();
 
         while self.peek_type_qualifier(parser) {
@@ -287,7 +290,7 @@ impl<'source> ParsingContext<'source> {
 
     pub fn parse_layout_qualifier_id_list(
         &mut self,
-        parser: &mut Parser,
+        parser: &mut Frontend,
         qualifiers: &mut TypeQualifiers,
     ) -> Result<()> {
         self.expect(parser, TokenValue::LeftParen)?;
@@ -308,7 +311,7 @@ impl<'source> ParsingContext<'source> {
 
     pub fn parse_layout_qualifier_id(
         &mut self,
-        parser: &mut Parser,
+        parser: &mut Frontend,
         qualifiers: &mut crate::FastHashMap<QualifierKey, (QualifierValue, Span)>,
     ) -> Result<()> {
         // layout_qualifier_id:
@@ -363,7 +366,7 @@ impl<'source> ParsingContext<'source> {
         Ok(())
     }
 
-    pub fn peek_type_name(&mut self, parser: &mut Parser) -> bool {
+    pub fn peek_type_name(&mut self, parser: &mut Frontend) -> bool {
         self.peek(parser).map_or(false, |t| match t.value {
             TokenValue::TypeName(_) | TokenValue::Void => true,
             TokenValue::Struct => true,

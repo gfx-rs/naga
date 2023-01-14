@@ -7,7 +7,7 @@ use super::{
     token::{Directive, DirectiveKind},
     token::{Token, TokenValue},
     variables::{GlobalOrConstant, VarDeclaration},
-    Parser, Result,
+    Frontend, Result,
 };
 use crate::{arena::Handle, Block, Constant, ConstantInner, Expression, ScalarValue, Span, Type};
 use core::convert::TryFrom;
@@ -56,7 +56,7 @@ impl<'source> ParsingContext<'source> {
         Ok(())
     }
 
-    pub fn expect_ident(&mut self, parser: &mut Parser) -> Result<(String, Span)> {
+    pub fn expect_ident(&mut self, parser: &mut Frontend) -> Result<(String, Span)> {
         let token = self.bump(parser)?;
 
         match token.value {
@@ -68,7 +68,7 @@ impl<'source> ParsingContext<'source> {
         }
     }
 
-    pub fn expect(&mut self, parser: &mut Parser, value: TokenValue) -> Result<Token> {
+    pub fn expect(&mut self, parser: &mut Frontend, value: TokenValue) -> Result<Token> {
         let token = self.bump(parser)?;
 
         if token.value != value {
@@ -81,7 +81,7 @@ impl<'source> ParsingContext<'source> {
         }
     }
 
-    pub fn next(&mut self, parser: &mut Parser) -> Option<Token> {
+    pub fn next(&mut self, parser: &mut Frontend) -> Option<Token> {
         loop {
             if let Some(token) = self.backtracked_token.take() {
                 self.last_meta = token.meta;
@@ -106,7 +106,7 @@ impl<'source> ParsingContext<'source> {
         }
     }
 
-    pub fn bump(&mut self, parser: &mut Parser) -> Result<Token> {
+    pub fn bump(&mut self, parser: &mut Frontend) -> Result<Token> {
         self.next(parser).ok_or(Error {
             kind: ErrorKind::EndOfFile,
             meta: self.last_meta,
@@ -114,7 +114,7 @@ impl<'source> ParsingContext<'source> {
     }
 
     /// Returns None on the end of the file rather than an error like other methods
-    pub fn bump_if(&mut self, parser: &mut Parser, value: TokenValue) -> Option<Token> {
+    pub fn bump_if(&mut self, parser: &mut Frontend, value: TokenValue) -> Option<Token> {
         if self.peek(parser).filter(|t| t.value == value).is_some() {
             self.bump(parser).ok()
         } else {
@@ -122,7 +122,7 @@ impl<'source> ParsingContext<'source> {
         }
     }
 
-    pub fn peek(&mut self, parser: &mut Parser) -> Option<&Token> {
+    pub fn peek(&mut self, parser: &mut Frontend) -> Option<&Token> {
         loop {
             if let Some(ref token) = self.backtracked_token {
                 break Some(token);
@@ -155,7 +155,7 @@ impl<'source> ParsingContext<'source> {
         }
     }
 
-    pub fn expect_peek(&mut self, parser: &mut Parser) -> Result<&Token> {
+    pub fn expect_peek(&mut self, parser: &mut Frontend) -> Result<&Token> {
         let meta = self.last_meta;
         self.peek(parser).ok_or(Error {
             kind: ErrorKind::EndOfFile,
@@ -163,7 +163,7 @@ impl<'source> ParsingContext<'source> {
         })
     }
 
-    pub fn parse(&mut self, parser: &mut Parser) -> Result<()> {
+    pub fn parse(&mut self, parser: &mut Frontend) -> Result<()> {
         // Body and expression arena for global initialization
         let mut body = Block::new();
         let mut ctx = Context::new(parser, &mut body);
@@ -191,7 +191,7 @@ impl<'source> ParsingContext<'source> {
         })
     }
 
-    fn parse_uint_constant(&mut self, parser: &mut Parser) -> Result<(u32, Span)> {
+    fn parse_uint_constant(&mut self, parser: &mut Frontend) -> Result<(u32, Span)> {
         let (value, meta) = self.parse_constant_expression(parser)?;
 
         let int = match parser.module.constants[value].inner {
@@ -222,7 +222,7 @@ impl<'source> ParsingContext<'source> {
 
     fn parse_constant_expression(
         &mut self,
-        parser: &mut Parser,
+        parser: &mut Frontend,
     ) -> Result<(Handle<Constant>, Span)> {
         let mut block = Block::new();
 
@@ -236,7 +236,7 @@ impl<'source> ParsingContext<'source> {
     }
 }
 
-impl Parser {
+impl Frontend {
     fn handle_directive(&mut self, directive: Directive, meta: Span) {
         let mut tokens = directive.tokens.into_iter();
 
@@ -409,7 +409,7 @@ pub struct DeclarationContext<'ctx, 'qualifiers> {
 impl<'ctx, 'qualifiers> DeclarationContext<'ctx, 'qualifiers> {
     fn add_var(
         &mut self,
-        parser: &mut Parser,
+        parser: &mut Frontend,
         ty: Handle<Type>,
         name: String,
         init: Option<Handle<Constant>>,

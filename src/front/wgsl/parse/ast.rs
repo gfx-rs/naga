@@ -1,4 +1,4 @@
-use super::Number;
+use crate::front::wgsl::parse::number::Number;
 use crate::{Arena, FastHashSet, Handle, Span};
 use std::hash::Hash;
 
@@ -135,8 +135,8 @@ pub struct Function<'a> {
     /// [`LocalDecl`]: StatementKind::LocalDecl
     /// [`arguments`]: Function::arguments
     /// [`Ident`]: Expression::Ident
-    /// [`StatementContext::local_table`]: super::StatementContext::local_table
-    /// [`ExpressionContext::local_table`]: super::ExpressionContext::local_table
+    /// [`StatementContext::local_table`]: super::super::lower::StatementContext::local_table
+    /// [`ExpressionContext::local_table`]: super::super::lower::ExpressionContext::local_table
     pub locals: Arena<Local>,
 
     pub body: Block<'a>,
@@ -423,7 +423,7 @@ pub enum Expression<'a> {
     /// everything's definition in hand, and can decide whether to emit a Naga
     /// [`Constant`], [`As`], [`Splat`], or [`Compose`] expression.
     ///
-    /// [`Lowerer::call`]: super::Lowerer::call
+    /// [`Lowerer::call`]: super::super::lower::Lowerer::call
     /// [`Constant`]: crate::Expression::Constant
     /// [`As`]: crate::Expression::As
     /// [`Splat`]: crate::Expression::Splat

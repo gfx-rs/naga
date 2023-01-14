@@ -10,7 +10,7 @@ use crate::{
         token::{Token, TokenValue},
         types::scalar_components,
         variables::{GlobalOrConstant, VarDeclaration},
-        Error, ErrorKind, Parser, Span,
+        Error, ErrorKind, Frontend, Span,
     },
     proc::Alignment,
     AddressSpace, Block, Expression, FunctionResult, Handle, ScalarKind, Statement, StructMember,
@@ -71,7 +71,7 @@ fn element_or_member_type(
 impl<'source> ParsingContext<'source> {
     pub fn parse_external_declaration(
         &mut self,
-        parser: &mut Parser,
+        parser: &mut Frontend,
         global_ctx: &mut Context,
         global_body: &mut Block,
     ) -> Result<()> {
@@ -100,7 +100,7 @@ impl<'source> ParsingContext<'source> {
 
     pub fn parse_initializer(
         &mut self,
-        parser: &mut Parser,
+        parser: &mut Frontend,
         ty: Handle<Type>,
         ctx: &mut Context,
         body: &mut Block,
@@ -171,7 +171,7 @@ impl<'source> ParsingContext<'source> {
     // produced Error::InvalidToken if it isn't consumed
     pub fn parse_init_declarator_list(
         &mut self,
-        parser: &mut Parser,
+        parser: &mut Frontend,
         mut ty: Handle<Type>,
         ctx: &mut DeclarationContext,
     ) -> Result<()> {
@@ -287,7 +287,7 @@ impl<'source> ParsingContext<'source> {
     /// `external` whether or not we are in a global or local context
     pub fn parse_declaration(
         &mut self,
-        parser: &mut Parser,
+        parser: &mut Frontend,
         ctx: &mut Context,
         body: &mut Block,
         external: bool,
@@ -524,7 +524,7 @@ impl<'source> ParsingContext<'source> {
 
     pub fn parse_block_declaration(
         &mut self,
-        parser: &mut Parser,
+        parser: &mut Frontend,
         ctx: &mut Context,
         body: &mut Block,
         qualifiers: &mut TypeQualifiers,
@@ -616,7 +616,7 @@ impl<'source> ParsingContext<'source> {
     // TODO: Accept layout arguments
     pub fn parse_struct_declaration_list(
         &mut self,
-        parser: &mut Parser,
+        parser: &mut Frontend,
         members: &mut Vec<StructMember>,
         layout: StructLayout,
     ) -> Result<u32> {
