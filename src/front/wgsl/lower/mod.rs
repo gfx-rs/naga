@@ -128,6 +128,9 @@ impl<'a, 'temp> StatementContext<'a, 'temp, '_> {
     }
 }
 
+/// State for lowering an `ast::Expression` to Naga IR.
+///
+/// Not to be confused with `parser::ExpressionContext`.
 pub struct ExpressionContext<'source, 'temp, 'out> {
     // WGSL AST values.
     local_table: &'temp mut FastHashMap<Handle<ast::Local>, TypedExpression>,

@@ -95,15 +95,10 @@ impl std::error::Error for ParseError {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq)]
-pub enum NumberType {
-    I32,
-}
-
-#[derive(Copy, Clone, Debug, PartialEq)]
 pub enum ExpectedToken<'a> {
     Token(Token<'a>),
     Identifier,
-    Number(NumberType),
+    Number,
     Integer,
     /// A compile-time constant expression.
     Constant,
@@ -272,11 +267,7 @@ impl<'a> Error<'a> {
                         }
                     }
                     ExpectedToken::Identifier => "identifier".to_string(),
-                    ExpectedToken::Number(ty) => {
-                        match ty {
-                            NumberType::I32 => "32-bit signed integer literal",
-                        }.to_string()
-                    },
+                    ExpectedToken::Number => "32-bit signed integer literal".to_string(),
                     ExpectedToken::Integer => "unsigned/signed integer literal".to_string(),
                     ExpectedToken::Constant => "compile-time constant".to_string(),
                     ExpectedToken::PrimaryExpression => "expression".to_string(),

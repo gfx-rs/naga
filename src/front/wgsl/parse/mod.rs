@@ -1,4 +1,4 @@
-use crate::front::wgsl::error::{Error, ExpectedToken, NumberType};
+use crate::front::wgsl::error::{Error, ExpectedToken};
 use crate::front::wgsl::parse::lexer::{Lexer, Token};
 use crate::front::wgsl::parse::number::Number;
 use crate::front::SymbolTable;
@@ -10,6 +10,8 @@ pub mod lexer;
 pub mod number;
 
 /// State for constructing an AST expression.
+///
+/// Not to be confused with `lower::ExpressionContext`.
 struct ExpressionContext<'input, 'temp, 'out> {
     /// The [`TranslationUnit::expressions`] arena to which we should contribute
     /// expressions.
@@ -226,10 +228,7 @@ impl Parser {
                 u32::try_from(num).map_err(|_| Error::NegativeInt(span))
             }
             (Token::Number(Err(e)), span) => Err(Error::BadNumber(span, e)),
-            other => Err(Error::Unexpected(
-                other.1,
-                ExpectedToken::Number(NumberType::I32),
-            )),
+            other => Err(Error::Unexpected(other.1, ExpectedToken::Number)),
         }
     }
 
@@ -243,10 +242,7 @@ impl Parser {
             }
             (Token::Number(Ok(Number::U32(num))), _) => Ok(num),
             (Token::Number(Err(e)), span) => Err(Error::BadNumber(span, e)),
-            other => Err(Error::Unexpected(
-                other.1,
-                ExpectedToken::Number(NumberType::I32),
-            )),
+            other => Err(Error::Unexpected(other.1, ExpectedToken::Number)),
         }
     }
 
