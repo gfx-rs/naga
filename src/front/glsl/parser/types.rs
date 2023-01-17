@@ -86,7 +86,7 @@ impl<'source> ParsingContext<'source> {
                 self.expect(parser, TokenValue::LeftBrace)?;
                 let mut members = Vec::new();
                 let span =
-                    self.parse_struct_declaration_list(parser, &mut members, StructLayout::Std140)?;
+                    self.parse_struct_declaration_list(parser, &mut members, StructLayout::Std430)?;
                 let end_meta = self.expect(parser, TokenValue::RightBrace)?.meta;
                 meta.subsume(end_meta);
                 let ty = parser.module.types.insert(
