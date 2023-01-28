@@ -2510,6 +2510,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     Unpack2x16float,
                     Regular(&'static str),
                     MissingIntOverload(&'static str),
+                    CountLeadingZeros,
                 }
 
                 let fun = match fun {
@@ -2572,6 +2573,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     Mf::Transpose => Function::Regular("transpose"),
                     Mf::Determinant => Function::Regular("determinant"),
                     // bits
+                    Mf::CountLeadingZeros => Function::CountLeadingZeros,
                     Mf::CountOneBits => Function::MissingIntOverload("countbits"),
                     Mf::ReverseBits => Function::MissingIntOverload("reversebits"),
                     Mf::FindLsb => Function::Regular("firstbitlow"),
@@ -2638,6 +2640,43 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                             self.write_expr(module, arg, func_ctx)?;
                             write!(self.out, ")")?;
                         }
+                    }
+                    Function::CountLeadingZeros => {
+                        match *func_ctx.info[arg].ty.inner_with(&module.types) {
+                            TypeInner::Vector { size, kind, .. } => {
+                                let s = match size {
+                                    crate::VectorSize::Bi => ".xx",
+                                    crate::VectorSize::Tri => ".xxx",
+                                    crate::VectorSize::Quad => ".xxxx",
+                                };
+
+                                if let ScalarKind::Uint = kind {
+                                    write!(self.out, "asuint((31){s} - firstbithigh(")?;
+                                } else {
+                                    write!(self.out, "(")?;
+                                    self.write_expr(module, arg, func_ctx)?;
+                                    write!(
+                                        self.out,
+                                        " < (0){s} ? (0){s} : (31){s} - firstbithigh("
+                                    )?;
+                                }
+                            }
+                            TypeInner::Scalar { kind, .. } => {
+                                if let ScalarKind::Uint = kind {
+                                    write!(self.out, "asuint(31 - firstbithigh(")?;
+                                } else {
+                                    write!(self.out, "(")?;
+                                    self.write_expr(module, arg, func_ctx)?;
+                                    write!(self.out, " < 0 ? 0 : 31 - firstbithigh(")?;
+                                }
+                            }
+                            _ => unreachable!(),
+                        }
+
+                        self.write_expr(module, arg, func_ctx)?;
+                        write!(self.out, "))")?;
+
+                        return Ok(());
                     }
                 }
             }

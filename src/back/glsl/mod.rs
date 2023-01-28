@@ -2928,6 +2928,40 @@ impl<'a, W: Write> Writer<'a, W> {
                     Mf::Transpose => "transpose",
                     Mf::Determinant => "determinant",
                     // bits
+                    Mf::CountLeadingZeros => {
+                        match *ctx.info[arg].ty.inner_with(&self.module.types) {
+                            crate::TypeInner::Vector { size, kind, .. } => {
+                                let s = back::vector_size_str(size);
+
+                                if let crate::ScalarKind::Uint = kind {
+                                    write!(self.out, "uvec{s}(ivec{s}(31) - findMSB(")?;
+                                    self.write_expr(arg, ctx)?;
+                                    write!(self.out, "))")?;
+                                } else {
+                                    write!(self.out, "mix(ivec{s}(31) - findMSB(")?;
+                                    self.write_expr(arg, ctx)?;
+                                    write!(self.out, "), ivec{s}(0), lessThan(")?;
+                                    self.write_expr(arg, ctx)?;
+                                    write!(self.out, ", ivec{s}(0)))")?;
+                                }
+                            }
+                            crate::TypeInner::Scalar { kind, .. } => {
+                                if let crate::ScalarKind::Uint = kind {
+                                    write!(self.out, "uint(31 - findMSB(")?;
+                                } else {
+                                    write!(self.out, "(")?;
+                                    self.write_expr(arg, ctx)?;
+                                    write!(self.out, " < 0 ? 0 : 31 - findMSB(")?;
+                                }
+
+                                self.write_expr(arg, ctx)?;
+                                write!(self.out, "))")?;
+                            }
+                            _ => unreachable!(),
+                        };
+
+                        return Ok(());
+                    }
                     Mf::CountOneBits => "bitCount",
                     Mf::ReverseBits => "bitfieldReverse",
                     Mf::ExtractBits => "bitfieldExtract",

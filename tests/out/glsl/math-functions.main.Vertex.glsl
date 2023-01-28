@@ -14,5 +14,9 @@ void main() {
     vec4 g = refract(v, v, 1.0);
     int const_dot = ( + ivec2(0, 0).x * ivec2(0, 0).x + ivec2(0, 0).y * ivec2(0, 0).y);
     uint first_leading_bit_abs = uint(findMSB(uint(abs(int(0u)))));
+    int clz_a = (-1 < 0 ? 0 : 31 - findMSB(-1));
+    uint clz_b = uint(31 - findMSB(1u));
+    ivec2 clz_c = mix(ivec2(31) - findMSB(ivec2(-1)), ivec2(0), lessThan(ivec2(-1), ivec2(0)));
+    uvec2 clz_d = uvec2(ivec2(31) - findMSB(uvec2(1u)));
 }
 
