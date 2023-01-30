@@ -83,6 +83,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             named_expressions: crate::NamedExpressions::default(),
             wrapped: super::Wrapped::default(),
             temp_access_chain: Vec::new(),
+            need_bake_expressions: Default::default(),
         }
     }
 
@@ -93,6 +94,34 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         self.entry_point_io.clear();
         self.named_expressions.clear();
         self.wrapped.clear();
+        self.need_bake_expressions.clear();
+    }
+
+    /// Helper method used to find which expressions of a given function require baking
+    ///
+    /// # Notes
+    /// Clears `need_bake_expressions` set before adding to it
+    fn update_expressions_to_bake(&mut self, func: &crate::Function, info: &valid::FunctionInfo) {
+        use crate::Expression;
+        self.need_bake_expressions.clear();
+        for (fun_handle, expr) in func.expressions.iter() {
+            let expr_info = &info[fun_handle];
+            let min_ref_count = func.expressions[fun_handle].bake_ref_count();
+            if min_ref_count <= expr_info.ref_count {
+                self.need_bake_expressions.insert(fun_handle);
+            }
+
+            match *expr {
+                Expression::Math {
+                    fun: crate::MathFunction::CountLeadingZeros,
+                    arg,
+                    ..
+                } => {
+                    self.need_bake_expressions.insert(arg);
+                }
+                _ => (),
+            }
+        }
     }
 
     pub fn write(
@@ -244,7 +273,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             // before writing all statements and expressions.
             self.write_wrapped_functions(module, &ctx)?;
 
-            self.write_function(module, name.as_str(), function, &ctx)?;
+            self.write_function(module, name.as_str(), function, &ctx, info)?;
 
             writeln!(self.out)?;
         }
@@ -296,7 +325,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             }
 
             let name = self.names[&NameKey::EntryPoint(index as u16)].clone();
-            self.write_function(module, &name, &ep.function, &ctx)?;
+            self.write_function(module, &name, &ep.function, &ctx, info)?;
 
             if index < module.entry_points.len() - 1 {
                 writeln!(self.out)?;
@@ -1034,8 +1063,11 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         name: &str,
         func: &crate::Function,
         func_ctx: &back::FunctionCtx<'_>,
+        info: &valid::FunctionInfo,
     ) -> BackendResult {
         // Function Declaration Syntax - https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-function-syntax
+
+        self.update_expressions_to_bake(func, info);
 
         // Write modifier
         if let Some(crate::FunctionResult {
@@ -1284,15 +1316,12 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         // Otherwise, we could accidentally write variable name instead of full expression.
                         // Also, we use sanitized names! It defense backend from generating variable with name from reserved keywords.
                         Some(self.namer.call(name))
+                    } else if self.need_bake_expressions.contains(&handle) {
+                        Some(format!("_expr{}", handle.index()))
                     } else if info.ref_count == 0 {
                         Some(self.namer.call(""))
                     } else {
-                        let min_ref_count = func_ctx.expressions[handle].bake_ref_count();
-                        if min_ref_count <= info.ref_count {
-                            Some(format!("_expr{}", handle.index()))
-                        } else {
-                            None
-                        }
+                        None
                     };
 
                     if let Some(name) = expr_name {

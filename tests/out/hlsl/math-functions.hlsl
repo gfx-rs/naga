@@ -12,6 +12,8 @@ void main()
     uint first_leading_bit_abs = firstbithigh(abs(0u));
     int clz_a = (-1 < 0 ? 0 : 31 - firstbithigh(-1));
     uint clz_b = asuint(31 - firstbithigh(1u));
-    int2 clz_c = ((-1).xx < (0).xx ? (0).xx : (31).xx - firstbithigh((-1).xx));
-    uint2 clz_d = asuint((31).xx - firstbithigh((1u).xx));
+    int2 _expr20 = (-1).xx;
+    int2 clz_c = (_expr20 < (0).xx ? (0).xx : (31).xx - firstbithigh(_expr20));
+    uint2 _expr23 = (1u).xx;
+    uint2 clz_d = asuint((31).xx - firstbithigh(_expr23));
 }
