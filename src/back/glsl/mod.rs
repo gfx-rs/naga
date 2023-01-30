@@ -1120,28 +1120,36 @@ impl<'a, W: Write> Writer<'a, W> {
             if min_ref_count <= expr_info.ref_count {
                 self.need_bake_expressions.insert(expr.0);
             }
-            // if the expression is a Dot product with integer arguments,
-            // then the args needs baking as well
-            if let (
-                fun_handle,
-                &Expression::Math {
+
+            let (fun_handle, expr) = expr;
+            match *expr {
+                Expression::Math {
                     fun: crate::MathFunction::Dot,
                     arg,
                     arg1,
                     ..
-                },
-            ) = expr
-            {
-                let inner = info[fun_handle].ty.inner_with(&self.module.types);
-                if let TypeInner::Scalar { kind, .. } = *inner {
-                    match kind {
-                        crate::ScalarKind::Sint | crate::ScalarKind::Uint => {
-                            self.need_bake_expressions.insert(arg);
-                            self.need_bake_expressions.insert(arg1.unwrap());
+                } => {
+                    // if the expression is a Dot product with integer arguments,
+                    // then the args needs baking as well
+                    let inner = info[fun_handle].ty.inner_with(&self.module.types);
+                    if let TypeInner::Scalar { kind, .. } = *inner {
+                        match kind {
+                            crate::ScalarKind::Sint | crate::ScalarKind::Uint => {
+                                self.need_bake_expressions.insert(arg);
+                                self.need_bake_expressions.insert(arg1.unwrap());
+                            }
+                            _ => (),
                         }
-                        _ => {}
                     }
                 }
+                Expression::Math {
+                    fun: crate::MathFunction::CountLeadingZeros,
+                    arg,
+                    ..
+                } => {
+                    self.need_bake_expressions.insert(arg);
+                }
+                _ => (),
             }
         }
     }
