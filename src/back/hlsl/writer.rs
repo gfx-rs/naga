@@ -112,13 +112,16 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             }
 
             match *expr {
-                Expression::Math {
-                    fun: crate::MathFunction::CountLeadingZeros,
-                    arg,
-                    ..
-                } => {
-                    self.need_bake_expressions.insert(arg);
-                }
+                Expression::Math { fun, arg, .. } => match fun {
+                    crate::MathFunction::Asinh
+                    | crate::MathFunction::Acosh
+                    | crate::MathFunction::Atanh
+                    | crate::MathFunction::Unpack2x16float
+                    | crate::MathFunction::CountLeadingZeros => {
+                        self.need_bake_expressions.insert(arg);
+                    }
+                    _ => (),
+                },
                 _ => (),
             }
         }
