@@ -2949,9 +2949,7 @@ impl<'a, W: Write> Writer<'a, W> {
                                 write!(self.out, ") + 0.5) * {LOG2_E})), ")?;
 
                                 if let crate::ScalarKind::Uint = kind {
-                                    write!(self.out, "mix(uvec{s}(0u), uvec{s}(32u), equal(")?;
-                                    self.write_expr(arg, ctx)?;
-                                    write!(self.out, ", uvec{s}(0u))), lessThanEqual(")?;
+                                    write!(self.out, "uvec{s}(32u), lessThanEqual(")?;
                                     self.write_expr(arg, ctx)?;
                                     write!(self.out, ", uvec{s}(0u)))")?;
                                 } else {
@@ -2967,9 +2965,7 @@ impl<'a, W: Write> Writer<'a, W> {
                                 self.write_expr(arg, ctx)?;
 
                                 if let crate::ScalarKind::Uint = kind {
-                                    write!(self.out, " <= 0u ? (")?;
-                                    self.write_expr(arg, ctx)?;
-                                    write!(self.out, " == 0u ? 32u : 0u) : uint(")?;
+                                    write!(self.out, " == 0u ? 32u : uint(")?;
                                 } else {
                                     write!(self.out, " <= 0 ? (")?;
                                     self.write_expr(arg, ctx)?;
