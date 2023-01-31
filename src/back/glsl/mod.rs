@@ -2930,8 +2930,6 @@ impl<'a, W: Write> Writer<'a, W> {
                     Mf::Determinant => "determinant",
                     // bits
                     Mf::CountLeadingZeros => {
-                        use std::f32::consts::LOG2_E;
-
                         match *ctx.info[arg].ty.inner_with(&self.module.types) {
                             crate::TypeInner::Vector { size, kind, .. } => {
                                 let s = back::vector_size_str(size);
@@ -2942,9 +2940,9 @@ impl<'a, W: Write> Writer<'a, W> {
                                     write!(self.out, "ivec{s}(")?;
                                 }
 
-                                write!(self.out, "mix(vec{s}(31.0) - floor(log(vec{s}(")?;
+                                write!(self.out, "mix(vec{s}(31.0) - floor(log2(vec{s}(")?;
                                 self.write_expr(arg, ctx)?;
-                                write!(self.out, ") + 0.5) * {LOG2_E}), ")?;
+                                write!(self.out, ") + 0.5)), ")?;
 
                                 if let crate::ScalarKind::Uint = kind {
                                     write!(self.out, "vec{s}(32.0), lessThanEqual(")?;
@@ -2970,9 +2968,9 @@ impl<'a, W: Write> Writer<'a, W> {
                                     write!(self.out, " == 0 ? 32 : 0) : int(")?;
                                 }
 
-                                write!(self.out, "31.0 - floor(log(float(")?;
+                                write!(self.out, "31.0 - floor(log2(float(")?;
                                 self.write_expr(arg, ctx)?;
-                                write!(self.out, ") + 0.5) * {LOG2_E})))")?;
+                                write!(self.out, ") + 0.5))))")?;
                             }
                             _ => unreachable!(),
                         };
