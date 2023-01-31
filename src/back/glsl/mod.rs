@@ -1122,35 +1122,26 @@ impl<'a, W: Write> Writer<'a, W> {
             }
 
             match *expr {
-                Expression::Math {
-                    fun: crate::MathFunction::Dot,
-                    arg,
-                    arg1,
-                    ..
-                } => {
-                    // if the expression is a Dot product with integer arguments,
-                    // then the args needs baking as well
-                    let inner = info[fun_handle].ty.inner_with(&self.module.types);
-                    if let TypeInner::Scalar { kind, .. } = *inner {
-                        match kind {
-                            crate::ScalarKind::Sint | crate::ScalarKind::Uint => {
-                                self.need_bake_expressions.insert(arg);
-                                self.need_bake_expressions.insert(arg1.unwrap());
+                Expression::Math { fun, arg, arg1, .. } => match fun {
+                    crate::MathFunction::Dot => {
+                        // if the expression is a Dot product with integer arguments,
+                        // then the args needs baking as well
+                        let inner = info[fun_handle].ty.inner_with(&self.module.types);
+                        if let TypeInner::Scalar { kind, .. } = *inner {
+                            match kind {
+                                crate::ScalarKind::Sint | crate::ScalarKind::Uint => {
+                                    self.need_bake_expressions.insert(arg);
+                                    self.need_bake_expressions.insert(arg1.unwrap());
+                                }
+                                _ => (),
                             }
-                            _ => (),
                         }
                     }
-                }
-                Expression::Math {
-                    fun: crate::MathFunction::CountLeadingZeros,
-                    arg,
-                    ..
-                } => {
-                    let inner = info[fun_handle].ty.inner_with(&self.module.types);
-                    if let Some(crate::ScalarKind::Sint) = inner.scalar_kind() {
+                    crate::MathFunction::CountLeadingZeros => {
                         self.need_bake_expressions.insert(arg);
                     }
-                }
+                    _ => (),
+                },
                 _ => (),
             }
         }
@@ -2939,33 +2930,55 @@ impl<'a, W: Write> Writer<'a, W> {
                     Mf::Determinant => "determinant",
                     // bits
                     Mf::CountLeadingZeros => {
+                        use std::f32::consts::LOG2_E;
+
                         match *ctx.info[arg].ty.inner_with(&self.module.types) {
                             crate::TypeInner::Vector { size, kind, .. } => {
                                 let s = back::vector_size_str(size);
 
+                                write!(self.out, "mix(")?;
+
                                 if let crate::ScalarKind::Uint = kind {
-                                    write!(self.out, "uvec{s}(ivec{s}(31) - findMSB(")?;
-                                    self.write_expr(arg, ctx)?;
-                                    write!(self.out, "))")?;
+                                    write!(self.out, "uvec{s}(")?;
                                 } else {
-                                    write!(self.out, "mix(ivec{s}(31) - findMSB(")?;
+                                    write!(self.out, "ivec{s}(")?;
+                                }
+
+                                write!(self.out, "vec{s}(31.0) - floor(log(vec{s}(")?;
+                                self.write_expr(arg, ctx)?;
+                                write!(self.out, ") + 0.5) * {LOG2_E})), ")?;
+
+                                if let crate::ScalarKind::Uint = kind {
+                                    write!(self.out, "mix(uvec{s}(0u), uvec{s}(32u), equal(")?;
                                     self.write_expr(arg, ctx)?;
-                                    write!(self.out, "), ivec{s}(0), lessThan(")?;
+                                    write!(self.out, ", uvec{s}(0u))), lessThanEqual(")?;
+                                    self.write_expr(arg, ctx)?;
+                                    write!(self.out, ", uvec{s}(0u)))")?;
+                                } else {
+                                    write!(self.out, "mix(ivec{s}(0u), ivec{s}(32u), equal(")?;
+                                    self.write_expr(arg, ctx)?;
+                                    write!(self.out, ", ivec{s}(0))), lessThanEqual(")?;
                                     self.write_expr(arg, ctx)?;
                                     write!(self.out, ", ivec{s}(0)))")?;
                                 }
                             }
                             crate::TypeInner::Scalar { kind, .. } => {
+                                write!(self.out, "(")?;
+                                self.write_expr(arg, ctx)?;
+
                                 if let crate::ScalarKind::Uint = kind {
-                                    write!(self.out, "uint(31 - findMSB(")?;
-                                } else {
-                                    write!(self.out, "(")?;
+                                    write!(self.out, " <= 0u ? (")?;
                                     self.write_expr(arg, ctx)?;
-                                    write!(self.out, " < 0 ? 0 : 31 - findMSB(")?;
+                                    write!(self.out, " == 0u ? 32u : 0u) : uint(")?;
+                                } else {
+                                    write!(self.out, " <= 0 ? (")?;
+                                    self.write_expr(arg, ctx)?;
+                                    write!(self.out, " == 0 ? 32 : 0) : int(")?;
                                 }
 
+                                write!(self.out, "31.0 - floor(log(float(")?;
                                 self.write_expr(arg, ctx)?;
-                                write!(self.out, "))")?;
+                                write!(self.out, ") + 0.5) * {LOG2_E})))")?;
                             }
                             _ => unreachable!(),
                         };
