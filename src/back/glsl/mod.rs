@@ -2936,28 +2936,26 @@ impl<'a, W: Write> Writer<'a, W> {
                             crate::TypeInner::Vector { size, kind, .. } => {
                                 let s = back::vector_size_str(size);
 
-                                write!(self.out, "mix(")?;
-
                                 if let crate::ScalarKind::Uint = kind {
                                     write!(self.out, "uvec{s}(")?;
                                 } else {
                                     write!(self.out, "ivec{s}(")?;
                                 }
 
-                                write!(self.out, "vec{s}(31.0) - floor(log(vec{s}(")?;
+                                write!(self.out, "mix(vec{s}(31.0) - floor(log(vec{s}(")?;
                                 self.write_expr(arg, ctx)?;
-                                write!(self.out, ") + 0.5) * {LOG2_E})), ")?;
+                                write!(self.out, ") + 0.5) * {LOG2_E}), ")?;
 
                                 if let crate::ScalarKind::Uint = kind {
-                                    write!(self.out, "uvec{s}(32u), lessThanEqual(")?;
+                                    write!(self.out, "vec{s}(32.0), lessThanEqual(")?;
                                     self.write_expr(arg, ctx)?;
-                                    write!(self.out, ", uvec{s}(0u)))")?;
+                                    write!(self.out, ", uvec{s}(0u))))")?;
                                 } else {
-                                    write!(self.out, "mix(ivec{s}(0u), ivec{s}(32u), equal(")?;
+                                    write!(self.out, "mix(vec{s}(0.0), vec{s}(32.0), equal(")?;
                                     self.write_expr(arg, ctx)?;
                                     write!(self.out, ", ivec{s}(0))), lessThanEqual(")?;
                                     self.write_expr(arg, ctx)?;
-                                    write!(self.out, ", ivec{s}(0)))")?;
+                                    write!(self.out, ", ivec{s}(0))))")?;
                                 }
                             }
                             crate::TypeInner::Scalar { kind, .. } => {
