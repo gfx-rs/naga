@@ -1121,8 +1121,8 @@ impl<'a, W: Write> Writer<'a, W> {
                 self.need_bake_expressions.insert(fun_handle);
             }
 
-            match *expr {
-                Expression::Math { fun, arg, arg1, .. } => match fun {
+            if let Expression::Math { fun, arg, arg1, .. } = *expr {
+                match fun {
                     crate::MathFunction::Dot => {
                         // if the expression is a Dot product with integer arguments,
                         // then the args needs baking as well
@@ -1133,16 +1133,15 @@ impl<'a, W: Write> Writer<'a, W> {
                                     self.need_bake_expressions.insert(arg);
                                     self.need_bake_expressions.insert(arg1.unwrap());
                                 }
-                                _ => (),
+                                _ => {}
                             }
                         }
                     }
                     crate::MathFunction::CountLeadingZeros => {
                         self.need_bake_expressions.insert(arg);
                     }
-                    _ => (),
-                },
-                _ => (),
+                    _ => {}
+                }
             }
         }
     }

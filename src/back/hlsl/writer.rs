@@ -116,8 +116,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 self.need_bake_expressions.insert(fun_handle);
             }
 
-            match *expr {
-                Expression::Math { fun, arg, .. } => match fun {
+            if let Expression::Math { fun, arg, .. } = *expr {
+                match fun {
                     crate::MathFunction::Asinh
                     | crate::MathFunction::Acosh
                     | crate::MathFunction::Atanh
@@ -130,9 +130,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                             self.need_bake_expressions.insert(arg);
                         }
                     }
-                    _ => (),
-                },
-                _ => (),
+                    _ => {}
+                }
             }
         }
     }
