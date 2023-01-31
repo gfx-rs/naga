@@ -14,6 +14,5 @@ void main()
     uint clz_b = asuint(31 - firstbithigh(1u));
     int2 _expr20 = (-1).xx;
     int2 clz_c = (_expr20 < (0).xx ? (0).xx : (31).xx - firstbithigh(_expr20));
-    uint2 _expr23 = (1u).xx;
-    uint2 clz_d = asuint((31).xx - firstbithigh(_expr23));
+    uint2 clz_d = asuint((31).xx - firstbithigh((1u).xx));
 }

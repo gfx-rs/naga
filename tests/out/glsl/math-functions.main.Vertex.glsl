@@ -18,7 +18,6 @@ void main() {
     uint clz_b = uint(31 - findMSB(1u));
     ivec2 _e20 = ivec2(-1);
     ivec2 clz_c = mix(ivec2(31) - findMSB(_e20), ivec2(0), lessThan(_e20, ivec2(0)));
-    uvec2 _e23 = uvec2(1u);
-    uvec2 clz_d = uvec2(ivec2(31) - findMSB(_e23));
+    uvec2 clz_d = uvec2(ivec2(31) - findMSB(uvec2(1u)));
 }
 

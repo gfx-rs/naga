@@ -1146,7 +1146,10 @@ impl<'a, W: Write> Writer<'a, W> {
                     arg,
                     ..
                 } => {
-                    self.need_bake_expressions.insert(arg);
+                    let inner = info[fun_handle].ty.inner_with(&self.module.types);
+                    if let Some(crate::ScalarKind::Sint) = inner.scalar_kind() {
+                        self.need_bake_expressions.insert(arg);
+                    }
                 }
                 _ => (),
             }

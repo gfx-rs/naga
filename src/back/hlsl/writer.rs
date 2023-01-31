@@ -101,7 +101,12 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
     ///
     /// # Notes
     /// Clears `need_bake_expressions` set before adding to it
-    fn update_expressions_to_bake(&mut self, func: &crate::Function, info: &valid::FunctionInfo) {
+    fn update_expressions_to_bake(
+        &mut self,
+        module: &Module,
+        func: &crate::Function,
+        info: &valid::FunctionInfo,
+    ) {
         use crate::Expression;
         self.need_bake_expressions.clear();
         for (fun_handle, expr) in func.expressions.iter() {
@@ -116,9 +121,14 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     crate::MathFunction::Asinh
                     | crate::MathFunction::Acosh
                     | crate::MathFunction::Atanh
-                    | crate::MathFunction::Unpack2x16float
-                    | crate::MathFunction::CountLeadingZeros => {
+                    | crate::MathFunction::Unpack2x16float => {
                         self.need_bake_expressions.insert(arg);
+                    }
+                    crate::MathFunction::CountLeadingZeros => {
+                        let inner = info[fun_handle].ty.inner_with(&module.types);
+                        if let Some(crate::ScalarKind::Sint) = inner.scalar_kind() {
+                            self.need_bake_expressions.insert(arg);
+                        }
                     }
                     _ => (),
                 },
@@ -1070,7 +1080,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
     ) -> BackendResult {
         // Function Declaration Syntax - https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-function-syntax
 
-        self.update_expressions_to_bake(func, info);
+        self.update_expressions_to_bake(module, func, info);
 
         // Write modifier
         if let Some(crate::FunctionResult {
