@@ -2023,17 +2023,10 @@ impl<'a, W: Write> Writer<'a, W> {
                                                         /* > We agreed that gl_ClipDistance and gl_CullDistance, and related language,
                                                             should not appear in the ESSL spec since it's not part of OpenGL ES 3.2.
                                                         */
-                                                        if let Version::Embedded {
-                                                            version,
-                                                            is_webgl: _,
-                                                        } = self.options.version
-                                                        {
-                                                            if version <= 320 {
-                                                                log::warn!(
+                                                        log::warn!(
                                                             "{:?} is not part of OpenGL ES <= 3.2",
-                                                            builtin);
-                                                            }
-                                                        }
+                                                            builtin
+                                                        );
                                                         continue;
                                                     }
                                                 }
