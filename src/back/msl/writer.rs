@@ -1721,9 +1721,54 @@ impl<W: Write> Writer<W> {
                     self.put_expression(arg, context, true)?;
                     write!(self.out, ") + 1) % 33) - 1)")?;
                 } else if fun == Mf::FindMsb {
-                    write!(self.out, "((({NAMESPACE}::clz(")?;
-                    self.put_expression(arg, context, true)?;
-                    write!(self.out, ") + 1) % 33) - 1)")?
+                    match *context.resolve_type(arg) {
+                        crate::TypeInner::Vector { size, kind, .. } => {
+                            let s = back::vector_size_str(size);
+
+                            if let crate::ScalarKind::Uint = kind {
+                                write!(self.out, "((({NAMESPACE}::clz(")?;
+                                self.put_expression(arg, context, true)?;
+                                write!(self.out, ") + 1) % 33) - 1)")?;
+                            } else {
+                                write!(self.out, "{NAMESPACE}::select(int{s}(")?;
+                                write!(self.out, "{NAMESPACE}::floor(")?;
+                                write!(self.out, "{NAMESPACE}::log2(float{s}(")?;
+                                write!(self.out, "{NAMESPACE}::select(")?;
+                                self.put_expression(arg, context, false)?;
+                                write!(self.out, ", ~")?;
+                                self.put_expression(arg, context, false)?;
+                                write!(self.out, ", ")?;
+                                self.put_expression(arg, context, false)?;
+                                write!(self.out, " < 0))))), int{s}(-1), ")?;
+                                self.put_expression(arg, context, false)?;
+                                write!(self.out, " == 0 || ")?;
+                                self.put_expression(arg, context, false)?;
+                                write!(self.out, " == -1)")?;
+                            }
+                        }
+                        crate::TypeInner::Scalar { kind, .. } => {
+                            if let crate::ScalarKind::Uint = kind {
+                                write!(self.out, "((({NAMESPACE}::clz(")?;
+                                self.put_expression(arg, context, true)?;
+                                write!(self.out, ") + 1) % 33) - 1)")?;
+                            } else {
+                                write!(self.out, "(")?;
+                                self.put_expression(arg, context, false)?;
+                                write!(self.out, " == 0 || ")?;
+                                self.put_expression(arg, context, false)?;
+                                write!(self.out, " == -1 ? -1 : int(")?;
+                                write!(self.out, "{NAMESPACE}::floor(")?;
+                                write!(self.out, "{NAMESPACE}::log2(float(")?;
+                                self.put_expression(arg, context, false)?;
+                                write!(self.out, " < 0 ? ~")?;
+                                self.put_expression(arg, context, false)?;
+                                write!(self.out, " : ")?;
+                                self.put_expression(arg, context, false)?;
+                                write!(self.out, ")))))")?;
+                            }
+                        }
+                        _ => unreachable!(),
+                    }
                 } else if fun == Mf::Unpack2x16float {
                     write!(self.out, "float2(as_type<half2>(")?;
                     self.put_expression(arg, context, false)?;
@@ -2275,43 +2320,47 @@ impl<W: Write> Writer<W> {
     ) {
         use crate::Expression;
         self.need_bake_expressions.clear();
-        for expr in func.expressions.iter() {
+        for (fun_handle, expr) in func.expressions.iter() {
             // Expressions whose reference count is above the
             // threshold should always be stored in temporaries.
-            let expr_info = &info[expr.0];
-            let min_ref_count = func.expressions[expr.0].bake_ref_count();
+            let expr_info = &info[fun_handle];
+            let min_ref_count = func.expressions[fun_handle].bake_ref_count();
             if min_ref_count <= expr_info.ref_count {
-                self.need_bake_expressions.insert(expr.0);
+                self.need_bake_expressions.insert(fun_handle);
             }
 
-            // WGSL's `dot` function works on any `vecN` type, but Metal's only
-            // works on floating-point vectors, so we emit inline code for
-            // integer vector `dot` calls. But that code uses each argument `N`
-            // times, once for each component (see `put_dot_product`), so to
-            // avoid duplicated evaluation, we must bake integer operands.
-            if let (
-                fun_handle,
-                &Expression::Math {
-                    fun: crate::MathFunction::Dot,
-                    arg,
-                    arg1,
-                    ..
-                },
-            ) = expr
-            {
-                use crate::TypeInner;
-                // check what kind of product this is depending
-                // on the resolve type of the Dot function itself
-                let inner = context.resolve_type(fun_handle);
-                if let TypeInner::Scalar { kind, .. } = *inner {
-                    match kind {
-                        crate::ScalarKind::Sint | crate::ScalarKind::Uint => {
-                            self.need_bake_expressions.insert(arg);
-                            self.need_bake_expressions.insert(arg1.unwrap());
+            match *expr {
+                Expression::Math { fun, arg, arg1, .. } => match fun {
+                    crate::MathFunction::Dot => {
+                        // WGSL's `dot` function works on any `vecN` type, but Metal's only
+                        // works on floating-point vectors, so we emit inline code for
+                        // integer vector `dot` calls. But that code uses each argument `N`
+                        // times, once for each component (see `put_dot_product`), so to
+                        // avoid duplicated evaluation, we must bake integer operands.
+
+                        use crate::TypeInner;
+                        // check what kind of product this is depending
+                        // on the resolve type of the Dot function itself
+                        let inner = context.resolve_type(fun_handle);
+                        if let TypeInner::Scalar { kind, .. } = *inner {
+                            match kind {
+                                crate::ScalarKind::Sint | crate::ScalarKind::Uint => {
+                                    self.need_bake_expressions.insert(arg);
+                                    self.need_bake_expressions.insert(arg1.unwrap());
+                                }
+                                _ => {}
+                            }
                         }
-                        _ => {}
                     }
-                }
+                    crate::MathFunction::FindMsb => {
+                        let inner = context.resolve_type(fun_handle);
+                        if let Some(crate::ScalarKind::Sint) = inner.scalar_kind() {
+                            self.need_bake_expressions.insert(arg);
+                        }
+                    }
+                    _ => {}
+                },
+                _ => {}
             }
         }
     }
