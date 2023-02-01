@@ -2329,8 +2329,8 @@ impl<W: Write> Writer<W> {
                 self.need_bake_expressions.insert(fun_handle);
             }
 
-            match *expr {
-                Expression::Math { fun, arg, arg1, .. } => match fun {
+            if let Expression::Math { fun, arg, arg1, .. } = *expr {
+                match fun {
                     crate::MathFunction::Dot => {
                         // WGSL's `dot` function works on any `vecN` type, but Metal's only
                         // works on floating-point vectors, so we emit inline code for
@@ -2359,8 +2359,7 @@ impl<W: Write> Writer<W> {
                         }
                     }
                     _ => {}
-                },
-                _ => {}
+                }
             }
         }
     }
