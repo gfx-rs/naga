@@ -2019,6 +2019,21 @@ impl<'a, W: Write> Writer<'a, W> {
                                                 crate::BuiltIn::ClipDistance
                                                 | crate::BuiltIn::CullDistance => {
                                                     if self.options.version.is_es() {
+                                                        // According to https://github.com/KhronosGroup/GLSL/issues/132
+                                                        /* > We agreed that gl_ClipDistance and gl_CullDistance, and related language,
+                                                            should not appear in the ESSL spec since it's not part of OpenGL ES 3.2.
+                                                        */
+                                                        if let Version::Embedded {
+                                                            version,
+                                                            is_webgl: _,
+                                                        } = self.options.version
+                                                        {
+                                                            if version <= 320 {
+                                                                log::warn!(
+                                                            "{:?} is not part of OpenGL ES <= 3.2",
+                                                            builtin);
+                                                            }
+                                                        }
                                                         continue;
                                                     }
                                                 }
@@ -2087,7 +2102,7 @@ impl<'a, W: Write> Writer<'a, W> {
                                 .contains(WriterFlags::FORCE_POINT_SIZE)
                             && !has_point_size
                         {
-                            writeln!(self.out, "gl_PointSize = 1.0;",)?;
+                            writeln!(self.out, "gl_PointSize = 1.0;")?;
                             write!(self.out, "{level}")?;
                         }
                         writeln!(self.out, "return;")?;
