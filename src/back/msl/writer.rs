@@ -3368,7 +3368,8 @@ impl<W: Write> Writer<W> {
                                     break;
                                 }
                             };
-                            let good = match options.per_stage_map[ep.stage].resources.get(br) {
+                            let target = options.get_resource_binding_target(&ep, &br);
+                            let good = match target {
                                 Some(target) => {
                                     let binding_ty = match module.types[var.ty].inner {
                                         crate::TypeInner::BindingArray { base, .. } => {
@@ -3393,7 +3394,7 @@ impl<W: Write> Writer<W> {
                             }
                         }
                         crate::AddressSpace::PushConstant => {
-                            if let Err(e) = options.resolve_push_constants(ep.stage) {
+                            if let Err(e) = options.resolve_push_constants(ep) {
                                 ep_error = Some(e);
                                 break;
                             }
@@ -3404,7 +3405,7 @@ impl<W: Write> Writer<W> {
                     }
                 }
                 if supports_array_length {
-                    if let Err(err) = options.resolve_sizes_buffer(ep.stage) {
+                    if let Err(err) = options.resolve_sizes_buffer(ep) {
                         ep_error = Some(err);
                     }
                 }
@@ -3673,15 +3674,13 @@ impl<W: Write> Writer<W> {
                 }
                 // the resolves have already been checked for `!fake_missing_bindings` case
                 let resolved = match var.space {
-                    crate::AddressSpace::PushConstant => {
-                        options.resolve_push_constants(ep.stage).ok()
-                    }
+                    crate::AddressSpace::PushConstant => options.resolve_push_constants(ep).ok(),
                     crate::AddressSpace::WorkGroup => None,
                     crate::AddressSpace::Storage { .. } if options.lang_version < (2, 0) => {
                         return Err(Error::UnsupportedAddressSpace(var.space))
                     }
                     _ => options
-                        .resolve_resource_binding(ep.stage, var.binding.as_ref().unwrap())
+                        .resolve_resource_binding(ep, var.binding.as_ref().unwrap())
                         .ok(),
                 };
                 if let Some(ref resolved) = resolved {
@@ -3726,7 +3725,7 @@ impl<W: Write> Writer<W> {
             // passed as a final struct-typed argument.
             if supports_array_length {
                 // this is checked earlier
-                let resolved = options.resolve_sizes_buffer(ep.stage).unwrap();
+                let resolved = options.resolve_sizes_buffer(ep).unwrap();
                 let separator = if module.global_variables.is_empty() {
                     ' '
                 } else {
@@ -3786,7 +3785,7 @@ impl<W: Write> Writer<W> {
                     };
                 } else if let Some(ref binding) = var.binding {
                     // write an inline sampler
-                    let resolved = options.resolve_resource_binding(ep.stage, binding).unwrap();
+                    let resolved = options.resolve_resource_binding(ep, binding).unwrap();
                     if let Some(sampler) = resolved.as_inline_sampler(options) {
                         let name = &self.names[&NameKey::GlobalVariable(handle)];
                         writeln!(
