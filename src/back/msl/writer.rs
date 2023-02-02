@@ -1723,8 +1723,7 @@ impl<W: Write> Writer<W> {
                 } else if fun == Mf::FindMsb {
                     let inner = context.resolve_type(arg);
 
-                    write!(self.out, "{NAMESPACE}::select(")?;
-                    write!(self.out, "31 - {NAMESPACE}::clz(")?;
+                    write!(self.out, "{NAMESPACE}::select(31 - {NAMESPACE}::clz(")?;
 
                     if let Some(crate::ScalarKind::Sint) = inner.scalar_kind() {
                         write!(self.out, "{NAMESPACE}::select(")?;
@@ -1740,7 +1739,7 @@ impl<W: Write> Writer<W> {
 
                     write!(self.out, "), ")?;
 
-                    // or metal will compain that select is ambiguous
+                    // or metal will complain that select is ambiguous
                     match *inner {
                         crate::TypeInner::Vector { size, kind, .. } => {
                             let size = back::vector_size_str(size);
