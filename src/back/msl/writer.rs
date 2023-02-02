@@ -1744,21 +1744,22 @@ impl<W: Write> Writer<W> {
                         crate::TypeInner::Vector { size, kind, .. } => {
                             let size = back::vector_size_str(size);
                             if let crate::ScalarKind::Sint = kind {
-                                write!(self.out, "int{size}(-1), ")?;
+                                write!(self.out, "int{size}")?;
                             } else {
-                                write!(self.out, "uint{size}(-1), ")?;
+                                write!(self.out, "uint{size}")?;
                             }
                         }
                         crate::TypeInner::Scalar { kind, .. } => {
                             if let crate::ScalarKind::Sint = kind {
-                                write!(self.out, "int(-1), ")?;
+                                write!(self.out, "int")?;
                             } else {
-                                write!(self.out, "uint(-1), ")?;
+                                write!(self.out, "uint")?;
                             }
                         }
                         _ => (),
                     }
 
+                    write!(self.out, "(-1), ")?;
                     self.put_expression(arg, context, true)?;
                     write!(self.out, " == 0 || ")?;
                     self.put_expression(arg, context, true)?;
