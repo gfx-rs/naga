@@ -2995,7 +2995,7 @@ impl<'a, W: Write> Writer<'a, W> {
                                     } else {
                                         write!(self.out, "(")?;
                                         self.write_expr(arg, ctx)?;
-                                        write!(self.out, " <= 0 ? 0 : int(")?;
+                                        write!(self.out, " < 0 ? 0 : int(")?;
                                         write!(self.out, "31.0 - floor(log2(float(")?;
                                         self.write_expr(arg, ctx)?;
                                         write!(self.out, ") + 0.5))))")?;
