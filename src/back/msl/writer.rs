@@ -2347,10 +2347,7 @@ impl<W: Write> Writer<W> {
                         }
                     }
                     crate::MathFunction::FindMsb => {
-                        let inner = context.resolve_type(fun_handle);
-                        if let Some(crate::ScalarKind::Sint) = inner.scalar_kind() {
-                            self.need_bake_expressions.insert(arg);
-                        }
+                        self.need_bake_expressions.insert(arg);
                     }
                     _ => {}
                 }
