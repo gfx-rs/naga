@@ -2982,7 +2982,7 @@ impl<'a, W: Write> Writer<'a, W> {
                                         write!(self.out, "mix(vec{s}(31.0) - floor(log2(vec{s}(")?;
                                         self.write_expr(arg, ctx)?;
                                         write!(self.out, ") + 0.5)), ")?;
-                                        write!(self.out, "vec{s}(0.0), lessThanEqual(")?;
+                                        write!(self.out, "vec{s}(0.0), lessThan(")?;
                                         self.write_expr(arg, ctx)?;
                                         write!(self.out, ", ivec{s}(0u))))")?;
                                     }
