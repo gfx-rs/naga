@@ -1125,12 +1125,13 @@ impl<'a, W: Write> Writer<'a, W> {
                 self.need_bake_expressions.insert(fun_handle);
             }
 
+            let inner = expr_info.ty.inner_with(&self.module.types);
+
             if let Expression::Math { fun, arg, arg1, .. } = *expr {
                 match fun {
                     crate::MathFunction::Dot => {
                         // if the expression is a Dot product with integer arguments,
                         // then the args needs baking as well
-                        let inner = info[fun_handle].ty.inner_with(&self.module.types);
                         if let TypeInner::Scalar { kind, .. } = *inner {
                             match kind {
                                 crate::ScalarKind::Sint | crate::ScalarKind::Uint => {
@@ -1142,7 +1143,13 @@ impl<'a, W: Write> Writer<'a, W> {
                         }
                     }
                     crate::MathFunction::CountLeadingZeros => {
-                        self.need_bake_expressions.insert(arg);
+                        if self.options.version.supports_integer_functions() {
+                            if let Some(crate::ScalarKind::Sint) = inner.scalar_kind() {
+                                self.need_bake_expressions.insert(arg);
+                            }
+                        } else {
+                            self.need_bake_expressions.insert(arg);
+                        }
                     }
                     _ => {}
                 }
