@@ -1723,54 +1723,47 @@ impl<W: Write> Writer<W> {
                 } else if fun == Mf::FindMsb {
                     let inner = context.resolve_type(arg);
 
-                    if let Some(crate::ScalarKind::Uint) = inner.scalar_kind() {
-                        write!(self.out, "((({NAMESPACE}::clz(")?;
+                    write!(self.out, "{NAMESPACE}::select(")?;
+                    write!(self.out, "31 - {NAMESPACE}::clz(")?;
+
+                    if let Some(crate::ScalarKind::Sint) = inner.scalar_kind() {
+                        write!(self.out, "{NAMESPACE}::select(")?;
                         self.put_expression(arg, context, true)?;
-                        write!(self.out, ") + 1) % 33) - 1)")?;
+                        write!(self.out, ", ~")?;
+                        self.put_expression(arg, context, true)?;
+                        write!(self.out, ", ")?;
+                        self.put_expression(arg, context, true)?;
+                        write!(self.out, " < 0)")?;
+                    } else {
+                        self.put_expression(arg, context, true)?;
                     }
 
+                    write!(self.out, "), ")?;
+
+                    // or metal will compain that select is ambiguous
                     match *inner {
-                        crate::TypeInner::Vector {
-                            size,
-                            kind: crate::ScalarKind::Sint,
-                            ..
-                        } => {
-                            let s = back::vector_size_str(size);
-                            write!(self.out, "{NAMESPACE}::select(int{s}(")?;
-                            write!(self.out, "{NAMESPACE}::floor(")?;
-                            write!(self.out, "{NAMESPACE}::log2(float{s}(")?;
-                            write!(self.out, "{NAMESPACE}::select(")?;
-                            self.put_expression(arg, context, false)?;
-                            write!(self.out, ", ~")?;
-                            self.put_expression(arg, context, false)?;
-                            write!(self.out, ", ")?;
-                            self.put_expression(arg, context, false)?;
-                            write!(self.out, " < 0))))), int{s}(-1), ")?;
-                            self.put_expression(arg, context, false)?;
-                            write!(self.out, " == 0 || ")?;
-                            self.put_expression(arg, context, false)?;
-                            write!(self.out, " == -1)")?;
+                        crate::TypeInner::Vector { size, kind, .. } => {
+                            let size = back::vector_size_str(size);
+                            if let crate::ScalarKind::Sint = kind {
+                                write!(self.out, "int{size}(-1), ")?;
+                            } else {
+                                write!(self.out, "uint{size}(-1), ")?;
+                            }
                         }
-                        crate::TypeInner::Scalar {
-                            kind: crate::ScalarKind::Sint,
-                            ..
-                        } => {
-                            write!(self.out, "(")?;
-                            self.put_expression(arg, context, false)?;
-                            write!(self.out, " == 0 || ")?;
-                            self.put_expression(arg, context, false)?;
-                            write!(self.out, " == -1 ? -1 : int(")?;
-                            write!(self.out, "{NAMESPACE}::floor(")?;
-                            write!(self.out, "{NAMESPACE}::log2(float(")?;
-                            self.put_expression(arg, context, false)?;
-                            write!(self.out, " < 0 ? ~")?;
-                            self.put_expression(arg, context, false)?;
-                            write!(self.out, " : ")?;
-                            self.put_expression(arg, context, false)?;
-                            write!(self.out, ")))))")?;
+                        crate::TypeInner::Scalar { kind, .. } => {
+                            if let crate::ScalarKind::Sint = kind {
+                                write!(self.out, "int(-1), ")?;
+                            } else {
+                                write!(self.out, "uint(-1), ")?;
+                            }
                         }
                         _ => (),
                     }
+
+                    self.put_expression(arg, context, true)?;
+                    write!(self.out, " == 0 || ")?;
+                    self.put_expression(arg, context, true)?;
+                    write!(self.out, " == -1)")?;
                 } else if fun == Mf::Unpack2x16float {
                     write!(self.out, "float2(as_type<half2>(")?;
                     self.put_expression(arg, context, false)?;

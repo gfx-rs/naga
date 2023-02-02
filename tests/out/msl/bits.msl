@@ -92,13 +92,13 @@ kernel void main_(
     metal::uint2 _e122 = u2_;
     u2_ = (((metal::ctz(_e122) + 1) % 33) - 1);
     metal::int3 _e124 = i3_;
-    i3_ = metal::select(int3(metal::floor(metal::log2(float3(metal::select(_e124, ~_e124, _e124 < 0))))), int3(-1), _e124 == 0 || _e124 == -1);
+    i3_ = metal::select(31 - metal::clz(metal::select(_e124, ~_e124, _e124 < 0)), int3(-1), _e124 == 0 || _e124 == -1);
     metal::uint3 _e126 = u3_;
-    u3_ = (((metal::clz(_e126) + 1) % 33) - 1);
+    u3_ = metal::select(31 - metal::clz(_e126), uint3(-1), _e126 == 0 || _e126 == -1);
     int _e128 = i;
-    i = (_e128 == 0 || _e128 == -1 ? -1 : int(metal::floor(metal::log2(float(_e128 < 0 ? ~_e128 : _e128)))));
+    i = metal::select(31 - metal::clz(metal::select(_e128, ~_e128, _e128 < 0)), int(-1), _e128 == 0 || _e128 == -1);
     uint _e130 = u;
-    u = (((metal::clz(_e130) + 1) % 33) - 1);
+    u = metal::select(31 - metal::clz(_e130), uint(-1), _e130 == 0 || _e130 == -1);
     int _e132 = i;
     i = metal::popcount(_e132);
     metal::int2 _e134 = i2_;
