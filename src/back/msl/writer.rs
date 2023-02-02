@@ -2315,13 +2315,13 @@ impl<W: Write> Writer<W> {
     ) {
         use crate::Expression;
         self.need_bake_expressions.clear();
-        for (fun_handle, expr) in func.expressions.iter() {
+        for (expr_handle, expr) in func.expressions.iter() {
             // Expressions whose reference count is above the
             // threshold should always be stored in temporaries.
-            let expr_info = &info[fun_handle];
-            let min_ref_count = func.expressions[fun_handle].bake_ref_count();
+            let expr_info = &info[expr_handle];
+            let min_ref_count = func.expressions[expr_handle].bake_ref_count();
             if min_ref_count <= expr_info.ref_count {
-                self.need_bake_expressions.insert(fun_handle);
+                self.need_bake_expressions.insert(expr_handle);
             }
 
             if let Expression::Math { fun, arg, arg1, .. } = *expr {
@@ -2336,7 +2336,7 @@ impl<W: Write> Writer<W> {
                         use crate::TypeInner;
                         // check what kind of product this is depending
                         // on the resolve type of the Dot function itself
-                        let inner = context.resolve_type(fun_handle);
+                        let inner = context.resolve_type(expr_handle);
                         if let TypeInner::Scalar { kind, .. } = *inner {
                             match kind {
                                 crate::ScalarKind::Sint | crate::ScalarKind::Uint => {
