@@ -2019,12 +2019,10 @@ impl<'a, W: Write> Writer<'a, W> {
                                                 crate::BuiltIn::ClipDistance
                                                 | crate::BuiltIn::CullDistance => {
                                                     if self.options.version.is_es() {
-                                                        // According to https://github.com/KhronosGroup/GLSL/issues/132
-                                                        /* > We agreed that gl_ClipDistance and gl_CullDistance, and related language,
-                                                            should not appear in the ESSL spec since it's not part of OpenGL ES 3.2.
-                                                        */
+                                                        // Note that gl_ClipDistance and gl_CullDistance are listed in the GLSL ES 3.2 spec but shouldn't
+                                                        // See https://github.com/KhronosGroup/GLSL/issues/132#issuecomment-685818465
                                                         log::warn!(
-                                                            "{:?} is not part of OpenGL ES <= 3.2",
+                                                            "{:?} is not part of GLSL ES",
                                                             builtin
                                                         );
                                                         continue;
