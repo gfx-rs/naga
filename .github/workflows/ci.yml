@@ -1,5 +1,4 @@
-# Regular testing.
-name: pipeline
+name: CI
 on: [push, pull_request]
 
 env:
