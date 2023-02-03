@@ -32,18 +32,15 @@ jobs:
         run: cargo +$MSRV check --all-features --workspace
 
   test:
-    name: Test Nightly
+    name: Test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
 
-      - name: Install nightly toolchain
-        run: rustup toolchain install nightly --no-self-update --profile=minimal
-
-      - name: Install cargo-nextest
+      - name: Install cargo-nextest and cargo-llvm-cov
         uses: taiki-e/install-action@v2
         with:
-          tool: cargo-nextest
+          tool: cargo-nextest,cargo-llvm-cov
 
       - name: Default test
         # Our intention here is to test `naga` with no features enabled. But
@@ -51,10 +48,15 @@ jobs:
         # `naga` with the features requested in `cli/Cargo.toml`. Passing
         # `--package naga` causes us to use the default features in the
         # top-level `Cargo.toml` instead.
-        run: cargo +nightly nextest run --package naga
+        run: cargo nextest run --package naga
 
       - name: Test all features
-        run: cargo +nightly nextest run --all-features --workspace
+        run: cargo llvm-cov --lcov --output-path lcov.info nextest --all-features --workspace
+
+      - name: Upload coverage report to codecov
+        uses: codecov/codecov-action@v3
+        with:
+          files: lcov.info
 
       - name: Check snapshots
         run: git diff --exit-code -- tests/out
