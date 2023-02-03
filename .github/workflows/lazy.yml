@@ -10,9 +10,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
       - name: Install binstall
         uses: taiki-e/install-action@v2
         with:
@@ -36,10 +33,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
       - run: mkdir data
       - name: Download shaders
         run: curl https://user.fm/files/v2-5573e18b9f03f42c6ae53c392083da35/dota2-shaders.zip -o data/all.zip
@@ -55,10 +48,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
       - name: Download shaders
         run: git clone https://github.com/SaschaWillems/Vulkan.git
       - name: Build Naga
@@ -88,10 +77,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
       - name: Download shaders
         run: git clone https://github.com/dneto0/spirv-samples.git
       - name: Build Naga
@@ -162,19 +147,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-      - uses: actions-rs/cargo@v1
-        name: Test minimal (without span)
-        with:
-          command: test
-          args: --features validate -p naga
-      - uses: actions-rs/cargo@v1
-        name: Test all (without validation)
-        with:
-          command: test
-          args: --features wgsl-in,wgsl-out,glsl-in,glsl-out,spv-in,spv-out,msl-out,hlsl-out,dot-out --workspace
+      - name: Test minimal (without span)
+        run: cargo test --features validate -p naga
+      - name: Test all (without validation)
+        run: cargo test --features wgsl-in,wgsl-out,glsl-in,glsl-out,spv-in,spv-out,msl-out,hlsl-out,dot-out --workspace
       - name: Check snapshots (without validation)
         run: git diff --exit-code -- tests/out

@@ -2,23 +2,27 @@
 name: pipeline
 on: [push, pull_request]
 
+env:
+  MSRV: 1.63
+
 jobs:
   test-msrv:
     name: Test MSRV and dependencies minimal-versions
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
+      - name: Install MSRV toolchain
+        run: rustup toolchain install $MSRV --no-self-update --profile=minimal
+      - name: Install nightly toolchain
+        run: rustup toolchain install nightly --no-self-update --profile=minimal
+      - name: Install cargo-hack
+        uses: taiki-e/install-action@v2
         with:
-          profile: minimal
-          toolchain: "1.63.0"
-          override: true
-      - uses: taiki-e/install-action@cargo-hack
-      - uses: taiki-e/install-action@cargo-minimal-versions
-      # nightly is only used by cargo-minimal-versions to regenerate the lock file
-      - run: rustup toolchain add nightly --no-self-update
+          tool: cargo-hack
+      # -Z avoid-dev-deps doesn't work
+      - run: cargo +nightly hack generate-lockfile --remove-dev-deps -Z minimal-versions --offline
       - name: Test all features
-        run: cargo minimal-versions test --all-features --workspace
+        run: cargo +$MSRV test --all-features --workspace
       - name: Check snapshots
         run: git diff --exit-code -- tests/out
   test:
@@ -26,48 +30,28 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: nightly
-          override: true
-      - uses: actions-rs/cargo@v1
-        name: Default test
-        with:
-          # Our intention here is to test `naga` with no features enabled. But
-          # since `cli` is the default package, a plain `cargo test` will build
-          # `naga` with the features requested in `cli/Cargo.toml`. Passing
-          # `--package naga` causes us to use the default features in the
-          # top-level `Cargo.toml` instead.
-          command: test
-          args: --package naga
-      - uses: actions-rs/cargo@v1
-        name: Test all features
-        with:
-          command: test
-          args: --all-features --workspace
+      - name: Install nightly toolchain
+        run: rustup toolchain install nightly --no-self-update --profile=minimal
+      - name: Default test
+        # Our intention here is to test `naga` with no features enabled. But
+        # since `cli` is the default package, a plain `cargo test` will build
+        # `naga` with the features requested in `cli/Cargo.toml`. Passing
+        # `--package naga` causes us to use the default features in the
+        # top-level `Cargo.toml` instead.
+        run: cargo +nightly test --package naga
+      - name: Test all features
+        run: cargo +nightly test --all-features --workspace
       - name: Check snapshots
         run: git diff --exit-code -- tests/out
-      - uses: actions-rs/cargo@v1
-        name: Check benchmarks
-        with:
-          command: check
-          args: --benches
+      - name: Check benchmarks
+        run: cargo +nightly check --benches
   clippy:
     name: Clippy
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          override: true
       - run: rustup component add clippy
-      - uses: actions-rs/cargo@v1
-        with:
-          command: clippy
-          args: --all-features --workspace -- -D warnings
+      - run: cargo clippy --all-features --workspace -- -D warnings
   documentation:
     name: Documentation
     runs-on: ubuntu-latest
@@ -75,26 +59,10 @@ jobs:
       RUSTDOCFLAGS: -Dwarnings
     steps:
       - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          override: true
-      - uses: actions-rs/cargo@v1
-        with:
-          command: doc
-          args: -p naga --all-features --document-private-items
+      - run: cargo doc -p naga --all-features --document-private-items
   fmt:
     name: Format
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          override: true
-          components: rustfmt
-      - name: run rustfmt
-        run: |
-          cargo fmt -- --check
+      - run: cargo fmt -- --check
