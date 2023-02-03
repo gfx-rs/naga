@@ -18,14 +18,14 @@ jobs:
         run: rustup toolchain install $MSRV --no-self-update --profile=minimal
       - name: Install nightly toolchain
         run: rustup toolchain install nightly --no-self-update --profile=minimal
-      - name: Install cargo-hack
+      - name: Install cargo-hack and cargo-nextest
         uses: taiki-e/install-action@v2
         with:
-          tool: cargo-hack
+          tool: cargo-hack,cargo-nextest
       # -Z avoid-dev-deps doesn't work
       - run: cargo +nightly hack generate-lockfile --remove-dev-deps -Z minimal-versions --offline
       - name: Test all features
-        run: cargo +$MSRV test --all-features --workspace
+        run: cargo +$MSRV nextest run --all-features --workspace
       - name: Check snapshots
         run: git diff --exit-code -- tests/out
   test:
@@ -35,15 +35,19 @@ jobs:
       - uses: actions/checkout@v3
       - name: Install nightly toolchain
         run: rustup toolchain install nightly --no-self-update --profile=minimal
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
       - name: Default test
         # Our intention here is to test `naga` with no features enabled. But
         # since `cli` is the default package, a plain `cargo test` will build
         # `naga` with the features requested in `cli/Cargo.toml`. Passing
         # `--package naga` causes us to use the default features in the
         # top-level `Cargo.toml` instead.
-        run: cargo +nightly test --package naga
+        run: cargo +nightly nextest run --package naga
       - name: Test all features
-        run: cargo +nightly test --all-features --workspace
+        run: cargo +nightly nextest run --all-features --workspace
       - name: Check snapshots
         run: git diff --exit-code -- tests/out
       - name: Check benchmarks
