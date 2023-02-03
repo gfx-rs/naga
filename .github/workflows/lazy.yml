@@ -4,6 +4,11 @@ on:
   push:
     branches: [master]
 
+env:
+  CARGO_INCREMENTAL: false
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: full
+
 jobs:
   coverage:
     name: Coverage

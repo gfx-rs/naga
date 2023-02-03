@@ -3,6 +3,9 @@ name: pipeline
 on: [push, pull_request]
 
 env:
+  CARGO_INCREMENTAL: false
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: full
   MSRV: 1.63
 
 jobs:
