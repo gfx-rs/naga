@@ -19,7 +19,7 @@ jobs:
       - name: Generate report
         run: cargo tarpaulin --tests --all-features --workspace --out Xml
       - name: Upload to codecov.io
-        uses: codecov/codecov-action@v1
+        uses: codecov/codecov-action@v3
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
       - name: Archive code coverage results
