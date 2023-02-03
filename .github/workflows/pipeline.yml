@@ -50,8 +50,17 @@ jobs:
         run: cargo +nightly nextest run --all-features --workspace
       - name: Check snapshots
         run: git diff --exit-code -- tests/out
+  check:
+    name: Check benchmarks and naga-fuzz
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
       - name: Check benchmarks
-        run: cargo +nightly check --benches
+        run: cargo check --benches
+      - name: Check naga-fuzz
+        run: |
+          cd fuzz
+          cargo check
   clippy:
     name: Clippy
     runs-on: ubuntu-latest
