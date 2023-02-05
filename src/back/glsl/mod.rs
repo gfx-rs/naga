@@ -1149,7 +1149,8 @@ impl<'a, W: Write> Writer<'a, W> {
                             }
                         }
                     }
-                    crate::MathFunction::CountLeadingZeros => {
+                    crate::MathFunction::CountTrailingZeros
+                    | crate::MathFunction::CountLeadingZeros => {
                         if let Some(crate::ScalarKind::Sint) = inner.scalar_kind() {
                             self.need_bake_expressions.insert(arg);
                         }
@@ -2960,6 +2961,78 @@ impl<'a, W: Write> Writer<'a, W> {
                     Mf::Transpose => "transpose",
                     Mf::Determinant => "determinant",
                     // bits
+                    Mf::CountTrailingZeros => {
+                        if self.options.version.supports_integer_functions() {
+                            match *ctx.info[arg].ty.inner_with(&self.module.types) {
+                                crate::TypeInner::Vector { size, kind, .. } => {
+                                    let s = back::vector_size_str(size);
+
+                                    if let crate::ScalarKind::Uint = kind {
+                                        write!(self.out, "uvec{s}(findLSB(")?;
+                                        self.write_expr(arg, ctx)?;
+                                        write!(self.out, ") - ivec{s}(1))")?;
+                                    } else {
+                                        write!(self.out, "mix(findLSB(")?;
+                                        self.write_expr(arg, ctx)?;
+                                        write!(self.out, ") - ivec{s}(1), ivec{s}(0), lessThan(")?;
+                                        self.write_expr(arg, ctx)?;
+                                        write!(self.out, ", ivec{s}(0)))")?;
+                                    }
+                                }
+                                crate::TypeInner::Scalar { kind, .. } => {
+                                    if let crate::ScalarKind::Uint = kind {
+                                        write!(self.out, "uint(findLSB(")?;
+                                    } else {
+                                        write!(self.out, "(")?;
+                                        self.write_expr(arg, ctx)?;
+                                        write!(self.out, " == 0 ? -1 : findLSB(")?;
+                                    }
+
+                                    self.write_expr(arg, ctx)?;
+                                    write!(self.out, ") - 1)")?;
+                                }
+                                _ => unreachable!(),
+                            };
+                        } else {
+                            match *ctx.info[arg].ty.inner_with(&self.module.types) {
+                                crate::TypeInner::Vector { size, kind, .. } => {
+                                    let s = back::vector_size_str(size);
+
+                                    if let crate::ScalarKind::Uint = kind {
+                                        write!(self.out, "uvec{s}(")?;
+                                        write!(self.out, "floor(log2(vec{s}(")?;
+                                        self.write_expr(arg, ctx)?;
+                                        write!(self.out, ") + 0.5)) - vec{s}(1.0))")?;
+                                    } else {
+                                        write!(self.out, "ivec{s}(")?;
+                                        write!(self.out, "mix(floor(log2(vec{s}(")?;
+                                        self.write_expr(arg, ctx)?;
+                                        write!(self.out, ") + 0.5)) - vec{s}(1.0), ")?;
+                                        write!(self.out, "vec{s}(0.0), lessThan(")?;
+                                        self.write_expr(arg, ctx)?;
+                                        write!(self.out, ", ivec{s}(0u))))")?;
+                                    }
+                                }
+                                crate::TypeInner::Scalar { kind, .. } => {
+                                    if let crate::ScalarKind::Uint = kind {
+                                        write!(self.out, "uint(floor(log2(float(")?;
+                                        self.write_expr(arg, ctx)?;
+                                        write!(self.out, ") + 0.5)) - 1.0)")?;
+                                    } else {
+                                        write!(self.out, "(")?;
+                                        self.write_expr(arg, ctx)?;
+                                        write!(self.out, " == 0 ? -1 : int(")?;
+                                        write!(self.out, "floor(log2(float(")?;
+                                        self.write_expr(arg, ctx)?;
+                                        write!(self.out, ") + 0.5))) - 1.0)")?;
+                                    }
+                                }
+                                _ => unreachable!(),
+                            };
+                        }
+
+                        return Ok(());
+                    }
                     Mf::CountLeadingZeros => {
                         if self.options.version.supports_integer_functions() {
                             match *ctx.info[arg].ty.inner_with(&self.module.types) {
