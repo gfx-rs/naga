@@ -888,71 +888,7 @@ impl<'w> BlockContext<'w> {
                         id,
                         arg0_id,
                     )),
-                    Mf::CountTrailingZeros => {
-                        let int = crate::ScalarValue::Sint(1);
-
-                        let (int_type_id, int_id) = match *arg_ty {
-                            crate::TypeInner::Vector { size, width, .. } => {
-                                let ty = self.get_type_id(LookupType::Local(LocalType::Value {
-                                    vector_size: Some(size),
-                                    kind: crate::ScalarKind::Sint,
-                                    width,
-                                    pointer_space: None,
-                                }));
-
-                                self.temp_list.clear();
-                                self.temp_list
-                                    .resize(size as _, self.writer.get_constant_scalar(int, width));
-
-                                let id = self.gen_id();
-                                block.body.push(Instruction::constant_composite(
-                                    ty,
-                                    id,
-                                    &self.temp_list,
-                                ));
-
-                                (ty, id)
-                            }
-                            crate::TypeInner::Scalar { width, .. } => (
-                                self.get_type_id(LookupType::Local(LocalType::Value {
-                                    vector_size: None,
-                                    kind: crate::ScalarKind::Sint,
-                                    width,
-                                    pointer_space: None,
-                                })),
-                                self.writer.get_constant_scalar(int, width),
-                            ),
-                            _ => unreachable!(),
-                        };
-
-                        block.body.push(Instruction::ext_inst(
-                            self.writer.gl450_ext_inst_id,
-                            spirv::GLOp::FindILsb,
-                            int_type_id,
-                            id,
-                            &[arg0_id],
-                        ));
-
-                        let sub_id = self.gen_id();
-                        block.body.push(Instruction::binary(
-                            spirv::Op::ISub,
-                            int_type_id,
-                            sub_id,
-                            id,
-                            int_id,
-                        ));
-
-                        if let Some(crate::ScalarKind::Uint) = arg_scalar_kind {
-                            block.body.push(Instruction::unary(
-                                spirv::Op::Bitcast,
-                                result_type_id,
-                                self.gen_id(),
-                                sub_id,
-                            ));
-                        }
-
-                        return Ok(());
-                    }
+                    Mf::CountTrailingZeros => MathOp::Ext(spirv::GLOp::FindILsb),
                     Mf::CountLeadingZeros => {
                         let int = crate::ScalarValue::Sint(31);
 

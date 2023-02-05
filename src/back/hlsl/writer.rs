@@ -2552,7 +2552,6 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     Unpack2x16float,
                     Regular(&'static str),
                     MissingIntOverload(&'static str),
-                    CountTrailingZeros,
                     CountLeadingZeros,
                 }
 
@@ -2616,7 +2615,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     Mf::Transpose => Function::Regular("transpose"),
                     Mf::Determinant => Function::Regular("determinant"),
                     // bits
-                    Mf::CountTrailingZeros => Function::CountTrailingZeros,
+                    Mf::CountTrailingZeros => Function::Regular("firstbitlow"),
                     Mf::CountLeadingZeros => Function::CountLeadingZeros,
                     Mf::CountOneBits => Function::MissingIntOverload("countbits"),
                     Mf::ReverseBits => Function::MissingIntOverload("reversebits"),
@@ -2684,45 +2683,6 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                             self.write_expr(module, arg, func_ctx)?;
                             write!(self.out, ")")?;
                         }
-                    }
-                    Function::CountTrailingZeros => {
-                        match *func_ctx.info[arg].ty.inner_with(&module.types) {
-                            TypeInner::Vector { size, kind, .. } => {
-                                let s = match size {
-                                    crate::VectorSize::Bi => ".xx",
-                                    crate::VectorSize::Tri => ".xxx",
-                                    crate::VectorSize::Quad => ".xxxx",
-                                };
-
-                                if let ScalarKind::Uint = kind {
-                                    write!(self.out, "asuint(firstbitlow(")?;
-                                    self.write_expr(module, arg, func_ctx)?;
-                                    write!(self.out, ") - (1){s})")?;
-                                } else {
-                                    write!(self.out, "(")?;
-                                    self.write_expr(module, arg, func_ctx)?;
-                                    write!(self.out, " == (0){s} ? (-1){s} : firstbitlow(")?;
-                                    self.write_expr(module, arg, func_ctx)?;
-                                    write!(self.out, ") - (1){s})")?;
-                                }
-                            }
-                            TypeInner::Scalar { kind, .. } => {
-                                if let ScalarKind::Uint = kind {
-                                    write!(self.out, "asuint(firstbitlow(")?;
-                                    self.write_expr(module, arg, func_ctx)?;
-                                    write!(self.out, ") - 1)")?;
-                                } else {
-                                    write!(self.out, "(")?;
-                                    self.write_expr(module, arg, func_ctx)?;
-                                    write!(self.out, " == 0 ? -1 : firstbitlow(")?;
-                                    self.write_expr(module, arg, func_ctx)?;
-                                    write!(self.out, ") - 1)")?;
-                                }
-                            }
-                            _ => unreachable!(),
-                        }
-
-                        return Ok(());
                     }
                     Function::CountLeadingZeros => {
                         match *func_ctx.info[arg].ty.inner_with(&module.types) {
