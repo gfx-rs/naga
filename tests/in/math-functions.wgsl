@@ -10,12 +10,10 @@ fn main() {
     let g = refract(v, v, f);
     let const_dot = dot(vec2<i32>(), vec2<i32>());
     let first_leading_bit_abs = firstLeadingBit(abs(0u));
-    let ctz_a = countTrailingZeros(-1);
-    let ctz_b = countTrailingZeros(1u);
-    let ctz_c = countTrailingZeros(vec2(-1));
-    let ctz_d = countTrailingZeros(vec2(1u));
-    let ctz_e = countTrailingZeros(0);
-    let ctz_f = countTrailingZeros(0u);
+    let ctz_a = countTrailingZeros(0u);
+    let ctz_b = countTrailingZeros(0xFFFFFFFFu);
+    let ctz_c = countTrailingZeros(vec2(1u));
+    let ctz_d = countTrailingZeros(vec2(0u));
     let clz_a = countLeadingZeros(-1);
     let clz_b = countLeadingZeros(1u);
     let clz_c = countLeadingZeros(vec2(-1));

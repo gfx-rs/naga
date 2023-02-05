@@ -1,11 +1,11 @@
 ; SPIR-V
 ; Version: 1.1
 ; Generator: rspirv
-; Bound: 63
+; Bound: 62
 OpCapability Shader
 %1 = OpExtInstImport "GLSL.std.450"
 OpMemoryModel Logical GLSL450
-OpEntryPoint Vertex %16 "main"
+OpEntryPoint Vertex %17 "main"
 %2 = OpTypeVoid
 %4 = OpTypeFloat 32
 %3 = OpConstant  %4  1.0
@@ -14,59 +14,58 @@ OpEntryPoint Vertex %16 "main"
 %6 = OpConstant  %7  0
 %9 = OpTypeInt 32 0
 %8 = OpConstant  %9  0
-%10 = OpConstant  %7  -1
+%10 = OpConstant  %9  4294967295
 %11 = OpConstant  %9  1
-%12 = OpTypeVector %4 4
-%13 = OpTypeVector %7 2
-%14 = OpConstantComposite  %13  %6 %6
-%17 = OpTypeFunction %2
-%43 = OpTypeVector %9 2
-%49 = OpConstant  %7  31
-%25 = OpConstantComposite  %12  %5 %5 %5 %5
-%26 = OpConstantComposite  %12  %3 %3 %3 %3
-%29 = OpConstantNull  %7
-%56 = OpConstantComposite  %13  %49 %49
-%60 = OpConstantComposite  %13  %49 %49
-%16 = OpFunction  %2  None %17
-%15 = OpLabel
-OpBranch %18
-%18 = OpLabel
-%19 = OpCompositeConstruct  %12  %5 %5 %5 %5
-%20 = OpExtInst  %4  %1 Degrees %3
-%21 = OpExtInst  %4  %1 Radians %3
-%22 = OpExtInst  %12  %1 Degrees %19
-%23 = OpExtInst  %12  %1 Radians %19
-%24 = OpExtInst  %12  %1 FClamp %19 %25 %26
-%27 = OpExtInst  %12  %1 Refract %19 %19 %3
-%30 = OpCompositeExtract  %7  %14 0
-%31 = OpCompositeExtract  %7  %14 0
-%32 = OpIMul  %7  %30 %31
-%33 = OpIAdd  %7  %29 %32
-%34 = OpCompositeExtract  %7  %14 1
-%35 = OpCompositeExtract  %7  %14 1
-%36 = OpIMul  %7  %34 %35
-%28 = OpIAdd  %7  %33 %36
-%37 = OpCopyObject  %9  %8
-%38 = OpExtInst  %9  %1 FindUMsb %37
-%39 = OpExtInst  %7  %1 FindILsb %10
-%40 = OpExtInst  %9  %1 FindILsb %11
-%41 = OpCompositeConstruct  %13  %10 %10
-%42 = OpExtInst  %13  %1 FindILsb %41
-%44 = OpCompositeConstruct  %43  %11 %11
-%45 = OpExtInst  %43  %1 FindILsb %44
-%46 = OpExtInst  %7  %1 FindILsb %6
-%47 = OpExtInst  %9  %1 FindILsb %8
-%48 = OpExtInst  %7  %1 FindUMsb %10
-%50 = OpISub  %7  %49 %48
-%51 = OpExtInst  %7  %1 FindUMsb %11
-%52 = OpISub  %7  %49 %51
-%53 = OpBitcast  %9  %52
-%54 = OpCompositeConstruct  %13  %10 %10
-%55 = OpExtInst  %13  %1 FindUMsb %54
-%57 = OpISub  %13  %56 %55
-%58 = OpCompositeConstruct  %43  %11 %11
-%59 = OpExtInst  %13  %1 FindUMsb %58
-%61 = OpISub  %13  %60 %59
-%62 = OpBitcast  %43  %61
+%12 = OpConstant  %7  -1
+%13 = OpTypeVector %4 4
+%14 = OpTypeVector %7 2
+%15 = OpConstantComposite  %14  %6 %6
+%18 = OpTypeFunction %2
+%42 = OpTypeVector %9 2
+%48 = OpConstant  %7  31
+%26 = OpConstantComposite  %13  %5 %5 %5 %5
+%27 = OpConstantComposite  %13  %3 %3 %3 %3
+%30 = OpConstantNull  %7
+%55 = OpConstantComposite  %14  %48 %48
+%59 = OpConstantComposite  %14  %48 %48
+%17 = OpFunction  %2  None %18
+%16 = OpLabel
+OpBranch %19
+%19 = OpLabel
+%20 = OpCompositeConstruct  %13  %5 %5 %5 %5
+%21 = OpExtInst  %4  %1 Degrees %3
+%22 = OpExtInst  %4  %1 Radians %3
+%23 = OpExtInst  %13  %1 Degrees %20
+%24 = OpExtInst  %13  %1 Radians %20
+%25 = OpExtInst  %13  %1 FClamp %20 %26 %27
+%28 = OpExtInst  %13  %1 Refract %20 %20 %3
+%31 = OpCompositeExtract  %7  %15 0
+%32 = OpCompositeExtract  %7  %15 0
+%33 = OpIMul  %7  %31 %32
+%34 = OpIAdd  %7  %30 %33
+%35 = OpCompositeExtract  %7  %15 1
+%36 = OpCompositeExtract  %7  %15 1
+%37 = OpIMul  %7  %35 %36
+%29 = OpIAdd  %7  %34 %37
+%38 = OpCopyObject  %9  %8
+%39 = OpExtInst  %9  %1 FindUMsb %38
+%40 = OpExtInst  %9  %1 FindILsb %8
+%41 = OpExtInst  %9  %1 FindILsb %10
+%43 = OpCompositeConstruct  %42  %11 %11
+%44 = OpExtInst  %42  %1 FindILsb %43
+%45 = OpCompositeConstruct  %42  %8 %8
+%46 = OpExtInst  %42  %1 FindILsb %45
+%47 = OpExtInst  %7  %1 FindUMsb %12
+%49 = OpISub  %7  %48 %47
+%50 = OpExtInst  %7  %1 FindUMsb %11
+%51 = OpISub  %7  %48 %50
+%52 = OpBitcast  %9  %51
+%53 = OpCompositeConstruct  %14  %12 %12
+%54 = OpExtInst  %14  %1 FindUMsb %53
+%56 = OpISub  %14  %55 %54
+%57 = OpCompositeConstruct  %42  %11 %11
+%58 = OpExtInst  %14  %1 FindUMsb %57
+%60 = OpISub  %14  %59 %58
+%61 = OpBitcast  %42  %60
 OpReturn
 OpFunctionEnd

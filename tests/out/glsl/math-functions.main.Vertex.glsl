@@ -14,16 +14,14 @@ void main() {
     vec4 g = refract(v, v, 1.0);
     int const_dot = ( + ivec2(0, 0).x * ivec2(0, 0).x + ivec2(0, 0).y * ivec2(0, 0).y);
     uint first_leading_bit_abs = uint(findMSB(uint(abs(int(0u)))));
-    int ctz_a = findLSB(-1);
-    uint ctz_b = findLSB(1u);
-    ivec2 ctz_c = findLSB(ivec2(-1));
-    uvec2 ctz_d = findLSB(uvec2(1u));
-    int ctz_e = findLSB(0);
-    uint ctz_f = findLSB(0u);
+    uint ctz_a = findLSB(0u);
+    uint ctz_b = findLSB(4294967295u);
+    uvec2 ctz_c = findLSB(uvec2(1u));
+    uvec2 ctz_d = findLSB(uvec2(0u));
     int clz_a = (-1 < 0 ? 0 : 31 - findMSB(-1));
     uint clz_b = uint(31 - findMSB(1u));
-    ivec2 _e34 = ivec2(-1);
-    ivec2 clz_c = mix(ivec2(31) - findMSB(_e34), ivec2(0), lessThan(_e34, ivec2(0)));
+    ivec2 _e30 = ivec2(-1);
+    ivec2 clz_c = mix(ivec2(31) - findMSB(_e30), ivec2(0), lessThan(_e30, ivec2(0)));
     uvec2 clz_d = uvec2(ivec2(31) - findMSB(uvec2(1u)));
 }
 
