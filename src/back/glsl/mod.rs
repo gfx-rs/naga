@@ -1149,7 +1149,8 @@ impl<'a, W: Write> Writer<'a, W> {
                             }
                         }
                     }
-                    crate::MathFunction::CountLeadingZeros => {
+                    crate::MathFunction::CountTrailingZeros
+                    | crate::MathFunction::CountLeadingZeros => {
                         if let Some(crate::ScalarKind::Sint) = inner.scalar_kind() {
                             self.need_bake_expressions.insert(arg);
                         }
@@ -2960,7 +2961,36 @@ impl<'a, W: Write> Writer<'a, W> {
                     Mf::Transpose => "transpose",
                     Mf::Determinant => "determinant",
                     // bits
-                    Mf::CountTrailingZeros => "findLSB",
+                    Mf::CountTrailingZeros => {
+                        match *ctx.info[arg].ty.inner_with(&self.module.types) {
+                            crate::TypeInner::Vector { size, kind, .. } => {
+                                let s = back::vector_size_str(size);
+
+                                if let crate::ScalarKind::Uint = kind {
+                                    write!(self.out, "uvec{s}(findLSB(")?;
+                                    self.write_expr(arg, ctx)?;
+                                    write!(self.out, "))")?;
+                                } else {
+                                    write!(self.out, "findMSB(")?;
+                                    self.write_expr(arg, ctx)?;
+                                    write!(self.out, ")")?;
+                                }
+                            }
+                            crate::TypeInner::Scalar { kind, .. } => {
+                                if let crate::ScalarKind::Uint = kind {
+                                    write!(self.out, "uint(findLSB(")?;
+                                    self.write_expr(arg, ctx)?;
+                                    write!(self.out, "))")?;
+                                } else {
+                                    write!(self.out, "findLSB(")?;
+                                    self.write_expr(arg, ctx)?;
+                                    write!(self.out, ")")?;
+                                }
+                            }
+                            _ => unreachable!(),
+                        };
+                        return Ok(());
+                    }
                     Mf::CountLeadingZeros => {
                         if self.options.version.supports_integer_functions() {
                             match *ctx.info[arg].ty.inner_with(&self.module.types) {

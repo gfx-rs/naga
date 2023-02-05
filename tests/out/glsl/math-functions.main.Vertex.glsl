@@ -14,10 +14,10 @@ void main() {
     vec4 g = refract(v, v, 1.0);
     int const_dot = ( + ivec2(0, 0).x * ivec2(0, 0).x + ivec2(0, 0).y * ivec2(0, 0).y);
     uint first_leading_bit_abs = uint(findMSB(uint(abs(int(0u)))));
-    uint ctz_a = findLSB(0u);
-    uint ctz_b = findLSB(4294967295u);
-    uvec2 ctz_c = findLSB(uvec2(1u));
-    uvec2 ctz_d = findLSB(uvec2(0u));
+    uint ctz_a = uint(findLSB(0u));
+    uint ctz_b = uint(findLSB(4294967295u));
+    uvec2 ctz_c = uvec2(findLSB(uvec2(1u)));
+    uvec2 ctz_d = uvec2(findLSB(uvec2(0u)));
     int clz_a = (-1 < 0 ? 0 : 31 - findMSB(-1));
     uint clz_b = uint(31 - findMSB(1u));
     ivec2 _e30 = ivec2(-1);
