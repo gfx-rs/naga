@@ -47,8 +47,24 @@ impl ExprPos {
 pub struct Context {
     pub expressions: Arena<Expression>,
     pub locals: Arena<LocalVariable>,
+
+    /// The [`FunctionArgument`]s for the final [`crate::Function`].
+    ///
+    /// Parameters with the `out` and `inout` qualifiers have [`Pointer`] types
+    /// here. For example, an `inout vec2 a` argument would be a [`Pointer`] to
+    /// a [`Vector`].
+    ///
+    /// [`Pointer`]: crate::TypeInner::Pointer
+    /// [`Vector`]: crate::TypeInner::Vector
     pub arguments: Vec<FunctionArgument>,
 
+    /// The parameter types given in the source code.
+    ///
+    /// The `out` and `inout` qualifiers don't affect the types that appear
+    /// here. For example, an `inout vec2 a` argument would simply be a
+    /// [`Vector`], not a pointer to one.
+    ///
+    /// [`Vector`]: crate::TypeInner::Vector
     pub parameters: Vec<Handle<Type>>,
     pub parameters_info: Vec<ParameterInfo>,
 
