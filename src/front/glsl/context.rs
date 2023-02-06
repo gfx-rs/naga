@@ -1035,7 +1035,7 @@ impl Context {
                 }
                 ExprPos::AccessBase { constant_index } => {
                     // If the index isn't constant all accesses backed by a constant base need
-                    // to be done trough a proxy local variable, since constants have a non
+                    // to be done through a proxy local variable, since constants have a non
                     // pointer type which is required for dynamic indexing
                     if !constant_index {
                         if let Some((constant, ty)) = var.constant {
@@ -1591,11 +1591,11 @@ impl Index<Handle<Expression>> for Context {
 
 /// Helper struct passed when parsing expressions
 ///
-/// This struct should only be obtained trough [`stmt_ctx`](Context::stmt_ctx)
+/// This struct should only be obtained through [`stmt_ctx`](Context::stmt_ctx)
 /// and only one of these may be active at any time per context.
 #[derive(Debug)]
 pub struct StmtContext {
-    /// A arena of high level expressions which can be lowered trough a
+    /// A arena of high level expressions which can be lowered through a
     /// [`Context`](Context) to naga's [`Expression`](crate::Expression)s
     pub hir_exprs: Arena<HirExpr>,
 }
