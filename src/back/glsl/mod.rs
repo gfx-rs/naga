@@ -2534,6 +2534,13 @@ impl<'a, W: Write> Writer<'a, W> {
                     crate::ImageDimension::D3 => 3,
                     crate::ImageDimension::Cube => 2,
                 };
+
+                if components == 1 {
+                    write!(self.out, "uint(")?;
+                } else {
+                    write!(self.out, "uvec{components}(")?;
+                }
+
                 match query {
                     crate::ImageQuery::Size { level } => {
                         match class {
@@ -2593,6 +2600,8 @@ impl<'a, W: Write> Writer<'a, W> {
                         write!(self.out, ")",)?;
                     }
                 }
+
+                write!(self.out, ")")?;
             }
             // `Unary` is pretty straightforward
             // "-" - for `Negate`
