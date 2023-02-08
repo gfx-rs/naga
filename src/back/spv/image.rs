@@ -1032,23 +1032,19 @@ impl<'w> BlockContext<'w> {
                     Id::D2 | Id::Cube => 2,
                     Id::D3 => 3,
                 };
-                let (extended_size_type_id, vector_size) = {
-                    let array_coords = usize::from(arrayed);
-                    let vector_size = match dim_coords + array_coords {
-                        2 => Some(crate::VectorSize::Bi),
-                        3 => Some(crate::VectorSize::Tri),
-                        4 => Some(crate::VectorSize::Quad),
-                        _ => None,
-                    };
-                    let type_id = self.get_type_id(LookupType::Local(LocalType::Value {
-                        vector_size,
-                        kind: crate::ScalarKind::Sint,
-                        width: 4,
-                        pointer_space: None,
-                    }));
-
-                    (type_id, vector_size)
+                let array_coords = usize::from(arrayed);
+                let vector_size = match dim_coords + array_coords {
+                    2 => Some(crate::VectorSize::Bi),
+                    3 => Some(crate::VectorSize::Tri),
+                    4 => Some(crate::VectorSize::Quad),
+                    _ => None,
                 };
+                let extended_size_type_id = self.get_type_id(LookupType::Local(LocalType::Value {
+                    vector_size,
+                    kind: crate::ScalarKind::Sint,
+                    width: 4,
+                    pointer_space: None,
+                }));
 
                 let (query_op, level_id) = match class {
                     Ic::Sampled { multi: true, .. }
@@ -1108,6 +1104,7 @@ impl<'w> BlockContext<'w> {
                         bitcast_id,
                         components,
                     ));
+
                     id
                 } else {
                     bitcast_id
@@ -1162,7 +1159,7 @@ impl<'w> BlockContext<'w> {
                 inst.add_operand(self.get_index_constant(0));
                 block.body.push(inst);
 
-                let query_id = self.gen_id();
+                let extract_id = self.gen_id();
                 block.body.push(Instruction::composite_extract(
                     self.get_type_id(
                         LocalType::Value {
@@ -1173,7 +1170,7 @@ impl<'w> BlockContext<'w> {
                         }
                         .into(),
                     ),
-                    query_id,
+                    extract_id,
                     id_extended,
                     &[vec_size as u32 - 1],
                 ));
@@ -1183,7 +1180,7 @@ impl<'w> BlockContext<'w> {
                     spirv::Op::Bitcast,
                     result_type_id,
                     id,
-                    query_id,
+                    extract_id,
                 ));
 
                 id
