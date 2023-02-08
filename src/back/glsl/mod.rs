@@ -2535,10 +2535,13 @@ impl<'a, W: Write> Writer<'a, W> {
                     crate::ImageDimension::Cube => 2,
                 };
 
-                if components == 1 {
-                    write!(self.out, "uint(")?;
+                if let crate::ImageQuery::Size { .. } = query {
+                    match components {
+                        1 => write!(self.out, "uint(")?,
+                        _ => write!(self.out, "uvec{components}(")?,
+                    }
                 } else {
-                    write!(self.out, "uvec{components}(")?;
+                    write!(self.out, "uint(")?;
                 }
 
                 match query {
