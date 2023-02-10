@@ -2,6 +2,7 @@ name: validation-windows
 on:
   pull_request:
     paths:
+      - '.github/workflows/validation-windows.yml'
       - 'tests/out/hlsl/*.hlsl'
 
 jobs:
