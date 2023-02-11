@@ -890,10 +890,45 @@ impl<'w> BlockContext<'w> {
                     )),
                     Mf::CountTrailingZeros => {
                         let uint = crate::ScalarValue::Uint(32);
+                        let int = crate::ScalarValue::Sint(0);
+
+                        let (int_type_id, _int_id) = match *arg_ty {
+                            crate::TypeInner::Vector { size, width, .. } => {
+                                let ty = self.get_type_id(LookupType::Local(LocalType::Value {
+                                    vector_size: Some(size),
+                                    kind: crate::ScalarKind::Sint,
+                                    width,
+                                    pointer_space: None,
+                                }));
+
+                                self.temp_list.clear();
+                                self.temp_list
+                                    .resize(size as _, self.writer.get_constant_scalar(int, width));
+
+                                let id = self.gen_id();
+                                block.body.push(Instruction::constant_composite(
+                                    ty,
+                                    id,
+                                    &self.temp_list,
+                                ));
+
+                                (ty, id)
+                            }
+                            crate::TypeInner::Scalar { width, .. } => (
+                                self.get_type_id(LookupType::Local(LocalType::Value {
+                                    vector_size: None,
+                                    kind: crate::ScalarKind::Sint,
+                                    width,
+                                    pointer_space: None,
+                                })),
+                                self.writer.get_constant_scalar(int, width),
+                            ),
+                            _ => unreachable!(),
+                        };
 
                         let (uint_type_id, uint_id) = match *arg_ty {
                             crate::TypeInner::Vector { size, width, .. } => {
-                                let uty = self.get_type_id(LookupType::Local(LocalType::Value {
+                                let ty = self.get_type_id(LookupType::Local(LocalType::Value {
                                     vector_size: Some(size),
                                     kind: crate::ScalarKind::Uint,
                                     width,
@@ -906,13 +941,14 @@ impl<'w> BlockContext<'w> {
                                     self.writer.get_constant_scalar(uint, width),
                                 );
 
-                                let uid = self.gen_id();
+                                let id = self.gen_id();
                                 block.body.push(Instruction::constant_composite(
-                                    uty,
-                                    uid,
+                                    ty,
+                                    id,
                                     &self.temp_list,
                                 ));
-                                (uty, uid)
+
+                                (ty, id)
                             }
                             crate::TypeInner::Scalar { width, .. } => (
                                 self.get_type_id(LookupType::Local(LocalType::Value {
@@ -926,12 +962,23 @@ impl<'w> BlockContext<'w> {
                             _ => unreachable!(),
                         };
 
+                        let mut arg_id = arg0_id;
+                        if let Some(crate::ScalarKind::Uint) = arg_scalar_kind {
+                            arg_id = self.gen_id();
+                            block.body.push(Instruction::unary(
+                                spirv::Op::Bitcast,
+                                int_type_id,
+                                arg_id,
+                                arg0_id,
+                            ));
+                        }
+
                         block.body.push(Instruction::ext_inst(
                             self.writer.gl450_ext_inst_id,
                             spirv::GLOp::FindILsb,
-                            result_type_id,
+                            int_type_id,
                             id,
-                            &[arg0_id],
+                            &[arg_id],
                         ));
 
                         let cast_id = self.gen_id();
