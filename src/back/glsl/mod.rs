@@ -2965,26 +2965,25 @@ impl<'a, W: Write> Writer<'a, W> {
                         match *ctx.info[arg].ty.inner_with(&self.module.types) {
                             crate::TypeInner::Vector { size, kind, .. } => {
                                 let s = back::vector_size_str(size);
-
                                 if let crate::ScalarKind::Uint = kind {
-                                    write!(self.out, "uvec{s}(findLSB(")?;
+                                    write!(self.out, "min(uvec{s}(findLSB(")?;
                                     self.write_expr(arg, ctx)?;
-                                    write!(self.out, "))")?;
+                                    write!(self.out, ")), uvec{s}(32u))")?;
                                 } else {
-                                    write!(self.out, "findMSB(")?;
+                                    write!(self.out, "ivec{s}(min(uvec{s}(findLSB(")?;
                                     self.write_expr(arg, ctx)?;
-                                    write!(self.out, ")")?;
+                                    write!(self.out, ")), uvec{s}(32u)))")?;
                                 }
                             }
                             crate::TypeInner::Scalar { kind, .. } => {
                                 if let crate::ScalarKind::Uint = kind {
-                                    write!(self.out, "uint(findLSB(")?;
+                                    write!(self.out, "min(uint(findLSB(")?;
                                     self.write_expr(arg, ctx)?;
-                                    write!(self.out, "))")?;
+                                    write!(self.out, ")), 32u)")?;
                                 } else {
-                                    write!(self.out, "findLSB(")?;
+                                    write!(self.out, "int(min(uint(findLSB(")?;
                                     self.write_expr(arg, ctx)?;
-                                    write!(self.out, ")")?;
+                                    write!(self.out, ")), 32u))")?;
                                 }
                             }
                             _ => unreachable!(),

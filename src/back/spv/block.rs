@@ -888,7 +888,80 @@ impl<'w> BlockContext<'w> {
                         id,
                         arg0_id,
                     )),
-                    Mf::CountTrailingZeros => MathOp::Ext(spirv::GLOp::FindILsb),
+                    Mf::CountTrailingZeros => {
+                        let uint = crate::ScalarValue::Uint(32);
+
+                        let (uint_type_id, uint_id) = match *arg_ty {
+                            crate::TypeInner::Vector { size, width, .. } => {
+                                let uty = self.get_type_id(LookupType::Local(LocalType::Value {
+                                    vector_size: Some(size),
+                                    kind: crate::ScalarKind::Uint,
+                                    width,
+                                    pointer_space: None,
+                                }));
+
+                                self.temp_list.clear();
+                                self.temp_list.resize(
+                                    size as _,
+                                    self.writer.get_constant_scalar(uint, width),
+                                );
+
+                                let uid = self.gen_id();
+                                block.body.push(Instruction::constant_composite(
+                                    uty,
+                                    uid,
+                                    &self.temp_list,
+                                ));
+                                (uty, uid)
+                            }
+                            crate::TypeInner::Scalar { width, .. } => (
+                                self.get_type_id(LookupType::Local(LocalType::Value {
+                                    vector_size: None,
+                                    kind: crate::ScalarKind::Uint,
+                                    width,
+                                    pointer_space: None,
+                                })),
+                                self.writer.get_constant_scalar(uint, width),
+                            ),
+                            _ => unreachable!(),
+                        };
+
+                        block.body.push(Instruction::ext_inst(
+                            self.writer.gl450_ext_inst_id,
+                            spirv::GLOp::FindILsb,
+                            result_type_id,
+                            id,
+                            &[arg0_id],
+                        ));
+
+                        let cast_id = self.gen_id();
+                        block.body.push(Instruction::unary(
+                            spirv::Op::Bitcast,
+                            uint_type_id,
+                            self.gen_id(),
+                            id,
+                        ));
+
+                        let min_id = self.gen_id();
+                        block.body.push(Instruction::ext_inst(
+                            self.writer.gl450_ext_inst_id,
+                            spirv::GLOp::UMin,
+                            uint_type_id,
+                            min_id,
+                            &[uint_id, cast_id],
+                        ));
+
+                        if let Some(crate::ScalarKind::Sint) = arg_scalar_kind {
+                            block.body.push(Instruction::unary(
+                                spirv::Op::Bitcast,
+                                result_type_id,
+                                self.gen_id(),
+                                min_id,
+                            ));
+                        }
+
+                        return Ok(());
+                    }
                     Mf::CountLeadingZeros => {
                         let int = crate::ScalarValue::Sint(31);
 

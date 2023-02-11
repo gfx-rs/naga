@@ -2552,6 +2552,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     Unpack2x16float,
                     Regular(&'static str),
                     MissingIntOverload(&'static str),
+                    CountTrailingZeros,
                     CountLeadingZeros,
                 }
 
@@ -2615,7 +2616,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     Mf::Transpose => Function::Regular("transpose"),
                     Mf::Determinant => Function::Regular("determinant"),
                     // bits
-                    Mf::CountTrailingZeros => Function::Regular("firstbitlow"),
+                    Mf::CountTrailingZeros => Function::CountTrailingZeros,
                     Mf::CountLeadingZeros => Function::CountLeadingZeros,
                     Mf::CountOneBits => Function::MissingIntOverload("countbits"),
                     Mf::ReverseBits => Function::MissingIntOverload("reversebits"),
@@ -2683,6 +2684,28 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                             self.write_expr(module, arg, func_ctx)?;
                             write!(self.out, ")")?;
                         }
+                    }
+                    Function::CountTrailingZeros => {
+                        match *func_ctx.info[arg].ty.inner_with(&module.types) {
+                            TypeInner::Vector { size, kind, .. } => {
+                                let s = match size {
+                                    crate::VectorSize::Bi => ".xx",
+                                    crate::VectorSize::Tri => ".xxx",
+                                    crate::VectorSize::Quad => ".xxxx",
+                                };
+
+                                write!(self.out, "min(asuint((32){s}, asuint(firstbitlow(")?;
+                            }
+                            TypeInner::Scalar { kind, .. } => {
+                                write!(self.out, "min(asuint((32), asuint(firstbitlow(")?;
+                            }
+                            _ => unreachable!(),
+                        }
+
+                        self.write_expr(module, arg, func_ctx)?;
+                        write!(self.out, "))))")?;
+
+                        return Ok(());
                     }
                     Function::CountLeadingZeros => {
                         match *func_ctx.info[arg].ty.inner_with(&module.types) {

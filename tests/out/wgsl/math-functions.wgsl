@@ -10,9 +10,13 @@ fn main() {
     let const_dot = dot(vec2<i32>(0, 0), vec2<i32>(0, 0));
     let first_leading_bit_abs = firstLeadingBit(abs(0u));
     let ctz_a = countTrailingZeros(0u);
-    let ctz_b = countTrailingZeros(4294967295u);
-    let ctz_c = countTrailingZeros(vec2<u32>(1u));
-    let ctz_d = countTrailingZeros(vec2<u32>(0u));
+    let ctz_b = countTrailingZeros(0);
+    let ctz_c = countTrailingZeros(4294967295u);
+    let ctz_d = countTrailingZeros(-1);
+    let ctz_e = countTrailingZeros(vec2<u32>(0u));
+    let ctz_f = countTrailingZeros(vec2<i32>(0));
+    let ctz_g = countTrailingZeros(vec2<u32>(1u));
+    let ctz_h = countTrailingZeros(vec2<i32>(1));
     let clz_a = countLeadingZeros(-1);
     let clz_b = countLeadingZeros(1u);
     let clz_c = countLeadingZeros(vec2<i32>(-1));
