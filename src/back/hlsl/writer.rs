@@ -2694,10 +2694,26 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                                     crate::VectorSize::Quad => ".xxxx",
                                 };
 
-                                write!(self.out, "min(asuint((32){s}, asuint(firstbitlow(")?;
+                                if let ScalarKind::Uint = kind {
+                                    write!(self.out, "min((32){s}, firstbitlow(")?;
+                                    self.write_expr(module, arg, func_ctx)?;
+                                    write!(self.out, "))")?;
+                                } else {
+                                    write!(self.out, "asint(min((32){s}, asuint(firstbitlow(")?;
+                                    self.write_expr(module, arg, func_ctx)?;
+                                    write!(self.out, "))))")?;
+                                }
                             }
                             TypeInner::Scalar { kind, .. } => {
-                                write!(self.out, "min(asuint((32), asuint(firstbitlow(")?;
+                                if let ScalarKind::Uint = kind {
+                                    write!(self.out, "min((32), firstbitlow(")?;
+                                    self.write_expr(module, arg, func_ctx)?;
+                                    write!(self.out, "))")?;
+                                } else {
+                                    write!(self.out, "asint(min((32), asuint(firstbitlow(")?;
+                                    self.write_expr(module, arg, func_ctx)?;
+                                    write!(self.out, "))))")?;
+                                }
                             }
                             _ => unreachable!(),
                         }

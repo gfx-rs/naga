@@ -938,7 +938,7 @@ impl<'w> BlockContext<'w> {
                         block.body.push(Instruction::unary(
                             spirv::Op::Bitcast,
                             uint_type_id,
-                            self.gen_id(),
+                            cast_id,
                             id,
                         ));
 
