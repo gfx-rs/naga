@@ -19,11 +19,9 @@ void main() {
     uint ctz_c = min(uint(findLSB(4294967295u)), 32u);
     int ctz_d = int(min(uint(findLSB(-1)), 32u));
     uvec2 ctz_e = min(uvec2(findLSB(uvec2(0u))), uvec2(32u));
-    ivec2 _e27 = ivec2(0);
-    ivec2 ctz_f = ivec2(min(uvec2(findLSB(_e27)), uvec2(32u)));
+    ivec2 ctz_f = ivec2(min(uvec2(findLSB(ivec2(0))), uvec2(32u)));
     uvec2 ctz_g = min(uvec2(findLSB(uvec2(1u))), uvec2(32u));
-    ivec2 _e33 = ivec2(1);
-    ivec2 ctz_h = ivec2(min(uvec2(findLSB(_e33)), uvec2(32u)));
+    ivec2 ctz_h = ivec2(min(uvec2(findLSB(ivec2(1))), uvec2(32u)));
     int clz_a = (-1 < 0 ? 0 : 31 - findMSB(-1));
     uint clz_b = uint(31 - findMSB(1u));
     ivec2 _e40 = ivec2(-1);

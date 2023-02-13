@@ -15,11 +15,9 @@ void main()
     uint ctz_c = min(32u, asuint(firstbitlow(asint(4294967295u))));
     int ctz_d = asint(min(32u, asuint(firstbitlow(-1))));
     uint2 ctz_e = min((32u).xx, asuint(firstbitlow(asint((0u).xx))));
-    int2 _expr27 = (0).xx;
-    int2 ctz_f = asint(min((32u).xx, asuint(firstbitlow(_expr27))));
+    int2 ctz_f = asint(min((32u).xx, asuint(firstbitlow((0).xx))));
     uint2 ctz_g = min((32u).xx, asuint(firstbitlow(asint((1u).xx))));
-    int2 _expr33 = (1).xx;
-    int2 ctz_h = asint(min((32u).xx, asuint(firstbitlow(_expr33))));
+    int2 ctz_h = asint(min((32u).xx, asuint(firstbitlow((1).xx))));
     int clz_a = (-1 < 0 ? 0 : 31 - firstbithigh(-1));
     uint clz_b = asuint(31 - firstbithigh(1u));
     int2 _expr40 = (-1).xx;
