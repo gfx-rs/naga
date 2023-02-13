@@ -1149,8 +1149,7 @@ impl<'a, W: Write> Writer<'a, W> {
                             }
                         }
                     }
-                    crate::MathFunction::CountTrailingZeros
-                    | crate::MathFunction::CountLeadingZeros => {
+                    crate::MathFunction::CountLeadingZeros => {
                         if let Some(crate::ScalarKind::Sint) = inner.scalar_kind() {
                             self.need_bake_expressions.insert(arg);
                         }

@@ -124,8 +124,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     | crate::MathFunction::Unpack2x16float => {
                         self.need_bake_expressions.insert(arg);
                     }
-                    crate::MathFunction::CountTrailingZeros
-                    | crate::MathFunction::CountLeadingZeros => {
+                    crate::MathFunction::CountLeadingZeros => {
                         let inner = info[fun_handle].ty.inner_with(&module.types);
                         if let Some(crate::ScalarKind::Sint) = inner.scalar_kind() {
                             self.need_bake_expressions.insert(arg);
