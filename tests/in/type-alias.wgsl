@@ -1,5 +1,5 @@
 type FVec3 = vec3<f32>;
-type IVec3 = vec3<i32>;
+type IVec3 = vec3i;
 type Mat2 = mat2x2<f32>;
 
 fn main() {
