@@ -243,7 +243,7 @@ ret_Constructarray2_float4_ Constructarray2_float4_(float4 arg0, float4 arg1) {
     return ret;
 }
 
-void assign_array_through_ptr_fn(inout float4 foo_2)
+void assign_array_through_ptr_fn(inout float4 foo_2[2])
 {
     foo_2 = Constructarray2_float4_((1.0).xxxx, (2.0).xxxx);
     return;
