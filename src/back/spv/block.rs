@@ -926,7 +926,7 @@ impl<'w> BlockContext<'w> {
                             _ => unreachable!(),
                         };
 
-                        let (uint_type_id, uint_id) = match *arg_ty {
+                        let uint_id = match *arg_ty {
                             crate::TypeInner::Vector { size, width, .. } => {
                                 let ty = self.get_type_id(LookupType::Local(LocalType::Value {
                                     vector_size: Some(size),
@@ -948,64 +948,30 @@ impl<'w> BlockContext<'w> {
                                     &self.temp_list,
                                 ));
 
-                                (ty, id)
+                                id
                             }
-                            crate::TypeInner::Scalar { width, .. } => (
-                                self.get_type_id(LookupType::Local(LocalType::Value {
-                                    vector_size: None,
-                                    kind: crate::ScalarKind::Uint,
-                                    width,
-                                    pointer_space: None,
-                                })),
-                                self.writer.get_constant_scalar(uint, width),
-                            ),
+                            crate::TypeInner::Scalar { width, .. } => {
+                                self.writer.get_constant_scalar(uint, width)
+                            }
                             _ => unreachable!(),
                         };
-
-                        let mut arg_id = arg0_id;
-                        if let Some(crate::ScalarKind::Uint) = arg_scalar_kind {
-                            arg_id = self.gen_id();
-                            block.body.push(Instruction::unary(
-                                spirv::Op::Bitcast,
-                                int_type_id,
-                                arg_id,
-                                arg0_id,
-                            ));
-                        }
 
                         block.body.push(Instruction::ext_inst(
                             self.writer.gl450_ext_inst_id,
                             spirv::GLOp::FindILsb,
                             int_type_id,
                             id,
-                            &[arg_id],
-                        ));
-
-                        let cast_id = self.gen_id();
-                        block.body.push(Instruction::unary(
-                            spirv::Op::Bitcast,
-                            uint_type_id,
-                            cast_id,
-                            id,
+                            &[arg0_id],
                         ));
 
                         let min_id = self.gen_id();
                         block.body.push(Instruction::ext_inst(
                             self.writer.gl450_ext_inst_id,
                             spirv::GLOp::UMin,
-                            uint_type_id,
+                            result_type_id,
                             min_id,
-                            &[uint_id, cast_id],
+                            &[uint_id, id],
                         ));
-
-                        if let Some(crate::ScalarKind::Sint) = arg_scalar_kind {
-                            block.body.push(Instruction::unary(
-                                spirv::Op::Bitcast,
-                                result_type_id,
-                                self.gen_id(),
-                                min_id,
-                            ));
-                        }
 
                         return Ok(());
                     }

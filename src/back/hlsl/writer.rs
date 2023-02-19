@@ -2694,22 +2694,28 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                                 };
 
                                 if let ScalarKind::Uint = kind {
-                                    write!(self.out, "min((32u){s}, asuint(firstbitlow(asint(")?;
+                                    write!(self.out, "min((32u){s}, firstbitlow(")?;
+                                    self.write_expr(module, arg, func_ctx)?;
+                                    write!(self.out, "))")?;
                                 } else {
                                     write!(self.out, "asint(min((32u){s}, asuint(firstbitlow(")?;
+                                    self.write_expr(module, arg, func_ctx)?;
+                                    write!(self.out, "))))")?;
                                 }
                             }
                             TypeInner::Scalar { kind, .. } => {
                                 if let ScalarKind::Uint = kind {
-                                    write!(self.out, "min(32u, asuint(firstbitlow(asint(")?;
+                                    write!(self.out, "min(32u, firstbitlow(")?;
+                                    self.write_expr(module, arg, func_ctx)?;
+                                    write!(self.out, "))")?;
                                 } else {
                                     write!(self.out, "asint(min(32u, asuint(firstbitlow(")?;
+                                    self.write_expr(module, arg, func_ctx)?;
+                                    write!(self.out, "))))")?;
                                 }
                             }
                             _ => unreachable!(),
                         }
-                        self.write_expr(module, arg, func_ctx)?;
-                        write!(self.out, "))))")?;
 
                         return Ok(());
                     }
