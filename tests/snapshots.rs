@@ -98,7 +98,7 @@ fn check_targets(module: &naga::Module, name: &str, targets: Targets) {
     let capabilities = if params.god_mode {
         naga::valid::Capabilities::all()
     } else {
-        naga::valid::Capabilities::empty()
+        naga::valid::Capabilities::default()
     };
 
     let dest = PathBuf::from(root).join(BASE_DIR_OUT);
@@ -558,6 +558,7 @@ fn convert_wgsl() {
         ),
         ("sprite", Targets::SPIRV),
         ("force_point_size_vertex_shader_webgl", Targets::GLSL),
+        ("invariant", Targets::GLSL),
     ];
 
     for &(name, targets) in inputs.iter() {
@@ -589,7 +590,7 @@ fn convert_spv(name: &str, adjust_coordinate_space: bool, targets: Targets) {
     check_targets(&module, name, targets);
     naga::valid::Validator::new(
         naga::valid::ValidationFlags::all(),
-        naga::valid::Capabilities::empty(),
+        naga::valid::Capabilities::default(),
     )
     .validate(&module)
     .unwrap();
