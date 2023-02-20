@@ -964,16 +964,13 @@ impl<'w> BlockContext<'w> {
                             &[arg0_id],
                         ));
 
-                        let min_id = self.gen_id();
-                        block.body.push(Instruction::ext_inst(
+                        MathOp::Custom(Instruction::ext_inst(
                             self.writer.gl450_ext_inst_id,
                             spirv::GLOp::UMin,
                             result_type_id,
-                            min_id,
-                            &[uint_id, id],
-                        ));
-
-                        return Ok(());
+                            id,
+                            &[uint_id, lsb_id],
+                        ))
                     }
                     Mf::CountLeadingZeros => {
                         let int = crate::ScalarValue::Sint(31);
