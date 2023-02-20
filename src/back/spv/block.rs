@@ -956,11 +956,12 @@ impl<'w> BlockContext<'w> {
                             _ => unreachable!(),
                         };
 
+                        let lsb_id = self.gen_id();
                         block.body.push(Instruction::ext_inst(
                             self.writer.gl450_ext_inst_id,
                             spirv::GLOp::FindILsb,
-                            int_type_id,
-                            id,
+                            result_type_id,
+                            lsb_id,
                             &[arg0_id],
                         ));
 
