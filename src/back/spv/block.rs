@@ -876,50 +876,15 @@ impl<'w> BlockContext<'w> {
                     )),
                     Mf::CountTrailingZeros => {
                         let uint = crate::ScalarValue::Uint(32);
-                        let int = crate::ScalarValue::Sint(0);
-
-                        let (int_type_id, _int_id) = match *arg_ty {
-                            crate::TypeInner::Vector { size, width, .. } => {
-                                let ty = self.get_type_id(LookupType::Local(LocalType::Value {
-                                    vector_size: Some(size),
-                                    kind: crate::ScalarKind::Sint,
-                                    width,
-                                    pointer_space: None,
-                                }));
-
-                                self.temp_list.clear();
-                                self.temp_list
-                                    .resize(size as _, self.writer.get_constant_scalar(int, width));
-
-                                let id = self.gen_id();
-                                block.body.push(Instruction::constant_composite(
-                                    ty,
-                                    id,
-                                    &self.temp_list,
-                                ));
-
-                                (ty, id)
-                            }
-                            crate::TypeInner::Scalar { width, .. } => (
-                                self.get_type_id(LookupType::Local(LocalType::Value {
-                                    vector_size: None,
-                                    kind: crate::ScalarKind::Sint,
-                                    width,
-                                    pointer_space: None,
-                                })),
-                                self.writer.get_constant_scalar(int, width),
-                            ),
-                            _ => unreachable!(),
-                        };
-
                         let uint_id = match *arg_ty {
                             crate::TypeInner::Vector { size, width, .. } => {
-                                let ty = self.get_type_id(LookupType::Local(LocalType::Value {
+                                let ty = LocalType::Value {
                                     vector_size: Some(size),
                                     kind: crate::ScalarKind::Uint,
                                     width,
                                     pointer_space: None,
-                                }));
+                                }
+                                .into();
 
                                 self.temp_list.clear();
                                 self.temp_list.resize(
@@ -927,14 +892,7 @@ impl<'w> BlockContext<'w> {
                                     self.writer.get_constant_scalar(uint, width),
                                 );
 
-                                let id = self.gen_id();
-                                block.body.push(Instruction::constant_composite(
-                                    ty,
-                                    id,
-                                    &self.temp_list,
-                                ));
-
-                                id
+                                self.writer.get_constant_composite(ty, &self.temp_list)
                             }
                             crate::TypeInner::Scalar { width, .. } => {
                                 self.writer.get_constant_scalar(uint, width)
