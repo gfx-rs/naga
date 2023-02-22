@@ -3368,7 +3368,7 @@ impl<W: Write> Writer<W> {
                                     break;
                                 }
                             };
-                            let target = options.get_resource_binding_target(&ep, &br);
+                            let target = options.get_resource_binding_target(ep, br);
                             let good = match target {
                                 Some(target) => {
                                     let binding_ty = match module.types[var.ty].inner {
