@@ -463,7 +463,7 @@ impl super::Validator {
                                         .span_iter()
                                         .next()
                                         .map_or(Default::default(), |(_, s)| *s),
-                                    "invalid switch arm here",
+                                    "conflicting switch arm here",
                                 ));
                             }
                         };
