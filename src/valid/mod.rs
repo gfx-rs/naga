@@ -154,13 +154,6 @@ impl ops::Index<Handle<crate::Function>> for ModuleInfo {
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub enum SwitchValue {
-    I32(i32),
-    U32(u32),
-    Default,
-}
-
 #[derive(Debug)]
 pub struct Validator {
     flags: ValidationFlags,
@@ -170,7 +163,7 @@ pub struct Validator {
     location_mask: BitSet,
     bind_group_masks: Vec<BitSet>,
     #[allow(dead_code)]
-    switch_values: FastHashSet<SwitchValue>,
+    switch_values: FastHashSet<crate::SwitchValue>,
     valid_expression_list: Vec<Handle<crate::Expression>>,
     valid_expression_set: BitSet,
 }

@@ -103,7 +103,7 @@ pub enum FunctionError {
     #[error("The `switch` value {0:?} is not an integer scalar")]
     InvalidSwitchType(Handle<crate::Expression>),
     #[error("Multiple `switch` cases for {0:?} are present")]
-    ConflictingSwitchCase(super::SwitchValue),
+    ConflictingSwitchCase(crate::SwitchValue),
     #[error("The `switch` contains cases with conflicting types")]
     ConflictingCaseType,
     #[error("The `switch` is missing a `default` case")]
@@ -449,14 +449,10 @@ impl super::Validator {
                     };
                     self.switch_values.clear();
                     for case in cases {
-                        let switch_value = match case.value {
-                            crate::SwitchValue::I32(value) if !uint => {
-                                super::SwitchValue::I32(value)
-                            }
-                            crate::SwitchValue::U32(value) if uint => {
-                                super::SwitchValue::U32(value)
-                            }
-                            crate::SwitchValue::Default => super::SwitchValue::Default,
+                        match case.value {
+                            crate::SwitchValue::I32(_) if !uint => {}
+                            crate::SwitchValue::U32(_) if uint => {}
+                            crate::SwitchValue::Default => {}
                             _ => {
                                 return Err(FunctionError::ConflictingCaseType.with_span_static(
                                     case.body
@@ -467,9 +463,9 @@ impl super::Validator {
                                 ));
                             }
                         };
-                        if !self.switch_values.insert(switch_value) {
-                            return Err(match switch_value {
-                                super::SwitchValue::Default => FunctionError::MultipleDefaultCases
+                        if !self.switch_values.insert(case.value) {
+                            return Err(match case.value {
+                                crate::SwitchValue::Default => FunctionError::MultipleDefaultCases
                                     .with_span_static(
                                         case.body
                                             .span_iter()
@@ -477,7 +473,7 @@ impl super::Validator {
                                             .map_or(Default::default(), |(_, s)| *s),
                                         "duplicated switch arm here",
                                     ),
-                                _ => FunctionError::ConflictingSwitchCase(switch_value)
+                                _ => FunctionError::ConflictingSwitchCase(case.value)
                                     .with_span_static(
                                         case.body
                                             .span_iter()
@@ -488,7 +484,7 @@ impl super::Validator {
                             });
                         }
                     }
-                    if !self.switch_values.contains(&super::SwitchValue::Default) {
+                    if !self.switch_values.contains(&crate::SwitchValue::Default) {
                         return Err(FunctionError::MissingDefaultCase
                             .with_span_static(span, "missing default case"));
                     }
