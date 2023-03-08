@@ -1434,7 +1434,8 @@ pub use block::Block;
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 #[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
 pub enum SwitchValue {
-    Integer(i32),
+    I32(i32),
+    U32(u32),
     Default,
 }
 
