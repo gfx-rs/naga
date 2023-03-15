@@ -371,7 +371,8 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
                         .expressions
                         .append(crate::Expression::GlobalVariable(lvar.handle), span);
 
-                    // Cull problematic builtins of gl_PerVertex
+                    // Cull problematic builtins of gl_PerVertex.
+                    // See the docs for `Frontend::gl_per_vertex_builtin_access`.
                     {
                         let ty = &module.types[result.ty];
                         match ty.inner {
