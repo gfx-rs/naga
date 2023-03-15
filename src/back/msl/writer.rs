@@ -2237,7 +2237,7 @@ impl<W: Write> Writer<W> {
                                 member.binding
                             {
                                 has_point_size = true;
-                                if !context.pipeline_options.allow_point_size {
+                                if !context.pipeline_options.allow_and_force_point_size {
                                     continue;
                                 }
                             }
@@ -2277,7 +2277,7 @@ impl<W: Write> Writer<W> {
 
                 if let FunctionOrigin::EntryPoint(ep_index) = context.origin {
                     let stage = context.module.entry_points[ep_index as usize].stage;
-                    if context.pipeline_options.allow_point_size
+                    if context.pipeline_options.allow_and_force_point_size
                         && stage == crate::ShaderStage::Vertex
                         && !has_point_size
                     {
@@ -3560,7 +3560,7 @@ impl<W: Write> Writer<W> {
 
                         if let crate::Binding::BuiltIn(crate::BuiltIn::PointSize) = *binding {
                             has_point_size = true;
-                            if !pipeline_options.allow_point_size {
+                            if !pipeline_options.allow_and_force_point_size {
                                 continue;
                             }
                         }
@@ -3581,7 +3581,7 @@ impl<W: Write> Writer<W> {
                         writeln!(self.out, ";")?;
                     }
 
-                    if pipeline_options.allow_point_size
+                    if pipeline_options.allow_and_force_point_size
                         && ep.stage == crate::ShaderStage::Vertex
                         && !has_point_size
                     {
