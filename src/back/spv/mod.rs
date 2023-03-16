@@ -291,6 +291,7 @@ enum LocalType {
     PointerToBindingArray {
         base: Handle<crate::Type>,
         size: u64,
+        space: crate::AddressSpace,
     },
     BindingArray {
         base: Handle<crate::Type>,

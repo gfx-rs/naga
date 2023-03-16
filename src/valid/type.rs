@@ -618,7 +618,12 @@ impl super::Validator {
                 self.require_type_capability(Capabilities::RAY_QUERY)?;
                 TypeInfo::new(TypeFlags::DATA | TypeFlags::SIZED, Alignment::ONE)
             }
-            Ti::BindingArray { .. } => TypeInfo::new(TypeFlags::empty(), Alignment::ONE),
+            Ti::BindingArray { base, size: _ } => {
+                if base >= handle {
+                    return Err(TypeError::InvalidArrayBaseType(base));
+                }
+                self.types[base.index()].clone()
+            }
         })
     }
 }

@@ -196,9 +196,8 @@ impl<'w> BlockContext<'w> {
     fn is_intermediate(&self, expr_handle: Handle<crate::Expression>) -> bool {
         match self.ir_function.expressions[expr_handle] {
             crate::Expression::GlobalVariable(handle) => {
-                let ty = self.ir_module.global_variables[handle].ty;
-                match self.ir_module.types[ty].inner {
-                    crate::TypeInner::BindingArray { .. } => false,
+                match self.ir_module.global_variables[handle].space {
+                    crate::AddressSpace::Handle => false,
                     _ => true,
                 }
             }
