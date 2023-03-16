@@ -507,11 +507,11 @@ fn write_function_expressions(
             }
             E::Derivative {
                 axis,
-                ctrl: _,
+                ctrl,
                 expr,
             } => {
                 edges.insert("", expr);
-                (format!("d{axis:?}").into(), 8)
+                (format!("d{axis:?}{ctrl:?}").into(), 8)
             }
             E::Relational { fun, argument } => {
                 edges.insert("arg", argument);
