@@ -505,11 +505,7 @@ fn write_function_expressions(
                 edges.insert("reject", reject);
                 ("Select".into(), 3)
             }
-            E::Derivative {
-                axis,
-                ctrl,
-                expr,
-            } => {
+            E::Derivative { axis, ctrl, expr } => {
                 edges.insert("", expr);
                 (format!("d{axis:?}{ctrl:?}").into(), 8)
             }
