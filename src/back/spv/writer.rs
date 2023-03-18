@@ -1966,6 +1966,13 @@ impl Writer {
     pub const fn get_capabilities_used(&self) -> &crate::FastHashSet<spirv::Capability> {
         &self.capabilities_used
     }
+
+    pub fn decorate_non_uniform_binding_array_access(&mut self, id: Word) -> Result<(), Error> {
+        self.require_any("NonUniformEXT", &[spirv::Capability::ShaderNonUniform])?;
+        self.use_extension("SPV_EXT_descriptor_indexing");
+        self.decorate(id, spirv::Decoration::NonUniform, &[]);
+        Ok(())
+    }
 }
 
 #[test]
