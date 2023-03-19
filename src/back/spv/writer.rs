@@ -1407,7 +1407,7 @@ impl Writer {
             } => {
                 self.decorate(id, Decoration::Location, &[location]);
 
-                let no_decorations = 
+                let no_decorations =
                     // VUID-StandaloneSpirv-Flat-06202
                     // > The Flat, NoPerspective, Sample, and Centroid decorations
                     // > must not be used on variables with the Input storage class in a vertex shader
