@@ -111,6 +111,8 @@ bitflags::bitflags! {
         const EARLY_DEPTH_TEST = 0x400;
         /// Support for [`Builtin::SampleIndex`] and [`Sampling::Sample`].
         const MULTISAMPLED_SHADING = 0x800;
+        /// Support for RayTracingKHR
+        const RAY_TRACING = 0x2000;
     }
 }
 
@@ -124,10 +126,16 @@ bitflags::bitflags! {
     /// Validation flags.
     #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
     #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
-    pub struct ShaderStages: u8 {
+    pub struct ShaderStages: u16 {
         const VERTEX = 0x1;
         const FRAGMENT = 0x2;
         const COMPUTE = 0x4;
+        const RAY_GEN = 1 << 3;
+        const MISS = 1 << 4;
+        const CALLABLE = 1 << 5;
+        const CLOSEST_HIT = 1 << 6;
+        const ANY_HIT = 1 << 7;
+        const INTERSECTION = 1 << 8;
     }
 }
 

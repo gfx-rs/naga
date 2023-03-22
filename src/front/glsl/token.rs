@@ -36,6 +36,7 @@ pub enum TokenValue {
     Buffer,
     Const,
     Shared,
+    RayPayloadInEXT,
 
     Restrict,
     /// A `glsl` memory qualifier such as `writeonly`

@@ -766,6 +766,13 @@ impl Writer {
                 .to_words(&mut self.logical_layout.execution_modes);
                 spirv::ExecutionModel::GLCompute
             }
+            // TODO
+            crate::ShaderStage::RayGen => spirv::ExecutionModel::RayGenerationKHR,
+            crate::ShaderStage::Miss => spirv::ExecutionModel::MissKHR,
+            crate::ShaderStage::Callable => spirv::ExecutionModel::CallableKHR,
+            crate::ShaderStage::ClosestHit => spirv::ExecutionModel::ClosestHitKHR,
+            crate::ShaderStage::AnyHit => spirv::ExecutionModel::AnyHitKHR,
+            crate::ShaderStage::Intersection => spirv::ExecutionModel::IntersectionKHR,
         };
         //self.check(exec_model.required_capabilities())?;
 
@@ -1585,6 +1592,24 @@ impl Writer {
                 }
             } else {
             }
+        };
+
+        match global_variable.space {
+            crate::AddressSpace::Function
+            | crate::AddressSpace::Private
+            | crate::AddressSpace::WorkGroup
+            | crate::AddressSpace::Uniform
+            | crate::AddressSpace::Storage { .. }
+            | crate::AddressSpace::Handle
+            | crate::AddressSpace::PushConstant => {}
+            crate::AddressSpace::IncomingRayPayload => {
+                self.require_any("Incoming Ray Payload", &[spirv::Capability::RayTracingKHR])?;
+                self.use_extension("SPV_KHR_ray_tracing");
+            }
+        };
+
+        if let Some(location) = global_variable.location {
+            self.decorate(id, Decoration::Location, &[location]);
         };
 
         let init_word = global_variable

@@ -100,7 +100,7 @@
                 bits: 63,
             ),
             available_stages: (
-                bits: 7,
+                bits: 511,
             ),
             uniformity: (
                 non_uniform_result: Some(4),
@@ -1166,7 +1166,7 @@
                 bits: 63,
             ),
             available_stages: (
-                bits: 7,
+                bits: 511,
             ),
             uniformity: (
                 non_uniform_result: Some(4),
@@ -2969,7 +2969,7 @@
                 bits: 63,
             ),
             available_stages: (
-                bits: 7,
+                bits: 511,
             ),
             uniformity: (
                 non_uniform_result: Some(4),

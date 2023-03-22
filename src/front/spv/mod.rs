@@ -5003,6 +5003,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                 }
                 let var = crate::GlobalVariable {
                     binding: dec.resource_binding(),
+                    location: None,
                     name: dec.name,
                     space,
                     ty,
@@ -5048,6 +5049,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     name: dec.name.clone(),
                     space: crate::AddressSpace::Private,
                     binding: None,
+                    location: None,
                     ty,
                     init: None,
                 };
@@ -5121,6 +5123,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     name: dec.name,
                     space: crate::AddressSpace::Private,
                     binding: None,
+                    location: None,
                     ty,
                     init,
                 };

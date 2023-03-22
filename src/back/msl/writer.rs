@@ -438,6 +438,7 @@ impl crate::AddressSpace {
             | Self::PushConstant
             | Self::Handle => true,
             Self::Function => false,
+            Self::IncomingRayPayload => unimplemented!(),
         }
     }
 
@@ -455,6 +456,7 @@ impl crate::AddressSpace {
             Self::Uniform | Self::PushConstant => false,
             // Not applicable.
             Self::Handle | Self::Function => false,
+            Self::IncomingRayPayload => unimplemented!(),
         }
     }
 
@@ -465,6 +467,7 @@ impl crate::AddressSpace {
             Self::Storage { .. } => Some("device"),
             Self::Private | Self::Function => Some("thread"),
             Self::WorkGroup => Some("threadgroup"),
+            Self::IncomingRayPayload => unimplemented!(),
         }
     }
 }
@@ -3432,6 +3435,7 @@ impl<W: Write> Writer<W> {
                         crate::AddressSpace::Function
                         | crate::AddressSpace::Private
                         | crate::AddressSpace::WorkGroup => {}
+                        crate::AddressSpace::IncomingRayPayload => unimplemented!(),
                     }
                 }
                 if supports_array_length {
@@ -3464,6 +3468,12 @@ impl<W: Write> Writer<W> {
                 crate::ShaderStage::Compute { .. } => {
                     ("kernel", LocationMode::Uniform, LocationMode::Uniform)
                 }
+                crate::ShaderStage::RayGen
+                | crate::ShaderStage::Miss
+                | crate::ShaderStage::Callable
+                | crate::ShaderStage::ClosestHit
+                | crate::ShaderStage::AnyHit
+                | crate::ShaderStage::Intersection => unimplemented!(),
             };
 
             // List all the Naga `EntryPoint`'s `Function`'s arguments,

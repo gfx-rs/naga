@@ -302,6 +302,12 @@ pub enum ShaderStage {
     Vertex,
     Fragment,
     Compute,
+    RayGen,
+    Miss,
+    Callable,
+    ClosestHit,
+    AnyHit,
+    Intersection,
 }
 
 /// Addressing space of variables.
@@ -324,6 +330,8 @@ pub enum AddressSpace {
     Handle,
     /// Push constants.
     PushConstant,
+    /// Incoming ray payload for SPV_KHR_ray_tracing
+    IncomingRayPayload,
 }
 
 /// Built-in inputs and outputs.
@@ -861,6 +869,8 @@ pub struct GlobalVariable {
     pub space: AddressSpace,
     /// For resources, defines the binding point.
     pub binding: Option<ResourceBinding>,
+    /// For some ray-tracing storage qualifiers, define the location
+    pub location: Option<u32>,
     /// The type of this variable.
     pub ty: Handle<Type>,
     /// Initial value for this variable.

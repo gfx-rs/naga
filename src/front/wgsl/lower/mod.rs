@@ -666,6 +666,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                             name: Some(v.name.name.to_string()),
                             space: v.space,
                             binding: v.binding.clone(),
+                            location: None,
                             ty,
                             init,
                         },
