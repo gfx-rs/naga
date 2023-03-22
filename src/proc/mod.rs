@@ -213,6 +213,7 @@ impl super::AddressSpace {
             crate::AddressSpace::Storage { access } => access,
             crate::AddressSpace::Handle => Sa::LOAD,
             crate::AddressSpace::PushConstant => Sa::LOAD,
+            crate::AddressSpace::IncomingRayPayload => Sa::LOAD | Sa::STORE,
         }
     }
 }

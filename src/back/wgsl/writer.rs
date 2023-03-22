@@ -157,6 +157,12 @@ impl<W: Write> Writer<W> {
                     Attribute::Stage(ShaderStage::Compute),
                     Attribute::WorkGroupSize(ep.workgroup_size),
                 ],
+                ShaderStage::RayGen
+                | ShaderStage::Miss
+                | ShaderStage::Callable
+                | ShaderStage::ClosestHit
+                | ShaderStage::AnyHit
+                | ShaderStage::Intersection => unimplemented!(),
             };
 
             self.write_attributes(&attributes)?;
@@ -209,6 +215,12 @@ impl<W: Write> Writer<W> {
                     ShaderStage::Compute => "ComputeOutput",
                     ShaderStage::Fragment => "FragmentOutput",
                     ShaderStage::Vertex => "VertexOutput",
+                    ShaderStage::RayGen
+                    | ShaderStage::Miss
+                    | ShaderStage::Callable
+                    | ShaderStage::ClosestHit
+                    | ShaderStage::AnyHit
+                    | ShaderStage::Intersection => unimplemented!(),
                 };
 
                 write!(self.out, "{name}")?;
@@ -343,6 +355,12 @@ impl<W: Write> Writer<W> {
                         ShaderStage::Vertex => "vertex",
                         ShaderStage::Fragment => "fragment",
                         ShaderStage::Compute => "compute",
+                        ShaderStage::RayGen
+                        | ShaderStage::Miss
+                        | ShaderStage::Callable
+                        | ShaderStage::ClosestHit
+                        | ShaderStage::AnyHit
+                        | ShaderStage::Intersection => unimplemented!(),
                     };
                     write!(self.out, "@{stage_str} ")?;
                 }
@@ -1931,6 +1949,7 @@ const fn address_space_str(
             As::WorkGroup => "workgroup",
             As::Handle => return (None, None),
             As::Function => "function",
+            As::IncomingRayPayload => unimplemented!(),
         }),
         None,
     )

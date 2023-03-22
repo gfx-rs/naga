@@ -173,7 +173,11 @@ const fn ptr_space_argument_flag(space: crate::AddressSpace) -> TypeFlags {
     use crate::AddressSpace as As;
     match space {
         As::Function | As::Private | As::WorkGroup => TypeFlags::ARGUMENT,
-        As::Uniform | As::Storage { .. } | As::Handle | As::PushConstant => TypeFlags::empty(),
+        As::Uniform
+        | As::Storage { .. }
+        | As::Handle
+        | As::PushConstant
+        | As::IncomingRayPayload => TypeFlags::empty(),
     }
 }
 

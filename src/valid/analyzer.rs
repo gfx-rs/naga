@@ -550,6 +550,7 @@ impl FunctionInfo {
                     // storage data is only uniform when read-only
                     As::Storage { access } => !access.contains(crate::StorageAccess::STORE),
                     As::Handle => false,
+                    As::IncomingRayPayload => false,
                 };
                 Uniformity {
                     non_uniform_result: if uniform { None } else { Some(handle) },
@@ -994,6 +995,7 @@ fn uniform_control_flow() {
             ty,
             space: crate::AddressSpace::Handle,
             binding: None,
+            location: None,
         },
         Default::default(),
     );
@@ -1003,6 +1005,7 @@ fn uniform_control_flow() {
             init: None,
             ty,
             binding: None,
+            location: None,
             space: crate::AddressSpace::Uniform,
         },
         Default::default(),

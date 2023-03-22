@@ -122,6 +122,7 @@ impl super::Validator {
                 name: _,
                 space: _,
                 binding: _,
+                location: _,
                 ty,
                 init,
             } = global_variable;

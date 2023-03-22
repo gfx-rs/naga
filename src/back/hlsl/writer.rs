@@ -676,6 +676,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 write!(self.out, "ConstantBuffer<")?;
                 "b"
             }
+            crate::AddressSpace::IncomingRayPayload => unimplemented!(),
         };
 
         // If the global is a push constant write the type now because it will be a

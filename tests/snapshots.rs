@@ -387,6 +387,12 @@ fn write_output_hlsl(
                 )
                 .unwrap();
             }
+            naga::ShaderStage::RayGen => unimplemented!(),
+            naga::ShaderStage::Miss => unimplemented!(),
+            naga::ShaderStage::Callable => unimplemented!(),
+            naga::ShaderStage::ClosestHit => unimplemented!(),
+            naga::ShaderStage::AnyHit => unimplemented!(),
+            naga::ShaderStage::Intersection => unimplemented!(),
         }
     }
 

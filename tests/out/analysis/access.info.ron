@@ -106,7 +106,7 @@
                 bits: 63,
             ),
             available_stages: (
-                bits: 7,
+                bits: 511,
             ),
             uniformity: (
                 non_uniform_result: None,
@@ -1541,7 +1541,7 @@
                 bits: 63,
             ),
             available_stages: (
-                bits: 7,
+                bits: 511,
             ),
             uniformity: (
                 non_uniform_result: None,
@@ -3374,7 +3374,7 @@
                 bits: 63,
             ),
             available_stages: (
-                bits: 7,
+                bits: 511,
             ),
             uniformity: (
                 non_uniform_result: Some(1),
@@ -3435,7 +3435,7 @@
                 bits: 63,
             ),
             available_stages: (
-                bits: 7,
+                bits: 511,
             ),
             uniformity: (
                 non_uniform_result: Some(1),
@@ -3535,7 +3535,7 @@
                 bits: 63,
             ),
             available_stages: (
-                bits: 7,
+                bits: 511,
             ),
             uniformity: (
                 non_uniform_result: None,
@@ -3599,7 +3599,7 @@
                 bits: 63,
             ),
             available_stages: (
-                bits: 7,
+                bits: 511,
             ),
             uniformity: (
                 non_uniform_result: None,
@@ -3720,7 +3720,7 @@
                 bits: 63,
             ),
             available_stages: (
-                bits: 7,
+                bits: 511,
             ),
             uniformity: (
                 non_uniform_result: Some(1),
@@ -4559,7 +4559,7 @@
                 bits: 63,
             ),
             available_stages: (
-                bits: 7,
+                bits: 511,
             ),
             uniformity: (
                 non_uniform_result: None,
@@ -5128,7 +5128,7 @@
                 bits: 63,
             ),
             available_stages: (
-                bits: 7,
+                bits: 511,
             ),
             uniformity: (
                 non_uniform_result: None,
@@ -5755,7 +5755,7 @@
                 bits: 63,
             ),
             available_stages: (
-                bits: 7,
+                bits: 511,
             ),
             uniformity: (
                 non_uniform_result: None,

@@ -193,6 +193,12 @@ impl VaryingContext<'_> {
                             St::Vertex => self.output,
                             St::Fragment => !self.output,
                             St::Compute => false,
+                            St::RayGen
+                            | St::Miss
+                            | St::Callable
+                            | St::ClosestHit
+                            | St::AnyHit
+                            | St::Intersection => false,
                         },
                         *ty_inner
                             == Ti::Vector {
@@ -205,6 +211,12 @@ impl VaryingContext<'_> {
                         match self.stage {
                             St::Vertex | St::Fragment => !self.output,
                             St::Compute => false,
+                            St::RayGen
+                            | St::Miss
+                            | St::Callable
+                            | St::ClosestHit
+                            | St::AnyHit
+                            | St::Intersection => false,
                         },
                         *ty_inner
                             == Ti::Scalar {
@@ -306,6 +318,12 @@ impl VaryingContext<'_> {
                     crate::ShaderStage::Vertex => self.output,
                     crate::ShaderStage::Fragment => !self.output,
                     crate::ShaderStage::Compute => false,
+                    crate::ShaderStage::RayGen => false,
+                    crate::ShaderStage::Miss => false,
+                    crate::ShaderStage::Callable => false,
+                    crate::ShaderStage::ClosestHit => false,
+                    crate::ShaderStage::AnyHit => false,
+                    crate::ShaderStage::Intersection => false,
                 };
 
                 // It doesn't make sense to specify a sampling when `interpolation` is `Flat`, but
@@ -493,6 +511,14 @@ impl super::Validator {
                     false,
                 )
             }
+            crate::AddressSpace::IncomingRayPayload => {
+                if !self.capabilities.contains(Capabilities::RAY_TRACING) {
+                    return Err(GlobalVariableError::UnsupportedCapability(
+                        Capabilities::RAY_TRACING,
+                    ));
+                }
+                (TypeFlags::DATA | TypeFlags::COPY | TypeFlags::SIZED, false)
+            }
         };
 
         if !type_info.flags.contains(required_type_flags) {
@@ -557,6 +583,12 @@ impl super::Validator {
                 crate::ShaderStage::Vertex => ShaderStages::VERTEX,
                 crate::ShaderStage::Fragment => ShaderStages::FRAGMENT,
                 crate::ShaderStage::Compute => ShaderStages::COMPUTE,
+                crate::ShaderStage::RayGen => ShaderStages::RAY_GEN,
+                crate::ShaderStage::Miss => ShaderStages::MISS,
+                crate::ShaderStage::Callable => ShaderStages::CALLABLE,
+                crate::ShaderStage::ClosestHit => ShaderStages::CLOSEST_HIT,
+                crate::ShaderStage::AnyHit => ShaderStages::ANY_HIT,
+                crate::ShaderStage::Intersection => ShaderStages::INTERSECTION,
             };
 
             if !info.available_stages.contains(stage_bit) {
@@ -634,6 +666,7 @@ impl super::Validator {
                 },
                 crate::AddressSpace::Private | crate::AddressSpace::WorkGroup => GlobalUse::all(),
                 crate::AddressSpace::PushConstant => GlobalUse::READ,
+                crate::AddressSpace::IncomingRayPayload => GlobalUse::all(),
             };
             if !allowed_usage.contains(usage) {
                 log::warn!("\tUsage error for: {:?}", var);

@@ -156,7 +156,8 @@ impl<'source> ParsingContext<'source> {
             | TokenValue::Buffer
             | TokenValue::Restrict
             | TokenValue::MemoryQualifier(_)
-            | TokenValue::Layout => true,
+            | TokenValue::Layout
+            | TokenValue::RayPayloadInEXT => true,
             _ => false,
         })
     }
@@ -210,7 +211,8 @@ impl<'source> ParsingContext<'source> {
                 | TokenValue::Out
                 | TokenValue::Uniform
                 | TokenValue::Shared
-                | TokenValue::Buffer => {
+                | TokenValue::Buffer
+                | TokenValue::RayPayloadInEXT => {
                     let storage = match token.value {
                         TokenValue::Const => StorageQualifier::Const,
                         TokenValue::In => StorageQualifier::Input,
@@ -225,6 +227,9 @@ impl<'source> ParsingContext<'source> {
                             StorageQualifier::AddressSpace(AddressSpace::Storage {
                                 access: crate::StorageAccess::all(),
                             })
+                        }
+                        TokenValue::RayPayloadInEXT => {
+                            StorageQualifier::AddressSpace(AddressSpace::IncomingRayPayload)
                         }
                         _ => unreachable!(),
                     };

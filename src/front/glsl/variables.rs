@@ -58,6 +58,7 @@ impl Frontend {
                 name: Some(name.into()),
                 space: AddressSpace::Private,
                 binding: None,
+                location: None,
                 ty,
                 init: None,
             },
@@ -462,6 +463,7 @@ impl Frontend {
                         name: name.clone(),
                         space: AddressSpace::Private,
                         binding: None,
+                        location: None,
                         ty,
                         init,
                     },
@@ -600,11 +602,24 @@ impl Frontend {
                     _ => None,
                 };
 
+                let location = match space {
+                    AddressSpace::IncomingRayPayload => {
+                        // TODO: glslang seems to use a counter for variables without
+                        // explicit location (even if that causes collisions)
+                        let location = qualifiers
+                            .uint_layout_qualifier("location", &mut self.errors)
+                            .unwrap_or(0);
+                        Some(location)
+                    }
+                    _ => None,
+                };
+
                 let handle = self.module.global_variables.append(
                     GlobalVariable {
                         name: name.clone(),
                         space,
                         binding,
+                        location,
                         ty,
                         init,
                     },

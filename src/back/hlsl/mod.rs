@@ -149,6 +149,12 @@ impl crate::ShaderStage {
             Self::Vertex => "vs",
             Self::Fragment => "ps",
             Self::Compute => "cs",
+            Self::RayGen
+            | Self::Miss
+            | Self::Callable
+            | Self::ClosestHit
+            | Self::AnyHit
+            | Self::Intersection => unimplemented!(),
         }
     }
 }

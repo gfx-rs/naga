@@ -287,7 +287,8 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
         }
-        ext @ ("vert" | "frag" | "comp") => {
+        ext @ ("vert" | "frag" | "comp" | "rgen" | "rmiss" | "rcall" | "rchit" | "rahit"
+        | "rint") => {
             let input = String::from_utf8(input)?;
             let mut parser = naga::front::glsl::Frontend::default();
 
@@ -299,6 +300,12 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                                 "vert" => naga::ShaderStage::Vertex,
                                 "frag" => naga::ShaderStage::Fragment,
                                 "comp" => naga::ShaderStage::Compute,
+                                "rgen" => naga::ShaderStage::RayGen,
+                                "rmiss" => naga::ShaderStage::Miss,
+                                "rcall" => naga::ShaderStage::Callable,
+                                "rchit" => naga::ShaderStage::ClosestHit,
+                                "rahit" => naga::ShaderStage::AnyHit,
+                                "rint" => naga::ShaderStage::Intersection,
                                 _ => unreachable!(),
                             },
                             defines: Default::default(),

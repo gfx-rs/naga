@@ -107,6 +107,7 @@ impl crate::AddressSpace {
             | crate::AddressSpace::Storage { .. }
             | crate::AddressSpace::Handle
             | crate::AddressSpace::PushConstant => false,
+            crate::AddressSpace::IncomingRayPayload => unimplemented!(),
         }
     }
 }
@@ -335,6 +336,12 @@ impl fmt::Display for VaryingName<'_> {
             crate::Binding::Location { location, .. } => {
                 let prefix = match (self.stage, self.output) {
                     (ShaderStage::Compute, _) => unreachable!(),
+                    (ShaderStage::RayGen, _) => unreachable!(),
+                    (ShaderStage::Miss, _) => unreachable!(),
+                    (ShaderStage::Callable, _) => unreachable!(),
+                    (ShaderStage::ClosestHit, _) => unreachable!(),
+                    (ShaderStage::AnyHit, _) => unreachable!(),
+                    (ShaderStage::Intersection, _) => unreachable!(),
                     // pipeline to vertex
                     (ShaderStage::Vertex, false) => "p2vs",
                     // vertex to fragment
@@ -361,6 +368,12 @@ impl ShaderStage {
             ShaderStage::Compute => "cs",
             ShaderStage::Fragment => "fs",
             ShaderStage::Vertex => "vs",
+            ShaderStage::RayGen
+            | ShaderStage::Miss
+            | ShaderStage::Callable
+            | ShaderStage::ClosestHit
+            | ShaderStage::AnyHit
+            | ShaderStage::Intersection => unimplemented!(),
         }
     }
 }
@@ -1030,6 +1043,7 @@ impl<'a, W: Write> Writer<'a, W> {
             crate::AddressSpace::Function => unreachable!(),
             // Textures and samplers are handled directly in `Writer::write`.
             crate::AddressSpace::Handle => unreachable!(),
+            crate::AddressSpace::IncomingRayPayload => unimplemented!(),
         }
 
         Ok(())
@@ -1302,6 +1316,12 @@ impl<'a, W: Write> Writer<'a, W> {
             ShaderStage::Vertex => output,
             ShaderStage::Fragment => !output,
             ShaderStage::Compute => false,
+            ShaderStage::RayGen
+            | ShaderStage::Miss
+            | ShaderStage::Callable
+            | ShaderStage::ClosestHit
+            | ShaderStage::AnyHit
+            | ShaderStage::Intersection => unimplemented!(),
         };
 
         // Write the I/O locations, if allowed
@@ -4010,6 +4030,7 @@ const fn glsl_storage_qualifier(space: crate::AddressSpace) -> Option<&'static s
         As::Handle => Some("uniform"),
         As::WorkGroup => Some("shared"),
         As::PushConstant => Some("uniform"),
+        As::IncomingRayPayload => unimplemented!(),
     }
 }
 

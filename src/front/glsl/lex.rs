@@ -108,6 +108,7 @@ impl<'a> Iterator for Lexer<'a> {
                     // types
                     "void" => TokenValue::Void,
                     "struct" => TokenValue::Struct,
+                    "rayPayloadInEXT" => TokenValue::RayPayloadInEXT,
                     word => match parse_type(word) {
                         Some(t) => TokenValue::TypeName(t),
                         None => TokenValue::Identifier(String::from(word)),
