@@ -1,30 +1,47 @@
 /*!
-Generating accesses to `ByteAddressBuffer` contents.
+Generating accesses to [`ByteAddressBuffer`] contents.
 
 Naga IR globals in the [`Storage`] address space are rendered as
-`ByteAddressBuffer`s or `RWByteAddressBuffer`s in HLSL. This means
-that we can't use HLSL array element indexing or struct member
-references to access their contents. Instead, we must emit `Load` and
-`Store` calls, and manually compute the byte offset of the value we
-need.
+[`ByteAddressBuffer`]s or [`RWByteAddressBuffer`]s in HLSL. These
+buffers don't have HLSL types (structs, arrays, etc.); instead, they
+are just raw blocks of bytes, with methods to load and store values of
+specific types at particular byte offsets. This means that Naga must
+translate chains of [`Access`] and [`AccessIndex`] expressions into
+HLSL expressions that compute byte offsets into the buffer.
 
 To generate code for a [`Storage`] access:
 
-- Call [`Writer::fill_access_chain`] to prepare for access to a given
-  [`Storage`] value. This populates [`Writer::temp_access_chain`] with
-  the appropriate byte offset calculations.
+- Call [`Writer::fill_access_chain`] on the expression referring to
+  the value. This populates [`Writer::temp_access_chain`] with the
+  appropriate byte offset calculations, as a vector of [`SubAccess`]
+  values.
 
-- Call [`Writer::write_storage_address`] to emit an expression that
-  computes a byte offset.
+- Call [`Writer::write_storage_address`] to emit an HLSL expression
+  for a given slice of [`SubAccess`] values.
 
-- You can temporarily push additional steps onto
-  [`Writer::temp_access_chain`] to refer to individual
-  elements/members in a composite access.
+Naga IR expressions can operate on composite values of any type, but
+[`ByteAddressBuffer`] and [`RWByteAddressBuffer`] have only a fixed
+set of `Load` and `Store` methods, to access one through four
+consecutive 32-bit values. To synthesize a Naga access, you can
+initialize [`temp_access_chain`] to refer to the composite, and then
+temporarily push and pop additional steps on
+[`Writer::temp_access_chain`] to generate accesses to the individual
+elements/members.
+
+The [`temp_access_chain`] field is a member of [`Writer`] solely to
+allow re-use of the `Vec`'s dynamic allocation. Its value is no longer
+needed once HLSL for the access has been generated.
 
 [`Storage`]: crate::AddressSpace::Storage
+[`ByteAddressBuffer`]: https://learn.microsoft.com/en-us/windows/win32/direct3dhlsl/sm5-object-byteaddressbuffer
+[`RWByteAddressBuffer`]: https://learn.microsoft.com/en-us/windows/win32/direct3dhlsl/sm5-object-rwbyteaddressbuffer
+[`Access`]: crate::Expression::Access
+[`AccessIndex`]: crate::Expression::AccessIndex
 [`Writer::fill_access_chain`]: super::Writer::fill_access_chain
 [`Writer::write_storage_address`]: super::Writer::write_storage_address
 [`Writer::temp_access_chain`]: super::Writer::temp_access_chain
+[`temp_access_chain`]: super::Writer::temp_access_chain
+[`Writer`]: super::Writer
 */
 
 use super::{super::FunctionCtx, BackendResult, Error};

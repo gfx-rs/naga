@@ -280,19 +280,18 @@ pub struct Writer<'a, W> {
     named_expressions: crate::NamedExpressions,
     wrapped: Wrapped,
 
-    /// A simplified representation of a global variable access chain.
+    /// A reference to some part of a global variable, lowered to a series of
+    /// byte offset calculations.
     ///
-    /// See the [`storage`] module's documentation for background on
-    /// why we need this.
+    /// See the [`storage`] module for background on why we need this.
     ///
-    /// Each [`SubAccess`] is a lowering of some [`Access`] or
-    /// [`AccessIndex`] expression to the level of byte strides and
-    /// offsets. See the [`SubAccess`] docs for details.
+    /// Each [`SubAccess`] in the vector is a lowering of some [`Access`] or
+    /// [`AccessIndex`] expression to the level of byte strides and offsets. See
+    /// [`SubAccess`] for details.
     ///
-    /// To access a composite value, we need to generate a series of
-    /// loads or stores of its individual components. For that, we
-    /// temporarily push a new `SubAccess` for each component, perform
-    /// the access, and then pop it back off.
+    /// This field is a member of [`Writer`] solely to allow re-use of
+    /// the `Vec`'s dynamic allocation. The value is no longer needed
+    /// once HLSL for the access has been generated.
     ///
     /// [`Storage`]: crate::AddressSpace::Storage
     /// [`SubAccess`]: storage::SubAccess
