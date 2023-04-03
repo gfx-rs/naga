@@ -478,7 +478,7 @@ fn parse_type_and_alias() {
         "
         type Vec2 = vec2<f32>;
         alias Vec4 = vec4<f32>;
-    ",
+        ",
     )
     .unwrap();
 }
