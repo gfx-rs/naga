@@ -1,5 +1,4 @@
 const NUM_PARTICLES: u32 = 1500u;
-alias Vec2 = vec2<f32>;
 
 struct Particle {
   pos : vec2<f32>,
