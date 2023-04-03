@@ -1084,9 +1084,9 @@ impl<'w> BlockContext<'w> {
                 }
             }
             crate::Expression::FunctionArgument(index) => self.function.parameter_id(index),
-            crate::Expression::CallResult(_) | crate::Expression::AtomicResult { .. } => {
-                self.cached[expr_handle]
-            }
+            crate::Expression::CallResult(_)
+            | crate::Expression::AtomicResult { .. }
+            | crate::Expression::RayQueryProceedResult => self.cached[expr_handle],
             crate::Expression::As {
                 expr,
                 kind,
@@ -1386,6 +1386,12 @@ impl<'w> BlockContext<'w> {
                 id
             }
             crate::Expression::ArrayLength(expr) => self.write_runtime_array_length(expr, block)?,
+            crate::Expression::RayQueryGetIntersection { query, committed } => {
+                if !committed {
+                    return Err(Error::FeatureNotImplemented("candidate intersection"));
+                }
+                self.write_ray_query_get_intersection(query, block)
+            }
         };
 
         self.cached[expr_handle] = id;
@@ -1621,12 +1627,7 @@ impl<'w> BlockContext<'w> {
         size: u32,
         block: &mut Block,
     ) {
-        let const_null = self.gen_id();
-        block
-            .body
-            .push(Instruction::constant_null(result_type_id, const_null));
-
-        let mut partial_sum = const_null;
+        let mut partial_sum = self.writer.write_constant_null(result_type_id);
         let last_component = size - 1;
         for index in 0..=last_component {
             // compute the product of the current components
@@ -2195,6 +2196,9 @@ impl<'w> BlockContext<'w> {
                     };
 
                     block.body.push(instruction);
+                }
+                crate::Statement::RayQuery { query, ref fun } => {
+                    self.write_ray_query_function(query, fun, &mut block);
                 }
             }
         }

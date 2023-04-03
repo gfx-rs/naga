@@ -252,6 +252,28 @@ impl StatementGraph {
                     }
                     "Atomic"
                 }
+                S::RayQuery { query, ref fun } => {
+                    self.dependencies.push((id, query, "query"));
+                    match *fun {
+                        crate::RayQueryFunction::Initialize {
+                            acceleration_structure,
+                            descriptor,
+                        } => {
+                            self.dependencies.push((
+                                id,
+                                acceleration_structure,
+                                "acceleration_structure",
+                            ));
+                            self.dependencies.push((id, descriptor, "descriptor"));
+                            "RayQueryInitialize"
+                        }
+                        crate::RayQueryFunction::Proceed { result } => {
+                            self.emits.push((id, result));
+                            "RayQueryProceed"
+                        }
+                        crate::RayQueryFunction::Terminate => "RayQueryTerminate",
+                    }
+                }
             };
             // Set the last node to the merge node
             last_node = merge_id;
@@ -549,6 +571,12 @@ fn write_function_expressions(
             E::ArrayLength(expr) => {
                 edges.insert("", expr);
                 ("ArrayLength".into(), 7)
+            }
+            E::RayQueryProceedResult => ("rayQueryProceedResult".into(), 4),
+            E::RayQueryGetIntersection { query, committed } => {
+                edges.insert("", query);
+                let ty = if committed { "Committed" } else { "Candidate" };
+                (format!("rayQueryGet{}Intersection", ty).into(), 4)
             }
         };
 

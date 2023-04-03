@@ -427,6 +427,10 @@ fn convert_wgsl() {
     let root = env!("CARGO_MANIFEST_DIR");
     let inputs = [
         (
+            "array-in-ctor",
+            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
+        ),
+        (
             "empty",
             Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
         ),
@@ -480,6 +484,10 @@ fn convert_wgsl() {
         ),
         (
             "functions",
+            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
+        ),
+        (
+            "fragment-output",
             Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
         ),
         ("functions-webgl", Targets::GLSL),
@@ -563,6 +571,7 @@ fn convert_wgsl() {
         ("sprite", Targets::SPIRV),
         ("force_point_size_vertex_shader_webgl", Targets::GLSL),
         ("invariant", Targets::GLSL),
+        ("ray-query", Targets::SPIRV | Targets::METAL),
     ];
 
     for &(name, targets) in inputs.iter() {

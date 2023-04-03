@@ -937,6 +937,7 @@ impl<W: Write> Writer<W> {
                     writeln!(self.out, "{level}workgroupBarrier();")?;
                 }
             }
+            Statement::RayQuery { .. } => unreachable!(),
         }
 
         Ok(())
@@ -1621,8 +1622,12 @@ impl<W: Write> Writer<W> {
 
                 write!(self.out, ")")?
             }
+            // Not supported yet
+            Expression::RayQueryGetIntersection { .. } => unreachable!(),
             // Nothing to do here, since call expression already cached
-            Expression::CallResult(_) | Expression::AtomicResult { .. } => {}
+            Expression::CallResult(_)
+            | Expression::AtomicResult { .. }
+            | Expression::RayQueryProceedResult => {}
         }
 
         Ok(())
