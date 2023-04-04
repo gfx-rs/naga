@@ -473,10 +473,9 @@ fn parse_storage_buffers() {
 }
 
 #[test]
-fn parse_type_and_alias() {
+fn parse_alias() {
     parse_str(
         "
-        type Vec2 = vec2<f32>;
         alias Vec4 = vec4<f32>;
         ",
     )
