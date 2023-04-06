@@ -1856,14 +1856,12 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     }
                 };
 
-                let pointer_space = {
-                    let pointer_ty = func_ctx.info[pointer].ty.inner_with(&module.types);
-                    pointer_ty.pointer_space().ok_or_else(|| {
-                        Error::Custom(format!(
-                            "unexpected resolved type for atomic pointer operand: {pointer_ty:?}"
-                        ))
-                    })?
-                };
+                // Validation ensures that `pointer` has a `Pointer` type.
+                let pointer_space = func_ctx.info[pointer]
+                    .ty
+                    .inner_with(&module.types)
+                    .pointer_space()
+                    .unwrap();
 
                 let fun_str = fun.to_hlsl_suffix();
                 write!(self.out, " {res_name}; ")?;
@@ -1874,7 +1872,9 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     }
                     crate::AddressSpace::Storage { .. } => {
                         let var_handle = self.fill_access_chain(module, pointer, func_ctx)?;
-                        // working around the borrow checker in `self.write_expr`
+                        // The call to `self.write_storage_address` wants
+                        // mutable access to all of `self`, so temporarily take
+                        // ownership of our reusable access chain buffer.
                         let chain = mem::take(&mut self.temp_access_chain);
                         let var_name = &self.names[&NameKey::GlobalVariable(var_handle)];
                         write!(self.out, "{var_name}.Interlocked{fun_str}(")?;
