@@ -44,6 +44,8 @@ jobs:
         with:
           tool: cargo-nextest,cargo-llvm-cov
 
+      # TODO: These two separate tests might need their own cache.
+
       - uses: Swatinem/rust-cache@v2
 
       - name: Default test
