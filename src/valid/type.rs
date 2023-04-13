@@ -618,11 +618,22 @@ impl super::Validator {
                 self.require_type_capability(Capabilities::RAY_QUERY)?;
                 TypeInfo::new(TypeFlags::DATA | TypeFlags::SIZED, Alignment::ONE)
             }
-            Ti::BindingArray { base, size: _ } => {
+            Ti::BindingArray { base, size } => {
                 if base >= handle {
                     return Err(TypeError::InvalidArrayBaseType(base));
                 }
-                self.types[base.index()].clone()
+                let type_info_mask = match size {
+                    crate::ArraySize::Constant(_) => {
+                        TypeFlags::DATA | TypeFlags::SIZED | TypeFlags::HOST_SHAREABLE
+                    }
+                    crate::ArraySize::Dynamic => {
+                        // Final type is non-sized
+                        TypeFlags::DATA | TypeFlags::HOST_SHAREABLE
+                    }
+                };
+                let base_info = &self.types[base.index()];
+
+                TypeInfo::new(base_info.flags & type_info_mask, Alignment::ONE)
             }
         })
     }
