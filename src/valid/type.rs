@@ -623,12 +623,10 @@ impl super::Validator {
                     return Err(TypeError::InvalidArrayBaseType(base));
                 }
                 let type_info_mask = match size {
-                    crate::ArraySize::Constant(_) => {
-                        TypeFlags::DATA | TypeFlags::SIZED | TypeFlags::HOST_SHAREABLE
-                    }
+                    crate::ArraySize::Constant(_) => TypeFlags::SIZED | TypeFlags::HOST_SHAREABLE,
                     crate::ArraySize::Dynamic => {
                         // Final type is non-sized
-                        TypeFlags::DATA | TypeFlags::HOST_SHAREABLE
+                        TypeFlags::HOST_SHAREABLE
                     }
                 };
                 let base_info = &self.types[base.index()];

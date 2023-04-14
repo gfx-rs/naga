@@ -1856,3 +1856,11 @@ fn function_returns_void() {
 "###,
     )
 }
+
+#[test]
+fn binding_array_local() {
+    check_validation! {
+        "fn f() { var x: binding_array<i32, 4>; }":
+        Err(_)
+    }
+}

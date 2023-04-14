@@ -200,7 +200,8 @@ tree.
     clippy::match_like_matches_macro,
     clippy::collapsible_if,
     clippy::derive_partial_eq_without_eq,
-    clippy::needless_borrowed_reference
+    clippy::needless_borrowed_reference,
+    clippy::single_match
 )]
 #![warn(
     trivial_casts,
