@@ -1315,6 +1315,21 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
             log::debug!("\t\t{:?} [{}]", inst.op, inst.wc);
 
             match inst.op {
+                Op::AtomicIAdd => {
+                    inst.expect(7)?;
+                    let type_id = self.next()?;
+                    let id = self.next()?;
+                    let pointer = self.next()?;
+                    let memory = self.next()?;
+                    let semantics = self.next()?;
+                    let value = self.next()?;
+
+                    let pointer = self.lookup_expression.lookup(pointer)?.handle;
+                    let expr = crate::Expression::Load { pointer };
+                    let handle = ctx.expressions.append(expr, span);
+                    let expr = LookupExpression { handle, type_id, block_id };
+                    self.lookup_expression.insert(id, expr);
+                }
                 Op::Line => {
                     inst.expect(4)?;
                     let _file_id = self.next()?;
