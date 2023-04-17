@@ -179,3 +179,23 @@ pub(super) fn map_storage_class(word: spirv::Word) -> Result<super::ExtendedClas
         _ => return Err(Error::UnsupportedStorageClass(word)),
     })
 }
+
+impl crate::AddressSpace {
+    pub(super) const fn try_from_spirv_semantics_and_scope(
+        semantics: spirv::MemorySemantics,
+        scope: spirv::Scope,
+    ) -> Result<Self, Error> {
+        match (semantics, scope) {
+            (spirv::MemorySemantics::UNIFORM_MEMORY, spirv::Scope::Device) => {
+                Ok(crate::AddressSpace::Storage { access: crate::StorageAccess::all() })
+            }
+            (spirv::MemorySemantics::WORKGROUP_MEMORY, spirv::Scope::Workgroup) => {
+                Ok(crate::AddressSpace::WorkGroup)
+            }
+            (spirv::MemorySemantics::NONE, spirv::Scope::Invocation) => {
+                Ok(crate::AddressSpace::Private)
+            }
+            _ => Err(Error::UnsupportedMemoryScopeSemantics(scope, semantics)),
+        }
+    }
+}

@@ -1,5 +1,5 @@
 use super::ModuleState;
-use crate::arena::Handle;
+use crate::{arena::Handle, ScalarKind};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -50,6 +50,8 @@ pub enum Error {
         rows: u8,
         width: u8,
     },
+    #[error("unsupported memory scope {0:?} and/or semantics {1:?}")]
+    UnsupportedMemoryScopeSemantics(spirv::Scope, spirv::MemorySemantics),
     #[error("unknown binary operator {0:?}")]
     UnknownBinaryOperator(spirv::Op),
     #[error("unknown relational function {0:?}")]
@@ -92,6 +94,10 @@ pub enum Error {
     InvalidAsType(Handle<crate::Type>),
     #[error("invalid vector type {0:?}")]
     InvalidVectorType(Handle<crate::Type>),
+    #[error("invalid atomic pointer of type {0:?}")]
+    InvalidAtomicScalarKind( ScalarKind ),
+    #[error("invalid atomic pointer of type {0:?}")]
+    InvalidAtomicPointer( Handle<crate::Type> ),
     #[error("inconsistent comparison sampling {0:?}")]
     InconsistentComparisonSampling(Handle<crate::GlobalVariable>),
     #[error("wrong function result type %{0}")]

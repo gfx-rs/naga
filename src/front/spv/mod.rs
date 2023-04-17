@@ -1315,19 +1315,43 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
             log::debug!("\t\t{:?} [{}]", inst.op, inst.wc);
 
             match inst.op {
-                Op::AtomicIAdd => {
-                    inst.expect(7)?;
+                Op::AtomicLoad => {
+                    // parse all the parameters
+                    inst.expect(6)?;
                     let type_id = self.next()?;
                     let id = self.next()?;
-                    let pointer = self.next()?;
-                    let memory = self.next()?;
+                    let pointer_id = self.next()?;
+                    let scope = self.next()?;
                     let semantics = self.next()?;
-                    let value = self.next()?;
-
-                    let pointer = self.lookup_expression.lookup(pointer)?.handle;
-                    let expr = crate::Expression::Load { pointer };
+                    // convert raw ids into spirv
+                    let scope = spirv::Scope::from_u32(scope)
+                        .ok_or_else(|| Error::InvalidBarrierScope(scope))?;
+                    let semantics = spirv::MemorySemantics::from_bits(semantics)
+                        .ok_or_else(|| Error::InvalidBarrierMemorySemantics(semantics))?;
+                    // type check the pointer we are loading
+                    let pointer_lexp = self.lookup_expression.lookup(pointer_id)?.clone();
+                    let pointer_handle = self.get_expr_handle(
+                        pointer_id,
+                        &pointer_lexp,
+                        ctx,
+                        &mut emitter,
+                        &mut block,
+                        body_idx,
+                    );
+                    let (kind, width) = self.ensure_atomic_pointer(&pointer_lexp, ctx, span)?;
+                    // convert scope and semantics into an address space...
+                    let space =
+                        crate::AddressSpace::try_from_spirv_semantics_and_scope(semantics, scope)?;
+                    let atomic_type = crate::TypeInner::Atomic { kind, width };
+                    let expr = crate::Expression::Load {
+                        pointer: pointer_handle,
+                    };
                     let handle = ctx.expressions.append(expr, span);
-                    let expr = LookupExpression { handle, type_id, block_id };
+                    let expr = LookupExpression {
+                        handle,
+                        type_id,
+                        block_id,
+                    };
                     self.lookup_expression.insert(id, expr);
                 }
                 Op::Line => {
@@ -3576,6 +3600,40 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
         let body = &mut ctx.bodies[body_idx];
         body.data.push(BodyFragment::BlockId(block_id));
         Ok(())
+    }
+
+    fn ensure_atomic_pointer(
+        &mut self,
+        pointer_lexp: &LookupExpression,
+        ctx: &mut BlockContext,
+        span: crate::Span,
+    ) -> Result<(crate::ScalarKind, u8), Error> {
+        let pointer_lookup = self.lookup_type.lookup(pointer_lexp.type_id)?;
+        let pointer_type = ctx
+            .type_arena
+            .get_handle(pointer_lookup.handle)
+            .map_err(|h| Error::UnsupportedType(pointer_lookup.handle))?;
+        match pointer_type.inner {
+            crate::TypeInner::Pointer { base, .. } => match ctx.type_arena[base].inner {
+                crate::TypeInner::Scalar { kind, width } => match kind {
+                    crate::ScalarKind::Uint
+                    | crate::ScalarKind::Sint
+                    | crate::ScalarKind::Float => Ok((kind, width)),
+                    _ => {
+                        log::error!("Pointer type to {:?} passed to atomic op", kind);
+                        Err(Error::InvalidAtomicScalarKind(kind))
+                    }
+                },
+                ref other => {
+                    log::error!("Pointer type to {:?} passed to atomic op", other);
+                    Err(Error::InvalidAtomicPointer(pointer_lookup.handle))
+                }
+            },
+            ref other => {
+                log::error!("Type {:?} passed to atomic op", other);
+                Err(Error::InvalidAtomicPointer(pointer_lookup.handle))
+            }
+        }
     }
 
     fn make_expression_storage(
