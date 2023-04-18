@@ -168,22 +168,6 @@ pub struct ExpressionContext<'source, 'temp, 'out> {
 }
 
 impl<'a> ExpressionContext<'a, '_, '_> {
-    fn reborrow(&mut self) -> ExpressionContext<'a, '_, '_> {
-        ExpressionContext {
-            local_table: self.local_table,
-            globals: self.globals,
-            types: self.types,
-            ast_expressions: self.ast_expressions,
-            typifier: self.typifier,
-            naga_expressions: self.naga_expressions,
-            module: self.module,
-            local_vars: self.local_vars,
-            arguments: self.arguments,
-            block: self.block,
-            emitter: self.emitter,
-        }
-    }
-
     fn as_output(&mut self) -> OutputContext<'a, '_, '_> {
         OutputContext {
             ast_expressions: self.ast_expressions,
@@ -855,7 +839,8 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     let mut emitter = Emitter::default();
                     emitter.start(ctx.naga_expressions);
 
-                    let value = self.expression(l.init, ctx.as_expression(block, &mut emitter))?;
+                    let value =
+                        self.expression(l.init, &mut ctx.as_expression(block, &mut emitter))?;
 
                     let explicit_ty =
                         l.ty.map(|ty| self.resolve_ast_type(ty, ctx.as_output()))
@@ -891,7 +876,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     let initializer = match v.init {
                         Some(init) => {
                             let initializer =
-                                self.expression(init, ctx.as_expression(block, &mut emitter))?;
+                                self.expression(init, &mut ctx.as_expression(block, &mut emitter))?;
                             ctx.as_expression(block, &mut emitter)
                                 .grow_types(initializer)?;
                             Some(initializer)
@@ -967,7 +952,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 emitter.start(ctx.naga_expressions);
 
                 let condition =
-                    self.expression(condition, ctx.as_expression(block, &mut emitter))?;
+                    self.expression(condition, &mut ctx.as_expression(block, &mut emitter))?;
                 block.extend(emitter.finish(ctx.naga_expressions));
 
                 let accept = self.block(accept, ctx.reborrow())?;
@@ -987,7 +972,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 emitter.start(ctx.naga_expressions);
 
                 let mut ectx = ctx.as_expression(block, &mut emitter);
-                let selector = self.expression(selector, ectx.reborrow())?;
+                let selector = self.expression(selector, &mut ectx)?;
 
                 ectx.grow_types(selector)?;
                 let uint =
@@ -1032,7 +1017,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 let mut emitter = Emitter::default();
                 emitter.start(ctx.naga_expressions);
                 let break_if = break_if
-                    .map(|expr| self.expression(expr, ctx.as_expression(block, &mut emitter)))
+                    .map(|expr| self.expression(expr, &mut ctx.as_expression(block, &mut emitter)))
                     .transpose()?;
                 continuing.extend(emitter.finish(ctx.naga_expressions));
 
@@ -1049,7 +1034,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 emitter.start(ctx.naga_expressions);
 
                 let value = value
-                    .map(|expr| self.expression(expr, ctx.as_expression(block, &mut emitter)))
+                    .map(|expr| self.expression(expr, &mut ctx.as_expression(block, &mut emitter)))
                     .transpose()?;
                 block.extend(emitter.finish(ctx.naga_expressions));
 
@@ -1067,7 +1052,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     stmt.span,
                     function,
                     arguments,
-                    ctx.as_expression(block, &mut emitter),
+                    &mut ctx.as_expression(block, &mut emitter),
                 )?;
                 block.extend(emitter.finish(ctx.naga_expressions));
                 return Ok(());
@@ -1076,9 +1061,12 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 let mut emitter = Emitter::default();
                 emitter.start(ctx.naga_expressions);
 
-                let expr =
-                    self.expression_for_reference(target, ctx.as_expression(block, &mut emitter))?;
-                let mut value = self.expression(value, ctx.as_expression(block, &mut emitter))?;
+                let expr = self.expression_for_reference(
+                    target,
+                    &mut ctx.as_expression(block, &mut emitter),
+                )?;
+                let mut value =
+                    self.expression(value, &mut ctx.as_expression(block, &mut emitter))?;
 
                 if !expr.is_reference {
                     let ty = ctx.invalid_assignment_type(expr.handle);
@@ -1123,8 +1111,8 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 };
 
                 let value_span = ctx.ast_expressions.get_span(value);
-                let reference =
-                    self.expression_for_reference(value, ctx.as_expression(block, &mut emitter))?;
+                let reference = self
+                    .expression_for_reference(value, &mut ctx.as_expression(block, &mut emitter))?;
                 let mut ectx = ctx.as_expression(block, &mut emitter);
 
                 ectx.grow_types(reference.handle)?;
@@ -1180,7 +1168,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 let mut emitter = Emitter::default();
                 emitter.start(ctx.naga_expressions);
 
-                let _ = self.expression(expr, ctx.as_expression(block, &mut emitter))?;
+                let _ = self.expression(expr, &mut ctx.as_expression(block, &mut emitter))?;
                 block.extend(emitter.finish(ctx.naga_expressions));
                 return Ok(());
             }
@@ -1194,16 +1182,16 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
     fn expression(
         &mut self,
         expr: Handle<ast::Expression<'source>>,
-        mut ctx: ExpressionContext<'source, '_, '_>,
+        ctx: &mut ExpressionContext<'source, '_, '_>,
     ) -> Result<Handle<crate::Expression>, Error<'source>> {
-        let expr = self.expression_for_reference(expr, ctx.reborrow())?;
+        let expr = self.expression_for_reference(expr, ctx)?;
         Ok(ctx.apply_load_rule(expr))
     }
 
     fn expression_for_reference(
         &mut self,
         expr: Handle<ast::Expression<'source>>,
-        mut ctx: ExpressionContext<'source, '_, '_>,
+        ctx: &mut ExpressionContext<'source, '_, '_>,
     ) -> Result<TypedExpression, Error<'source>> {
         let span = ctx.ast_expressions.get_span(expr);
         let expr = &ctx.ast_expressions[expr];
@@ -1275,17 +1263,17 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 ty_span,
                 ref components,
             } => {
-                let handle = self.construct(span, ty, ty_span, components, ctx.reborrow())?;
+                let handle = self.construct(span, ty, ty_span, components, ctx)?;
                 return Ok(TypedExpression::non_reference(handle));
             }
             ast::Expression::Unary { op, expr } => {
-                let expr = self.expression(expr, ctx.reborrow())?;
+                let expr = self.expression(expr, ctx)?;
                 (crate::Expression::Unary { op, expr }, false)
             }
             ast::Expression::AddrOf(expr) => {
                 // The `&` operator simply converts a reference to a pointer. And since a
                 // reference is required, the Load Rule is not applied.
-                let expr = self.expression_for_reference(expr, ctx.reborrow())?;
+                let expr = self.expression_for_reference(expr, ctx)?;
                 if !expr.is_reference {
                     return Err(Error::NotReference("the operand of the `&` operator", span));
                 }
@@ -1298,7 +1286,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             }
             ast::Expression::Deref(expr) => {
                 // The pointer we dereference must be loaded.
-                let pointer = self.expression(expr, ctx.reborrow())?;
+                let pointer = self.expression(expr, ctx)?;
 
                 ctx.grow_types(pointer)?;
                 if ctx.resolved_inner(pointer).pointer_space().is_none() {
@@ -1312,8 +1300,8 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             }
             ast::Expression::Binary { op, left, right } => {
                 // Load both operands.
-                let mut left = self.expression(left, ctx.reborrow())?;
-                let mut right = self.expression(right, ctx.reborrow())?;
+                let mut left = self.expression(left, ctx)?;
+                let mut right = self.expression(right, ctx)?;
                 ctx.binary_op_splat(op, &mut left, &mut right)?;
                 (crate::Expression::Binary { op, left, right }, false)
             }
@@ -1322,13 +1310,13 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 ref arguments,
             } => {
                 let handle = self
-                    .call(span, function, arguments, ctx.reborrow())?
+                    .call(span, function, arguments, ctx)?
                     .ok_or(Error::FunctionReturnsVoid(function.span))?;
                 return Ok(TypedExpression::non_reference(handle));
             }
             ast::Expression::Index { base, index } => {
-                let expr = self.expression_for_reference(base, ctx.reborrow())?;
-                let index = self.expression(index, ctx.reborrow())?;
+                let expr = self.expression_for_reference(base, ctx)?;
+                let index = self.expression(index, ctx)?;
 
                 ctx.grow_types(expr.handle)?;
                 let wgsl_pointer =
@@ -1376,7 +1364,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 let TypedExpression {
                     handle,
                     is_reference,
-                } = self.expression_for_reference(base, ctx.reborrow())?;
+                } = self.expression_for_reference(base, ctx)?;
 
                 ctx.grow_types(handle)?;
                 let temp_inner;
@@ -1460,7 +1448,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 access
             }
             ast::Expression::Bitcast { expr, to, ty_span } => {
-                let expr = self.expression(expr, ctx.reborrow())?;
+                let expr = self.expression(expr, ctx)?;
                 let to_resolved = self.resolve_ast_type(to, ctx.as_output())?;
 
                 let kind = match ctx.module.types[to_resolved].inner {
@@ -1517,7 +1505,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         span: Span,
         function: &ast::Ident<'source>,
         arguments: &[Handle<ast::Expression<'source>>],
-        mut ctx: ExpressionContext<'source, '_, '_>,
+        ctx: &mut ExpressionContext<'source, '_, '_>,
     ) -> Result<Option<Handle<crate::Expression>>, Error<'source>> {
         match ctx.globals.get(function.name) {
             Some(&LoweredGlobalDecl::Type(ty)) => {
@@ -1526,7 +1514,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     &ast::ConstructorType::Type(ty),
                     function.span,
                     arguments,
-                    ctx.reborrow(),
+                    ctx,
                 )?;
                 Ok(Some(handle))
             }
@@ -1537,7 +1525,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             Some(&LoweredGlobalDecl::Function(function)) => {
                 let arguments = arguments
                     .iter()
-                    .map(|&arg| self.expression(arg, ctx.reborrow()))
+                    .map(|&arg| self.expression(arg, ctx))
                     .collect::<Result<Vec<_>, _>>()?;
 
                 ctx.block.extend(ctx.emitter.finish(ctx.naga_expressions));
@@ -1561,13 +1549,13 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 let span = function.span;
                 let expr = if let Some(fun) = conv::map_relational_fun(function.name) {
                     let mut args = ctx.prepare_args(arguments, 1, span);
-                    let argument = self.expression(args.next()?, ctx.reborrow())?;
+                    let argument = self.expression(args.next()?, ctx)?;
                     args.finish()?;
 
                     crate::Expression::Relational { fun, argument }
                 } else if let Some((axis, ctrl)) = conv::map_derivative(function.name) {
                     let mut args = ctx.prepare_args(arguments, 1, span);
-                    let expr = self.expression(args.next()?, ctx.reborrow())?;
+                    let expr = self.expression(args.next()?, ctx)?;
                     args.finish()?;
 
                     crate::Expression::Derivative { axis, ctrl, expr }
@@ -1575,20 +1563,20 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     let expected = fun.argument_count() as _;
                     let mut args = ctx.prepare_args(arguments, expected, span);
 
-                    let arg = self.expression(args.next()?, ctx.reborrow())?;
+                    let arg = self.expression(args.next()?, ctx)?;
                     let arg1 = args
                         .next()
-                        .map(|x| self.expression(x, ctx.reborrow()))
+                        .map(|x| self.expression(x, ctx))
                         .ok()
                         .transpose()?;
                     let arg2 = args
                         .next()
-                        .map(|x| self.expression(x, ctx.reborrow()))
+                        .map(|x| self.expression(x, ctx))
                         .ok()
                         .transpose()?;
                     let arg3 = args
                         .next()
-                        .map(|x| self.expression(x, ctx.reborrow()))
+                        .map(|x| self.expression(x, ctx))
                         .ok()
                         .transpose()?;
 
@@ -1602,15 +1590,15 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         arg3,
                     }
                 } else if let Some(fun) = Texture::map(function.name) {
-                    self.texture_sample_helper(fun, arguments, span, ctx.reborrow())?
+                    self.texture_sample_helper(fun, arguments, span, ctx)?
                 } else {
                     match function.name {
                         "select" => {
                             let mut args = ctx.prepare_args(arguments, 3, span);
 
-                            let reject = self.expression(args.next()?, ctx.reborrow())?;
-                            let accept = self.expression(args.next()?, ctx.reborrow())?;
-                            let condition = self.expression(args.next()?, ctx.reborrow())?;
+                            let reject = self.expression(args.next()?, ctx)?;
+                            let accept = self.expression(args.next()?, ctx)?;
+                            let condition = self.expression(args.next()?, ctx)?;
 
                             args.finish()?;
 
@@ -1622,22 +1610,22 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         }
                         "arrayLength" => {
                             let mut args = ctx.prepare_args(arguments, 1, span);
-                            let expr = self.expression(args.next()?, ctx.reborrow())?;
+                            let expr = self.expression(args.next()?, ctx)?;
                             args.finish()?;
 
                             crate::Expression::ArrayLength(expr)
                         }
                         "atomicLoad" => {
                             let mut args = ctx.prepare_args(arguments, 1, span);
-                            let pointer = self.atomic_pointer(args.next()?, ctx.reborrow())?;
+                            let pointer = self.atomic_pointer(args.next()?, ctx)?;
                             args.finish()?;
 
                             crate::Expression::Load { pointer }
                         }
                         "atomicStore" => {
                             let mut args = ctx.prepare_args(arguments, 2, span);
-                            let pointer = self.atomic_pointer(args.next()?, ctx.reborrow())?;
-                            let value = self.expression(args.next()?, ctx.reborrow())?;
+                            let pointer = self.atomic_pointer(args.next()?, ctx)?;
+                            let value = self.expression(args.next()?, ctx)?;
                             args.finish()?;
 
                             ctx.block.extend(ctx.emitter.finish(ctx.naga_expressions));
@@ -1651,7 +1639,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                                 span,
                                 crate::AtomicFunction::Add,
                                 arguments,
-                                ctx.reborrow(),
+                                ctx,
                             )?))
                         }
                         "atomicSub" => {
@@ -1659,7 +1647,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                                 span,
                                 crate::AtomicFunction::Subtract,
                                 arguments,
-                                ctx.reborrow(),
+                                ctx,
                             )?))
                         }
                         "atomicAnd" => {
@@ -1667,7 +1655,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                                 span,
                                 crate::AtomicFunction::And,
                                 arguments,
-                                ctx.reborrow(),
+                                ctx,
                             )?))
                         }
                         "atomicOr" => {
@@ -1675,7 +1663,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                                 span,
                                 crate::AtomicFunction::InclusiveOr,
                                 arguments,
-                                ctx.reborrow(),
+                                ctx,
                             )?))
                         }
                         "atomicXor" => {
@@ -1683,7 +1671,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                                 span,
                                 crate::AtomicFunction::ExclusiveOr,
                                 arguments,
-                                ctx.reborrow(),
+                                ctx,
                             )?))
                         }
                         "atomicMin" => {
@@ -1691,7 +1679,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                                 span,
                                 crate::AtomicFunction::Min,
                                 arguments,
-                                ctx.reborrow(),
+                                ctx,
                             )?))
                         }
                         "atomicMax" => {
@@ -1699,7 +1687,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                                 span,
                                 crate::AtomicFunction::Max,
                                 arguments,
-                                ctx.reborrow(),
+                                ctx,
                             )?))
                         }
                         "atomicExchange" => {
@@ -1707,19 +1695,19 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                                 span,
                                 crate::AtomicFunction::Exchange { compare: None },
                                 arguments,
-                                ctx.reborrow(),
+                                ctx,
                             )?))
                         }
                         "atomicCompareExchangeWeak" => {
                             let mut args = ctx.prepare_args(arguments, 3, span);
 
-                            let pointer = self.atomic_pointer(args.next()?, ctx.reborrow())?;
+                            let pointer = self.atomic_pointer(args.next()?, ctx)?;
 
-                            let compare = self.expression(args.next()?, ctx.reborrow())?;
+                            let compare = self.expression(args.next()?, ctx)?;
 
                             let value = args.next()?;
                             let value_span = ctx.ast_expressions.get_span(value);
-                            let value = self.expression(value, ctx.reborrow())?;
+                            let value = self.expression(value, ctx)?;
                             ctx.grow_types(value)?;
 
                             args.finish()?;
@@ -1770,16 +1758,16 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
                             let image = args.next()?;
                             let image_span = ctx.ast_expressions.get_span(image);
-                            let image = self.expression(image, ctx.reborrow())?;
+                            let image = self.expression(image, ctx)?;
 
-                            let coordinate = self.expression(args.next()?, ctx.reborrow())?;
+                            let coordinate = self.expression(args.next()?, ctx)?;
 
                             let (_, arrayed) = ctx.image_data(image, image_span)?;
                             let array_index = arrayed
-                                .then(|| self.expression(args.next()?, ctx.reborrow()))
+                                .then(|| self.expression(args.next()?, ctx))
                                 .transpose()?;
 
-                            let value = self.expression(args.next()?, ctx.reborrow())?;
+                            let value = self.expression(args.next()?, ctx)?;
 
                             args.finish()?;
 
@@ -1799,23 +1787,23 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
                             let image = args.next()?;
                             let image_span = ctx.ast_expressions.get_span(image);
-                            let image = self.expression(image, ctx.reborrow())?;
+                            let image = self.expression(image, ctx)?;
 
-                            let coordinate = self.expression(args.next()?, ctx.reborrow())?;
+                            let coordinate = self.expression(args.next()?, ctx)?;
 
                             let (class, arrayed) = ctx.image_data(image, image_span)?;
                             let array_index = arrayed
-                                .then(|| self.expression(args.next()?, ctx.reborrow()))
+                                .then(|| self.expression(args.next()?, ctx))
                                 .transpose()?;
 
                             let level = class
                                 .is_mipmapped()
-                                .then(|| self.expression(args.next()?, ctx.reborrow()))
+                                .then(|| self.expression(args.next()?, ctx))
                                 .transpose()?;
 
                             let sample = class
                                 .is_multisampled()
-                                .then(|| self.expression(args.next()?, ctx.reborrow()))
+                                .then(|| self.expression(args.next()?, ctx))
                                 .transpose()?;
 
                             args.finish()?;
@@ -1830,10 +1818,10 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         }
                         "textureDimensions" => {
                             let mut args = ctx.prepare_args(arguments, 1, span);
-                            let image = self.expression(args.next()?, ctx.reborrow())?;
+                            let image = self.expression(args.next()?, ctx)?;
                             let level = args
                                 .next()
-                                .map(|arg| self.expression(arg, ctx.reborrow()))
+                                .map(|arg| self.expression(arg, ctx))
                                 .ok()
                                 .transpose()?;
                             args.finish()?;
@@ -1845,7 +1833,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         }
                         "textureNumLevels" => {
                             let mut args = ctx.prepare_args(arguments, 1, span);
-                            let image = self.expression(args.next()?, ctx.reborrow())?;
+                            let image = self.expression(args.next()?, ctx)?;
                             args.finish()?;
 
                             crate::Expression::ImageQuery {
@@ -1855,7 +1843,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         }
                         "textureNumLayers" => {
                             let mut args = ctx.prepare_args(arguments, 1, span);
-                            let image = self.expression(args.next()?, ctx.reborrow())?;
+                            let image = self.expression(args.next()?, ctx)?;
                             args.finish()?;
 
                             crate::Expression::ImageQuery {
@@ -1865,7 +1853,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         }
                         "textureNumSamples" => {
                             let mut args = ctx.prepare_args(arguments, 1, span);
-                            let image = self.expression(args.next()?, ctx.reborrow())?;
+                            let image = self.expression(args.next()?, ctx)?;
                             args.finish()?;
 
                             crate::Expression::ImageQuery {
@@ -1875,10 +1863,9 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         }
                         "rayQueryInitialize" => {
                             let mut args = ctx.prepare_args(arguments, 3, span);
-                            let query = self.ray_query_pointer(args.next()?, ctx.reborrow())?;
-                            let acceleration_structure =
-                                self.expression(args.next()?, ctx.reborrow())?;
-                            let descriptor = self.expression(args.next()?, ctx.reborrow())?;
+                            let query = self.ray_query_pointer(args.next()?, ctx)?;
+                            let acceleration_structure = self.expression(args.next()?, ctx)?;
+                            let descriptor = self.expression(args.next()?, ctx)?;
                             args.finish()?;
 
                             let _ = ctx.module.generate_ray_desc_type();
@@ -1895,7 +1882,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         }
                         "rayQueryProceed" => {
                             let mut args = ctx.prepare_args(arguments, 1, span);
-                            let query = self.ray_query_pointer(args.next()?, ctx.reborrow())?;
+                            let query = self.ray_query_pointer(args.next()?, ctx)?;
                             args.finish()?;
 
                             ctx.block.extend(ctx.emitter.finish(ctx.naga_expressions));
@@ -1911,7 +1898,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         }
                         "rayQueryGetCommittedIntersection" => {
                             let mut args = ctx.prepare_args(arguments, 1, span);
-                            let query = self.ray_query_pointer(args.next()?, ctx.reborrow())?;
+                            let query = self.ray_query_pointer(args.next()?, ctx)?;
                             args.finish()?;
 
                             let _ = ctx.module.generate_ray_intersection_type();
@@ -1928,7 +1915,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                                 &ast::ConstructorType::Type(ty),
                                 function.span,
                                 arguments,
-                                ctx.reborrow(),
+                                ctx,
                             )?;
                             return Ok(Some(handle));
                         }
@@ -1945,10 +1932,10 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
     fn atomic_pointer(
         &mut self,
         expr: Handle<ast::Expression<'source>>,
-        mut ctx: ExpressionContext<'source, '_, '_>,
+        ctx: &mut ExpressionContext<'source, '_, '_>,
     ) -> Result<Handle<crate::Expression>, Error<'source>> {
         let span = ctx.ast_expressions.get_span(expr);
-        let pointer = self.expression(expr, ctx.reborrow())?;
+        let pointer = self.expression(expr, ctx)?;
 
         ctx.grow_types(pointer)?;
         match *ctx.resolved_inner(pointer) {
@@ -1971,14 +1958,14 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         span: Span,
         fun: crate::AtomicFunction,
         args: &[Handle<ast::Expression<'source>>],
-        mut ctx: ExpressionContext<'source, '_, '_>,
+        ctx: &mut ExpressionContext<'source, '_, '_>,
     ) -> Result<Handle<crate::Expression>, Error<'source>> {
         let mut args = ctx.prepare_args(args, 2, span);
 
-        let pointer = self.atomic_pointer(args.next()?, ctx.reborrow())?;
+        let pointer = self.atomic_pointer(args.next()?, ctx)?;
 
         let value = args.next()?;
-        let value = self.expression(value, ctx.reborrow())?;
+        let value = self.expression(value, ctx)?;
         let ty = ctx.register_type(value)?;
 
         args.finish()?;
@@ -2007,14 +1994,14 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         fun: Texture,
         args: &[Handle<ast::Expression<'source>>],
         span: Span,
-        mut ctx: ExpressionContext<'source, '_, '_>,
+        ctx: &mut ExpressionContext<'source, '_, '_>,
     ) -> Result<crate::Expression, Error<'source>> {
         let mut args = ctx.prepare_args(args, fun.min_argument_count(), span);
 
         let (image, gather) = match fun {
             Texture::Gather => {
                 let image_or_component = args.next()?;
-                match self.gather_component(image_or_component, ctx.reborrow())? {
+                match self.gather_component(image_or_component, ctx)? {
                     Some(component) => {
                         let image = args.next()?;
                         (image, Some(component))
@@ -2034,44 +2021,44 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         };
 
         let image_span = ctx.ast_expressions.get_span(image);
-        let image = self.expression(image, ctx.reborrow())?;
+        let image = self.expression(image, ctx)?;
 
-        let sampler = self.expression(args.next()?, ctx.reborrow())?;
+        let sampler = self.expression(args.next()?, ctx)?;
 
-        let coordinate = self.expression(args.next()?, ctx.reborrow())?;
+        let coordinate = self.expression(args.next()?, ctx)?;
 
         let (_, arrayed) = ctx.image_data(image, image_span)?;
         let array_index = arrayed
-            .then(|| self.expression(args.next()?, ctx.reborrow()))
+            .then(|| self.expression(args.next()?, ctx))
             .transpose()?;
 
         let (level, depth_ref) = match fun {
             Texture::Gather => (crate::SampleLevel::Zero, None),
             Texture::GatherCompare => {
-                let reference = self.expression(args.next()?, ctx.reborrow())?;
+                let reference = self.expression(args.next()?, ctx)?;
                 (crate::SampleLevel::Zero, Some(reference))
             }
 
             Texture::Sample => (crate::SampleLevel::Auto, None),
             Texture::SampleBias => {
-                let bias = self.expression(args.next()?, ctx.reborrow())?;
+                let bias = self.expression(args.next()?, ctx)?;
                 (crate::SampleLevel::Bias(bias), None)
             }
             Texture::SampleCompare => {
-                let reference = self.expression(args.next()?, ctx.reborrow())?;
+                let reference = self.expression(args.next()?, ctx)?;
                 (crate::SampleLevel::Auto, Some(reference))
             }
             Texture::SampleCompareLevel => {
-                let reference = self.expression(args.next()?, ctx.reborrow())?;
+                let reference = self.expression(args.next()?, ctx)?;
                 (crate::SampleLevel::Zero, Some(reference))
             }
             Texture::SampleGrad => {
-                let x = self.expression(args.next()?, ctx.reborrow())?;
-                let y = self.expression(args.next()?, ctx.reborrow())?;
+                let x = self.expression(args.next()?, ctx)?;
+                let y = self.expression(args.next()?, ctx)?;
                 (crate::SampleLevel::Gradient { x, y }, None)
             }
             Texture::SampleLevel => {
-                let level = self.expression(args.next()?, ctx.reborrow())?;
+                let level = self.expression(args.next()?, ctx)?;
                 (crate::SampleLevel::Exact(level), None)
             }
         };
@@ -2099,7 +2086,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
     fn gather_component(
         &mut self,
         expr: Handle<ast::Expression<'source>>,
-        mut ctx: ExpressionContext<'source, '_, '_>,
+        ctx: &mut ExpressionContext<'source, '_, '_>,
     ) -> Result<Option<crate::SwizzleComponent>, Error<'source>> {
         let span = ctx.ast_expressions.get_span(expr);
 
@@ -2403,10 +2390,10 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
     fn ray_query_pointer(
         &mut self,
         expr: Handle<ast::Expression<'source>>,
-        mut ctx: ExpressionContext<'source, '_, '_>,
+        ctx: &mut ExpressionContext<'source, '_, '_>,
     ) -> Result<Handle<crate::Expression>, Error<'source>> {
         let span = ctx.ast_expressions.get_span(expr);
-        let pointer = self.expression(expr, ctx.reborrow())?;
+        let pointer = self.expression(expr, ctx)?;
 
         ctx.grow_types(pointer)?;
         match *ctx.resolved_inner(pointer) {
