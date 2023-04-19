@@ -1,59 +1,62 @@
 ; SPIR-V
 ; Version: 1.0
 ; Generator: rspirv
-; Bound: 34
+; Bound: 37
 OpCapability Shader
 %1 = OpExtInstImport "GLSL.std.450"
 OpMemoryModel Logical GLSL450
-OpEntryPoint Fragment %28 "main" %26
-OpExecutionMode %28 OriginUpperLeft
-OpName %8 "Texture"
-OpName %10 "Sampler"
-OpName %13 "Passed_Texture"
-OpName %15 "Passed_Sampler"
-OpName %17 "test"
-OpName %28 "main"
-OpDecorate %8 DescriptorSet 0
-OpDecorate %8 Binding 0
-OpDecorate %10 DescriptorSet 0
-OpDecorate %10 Binding 1
-OpDecorate %26 Location 0
+OpEntryPoint Fragment %31 "main" %29
+OpExecutionMode %31 OriginUpperLeft
+OpName %11 "Texture"
+OpName %13 "Sampler"
+OpName %16 "Passed_Texture"
+OpName %18 "Passed_Sampler"
+OpName %20 "test"
+OpName %31 "main"
+OpDecorate %11 DescriptorSet 0
+OpDecorate %11 Binding 0
+OpDecorate %13 DescriptorSet 0
+OpDecorate %13 Binding 1
+OpDecorate %29 Location 0
 %2 = OpTypeVoid
 %4 = OpTypeFloat 32
 %3 = OpTypeImage %4 2D 0 0 0 1 Unknown
 %5 = OpTypeSampler
 %6 = OpTypeVector %4 4
 %7 = OpTypeVector %4 2
-%9 = OpTypePointer UniformConstant %3
-%8 = OpVariable  %9  UniformConstant
-%11 = OpTypePointer UniformConstant %5
-%10 = OpVariable  %11  UniformConstant
-%18 = OpTypeFunction %6 %9 %11
-%19 = OpConstant  %4  0.0
-%22 = OpTypeSampledImage %3
-%27 = OpTypePointer Output %6
-%26 = OpVariable  %27  Output
-%29 = OpTypeFunction %2
-%17 = OpFunction  %6  None %18
-%13 = OpFunctionParameter  %9
-%15 = OpFunctionParameter  %11
-%12 = OpLabel
-%14 = OpLoad  %3  %13
-%16 = OpLoad  %5  %15
-OpBranch %20
-%20 = OpLabel
-%21 = OpCompositeConstruct  %7  %19 %19
-%23 = OpSampledImage  %22  %14 %16
-%24 = OpImageSampleImplicitLod  %6  %23 %21
-OpReturnValue %24
+%9 = OpTypeInt 32 1
+%8 = OpConstant  %9  0
+%10 = OpConstant  %9  1
+%12 = OpTypePointer UniformConstant %3
+%11 = OpVariable  %12  UniformConstant
+%14 = OpTypePointer UniformConstant %5
+%13 = OpVariable  %14  UniformConstant
+%21 = OpTypeFunction %6 %12 %14
+%22 = OpConstant  %4  0.0
+%25 = OpTypeSampledImage %3
+%30 = OpTypePointer Output %6
+%29 = OpVariable  %30  Output
+%32 = OpTypeFunction %2
+%20 = OpFunction  %6  None %21
+%16 = OpFunctionParameter  %12
+%18 = OpFunctionParameter  %14
+%15 = OpLabel
+%17 = OpLoad  %3  %16
+%19 = OpLoad  %5  %18
+OpBranch %23
+%23 = OpLabel
+%24 = OpCompositeConstruct  %7  %22 %22
+%26 = OpSampledImage  %25  %17 %19
+%27 = OpImageSampleImplicitLod  %6  %26 %24
+OpReturnValue %27
 OpFunctionEnd
-%28 = OpFunction  %2  None %29
-%25 = OpLabel
-%30 = OpLoad  %3  %8
-%31 = OpLoad  %5  %10
-OpBranch %32
-%32 = OpLabel
-%33 = OpFunctionCall  %6  %17 %8 %10
-OpStore %26 %33
+%31 = OpFunction  %2  None %32
+%28 = OpLabel
+%33 = OpLoad  %3  %11
+%34 = OpLoad  %5  %13
+OpBranch %35
+%35 = OpLabel
+%36 = OpFunctionCall  %6  %20 %11 %13
+OpStore %29 %36
 OpReturn
 OpFunctionEnd

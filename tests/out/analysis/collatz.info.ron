@@ -430,5 +430,18 @@
             dual_source_blending: false,
         ),
     ],
-    const_expression_types: [],
+    const_expression_types: [
+        Value(Scalar(
+            kind: Sint,
+            width: 4,
+        )),
+        Value(Scalar(
+            kind: Sint,
+            width: 4,
+        )),
+        Value(Scalar(
+            kind: Sint,
+            width: 4,
+        )),
+    ],
 )

@@ -4382,5 +4382,49 @@
             kind: Sint,
             width: 4,
         )),
+        Value(Scalar(
+            kind: Sint,
+            width: 4,
+        )),
+        Value(Scalar(
+            kind: Sint,
+            width: 4,
+        )),
+        Value(Scalar(
+            kind: Sint,
+            width: 4,
+        )),
+        Value(Scalar(
+            kind: Sint,
+            width: 4,
+        )),
+        Value(Scalar(
+            kind: Sint,
+            width: 4,
+        )),
+        Value(Scalar(
+            kind: Sint,
+            width: 4,
+        )),
+        Value(Scalar(
+            kind: Sint,
+            width: 4,
+        )),
+        Value(Scalar(
+            kind: Sint,
+            width: 4,
+        )),
+        Value(Scalar(
+            kind: Sint,
+            width: 4,
+        )),
+        Value(Scalar(
+            kind: Sint,
+            width: 4,
+        )),
+        Value(Scalar(
+            kind: Sint,
+            width: 4,
+        )),
     ],
 )

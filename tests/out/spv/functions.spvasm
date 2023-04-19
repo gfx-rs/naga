@@ -15,33 +15,33 @@ OpExecutionMode %73 LocalSize 1 1 1
 %8 = OpTypeInt 32 0
 %7 = OpTypeVector %8 3
 %9 = OpTypeVector %5 4
-%12 = OpTypeFunction %3
-%13 = OpConstant  %4  2.0
-%14 = OpConstant  %4  0.5
-%22 = OpTypeFunction %5
-%23 = OpConstant  %5  1
+%10 = OpConstant  %5  1
+%13 = OpTypeFunction %3
+%14 = OpConstant  %4  2.0
+%15 = OpConstant  %4  0.5
+%23 = OpTypeFunction %5
 %24 = OpConstant  %8  1
 %25 = OpConstant  %5  4
 %26 = OpConstant  %5  2
 %31 = OpConstantNull  %5
 %42 = OpConstantNull  %8
 %74 = OpTypeFunction %2
-%11 = OpFunction  %3  None %12
-%10 = OpLabel
-OpBranch %15
-%15 = OpLabel
-%16 = OpCompositeConstruct  %3  %13 %13
+%12 = OpFunction  %3  None %13
+%11 = OpLabel
+OpBranch %16
+%16 = OpLabel
 %17 = OpCompositeConstruct  %3  %14 %14
-%18 = OpCompositeConstruct  %3  %14 %14
-%19 = OpExtInst  %3  %1 Fma %16 %17 %18
-OpReturnValue %19
+%18 = OpCompositeConstruct  %3  %15 %15
+%19 = OpCompositeConstruct  %3  %15 %15
+%20 = OpExtInst  %3  %1 Fma %17 %18 %19
+OpReturnValue %20
 OpFunctionEnd
-%21 = OpFunction  %5  None %22
-%20 = OpLabel
+%22 = OpFunction  %5  None %23
+%21 = OpLabel
 OpBranch %27
 %27 = OpLabel
-%28 = OpCompositeConstruct  %6  %23 %23
-%29 = OpCompositeConstruct  %6  %23 %23
+%28 = OpCompositeConstruct  %6  %10 %10
+%29 = OpCompositeConstruct  %6  %10 %10
 %32 = OpCompositeExtract  %5  %28 0
 %33 = OpCompositeExtract  %5  %29 0
 %34 = OpIMul  %5  %32 %33
@@ -88,7 +88,7 @@ OpFunctionEnd
 %72 = OpLabel
 OpBranch %75
 %75 = OpLabel
-%76 = OpFunctionCall  %3  %11
-%77 = OpFunctionCall  %5  %21
+%76 = OpFunctionCall  %3  %12
+%77 = OpFunctionCall  %5  %22
 OpReturn
 OpFunctionEnd
