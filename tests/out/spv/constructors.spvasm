@@ -78,7 +78,11 @@ OpStore %43 %52
 %63 = OpCompositeConstruct  %9  %21 %21
 %64 = OpCompositeConstruct  %8  %62 %63
 %65 = OpCompositeConstruct  %17  %38 %39 %40 %41
-%71 = OpCopyObject  %20  %49
+%67 = OpCompositeConstruct  %14  %48 %48
+%68 = OpCompositeConstruct  %7  %21 %21 %21
+%69 = OpCompositeConstruct  %7  %21 %21 %21
+%70 = OpCompositeConstruct  %7  %21 %21 %21
+%71 = OpCompositeConstruct  %20  %69 %70
 %73 = OpCopyObject  %20  %49
 OpReturn
 OpFunctionEnd
