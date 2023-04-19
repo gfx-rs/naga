@@ -49,19 +49,19 @@ OpDecorate %30 BuiltIn PointSize
 %30 = OpVariable  %31  Output
 %32 = OpConstant  %4  1.0
 %34 = OpTypeFunction %2
+%35 = OpConstantComposite  %3  %32 %32 %32 %32
 %33 = OpFunction  %2  None %34
 %18 = OpLabel
 %21 = OpLoad  %6  %19
 %23 = OpLoad  %6  %22
 %25 = OpLoad  %6  %24
 OpStore %30 %32
-OpBranch %35
-%35 = OpLabel
-%36 = OpIAdd  %6  %21 %23
-%37 = OpIAdd  %6  %36 %25
-%38 = OpCompositeConstruct  %3  %32 %32 %32 %32
-%39 = OpConvertUToF  %4  %37
-%40 = OpCompositeConstruct  %5  %38 %39
+OpBranch %36
+%36 = OpLabel
+%37 = OpIAdd  %6  %21 %23
+%38 = OpIAdd  %6  %37 %25
+%39 = OpConvertUToF  %4  %38
+%40 = OpCompositeConstruct  %5  %35 %39
 %41 = OpCompositeExtract  %3  %40 0
 OpStore %26 %41
 %42 = OpCompositeExtract  %4  %40 1

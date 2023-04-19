@@ -33,6 +33,7 @@ OpDecorate %29 Location 0
 %13 = OpVariable  %14  UniformConstant
 %21 = OpTypeFunction %6 %12 %14
 %22 = OpConstant  %4  0.0
+%23 = OpConstantComposite  %7  %22 %22
 %25 = OpTypeSampledImage %3
 %30 = OpTypePointer Output %6
 %29 = OpVariable  %30  Output
@@ -43,11 +44,10 @@ OpDecorate %29 Location 0
 %15 = OpLabel
 %17 = OpLoad  %3  %16
 %19 = OpLoad  %5  %18
-OpBranch %23
-%23 = OpLabel
-%24 = OpCompositeConstruct  %7  %22 %22
+OpBranch %24
+%24 = OpLabel
 %26 = OpSampledImage  %25  %17 %19
-%27 = OpImageSampleImplicitLod  %6  %26 %24
+%27 = OpImageSampleImplicitLod  %6  %26 %23
 OpReturnValue %27
 OpFunctionEnd
 %31 = OpFunction  %2  None %32

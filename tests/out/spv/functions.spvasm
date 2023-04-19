@@ -1,12 +1,12 @@
 ; SPIR-V
 ; Version: 1.1
 ; Generator: rspirv
-; Bound: 78
+; Bound: 75
 OpCapability Shader
 %1 = OpExtInstImport "GLSL.std.450"
 OpMemoryModel Logical GLSL450
-OpEntryPoint GLCompute %73 "main"
-OpExecutionMode %73 LocalSize 1 1 1
+OpEntryPoint GLCompute %70 "main"
+OpExecutionMode %70 LocalSize 1 1 1
 %2 = OpTypeVoid
 %4 = OpTypeFloat 32
 %3 = OpTypeVector %4 2
@@ -18,77 +18,74 @@ OpExecutionMode %73 LocalSize 1 1 1
 %10 = OpConstant  %5  1
 %13 = OpTypeFunction %3
 %14 = OpConstant  %4  2.0
-%15 = OpConstant  %4  0.5
-%23 = OpTypeFunction %5
+%15 = OpConstantComposite  %3  %14 %14
+%16 = OpConstant  %4  0.5
+%17 = OpConstantComposite  %3  %16 %16
+%22 = OpTypeFunction %5
+%23 = OpConstantComposite  %6  %10 %10
 %24 = OpConstant  %8  1
-%25 = OpConstant  %5  4
-%26 = OpConstant  %5  2
-%31 = OpConstantNull  %5
-%42 = OpConstantNull  %8
-%74 = OpTypeFunction %2
+%25 = OpConstantComposite  %7  %24 %24 %24
+%26 = OpConstant  %5  4
+%27 = OpConstantComposite  %9  %26 %26 %26 %26
+%28 = OpConstant  %5  2
+%29 = OpConstantComposite  %9  %28 %28 %28 %28
+%32 = OpConstantNull  %5
+%41 = OpConstantNull  %8
+%71 = OpTypeFunction %2
 %12 = OpFunction  %3  None %13
 %11 = OpLabel
-OpBranch %16
-%16 = OpLabel
-%17 = OpCompositeConstruct  %3  %14 %14
-%18 = OpCompositeConstruct  %3  %15 %15
-%19 = OpCompositeConstruct  %3  %15 %15
-%20 = OpExtInst  %3  %1 Fma %17 %18 %19
-OpReturnValue %20
+OpBranch %18
+%18 = OpLabel
+%19 = OpExtInst  %3  %1 Fma %15 %17 %17
+OpReturnValue %19
 OpFunctionEnd
-%22 = OpFunction  %5  None %23
-%21 = OpLabel
-OpBranch %27
-%27 = OpLabel
-%28 = OpCompositeConstruct  %6  %10 %10
-%29 = OpCompositeConstruct  %6  %10 %10
-%32 = OpCompositeExtract  %5  %28 0
-%33 = OpCompositeExtract  %5  %29 0
-%34 = OpIMul  %5  %32 %33
-%35 = OpIAdd  %5  %31 %34
-%36 = OpCompositeExtract  %5  %28 1
-%37 = OpCompositeExtract  %5  %29 1
-%38 = OpIMul  %5  %36 %37
-%30 = OpIAdd  %5  %35 %38
-%39 = OpCompositeConstruct  %7  %24 %24 %24
-%40 = OpCompositeConstruct  %7  %24 %24 %24
-%43 = OpCompositeExtract  %8  %39 0
-%44 = OpCompositeExtract  %8  %40 0
-%45 = OpIMul  %8  %43 %44
-%46 = OpIAdd  %8  %42 %45
-%47 = OpCompositeExtract  %8  %39 1
-%48 = OpCompositeExtract  %8  %40 1
-%49 = OpIMul  %8  %47 %48
-%50 = OpIAdd  %8  %46 %49
-%51 = OpCompositeExtract  %8  %39 2
-%52 = OpCompositeExtract  %8  %40 2
-%53 = OpIMul  %8  %51 %52
-%41 = OpIAdd  %8  %50 %53
-%54 = OpCompositeConstruct  %9  %25 %25 %25 %25
-%55 = OpCompositeConstruct  %9  %26 %26 %26 %26
-%57 = OpCompositeExtract  %5  %54 0
-%58 = OpCompositeExtract  %5  %55 0
-%59 = OpIMul  %5  %57 %58
-%60 = OpIAdd  %5  %31 %59
-%61 = OpCompositeExtract  %5  %54 1
-%62 = OpCompositeExtract  %5  %55 1
-%63 = OpIMul  %5  %61 %62
-%64 = OpIAdd  %5  %60 %63
-%65 = OpCompositeExtract  %5  %54 2
-%66 = OpCompositeExtract  %5  %55 2
-%67 = OpIMul  %5  %65 %66
-%68 = OpIAdd  %5  %64 %67
-%69 = OpCompositeExtract  %5  %54 3
-%70 = OpCompositeExtract  %5  %55 3
-%71 = OpIMul  %5  %69 %70
-%56 = OpIAdd  %5  %68 %71
-OpReturnValue %56
+%21 = OpFunction  %5  None %22
+%20 = OpLabel
+OpBranch %30
+%30 = OpLabel
+%33 = OpCompositeExtract  %5  %23 0
+%34 = OpCompositeExtract  %5  %23 0
+%35 = OpIMul  %5  %33 %34
+%36 = OpIAdd  %5  %32 %35
+%37 = OpCompositeExtract  %5  %23 1
+%38 = OpCompositeExtract  %5  %23 1
+%39 = OpIMul  %5  %37 %38
+%31 = OpIAdd  %5  %36 %39
+%42 = OpCompositeExtract  %8  %25 0
+%43 = OpCompositeExtract  %8  %25 0
+%44 = OpIMul  %8  %42 %43
+%45 = OpIAdd  %8  %41 %44
+%46 = OpCompositeExtract  %8  %25 1
+%47 = OpCompositeExtract  %8  %25 1
+%48 = OpIMul  %8  %46 %47
+%49 = OpIAdd  %8  %45 %48
+%50 = OpCompositeExtract  %8  %25 2
+%51 = OpCompositeExtract  %8  %25 2
+%52 = OpIMul  %8  %50 %51
+%40 = OpIAdd  %8  %49 %52
+%54 = OpCompositeExtract  %5  %27 0
+%55 = OpCompositeExtract  %5  %29 0
+%56 = OpIMul  %5  %54 %55
+%57 = OpIAdd  %5  %32 %56
+%58 = OpCompositeExtract  %5  %27 1
+%59 = OpCompositeExtract  %5  %29 1
+%60 = OpIMul  %5  %58 %59
+%61 = OpIAdd  %5  %57 %60
+%62 = OpCompositeExtract  %5  %27 2
+%63 = OpCompositeExtract  %5  %29 2
+%64 = OpIMul  %5  %62 %63
+%65 = OpIAdd  %5  %61 %64
+%66 = OpCompositeExtract  %5  %27 3
+%67 = OpCompositeExtract  %5  %29 3
+%68 = OpIMul  %5  %66 %67
+%53 = OpIAdd  %5  %65 %68
+OpReturnValue %53
 OpFunctionEnd
-%73 = OpFunction  %2  None %74
+%70 = OpFunction  %2  None %71
+%69 = OpLabel
+OpBranch %72
 %72 = OpLabel
-OpBranch %75
-%75 = OpLabel
-%76 = OpFunctionCall  %3  %12
-%77 = OpFunctionCall  %5  %22
+%73 = OpFunctionCall  %3  %12
+%74 = OpFunctionCall  %5  %21
 OpReturn
 OpFunctionEnd

@@ -71,6 +71,7 @@ OpDecorate %62 Location 0
 %55 = OpTypeBool
 %62 = OpVariable  %26  Output
 %64 = OpConstant  %3  0.5
+%65 = OpConstantComposite  %5  %29 %64 %29 %64
 %27 = OpFunction  %2  None %28
 %17 = OpLabel
 %20 = OpLoad  %4  %18
@@ -113,9 +114,8 @@ OpReturn
 OpFunctionEnd
 %63 = OpFunction  %2  None %28
 %61 = OpLabel
-OpBranch %65
-%65 = OpLabel
-%66 = OpCompositeConstruct  %5  %29 %64 %29 %64
-OpStore %62 %66
+OpBranch %66
+%66 = OpLabel
+OpStore %62 %65
 OpReturn
 OpFunctionEnd

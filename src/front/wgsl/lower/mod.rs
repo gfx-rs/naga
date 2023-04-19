@@ -1185,11 +1185,19 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         }
                     };
 
+                    let (const_initializer, initializer) = {
+                        match initializer {
+                            Some(init) if ctx.naga_expressions.is_const(init) => (Some(init), None),
+                            Some(init) => (None, Some(init)),
+                            None => (None, None),
+                        }
+                    };
+
                     let var = ctx.variables.append(
                         crate::LocalVariable {
                             name: Some(v.name.name.to_string()),
                             ty,
-                            init: None,
+                            init: const_initializer,
                         },
                         stmt.span,
                     );

@@ -77,6 +77,7 @@ OpDecorate %28 BuiltIn Position
 %35 = OpTypePointer Uniform %10
 %37 = OpTypePointer Uniform %12
 %39 = OpConstant  %4  1.0
+%40 = OpConstantComposite  %13  %39 %39 %39 %39
 %42 = OpTypePointer Uniform %4
 %43 = OpConstant  %9  1
 %30 = OpFunction  %2  None %31
@@ -84,12 +85,11 @@ OpDecorate %28 BuiltIn Position
 %34 = OpAccessChain  %32  %18 %33
 %36 = OpAccessChain  %35  %21 %33
 %38 = OpAccessChain  %37  %24 %33
-OpBranch %40
-%40 = OpLabel
-%41 = OpCompositeConstruct  %13  %39 %39 %39 %39
+OpBranch %41
+%41 = OpLabel
 %44 = OpAccessChain  %42  %34 %43
 %45 = OpLoad  %4  %44
-%46 = OpVectorTimesScalar  %13  %41 %45
+%46 = OpVectorTimesScalar  %13  %40 %45
 %47 = OpAccessChain  %42  %36 %43
 %48 = OpLoad  %4  %47
 %49 = OpVectorTimesScalar  %13  %46 %48

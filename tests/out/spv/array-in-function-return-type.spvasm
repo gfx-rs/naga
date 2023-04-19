@@ -21,16 +21,16 @@ OpDecorate %19 Location 0
 %13 = OpTypeFunction %4
 %14 = OpConstant  %3  1.0
 %15 = OpConstant  %3  2.0
+%16 = OpConstantComposite  %4  %14 %15
 %20 = OpTypePointer Output %7
 %19 = OpVariable  %20  Output
 %22 = OpTypeFunction %2
 %23 = OpConstant  %3  0.0
 %12 = OpFunction  %4  None %13
 %11 = OpLabel
-OpBranch %16
-%16 = OpLabel
-%17 = OpCompositeConstruct  %4  %14 %15
-OpReturnValue %17
+OpBranch %17
+%17 = OpLabel
+OpReturnValue %16
 OpFunctionEnd
 %21 = OpFunction  %2  None %22
 %18 = OpLabel
