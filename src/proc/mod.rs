@@ -2,12 +2,14 @@
 [`Module`](super::Module) processing functionality.
 */
 
+mod constant_evaluator;
 pub mod index;
 mod layouter;
 mod namer;
 mod terminator;
 mod typifier;
 
+pub use constant_evaluator::{ConstantEvaluator, ConstantEvaluatorError};
 pub use index::{BoundsCheckPolicies, BoundsCheckPolicy, IndexableLength, IndexableLengthError};
 pub use layouter::{Alignment, LayoutError, LayoutErrorInner, Layouter, TypeLayout};
 pub use namer::{EntryPointIndex, NameKey, Namer};
@@ -589,29 +591,59 @@ impl GlobalCtx<'_> {
         handle: crate::Handle<crate::Expression>,
         arena: &crate::Arena<crate::Expression>,
     ) -> Result<u32, U32EvalError> {
+        match self.eval_expr_to_literal_from(handle, arena) {
+            Some(crate::Literal::U32(value)) => Ok(value),
+            Some(crate::Literal::I32(value)) => {
+                value.try_into().map_err(|_| U32EvalError::Negative)
+            }
+            _ => Err(U32EvalError::NonConst),
+        }
+    }
+
+    pub(crate) fn eval_expr_to_literal(
+        &self,
+        handle: crate::Handle<crate::Expression>,
+    ) -> Option<crate::Literal> {
+        self.eval_expr_to_literal_from(handle, self.const_expressions)
+    }
+
+    pub(crate) fn eval_expr_to_literal_from(
+        &self,
+        handle: crate::Handle<crate::Expression>,
+        arena: &crate::Arena<crate::Expression>,
+    ) -> Option<crate::Literal> {
         fn get(
             gctx: GlobalCtx,
             handle: crate::Handle<crate::Expression>,
             arena: &crate::Arena<crate::Expression>,
-        ) -> Result<u32, U32EvalError> {
-            match arena[handle] {
-                crate::Expression::Literal(crate::Literal::U32(value)) => Ok(value),
-                crate::Expression::Literal(crate::Literal::I32(value)) => {
-                    value.try_into().map_err(|_| U32EvalError::Negative)
-                }
-                crate::Expression::ZeroValue(ty)
-                    if matches!(
-                        gctx.types[ty].inner,
-                        crate::TypeInner::Scalar {
-                            kind: crate::ScalarKind::Sint | crate::ScalarKind::Uint,
-                            width: _
-                        }
-                    ) =>
-                {
-                    Ok(0)
-                }
-                _ => Err(U32EvalError::NonConst),
-            }
+        ) -> Option<crate::Literal> {
+            Some(match arena[handle] {
+                crate::Expression::Literal(literal) => literal,
+                crate::Expression::ZeroValue(ty) => match gctx.types[ty].inner {
+                    crate::TypeInner::Scalar {
+                        kind: crate::ScalarKind::Sint,
+                        width: 4,
+                    } => crate::Literal::I32(0),
+                    crate::TypeInner::Scalar {
+                        kind: crate::ScalarKind::Uint,
+                        width: 4,
+                    } => crate::Literal::U32(0),
+                    crate::TypeInner::Scalar {
+                        kind: crate::ScalarKind::Float,
+                        width: 4,
+                    } => crate::Literal::F32(0.0),
+                    crate::TypeInner::Scalar {
+                        kind: crate::ScalarKind::Float,
+                        width: 8,
+                    } => crate::Literal::F64(0.0),
+                    crate::TypeInner::Scalar {
+                        kind: crate::ScalarKind::Bool,
+                        width: 1,
+                    } => crate::Literal::Bool(false),
+                    _ => return None,
+                },
+                _ => return None,
+            })
         }
         match arena[handle] {
             crate::Expression::Constant(c) => {
