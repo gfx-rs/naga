@@ -170,6 +170,12 @@ impl super::Validator {
                     components.iter().map(|&handle| mod_info[handle].clone()),
                 )?;
             }
+            E::Splat { value, .. } => {
+                match *mod_info.const_expression_types[value.index()].inner_with(gctx.types) {
+                    crate::TypeInner::Scalar { .. } => {}
+                    _ => return Err(super::ConstExpressionError::InvalidSplatType(value)),
+                }
+            }
             _ => return Err(super::ConstExpressionError::NonConst),
         }
 

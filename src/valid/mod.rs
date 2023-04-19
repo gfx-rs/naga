@@ -186,6 +186,8 @@ pub enum ConstExpressionError {
     NonConst,
     #[error(transparent)]
     Compose(#[from] ComposeError),
+    #[error("Splatting {0:?} can't be done")]
+    InvalidSplatType(Handle<crate::Expression>),
     #[error("Type resolution failed")]
     Type(#[from] crate::proc::ResolveError),
 }
