@@ -1021,6 +1021,12 @@ impl ModuleInfo {
             }
         }
 
+        for (_, expr) in fun.local_variables.iter() {
+            if let Some(init) = expr.init {
+                let _ = info.add_ref(init);
+            }
+        }
+
         let uniformity = info.process_block(&fun.body, &self.functions, None, &fun.expressions)?;
         info.uniformity = uniformity.result;
         info.may_kill = uniformity.exit.contains(ExitFlags::MAY_KILL);
