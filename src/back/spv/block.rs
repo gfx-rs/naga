@@ -1405,8 +1405,8 @@ impl<'w> BlockContext<'w> {
     /// Emit any needed bounds-checking expressions to `block`.
     ///
     /// Some cases we need to generate a different return type than what the IR gives us.
-    /// This is because pointers to binding arrays don't exist in the IR, but we need to
-    /// create them to create an access chain in SPIRV.
+    /// This is because pointers to binding arrays of handles (such as images or samplers)
+    /// don't exist in the IR, but we need to create them to create an access chain in SPIRV.
     ///
     /// On success, the return value is an [`ExpressionPointer`] value; see the
     /// documentation for that type.

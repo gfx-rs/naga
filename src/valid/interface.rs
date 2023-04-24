@@ -401,6 +401,9 @@ impl super::Validator {
 
         log::debug!("var {:?}", var);
         let inner_ty = match types[var.ty].inner {
+            // A binding array is (mostly) supposed to behave the same as a
+            // series of individually bound resources, so we can (mostly)
+            // validate a `binding_array<T>` as if it were just a plain `T`.
             crate::TypeInner::BindingArray { base, .. } => base,
             _ => var.ty,
         };

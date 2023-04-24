@@ -1860,7 +1860,26 @@ fn function_returns_void() {
 #[test]
 fn binding_array_local() {
     check_validation! {
-        "fn f() { var x: binding_array<i32, 4>; }":
+        "fn f() { var x: binding_array<sampler, 4>; }":
         Err(_)
+    }
+}
+
+#[test]
+fn binding_array_private() {
+    check_validation! {
+        "var<private> x: binding_array<sampler, 4>;":
+        Err(_)
+    }
+}
+
+#[test]
+fn binding_array_non_struct() {
+    check_validation! {
+        "var<storage> x: binding_array<i32, 4>;":
+        Err(naga::valid::ValidationError::Type {
+            source: naga::valid::TypeError::BindingArrayBaseTypeNotStruct(_),
+            ..
+        })
     }
 }
