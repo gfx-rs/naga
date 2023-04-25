@@ -18,13 +18,13 @@ void main()
     int2 ftb_c = asint(firstbitlow((-1).xx));
     uint2 ftb_d = firstbitlow((1u).xx);
     uint ctz_a = min(32u, firstbitlow(0u));
-    int ctz_b = min(32, asint(firstbitlow(0)));
+    int ctz_b = asint(min(32u, firstbitlow(0)));
     uint ctz_c = min(32u, firstbitlow(4294967295u));
-    int ctz_d = min(32, asint(firstbitlow(-1)));
+    int ctz_d = asint(min(32u, firstbitlow(-1)));
     uint2 ctz_e = min((32u).xx, firstbitlow((0u).xx));
-    int2 ctz_f = min((32).xx, asint(firstbitlow((0).xx)));
+    int2 ctz_f = asint(min((32u).xx, firstbitlow((0).xx)));
     uint2 ctz_g = min((32u).xx, firstbitlow((1u).xx));
-    int2 ctz_h = min((32).xx, asint(firstbitlow((1).xx)));
+    int2 ctz_h = asint(min((32u).xx, firstbitlow((1).xx)));
     int clz_a = (-1 < 0 ? 0 : 31 - asint(firstbithigh(-1)));
     uint clz_b = (31u - firstbithigh(1u));
     int2 _expr58 = (-1).xx;

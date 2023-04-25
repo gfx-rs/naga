@@ -2737,7 +2737,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                                     self.write_expr(module, arg, func_ctx)?;
                                     write!(self.out, "))")?;
                                 } else {
-                                    write!(self.out, "min((32){s}, asint(firstbitlow(")?;
+                                    write!(self.out, "asint(min((32u){s}, firstbitlow(")?;
                                     self.write_expr(module, arg, func_ctx)?;
                                     write!(self.out, ")))")?;
                                 }
@@ -2748,7 +2748,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                                     self.write_expr(module, arg, func_ctx)?;
                                     write!(self.out, "))")?;
                                 } else {
-                                    write!(self.out, "min(32, asint(firstbitlow(")?;
+                                    write!(self.out, "asint(min(32u, firstbitlow(")?;
                                     self.write_expr(module, arg, func_ctx)?;
                                     write!(self.out, ")))")?;
                                 }
