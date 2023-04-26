@@ -564,7 +564,7 @@ pub fn emit_annotated_error<E: Error>(ann_err: &WithSpan<E>, filename: &str, sou
         .unwrap()
         // NOTE: `replace` is intended to correct the alignment of multi-line messages against the
         // `error: ` prefix, which is 7 characters.
-        .replace("\n", "\n       ");
+        .replace('\n', "\n       ");
     let diagnostic = Diagnostic::error().with_message(msg).with_labels(
         ann_err
             .spans()
