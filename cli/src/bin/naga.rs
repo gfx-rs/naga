@@ -166,7 +166,7 @@ fn print_err(error: &dyn Error) {
 
     let mut e = error.source();
     if e.is_some() {
-        eprintln!(": ");
+        eprintln!(":");
     } else {
         eprintln!();
     }
