@@ -1,7 +1,13 @@
 #![allow(clippy::manual_strip)]
 #[allow(unused_imports)]
 use std::fs;
-use std::{error::Error, fmt, io::Read, path::Path, str::FromStr};
+use std::{
+    error::Error,
+    fmt,
+    io::{stderr, Read, Write},
+    path::Path,
+    str::FromStr,
+};
 
 /// Translate shaders to different formats.
 #[derive(argh::FromArgs, Debug, Clone)]
@@ -161,18 +167,18 @@ trait PrettyResult {
     fn unwrap_pretty(self) -> Self::Target;
 }
 
-fn print_err(error: &dyn Error) {
-    eprint!("{error}");
+fn print_err(out: &mut dyn Write, error: &dyn Error) {
+    write!(out, "{error}").unwrap();
 
     let mut e = error.source();
     if e.is_some() {
-        eprintln!(":");
+        writeln!(out, ":").unwrap();
     } else {
-        eprintln!();
+        writeln!(out).unwrap();
     }
 
     while let Some(source) = e {
-        eprintln!("        {source}");
+        writeln!(out, "        {source}").unwrap();
         e = source.source();
     }
 }
@@ -183,7 +189,7 @@ impl<T, E: Error> PrettyResult for Result<T, E> {
         match self {
             Result::Ok(value) => value,
             Result::Err(error) => {
-                print_err(&error);
+                print_err(&mut stderr().lock(), &error);
                 std::process::exit(1);
             }
         }
@@ -192,7 +198,7 @@ impl<T, E: Error> PrettyResult for Result<T, E> {
 
 fn main() {
     if let Err(e) = run() {
-        print_err(e.as_ref());
+        print_err(&mut stderr().lock(), e.as_ref());
         std::process::exit(1);
     }
 }
@@ -340,7 +346,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 let filename = input_path.file_name().and_then(std::ffi::OsStr::to_str);
                 emit_annotated_error(&error, filename.unwrap_or("input"), &input);
             }
-            print_err(&error);
+            print_err(&mut stderr().lock(), &error);
             None
         }
     };
@@ -362,8 +368,6 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             .ok_or(CliError("Output filename not valid unicode"))?
         {
             "txt" => {
-                use std::io::Write;
-
                 let mut file = fs::File::create(output_path)?;
                 writeln!(file, "{module:#?}")?;
                 if let Some(ref info) = info {
