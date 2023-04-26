@@ -345,8 +345,9 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             if let Some(input) = input_text {
                 let filename = input_path.file_name().and_then(std::ffi::OsStr::to_str);
                 emit_annotated_error(&error, filename.unwrap_or("input"), &input);
+            } else {
+                print_err(&mut stderr().lock(), &error);
             }
-            print_err(&mut stderr().lock(), &error);
             None
         }
     };
@@ -557,7 +558,14 @@ pub fn emit_annotated_error<E: Error>(ann_err: &WithSpan<E>, filename: &str, sou
     let config = codespan_reporting::term::Config::default();
     let writer = StandardStream::stderr(ColorChoice::Auto);
 
-    let diagnostic = Diagnostic::error().with_labels(
+    let mut msg_buf = Vec::new();
+    print_err(&mut msg_buf, ann_err);
+    let msg = String::from_utf8(msg_buf)
+        .unwrap()
+        // NOTE: `replace` is intended to correct the alignment of multi-line messages against the
+        // `error: ` prefix, which is 7 characters.
+        .replace("\n", "\n       ");
+    let diagnostic = Diagnostic::error().with_message(msg).with_labels(
         ann_err
             .spans()
             .map(|(span, desc)| {
