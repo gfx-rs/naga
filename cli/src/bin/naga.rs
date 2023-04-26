@@ -172,7 +172,7 @@ fn print_err(error: &dyn Error) {
     }
 
     while let Some(source) = e {
-        eprintln!("\t{source}");
+        eprintln!("        {source}");
         e = source.source();
     }
 }
