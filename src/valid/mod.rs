@@ -211,7 +211,7 @@ pub enum ValidationError {
         name: String,
         source: FunctionError,
     },
-    #[error("Entry point {name} at {stage:?} is invalid")]
+    #[error("Entry point '{name}' at {stage:?} is invalid")]
     EntryPoint {
         stage: crate::ShaderStage,
         name: String,
