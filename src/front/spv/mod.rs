@@ -506,7 +506,7 @@ struct BlockContext<'function> {
     /// Constants arena of the module being processed
     const_arena: &'function mut Arena<crate::Constant>,
     /// Type arena of the module being processed
-    type_arena: &'function UniqueArena<crate::Type>,
+    type_arena: &'function mut UniqueArena<crate::Type>,
     /// Global arena of the module being processed
     global_arena: &'function Arena<crate::GlobalVariable>,
     /// Arguments of the function currently being processed

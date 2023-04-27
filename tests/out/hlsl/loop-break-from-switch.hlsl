@@ -8,16 +8,23 @@ struct FragmentInput_main {
 
 void function()
 {
+    bool local = false;
+
     int _expr8 = global;
     while(true) {
         switch(_expr8) {
             case 0: {
                 global_1 = 0;
+                local = true;
                 break;
             }
             default: {
                 break;
             }
+        }
+        bool _expr11 = local;
+        if (_expr11) {
+            break;
         }
         global_1 = -9;
         break;
