@@ -577,10 +577,19 @@ impl<'function> BlockContext<'function> {
 
     /// Consumes the `BlockContext` producing a Ir [`Block`](crate::Block)
     fn lower(mut self) -> crate::Block {
+        /// Helper type used for tracking the control-flow constructs which
+        /// support the [`Statement::Break`](crate::Statement::Break) syntax.
+        #[derive(Copy, Clone, Debug)]
+        enum Breakable {
+            Loop,
+            Switch,
+        }
+
         fn lower_impl(
             blocks: &mut crate::FastHashMap<spirv::Word, crate::Block>,
             bodies: &[super::Body],
             body_idx: BodyIndex,
+            innermost_breakable: Option<Breakable>,
         ) -> crate::Block {
             let mut block = crate::Block::new();
 
@@ -592,8 +601,8 @@ impl<'function> BlockContext<'function> {
                         accept,
                         reject,
                     } => {
-                        let accept = lower_impl(blocks, bodies, accept);
-                        let reject = lower_impl(blocks, bodies, reject);
+                        let accept = lower_impl(blocks, bodies, accept, innermost_breakable);
+                        let reject = lower_impl(blocks, bodies, reject, innermost_breakable);
 
                         block.push(
                             crate::Statement::If {
@@ -609,8 +618,12 @@ impl<'function> BlockContext<'function> {
                         continuing,
                         break_if,
                     } => {
-                        let body = lower_impl(blocks, bodies, body);
-                        let continuing = lower_impl(blocks, bodies, continuing);
+                        let body = lower_impl(blocks, bodies, body, Some(Breakable::Loop));
+                        // NOTE(eddyb) the `continuing {...}` block cannot `break`,
+                        // but this is checked in the validator, and so it's allowed
+                        // here (where we could only panic, which is worse UX).
+                        let continuing =
+                            lower_impl(blocks, bodies, continuing, Some(Breakable::Loop));
 
                         block.push(
                             crate::Statement::Loop {
@@ -629,7 +642,8 @@ impl<'function> BlockContext<'function> {
                         let mut ir_cases: Vec<_> = cases
                             .iter()
                             .map(|&(value, body_idx)| {
-                                let body = lower_impl(blocks, bodies, body_idx);
+                                let body =
+                                    lower_impl(blocks, bodies, body_idx, Some(Breakable::Switch));
 
                                 // Handle simple cases that would make a fallthrough statement unreachable code
                                 let fall_through = body.last().map_or(true, |s| !s.is_terminator());
@@ -643,7 +657,7 @@ impl<'function> BlockContext<'function> {
                             .collect();
                         ir_cases.push(crate::SwitchCase {
                             value: crate::SwitchValue::Default,
-                            body: lower_impl(blocks, bodies, default),
+                            body: lower_impl(blocks, bodies, default, Some(Breakable::Switch)),
                             fall_through: false,
                         });
 
@@ -655,11 +669,27 @@ impl<'function> BlockContext<'function> {
                             crate::Span::default(),
                         )
                     }
-                    super::BodyFragment::Break => {
-                        block.push(crate::Statement::Break, crate::Span::default())
-                    }
                     super::BodyFragment::Continue => {
                         block.push(crate::Statement::Continue, crate::Span::default())
+                    }
+                    super::BodyFragment::LoopBreak => {
+                        match innermost_breakable.expect("stray loop `break`") {
+                            Breakable::Loop => {}
+                            Breakable::Switch => {
+                                unimplemented!("loop `break` from nested switch")
+                            }
+                        }
+                        assert!(matches!(innermost_breakable.unwrap(), Breakable::Loop), "");
+                        block.push(crate::Statement::Break, crate::Span::default())
+                    }
+                    super::BodyFragment::SwitchBreak => {
+                        match innermost_breakable.expect("stray switch `break`") {
+                            Breakable::Loop => {
+                                unreachable!("switch `break` from nested loop")
+                            }
+                            Breakable::Switch => {}
+                        }
+                        block.push(crate::Statement::Break, crate::Span::default())
                     }
                 }
             }
@@ -667,6 +697,6 @@ impl<'function> BlockContext<'function> {
             block
         }
 
-        lower_impl(&mut self.blocks, &self.bodies, 0)
+        lower_impl(&mut self.blocks, &self.bodies, 0, None)
     }
 }

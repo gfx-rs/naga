@@ -399,8 +399,9 @@ enum BodyFragment {
         cases: Vec<(i32, BodyIndex)>,
         default: BodyIndex,
     },
-    Break,
     Continue,
+    LoopBreak,
+    SwitchBreak,
 }
 
 /// An intermediate representation of a Naga [`Block`].
@@ -1251,9 +1252,8 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
         fn merger(body: &mut Body, target: &MergeBlockInformation) {
             body.data.push(match *target {
                 MergeBlockInformation::LoopContinue => BodyFragment::Continue,
-                MergeBlockInformation::LoopMerge | MergeBlockInformation::SwitchMerge => {
-                    BodyFragment::Break
-                }
+                MergeBlockInformation::LoopMerge => BodyFragment::LoopBreak,
+                MergeBlockInformation::SwitchMerge => BodyFragment::SwitchBreak,
 
                 // Finishing a selection merge means just falling off the end of
                 // the `accept` or `reject` block of the `If` statement.
