@@ -251,8 +251,7 @@ impl<'source> ParsingContext<'source> {
             } else if ctx.external {
                 init.and_then(|expr| ctx.ctx.lift_up_const_expression(expr).ok())
             } else {
-                None
-                // init.filter(|expr| ctx.ctx.expressions.is_const(*expr))
+                init.filter(|expr| ctx.ctx.expressions.is_const(*expr))
             };
 
             let pointer = ctx.add_var(frontend, ty, name, maybe_const_expr, meta)?;
