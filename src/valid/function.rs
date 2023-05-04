@@ -833,12 +833,12 @@ impl super::Validator {
                     stages &= super::ShaderStages::COMPUTE;
                     let pointer_inner =
                         context.resolve_type(pointer, &self.valid_expression_set)?;
-                    match pointer_inner {
-                        &Ti::Pointer {
+                    match *pointer_inner {
+                        Ti::Pointer {
                             space: AddressSpace::WorkGroup,
                             ..
                         } => {}
-                        &Ti::ValuePointer {
+                        Ti::ValuePointer {
                             space: AddressSpace::WorkGroup,
                             ..
                         } => {}
