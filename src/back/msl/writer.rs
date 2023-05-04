@@ -2817,7 +2817,7 @@ impl<W: Write> Writer<W> {
                     writeln!(self.out, ";")?;
                 }
                 crate::Statement::WorkGroupUniformLoad { pointer, result } => {
-                    self.write_barrier(crate::Barrier::WORK_GROUP, level);
+                    self.write_barrier(crate::Barrier::WORK_GROUP, level)?;
 
                     write!(self.out, "{level}")?;
                     let name = self.namer.call("");
@@ -2826,7 +2826,7 @@ impl<W: Write> Writer<W> {
                     self.named_expressions.insert(result, name);
 
                     writeln!(self.out, ";")?;
-                    self.write_barrier(crate::Barrier::WORK_GROUP, level);
+                    self.write_barrier(crate::Barrier::WORK_GROUP, level)?;
                 }
                 crate::Statement::RayQuery { query, ref fun } => {
                     match *fun {

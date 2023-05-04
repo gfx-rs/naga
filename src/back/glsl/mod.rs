@@ -2129,13 +2129,13 @@ impl<'a, W: Write> Writer<'a, W> {
                 // GLSL doesn't have pointers, which means that this backend needs to ensure that
                 // the actual "loading" is happening between the two barriers.
                 // This is done in `Emit` by never emitting a variable name for pointer variables
-                self.write_barrier(crate::Barrier::WORK_GROUP, level);
+                self.write_barrier(crate::Barrier::WORK_GROUP, level)?;
 
                 let result_name = format!("{}{}", back::BAKE_PREFIX, result.index());
                 // Expressions cannot have side effects, so just writing the expression here is fine.
-                self.write_named_expr(pointer, result_name, result, ctx);
+                self.write_named_expr(pointer, result_name, result, ctx)?;
 
-                self.write_barrier(crate::Barrier::WORK_GROUP, level);
+                self.write_barrier(crate::Barrier::WORK_GROUP, level)?;
             }
             // Stores a value into an image.
             Statement::ImageStore {

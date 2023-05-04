@@ -1904,11 +1904,11 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 self.named_expressions.insert(result, res_name);
             }
             Statement::WorkGroupUniformLoad { pointer, result } => {
-                self.write_barrier(crate::Barrier::WORK_GROUP, level);
+                self.write_barrier(crate::Barrier::WORK_GROUP, level)?;
                 let name = format!("_expr{}", result.index());
-                self.write_named_expr(module, pointer, name, result, func_ctx);
+                self.write_named_expr(module, pointer, name, result, func_ctx)?;
 
-                self.write_barrier(crate::Barrier::WORK_GROUP, level);
+                self.write_barrier(crate::Barrier::WORK_GROUP, level)?;
             }
             Statement::Switch {
                 selector,

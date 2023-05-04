@@ -783,14 +783,14 @@ impl<W: Write> Writer<W> {
                 writeln!(self.out, ");")?
             }
             Statement::WorkGroupUniformLoad { pointer, result } => {
-                write!(self.out, "{level}");
+                write!(self.out, "{level}")?;
                 // TODO: Obey named expressions here.
                 let res_name = format!("{}{}", back::BAKE_PREFIX, result.index());
-                self.start_named_expr(module, result, func_ctx, &res_name);
+                self.start_named_expr(module, result, func_ctx, &res_name)?;
                 self.named_expressions.insert(result, res_name);
-                write!(self.out, "workgroupUniformLoad(");
+                write!(self.out, "workgroupUniformLoad(")?;
                 self.write_expr(module, pointer, func_ctx)?;
-                writeln!(self.out, ");");
+                writeln!(self.out, ");")?;
             }
             Statement::ImageStore {
                 image,

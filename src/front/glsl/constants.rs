@@ -291,6 +291,7 @@ impl<'a> ConstantSolver<'a> {
             Expression::Derivative { .. } => Err(ConstantSolvingError::Derivative),
             Expression::Relational { .. } => Err(ConstantSolvingError::Relational),
             Expression::CallResult { .. } => Err(ConstantSolvingError::Call),
+            Expression::WorkGroupUniformLoadResult { .. } => unreachable!(),
             Expression::AtomicResult { .. } => Err(ConstantSolvingError::Atomic),
             Expression::FunctionArgument(_) => Err(ConstantSolvingError::FunctionArg),
             Expression::GlobalVariable(_) => Err(ConstantSolvingError::GlobalVariable),
