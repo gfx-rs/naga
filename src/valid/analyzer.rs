@@ -694,7 +694,7 @@ impl FunctionInfo {
                 // The result of WorkGroupUniformLoad is always uniform by definition
                 non_uniform_result: None,
                 // The call is what cares about uniformity, not the expression
-                // This expression is never emitted, so this requirement should never be used anyway (?
+                // This expression is never emitted, so this requirement should never be used anyway?
                 requirements: UniformityRequirements::empty(),
             },
             E::ArrayLength(expr) => Uniformity {

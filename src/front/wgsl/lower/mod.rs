@@ -1771,6 +1771,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                             args.finish()?;
 
                             let pointer = self.expression(expr, ctx.reborrow())?;
+                            ctx.grow_types(pointer)?;
                             let result_ty = match *ctx.resolved_inner(pointer) {
                                 crate::TypeInner::Pointer {
                                     base,

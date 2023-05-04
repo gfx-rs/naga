@@ -834,11 +834,11 @@ impl super::Validator {
                     let pointer_inner =
                         context.resolve_type(pointer, &self.valid_expression_set)?;
                     match pointer_inner {
-                        Ti::Pointer {
+                        &Ti::Pointer {
                             space: AddressSpace::WorkGroup,
                             ..
                         } => {}
-                        Ti::ValuePointer {
+                        &Ti::ValuePointer {
                             space: AddressSpace::WorkGroup,
                             ..
                         } => {}
@@ -849,7 +849,7 @@ impl super::Validator {
                     }
                     self.emit_expression(result, context)?;
                     let ty = match &context.expressions[result] {
-                        crate::Expression::WorkGroupUniformLoadResult { ty } => ty,
+                        &crate::Expression::WorkGroupUniformLoadResult { ty } => ty,
                         _ => {
                             return Err(FunctionError::WorkgroupUniformLoadExpressionMismatch(
                                 result,
@@ -858,10 +858,10 @@ impl super::Validator {
                         }
                     };
                     let expected_pointer_inner = Ti::Pointer {
-                        base: *ty,
+                        base: ty,
                         space: AddressSpace::WorkGroup,
                     };
-                    if !expected_pointer_inner.equivalent(pointer_inner, &context.types) {
+                    if !expected_pointer_inner.equivalent(pointer_inner, context.types) {
                         return Err(FunctionError::WorkgroupUniformLoadInvalidPointer(pointer)
                             .with_span_static(span, "WorkGroupUniformLoad"));
                     }

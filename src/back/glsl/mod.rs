@@ -3736,7 +3736,7 @@ impl<'a, W: Write> Writer<'a, W> {
         named: Handle<crate::Expression>,
         ctx: &back::FunctionCtx,
     ) -> BackendResult {
-        match ctx.info[handle].ty {
+        match ctx.info[named].ty {
             proc::TypeResolution::Handle(ty_handle) => match self.module.types[ty_handle].inner {
                 TypeInner::Struct { .. } => {
                     let ty_name = &self.names[&NameKey::Type(ty_handle)];
@@ -3751,7 +3751,7 @@ impl<'a, W: Write> Writer<'a, W> {
             }
         }
 
-        let base_ty_res = &ctx.info[handle].ty;
+        let base_ty_res = &ctx.info[named].ty;
         let resolved = base_ty_res.inner_with(&self.module.types);
 
         write!(self.out, " {name}")?;
