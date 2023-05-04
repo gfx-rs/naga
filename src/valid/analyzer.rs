@@ -740,7 +740,7 @@ impl FunctionInfo {
         use crate::Statement as S;
 
         let mut combined_uniformity = FunctionUniformity::new();
-        for (statement, span) in statements.span_iter() {
+        for statement in statements {
             let uniformity = match *statement {
                 S::Emit(ref range) => {
                     let mut requirements = UniformityRequirements::empty();
@@ -783,8 +783,10 @@ impl FunctionInfo {
                     },
                     exit: ExitFlags::empty(),
                 },
-                S::WorkGroupUniformLoad { pointer, .. } => {
-                    #[cfg(feature = "validate")]
+                S::WorkGroupUniformLoad { .. } => {
+                    // We choose not to check that this occurs in what we believe to be a uniform condition
+                    // because our definition includes some blocks which are actually uniform (by the WGSL spec)
+                    /* #[cfg(feature = "validate")]
                     if self
                         .flags
                         .contains(super::ValidationFlags::CONTROL_FLOW_UNIFORMITY)
@@ -796,7 +798,7 @@ impl FunctionInfo {
                             return Err(FunctionError::NonUniformWorkgroupUniformLoad(cause)
                                 .with_span_static(*span, "WorkGroupUniformLoad"));
                         }
-                    }
+                    } */
                     FunctionUniformity {
                         result: Uniformity {
                             non_uniform_result: None,
