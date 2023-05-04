@@ -2132,6 +2132,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 self.write_barrier(crate::Barrier::WORK_GROUP, level)?;
 
                 let result_name = format!("{}{}", back::BAKE_PREFIX, result.index());
+                write!(self.out, "{level}")?;
                 // Expressions cannot have side effects, so just writing the expression here is fine.
                 self.write_named_expr(pointer, result_name, result, ctx)?;
 

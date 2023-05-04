@@ -17,7 +17,7 @@ void main() {
     uvec3 workgroup_id = gl_WorkGroupID;
     memoryBarrierShared();
     barrier();
-int _e4 = arr_i32_[workgroup_id.x];
+    int _e4 = arr_i32_[workgroup_id.x];
     memoryBarrierShared();
     barrier();
     if ((_e4 > 10)) {
