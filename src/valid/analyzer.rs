@@ -783,7 +783,9 @@ impl FunctionInfo {
                     },
                     exit: ExitFlags::empty(),
                 },
-                S::WorkGroupUniformLoad { .. } => {
+                S::WorkGroupUniformLoad { pointer, .. } => {
+                    let _condition_nur = self.add_ref(pointer);
+
                     // We choose not to check that this occurs in what we believe to be a uniform condition
                     // because our definition includes some blocks which are actually uniform (by the WGSL spec)
                     /* #[cfg(feature = "validate")]
