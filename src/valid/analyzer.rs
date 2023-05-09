@@ -786,8 +786,11 @@ impl FunctionInfo {
                 S::WorkGroupUniformLoad { pointer, .. } => {
                     let _condition_nur = self.add_ref(pointer);
 
-                    // We choose not to check that this occurs in what we believe to be a uniform condition
-                    // because our definition includes some blocks which are actually uniform (by the WGSL spec)
+                    // Don't check that this call occurs in uniform control flow until Naga implements WGSL's standard
+                    // uniformity analysis (https://github.com/gfx-rs/naga/issues/1744).
+                    // The uniformity analysis Naga uses now is less accurate than the one in the WGSL standard,
+                    // causing Naga to reject correct uses of `workgroupUniformLoad` in some interesting programs.
+
                     /* #[cfg(feature = "validate")]
                     if self
                         .flags
