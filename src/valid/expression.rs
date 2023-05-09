@@ -118,7 +118,7 @@ pub enum ExpressionError {
     InvalidArgumentType(crate::MathFunction, u32, Handle<crate::Expression>),
     #[error("Atomic result type can't be {0:?}")]
     InvalidAtomicResultType(Handle<crate::Type>),
-    #[error("Atomic result type can't be {0:?}. It must be not contain any atomic values")]
+    #[error("workgroupUniformLoad result type can't be {0:?}. It can only be a constructible type.")]
     InvalidWorkGroupUniformLoadResultType(Handle<crate::Type>),
     #[error("Shader requires capability {0:?}")]
     MissingCapabilities(super::Capabilities),
