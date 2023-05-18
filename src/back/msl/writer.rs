@@ -3020,7 +3020,7 @@ impl<W: Write> Writer<W> {
     ) -> Result<TranslationInfo, Error> {
         self.names.clear();
         self.namer
-            .reset(module, super::keywords::RESERVED, &[], &mut self.names);
+            .reset(module, super::keywords::RESERVED, &[], &[], &mut self.names);
         self.struct_member_pads.clear();
 
         writeln!(

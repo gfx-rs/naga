@@ -1,5 +1,6 @@
 use crate::{arena::Handle, FastHashMap, FastHashSet};
 use std::borrow::Cow;
+use unicase::UniCase;
 
 pub type EntryPointIndex = u16;
 const SEPARATOR: char = '_';
@@ -25,6 +26,7 @@ pub struct Namer {
     /// The last numeric suffix used for each base name. Zero means "no suffix".
     unique: FastHashMap<String, u32>,
     keywords: FastHashSet<String>,
+    keywords_case_insensitive: FastHashSet<UniCase<String>>,
     reserved_prefixes: Vec<String>,
 }
 
@@ -102,7 +104,12 @@ impl Namer {
             }
             None => {
                 let mut suffixed = base.to_string();
-                if base.ends_with(char::is_numeric) || self.keywords.contains(base.as_ref()) {
+                if base.ends_with(char::is_numeric)
+                    || self.keywords.contains(base.as_ref())
+                    || self
+                        .keywords_case_insensitive
+                        .contains(&base.as_ref().into())
+                {
                     suffixed.push(SEPARATOR);
                 }
                 debug_assert!(!self.keywords.contains(&suffixed));
@@ -137,6 +144,7 @@ impl Namer {
         &mut self,
         module: &crate::Module,
         reserved_keywords: &[&str],
+        reserved_keywords_case_insensitive: &[&str],
         reserved_prefixes: &[&str],
         output: &mut FastHashMap<NameKey, String>,
     ) {
@@ -148,6 +156,14 @@ impl Namer {
         self.keywords.clear();
         self.keywords
             .extend(reserved_keywords.iter().map(|string| (string.to_string())));
+
+        self.keywords_case_insensitive.clear();
+        self.keywords_case_insensitive.extend(
+            reserved_keywords_case_insensitive
+                .iter()
+                .map(|string| (UniCase::new(string.to_string()))),
+        );
+
         let mut temp = String::new();
 
         for (ty_handle, ty) in module.types.iter() {
