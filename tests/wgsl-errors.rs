@@ -1884,7 +1884,7 @@ fn function_returns_void() {
 }
 
 #[test]
-fn function_param_redefinition() {
+fn function_param_redefinition_as_param() {
     check(
         "
         fn x(a: f32, a: vec2<f32>) {}
@@ -1896,6 +1896,26 @@ fn function_param_redefinition() {
   │              ^       ^ redefinition of `a`
   │              │        
   │              previous definition of `a`
+
+"###,
+    )
+}
+
+#[test]
+fn function_param_redefinition_as_local() {
+    check(
+        "
+        fn x(a: f32) {
+			let a = 0.0;
+		}
+    ",
+        r###"error: redefinition of `a`
+  ┌─ wgsl:2:14
+  │
+2 │         fn x(a: f32) {
+  │              ^ previous definition of `a`
+3 │             let a = 0.0;
+  │                 ^ redefinition of `a`
 
 "###,
     )

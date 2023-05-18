@@ -2011,15 +2011,15 @@ impl Parser {
         ctx.local_table.push_scope();
 
         lexer.expect(Token::Paren('{'))?;
-        let mut statements = ast::Block::default();
+        let mut block = ast::Block::default();
         while !lexer.skip(Token::Paren('}')) {
-            self.statement(lexer, ctx.reborrow(), &mut statements)?;
+            self.statement(lexer, ctx.reborrow(), &mut block)?;
         }
 
         ctx.local_table.pop_scope();
 
         let span = self.pop_rule_span(lexer);
-        Ok((statements, span))
+        Ok((block, span))
     }
 
     fn varying_binding<'a>(
@@ -2058,6 +2058,9 @@ impl Parser {
             unresolved: dependencies,
         };
 
+        // start a scope that contains arguments as well as the function body
+        ctx.local_table.push_scope();
+
         // read parameter list
         let mut arguments = Vec::new();
         lexer.expect(Token::Paren('('))?;
@@ -2094,8 +2097,14 @@ impl Parser {
             None
         };
 
-        // read body
-        let body = self.block(lexer, ctx)?.0;
+        // do not use `self.block` here, since we must not push a new scope
+        lexer.expect(Token::Paren('{'))?;
+        let mut body = ast::Block::default();
+        while !lexer.skip(Token::Paren('}')) {
+            self.statement(lexer, ctx.reborrow(), &mut body)?;
+        }
+
+        ctx.local_table.pop_scope();
 
         let fun = ast::Function {
             entry_point: None,
