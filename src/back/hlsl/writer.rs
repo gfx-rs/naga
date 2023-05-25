@@ -126,7 +126,17 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     crate::MathFunction::Asinh
                     | crate::MathFunction::Acosh
                     | crate::MathFunction::Atanh
-                    | crate::MathFunction::Unpack2x16float => {
+                    | crate::MathFunction::Unpack2x16float
+                    | crate::MathFunction::Unpack2x16snorm
+                    | crate::MathFunction::Unpack2x16unorm
+                    | crate::MathFunction::Unpack4x8snorm
+                    | crate::MathFunction::Unpack4x8unorm
+                    // TODO: These use multiple args, unsure how to bake them
+                    | crate::MathFunction::Pack2x16float
+                    | crate::MathFunction::Pack2x16snorm
+                    | crate::MathFunction::Pack2x16unorm
+                    | crate::MathFunction::Pack4x8snorm
+                    | crate::MathFunction::Pack4x8unorm => {
                         self.need_bake_expressions.insert(arg);
                     }
                     crate::MathFunction::CountLeadingZeros => {
@@ -2590,7 +2600,10 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 enum Function {
                     Asincosh { is_sin: bool },
                     Atanh,
+                    Pack2x16float,
+                    PackBits { signed: bool, dims: u32, scale: f32 },
                     Unpack2x16float,
+                    UnpackBits { signed: bool, dims: u32, scale: f32 },
                     Regular(&'static str),
                     MissingIntOverload(&'static str),
                     MissingIntReturnType(&'static str),
@@ -2664,7 +2677,18 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     Mf::ReverseBits => Function::MissingIntOverload("reversebits"),
                     Mf::FindLsb => Function::MissingIntReturnType("firstbitlow"),
                     Mf::FindMsb => Function::MissingIntReturnType("firstbithigh"),
+                    // Data Packing
+                    Mf::Pack2x16float => Function::Pack2x16float,
+                    // Mf::Pack2x16snorm => Function::PackBits { signed: true, dims: 2, scale: 32767.0 },
+                    Mf::Pack2x16unorm => Function::PackBits { signed: false, dims: 2, scale: 65535.0 },
+                    // Mf::Pack4x8snorm => Function::PackBits { signed: true, dims: 4, scale: 127.0 },
+                    Mf::Pack4x8unorm => Function::PackBits { signed: false, dims: 4, scale: 255.0 },
+                    // Data Unpacking
                     Mf::Unpack2x16float => Function::Unpack2x16float,
+                    // Mf::Unpack2x16snorm => Function::UnpackBits { signed: true, dims: 2, scale: 32767.0 },
+                    Mf::Unpack2x16unorm => Function::UnpackBits { signed: false, dims: 2, scale: 65535.0 },
+                    // Mf::Unpack4x8snorm => Function::UnpackBits { signed: true, dims: 4, scale: 127.0 },
+                    Mf::Unpack4x8unorm => Function::UnpackBits { signed: false, dims: 4, scale: 255.0 },
                     _ => return Err(Error::Unimplemented(format!("write_expr_math {fun:?}"))),
                 };
 
@@ -2688,12 +2712,67 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         self.write_expr(module, arg, func_ctx)?;
                         write!(self.out, "))")?;
                     }
+                    Function::Pack2x16float => {
+                        write!(self.out, "f32tof16(")?;
+                        self.write_expr(module, arg, func_ctx)?;
+                        write!(self.out, ") | (f32tof16(")?;
+                        if let Some(arg) = arg1 {
+                            self.write_expr(module, arg, func_ctx)?;
+                        }
+                        write!(self.out, ") << 16)")?;
+                    }
+                    Function::PackBits { signed, dims, scale } => {
+                        if dims == 4 {
+                            write!(self.out, "uint((f32(clamp(")?;
+                            self.write_expr(module, arg, func_ctx)?;
+                            write!(self.out, ", 0, 1) * {scale}) + 0.5) | (f32(clamp(")?;
+                            if let Some(arg) = arg1 {
+                                self.write_expr(module, arg, func_ctx)?;
+                            }
+                            write!(self.out, ", 0, 1) * {scale}) + 0.5) << 8 | (f32(clamp(")?;
+                            if let Some(arg) = arg2 {
+                                self.write_expr(module, arg, func_ctx)?;
+                            }
+                            write!(self.out, ", 0, 1) * {scale}) + 0.5) << 16 | (f32(clamp(")?;
+                            if let Some(arg) = arg3 {
+                                self.write_expr(module, arg, func_ctx)?;
+                            }
+                            write!(self.out, ", 0, 1) * {scale}) + 0.5) << 24))")?;
+                        } else if dims == 2 {
+                            write!(self.out, "uint((f32(clamp(")?;
+                            self.write_expr(module, arg, func_ctx)?;
+                            write!(self.out, ", 0, 1) * {scale}) + 0.5) | (f32(clamp(")?;
+                            if let Some(arg) = arg1 {
+                                self.write_expr(module, arg, func_ctx)?;
+                            }
+                            write!(self.out, ", 0, 1) * {scale}) + 0.5) << 16))")?;
+                        }
+                    }
                     Function::Unpack2x16float => {
                         write!(self.out, "float2(f16tof32(")?;
                         self.write_expr(module, arg, func_ctx)?;
                         write!(self.out, "), f16tof32((")?;
                         self.write_expr(module, arg, func_ctx)?;
                         write!(self.out, ") >> 16))")?;
+                    }
+                    Function::UnpackBits { signed, dims, scale } => {
+                        if dims == 4 {
+                            write!(self.out, "float4(float(")?;
+                            self.write_expr(module, arg, func_ctx)?;
+                            write!(self.out, "& 0xff) / {scale}, float(")?;
+                            self.write_expr(module, arg, func_ctx)?;
+                            write!(self.out, ">> 8 & 0xff) / {scale}, float(")?;
+                            self.write_expr(module, arg, func_ctx)?;
+                            write!(self.out, ">> 16 & 0xff) / {scale}, float(")?;
+                            self.write_expr(module, arg, func_ctx)?;
+                            write!(self.out, ">> 24) / {scale}))")?;
+                        } else if dims == 2 {
+                            write!(self.out, "float2(float(")?;
+                            self.write_expr(module, arg, func_ctx)?;
+                            write!(self.out, "& 0xffff) / {scale}, float(")?;
+                            self.write_expr(module, arg, func_ctx)?;
+                            write!(self.out, ">> 16) / {scale}))")?;
+                        }
                     }
                     Function::Regular(fun_name) => {
                         write!(self.out, "{fun_name}(")?;
