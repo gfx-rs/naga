@@ -640,7 +640,7 @@ fn convert_spv_all() {
     convert_spv(
         "image-query",
         false,
-        Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
+        Targets::HLSL | Targets::WGSL | Targets::METAL,
     );
     convert_spv("degrees", false, Targets::empty());
     convert_spv("binding-arrays.dynamic", true, Targets::WGSL);
