@@ -1,0 +1,37 @@
+// language: metal2.0
+#include <metal_stdlib>
+#include <simd/simd.h>
+
+using metal::uint;
+
+
+void shader_1(
+    metal::texture2d<float, metal::access::read_write> output_tex,
+    thread metal::uint3& global
+) {
+    metal::uint3 _e7 = global;
+    switch(as_type<int>(0u)) {
+        default: {
+            if (_e7.x < metal::uint2(output_tex.get_width(), output_tex.get_height()).x) {
+                break;
+            }
+            metal::uint2 _e15 = _e7.xy;
+            metal::float4 _e16 = output_tex.read(metal::uint2(_e15));
+            float unnamed = _e16.x;
+            output_tex.write(metal::float4(static_cast<float>(_e7.z), _e16.y, _e16.z, _e16.w), metal::uint2(_e15));
+            break;
+        }
+    }
+    return;
+}
+
+struct shaderInput {
+};
+kernel void shader(
+  metal::uint3 param [[thread_position_in_grid]]
+, metal::texture2d<float, metal::access::read_write> output_tex [[user(fake0)]]
+) {
+    metal::uint3 global = {};
+    global = param;
+    shader_1(output_tex, global);
+}

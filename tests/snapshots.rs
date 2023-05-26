@@ -637,6 +637,11 @@ fn convert_spv_all() {
         true,
         Targets::HLSL | Targets::WGSL | Targets::METAL,
     );
+    convert_spv(
+        "image-query",
+        false,
+        Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
+    );
     convert_spv("degrees", false, Targets::empty());
     convert_spv("binding-arrays.dynamic", true, Targets::WGSL);
     convert_spv("binding-arrays.static", true, Targets::WGSL);
