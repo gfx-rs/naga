@@ -121,7 +121,6 @@ pub const RESERVED: &[&str] = &[
     "Texture2DArray",
     "Texture2DMS",
     "Texture2DMSArray",
-    "TextureCube",
     "TextureCubeArray",
     "true",
     "typedef",
