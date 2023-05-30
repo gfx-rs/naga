@@ -26,7 +26,7 @@ pub struct Namer {
     /// The last numeric suffix used for each base name. Zero means "no suffix".
     unique: FastHashMap<String, u32>,
     keywords: FastHashSet<String>,
-    keywords_case_insensitive: FastHashSet<AsciiUniCase<String>>,
+    keywords_case_insensitive: FastHashSet<AsciiUniCase<&'static str>>,
     reserved_prefixes: Vec<String>,
 }
 
@@ -108,7 +108,7 @@ impl Namer {
                     || self.keywords.contains(base.as_ref())
                     || self
                         .keywords_case_insensitive
-                        .contains(&AsciiUniCase(base.to_owned().into_owned()))
+                        .contains(&AsciiUniCase(base.as_ref()))
                 {
                     suffixed.push(SEPARATOR);
                 }
@@ -144,7 +144,7 @@ impl Namer {
         &mut self,
         module: &crate::Module,
         reserved_keywords: &[&str],
-        reserved_keywords_case_insensitive: &[&str],
+        reserved_keywords_case_insensitive: &[&'static str],
         reserved_prefixes: &[&str],
         output: &mut FastHashMap<NameKey, String>,
     ) {
@@ -164,7 +164,7 @@ impl Namer {
         self.keywords_case_insensitive.extend(
             reserved_keywords_case_insensitive
                 .iter()
-                .map(|string| (AsciiUniCase(string.to_string()))),
+                .map(|string| (AsciiUniCase(*string))),
         );
 
         let mut temp = String::new();
