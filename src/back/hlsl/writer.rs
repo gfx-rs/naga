@@ -2753,54 +2753,37 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     // returns T
                     // T is i32, u32, vecN<i32>, or vecN<u32>
                     Function::InsertBits => {
-                        // ((S0.u & S1.u) | (~S0.u & S2.u))
-                        // TODO: what
+                        // mask = ((0xFFFFFFFFu >> (32 - count)) << offset)
+                        // return (count == 0 ? e : ((e & ~mask) | ((newbits << offset) & mask)))
                         if let (Some(newbits), Some(offset), Some(count)) = (arg1, arg2, arg3) {
-                            // write!(self.out, "(")?;
-                            // self.write_expr(module, arg, func_ctx)?;
-                            // write!(self.out, " & ~")?;
-                            // // mask
-                            // write!(self.out, "((-1 >> (32 - ")?;
-                            // self.write_expr(module, arg1, func_ctx)?;
-                            // write!(self.out, ")) << ")?;
-                            // self.write_expr(module, arg2, func_ctx)?;
-                            // write!(self.out, ")")?;
-                            // // End mask
-                            // write!(self.out, ") | ((")?;
-                            // self.write_expr(module, arg3, func_ctx)?;
-                            // write!(self.out, " << ")?;
-                            // self.write_expr(module, arg2, func_ctx)?;
-                            // write!(self.out, ") & ")?;
-                            // // mask
-                            // write!(self.out, "((-1 >> (32 - ")?;
-                            // self.write_expr(module, arg1, func_ctx)?;
-                            // write!(self.out, ")) << ")?;
-                            // self.write_expr(module, arg2, func_ctx)?;
-                            // write!(self.out, "))")?;
+                            write!(self.out, "(")?;
+                            self.write_expr(module, count, func_ctx)?;
+                            write!(self.out, " == 0 ? ")?;
+                            self.write_expr(module, arg, func_ctx)?;
+                            write!(self.out, " : ")?;
                             write!(self.out, "(")?;
                             self.write_expr(module, arg, func_ctx)?;
                             write!(self.out, " & ~")?;
-                            // ((((1u << count) - 1u) << offset) & 0xffffffffu)
                             // mask
-                            write!(self.out, "((((1u << ")?;
+                            write!(self.out, "((0xFFFFFFFFu >> (32u - ")?;
                             self.write_expr(module, count, func_ctx)?;
-                            write!(self.out, ") - 1u) << ")?;
+                            write!(self.out, ")) << ")?;
                             self.write_expr(module, offset, func_ctx)?;
-                            write!(self.out, ") & 0xffffffffu)")?;
+                            write!(self.out, ")")?;
                             // end mask
                             write!(self.out, ") | ((")?;
                             self.write_expr(module, newbits, func_ctx)?;
                             write!(self.out, " << ")?;
                             self.write_expr(module, offset, func_ctx)?;
                             write!(self.out, ") & ")?;
-                            // mask
-                            write!(self.out, "((((1u << ")?;
+                            // // mask
+                            write!(self.out, "((0xFFFFFFFFu >> (32u - ")?;
                             self.write_expr(module, count, func_ctx)?;
-                            write!(self.out, ") - 1u) << ")?;
+                            write!(self.out, ")) << ")?;
                             self.write_expr(module, offset, func_ctx)?;
-                            write!(self.out, ") & 0xffffffffu)")?;
-                            // end mask
                             write!(self.out, ")")?;
+                            // // end mask
+                            write!(self.out, "))")?;
                         }
                     }
                     Function::Pack2x16float => {
