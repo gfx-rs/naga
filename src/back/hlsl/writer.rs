@@ -2778,7 +2778,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                                 self.write_expr(module, offset, func_ctx)?;
                                 write!(self.out, ") & (")?;
                                 self.write_expr(module, count, func_ctx)?;
-                                write!(self.out, " == {scalar_width}u ? {scalar_max}u : ((1 << ")?;
+                                write!(self.out, " == {scalar_width}u ? {scalar_max}u : ((1u << ")?;
                                 self.write_expr(module, count, func_ctx)?;
                                 write!(self.out, ") - 1)))")?;
                             } else {
