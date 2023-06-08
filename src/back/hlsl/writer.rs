@@ -2799,9 +2799,29 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         }
                     }
                     Function::InsertBits => {
-                        // mask = ((0xFFFFFFFFu >> (32 - count)) << offset)
-                        // return (count == 0 ? e : ((e & ~mask) | ((newbits << offset) & mask)))
+                        // e: T,
+                        // newbits: T,
+                        // offset: u32,
+                        // count: u32
+                        // returns T
+                        // T is i32, u32, vecN<i32>, or vecN<u32>
                         if let (Some(newbits), Some(offset), Some(count)) = (arg1, arg2, arg3) {
+                            let inner = func_ctx.info[expr].ty.inner_with(&module.types);
+                            let scalar_width = inner.scalar_width().unwrap_or(32);
+                            let scalar_max: u64 = match scalar_width {
+                                8 => 0xff,
+                                16 => 0xffff,
+                                32 => 0xffffffff,
+                                64 => 0xffffffffffffffff,
+                                _ => {
+                                    return Err(Error::Unimplemented(format!(
+                                        "write_expr_math extract_bits for scalar_width {}",
+                                        scalar_width
+                                    )))
+                                }
+                            };
+                            // mask = ((0xFFFFFFFFu >> (32 - count)) << offset)
+                            // return (count == 0 ? e : ((e & ~mask) | ((newbits << offset) & mask)))
                             write!(self.out, "(")?;
                             self.write_expr(module, count, func_ctx)?;
                             write!(self.out, " == 0 ? ")?;
@@ -2811,7 +2831,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                             self.write_expr(module, arg, func_ctx)?;
                             write!(self.out, " & ~")?;
                             // mask
-                            write!(self.out, "((0xFFFFFFFFu >> (32u - ")?;
+                            write!(self.out, "(({scalar_max}u >> ({scalar_width}u - ")?;
                             self.write_expr(module, count, func_ctx)?;
                             write!(self.out, ")) << ")?;
                             self.write_expr(module, offset, func_ctx)?;
@@ -2823,7 +2843,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                             self.write_expr(module, offset, func_ctx)?;
                             write!(self.out, ") & ")?;
                             // // mask
-                            write!(self.out, "((0xFFFFFFFFu >> (32u - ")?;
+                            write!(self.out, "(({scalar_max}u >> ({scalar_width}u - ")?;
                             self.write_expr(module, count, func_ctx)?;
                             write!(self.out, ")) << ")?;
                             self.write_expr(module, offset, func_ctx)?;
