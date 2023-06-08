@@ -420,7 +420,7 @@ fn convert_wgsl() {
         ),
         (
             "bits",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::WGSL,
+            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
         ),
         (
             "bitcast",
