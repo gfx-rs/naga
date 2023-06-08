@@ -2600,6 +2600,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 enum Function {
                     Asincosh { is_sin: bool },
                     Atanh,
+                    ExtractBits,
                     InsertBits,
                     Pack2x16float,
                     PackBits { signed: bool, dims: u32, scale: u32 },
@@ -2678,6 +2679,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     Mf::ReverseBits => Function::MissingIntOverload("reversebits"),
                     Mf::FindLsb => Function::MissingIntReturnType("firstbitlow"),
                     Mf::FindMsb => Function::MissingIntReturnType("firstbithigh"),
+                    Mf::ExtractBits => Function::ExtractBits,
                     Mf::InsertBits => Function::InsertBits,
                     // Data Packing
                     Mf::Pack2x16float => Function::Pack2x16float,
@@ -2746,12 +2748,56 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         self.write_expr(module, arg, func_ctx)?;
                         write!(self.out, "))")?;
                     }
-                    // e: T,
-                    // newbits: T,
-                    // offset: u32,
-                    // count: u32
-                    // returns T
-                    // T is i32, u32, vecN<i32>, or vecN<u32>
+                    Function::ExtractBits => {
+                        // e: T,
+                        // offset: u32,
+                        // count: u32
+                        // T is u32 or i32 or vecN<u32> or vecN<i32>
+                        if let (Some(offset), Some(count)) = (arg1, arg2) {
+                            let inner = func_ctx.info[expr].ty.inner_with(&module.types);
+                            let scalar_kind = inner.scalar_kind();
+                            let scalar_width = inner.scalar_width().unwrap_or(32);
+                            let scalar_max: u32 = match scalar_width {
+                                8 => 0xff,
+                                16 => 0xffff,
+                                32 => 0xffffffff,
+                                _ => {
+                                    return Err(Error::Unimplemented(format!(
+                                        "write_expr_math extract_bits for scalar_width {}",
+                                        scalar_width
+                                    )))
+                                }
+                            };
+
+                            if let Some(ScalarKind::Uint) = scalar_kind {
+                                // Unsigned
+                                // ((e >> offset) & (count == 32u ? 0xffffffffu : ((1 << count) - 1)))
+                                write!(self.out, "((")?;
+                                self.write_expr(module, arg, func_ctx)?;
+                                write!(self.out, " >> ")?;
+                                self.write_expr(module, offset, func_ctx)?;
+                                write!(self.out, ") & (")?;
+                                self.write_expr(module, count, func_ctx)?;
+                                write!(self.out, " == {scalar_width}u ? {scalar_max}u : ((1 << ")?;
+                                self.write_expr(module, count, func_ctx)?;
+                                write!(self.out, ") - 1)))")?;
+                            } else {
+                                // Signed
+                                // (count == 0 ? 0 : (e << (32 - count - offset)) >> (32 - count))
+                                write!(self.out, "(")?;
+                                self.write_expr(module, count, func_ctx)?;
+                                write!(self.out, " == 0 ? 0 : (")?;
+                                self.write_expr(module, arg, func_ctx)?;
+                                write!(self.out, " << ({scalar_width} - ")?;
+                                self.write_expr(module, count, func_ctx)?;
+                                write!(self.out, " - ")?;
+                                self.write_expr(module, offset, func_ctx)?;
+                                write!(self.out, ")) >> ({scalar_width} - ")?;
+                                self.write_expr(module, count, func_ctx)?;
+                                write!(self.out, "))")?;
+                            }
+                        }
+                    }
                     Function::InsertBits => {
                         // mask = ((0xFFFFFFFFu >> (32 - count)) << offset)
                         // return (count == 0 ? e : ((e & ~mask) | ((newbits << offset) & mask)))
