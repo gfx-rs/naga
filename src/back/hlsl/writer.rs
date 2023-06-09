@@ -2878,7 +2878,10 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                                 self.write_expr(module, arg, func_ctx)?;
                                 write!(self.out, "[2], -1.0, 1.0) * {scale}.0 + 0.5)) & 0xFF) << 16) | ((int(floor(clamp(")?;
                                 self.write_expr(module, arg, func_ctx)?;
-                                write!(self.out, "[3], -1.0, 1.0) * {scale}.0 + 0.5)) & 0xFF) << 24))",)?;
+                                write!(
+                                    self.out,
+                                    "[3], -1.0, 1.0) * {scale}.0 + 0.5)) & 0xFF) << 24))",
+                                )?;
                             } else {
                                 // pack4x8unorm
                                 write!(self.out, "(uint(clamp(")?;
