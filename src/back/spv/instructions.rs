@@ -21,10 +21,25 @@ impl super::Instruction {
     //  Debug Instructions
     //
 
-    pub(super) fn source(source_language: spirv::SourceLanguage, version: u32) -> Self {
+    pub(super) fn string(name: &str, id: Word) -> Self {
+        let mut instruction = Self::new(Op::String);
+        instruction.set_result(id);
+        instruction.add_operands(helpers::string_to_words(name));
+        instruction
+    }
+
+    pub(super) fn source(
+        source_language: spirv::SourceLanguage,
+        version: u32,
+        source: Option<(Word, &str)>,
+    ) -> Self {
         let mut instruction = Self::new(Op::Source);
         instruction.add_operand(source_language as u32);
         instruction.add_operands(helpers::bytes_to_words(&version.to_le_bytes()));
+        if let Some((file, source)) = source {
+            instruction.add_operand(file);
+            instruction.add_operands(helpers::string_to_words(source));
+        }
         instruction
     }
 
@@ -41,6 +56,18 @@ impl super::Instruction {
         instruction.add_operand(member);
         instruction.add_operands(helpers::string_to_words(name));
         instruction
+    }
+
+    pub(super) fn line(file: Word, line: Word, column: Word) -> Self {
+        let mut instruction = Self::new(Op::Line);
+        instruction.add_operand(file);
+        instruction.add_operand(line);
+        instruction.add_operand(column);
+        instruction
+    }
+
+    pub(super) const fn no_line() -> Self {
+        Self::new(Op::NoLine)
     }
 
     //

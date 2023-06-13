@@ -1,4 +1,5 @@
 use super::{
+    block::DebugInfo,
     helpers::{contains_builtin, global_needs_wrapper, map_storage_class},
     make_local, Block, BlockContext, CachedConstant, CachedExpressions, EntryPointContext, Error,
     Function, FunctionArgument, GlobalVariable, IdGenerator, Instruction, LocalType, LocalVariable,
@@ -12,7 +13,7 @@ use crate::{
     valid::{FunctionInfo, ModuleInfo},
 };
 use spirv::Word;
-use std::collections::hash_map::Entry;
+use std::{collections::hash_map::Entry, path::Path};
 
 struct FunctionInterface<'a> {
     varying_ids: &'a mut Vec<Word>,
@@ -76,6 +77,7 @@ impl Writer {
             binding_map: options.binding_map.clone(),
             saved_cached: CachedExpressions::default(),
             gl450_ext_inst_id,
+            source_file_id: None,
             temp_list: Vec::new(),
         })
     }
@@ -111,6 +113,7 @@ impl Writer {
             id_gen,
             void_type,
             gl450_ext_inst_id,
+            source_file_id: None,
 
             // Recycled:
             capabilities_used: take(&mut self.capabilities_used).recycle(),
@@ -688,11 +691,22 @@ impl Writer {
             next_id
         };
 
+        let debug_info = (|| {
+            if !context.writer.flags.contains(WriterFlags::DEBUG) {
+                return None;
+            }
+            Some(DebugInfo {
+                source_code: ir_module.source_code.as_ref()?,
+                source_file_id: context.writer.source_file_id?,
+            })
+        })();
+
         context.write_block(
             main_id,
             &ir_function.body,
             super::block::BlockExit::Return,
             LoopContext::default(),
+            debug_info.as_ref(),
         )?;
 
         // Consume the `BlockContext`, ending its borrows and letting the
@@ -1772,8 +1786,28 @@ impl Writer {
             .to_words(&mut self.logical_layout.ext_inst_imports);
 
         if self.flags.contains(WriterFlags::DEBUG) {
-            self.debugs
-                .push(Instruction::source(spirv::SourceLanguage::GLSL, 450));
+            if let Some(file_name) = (|| {
+                Path::new(ir_module.file_path.as_ref()?)
+                    .file_name()?
+                    .to_str()
+            })() {
+                let source_file_id = self.id_gen.next();
+                self.source_file_id = Some(source_file_id);
+                self.debugs
+                    .push(Instruction::string(file_name, source_file_id));
+            }
+
+            let debug_source_code = (|| {
+                Some((
+                    self.source_file_id?,
+                    ir_module.source_code.as_ref()?.as_str(),
+                ))
+            })();
+            self.debugs.push(Instruction::source(
+                spirv::SourceLanguage::GLSL,
+                450,
+                debug_source_code,
+            ));
         }
 
         self.constant_ids.resize(ir_module.constants.len(), 0);

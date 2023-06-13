@@ -68,6 +68,10 @@ struct Args {
     #[argh(option)]
     stdin_file_path: Option<String>,
 
+    /// generate debug symbols, only works for spv-out for now
+    #[argh(option, short = 'g')]
+    generate_debug_symbols: Option<bool>,
+
     /// show version
     #[argh(switch)]
     version: bool,
@@ -258,7 +262,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     }
     params.keep_coordinate_space = args.keep_coordinate_space;
 
-    let (module, input_text) = match Path::new(&input_path)
+    let (mut module, input_text) = match Path::new(&input_path)
         .extension()
         .ok_or(CliError("Input filename has no extension"))?
         .to_str()
@@ -315,6 +319,12 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         }
         _ => return Err(CliError("Unknown input file extension").into()),
     };
+
+    //Insert Debug infos
+    if args.generate_debug_symbols.unwrap_or_default() {
+        module.file_path = input_path.as_os_str().to_str().map(ToString::to_string);
+        module.source_code = input_text.clone();
+    }
 
     // Decide which capabilities our output formats can support.
     let validation_caps =
@@ -415,6 +425,12 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 };
 
                 params.spv.bounds_check_policies = params.bounds_check_policies;
+                if let Some(generate_debug_symbols) = args.generate_debug_symbols {
+                    params
+                        .spv
+                        .flags
+                        .set(spv::WriterFlags::DEBUG, generate_debug_symbols);
+                };
                 params.spv.flags.set(
                     spv::WriterFlags::ADJUST_COORDINATE_SPACE,
                     !params.keep_coordinate_space,

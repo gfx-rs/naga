@@ -2355,4 +2355,6 @@
             ),
         ),
     ],
+    source_code: None,
+    file_path: None,
 )

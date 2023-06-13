@@ -620,6 +620,9 @@ pub struct Writer {
     saved_cached: CachedExpressions,
 
     gl450_ext_inst_id: Word,
+
+    //used for OpString to track source code filename
+    source_file_id: Option<Word>,
     // Just a temporary list of SPIR-V ids
     temp_list: Vec<Word>,
 }

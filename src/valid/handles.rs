@@ -40,6 +40,7 @@ impl super::Validator {
             ref global_variables,
             ref types,
             ref special_types,
+            ..
         } = module;
 
         // NOTE: Types being first is important. All other forms of validation depend on this.
