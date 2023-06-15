@@ -2603,9 +2603,15 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     ExtractBits,
                     InsertBits,
                     Pack2x16float,
-                    PackBits { signed: bool, dims: u32, scale: u32 },
+                    Pack2x16snorm,
+                    Pack2x16unorm,
+                    Pack4x8snorm,
+                    Pack4x8unorm,
                     Unpack2x16float,
-                    UnpackBits { signed: bool, dims: u32, scale: u32 },
+                    Unpack2x16snorm,
+                    Unpack2x16unorm,
+                    Unpack4x8snorm,
+                    Unpack4x8unorm,
                     Regular(&'static str),
                     MissingIntOverload(&'static str),
                     MissingIntReturnType(&'static str),
@@ -2683,48 +2689,16 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     Mf::InsertBits => Function::InsertBits,
                     // Data Packing
                     Mf::Pack2x16float => Function::Pack2x16float,
-                    Mf::Pack2x16snorm => Function::PackBits {
-                        signed: true,
-                        dims: 2,
-                        scale: 32767,
-                    },
-                    Mf::Pack2x16unorm => Function::PackBits {
-                        signed: false,
-                        dims: 2,
-                        scale: 65535,
-                    },
-                    Mf::Pack4x8snorm => Function::PackBits {
-                        signed: true,
-                        dims: 4,
-                        scale: 127,
-                    },
-                    Mf::Pack4x8unorm => Function::PackBits {
-                        signed: false,
-                        dims: 4,
-                        scale: 255,
-                    },
+                    Mf::Pack2x16snorm => Function::Pack2x16snorm,
+                    Mf::Pack2x16unorm => Function::Pack2x16unorm,
+                    Mf::Pack4x8snorm => Function::Pack4x8snorm,
+                    Mf::Pack4x8unorm => Function::Pack4x8unorm,
                     // Data Unpacking
                     Mf::Unpack2x16float => Function::Unpack2x16float,
-                    Mf::Unpack2x16snorm => Function::UnpackBits {
-                        signed: true,
-                        dims: 2,
-                        scale: 32767,
-                    },
-                    Mf::Unpack2x16unorm => Function::UnpackBits {
-                        signed: false,
-                        dims: 2,
-                        scale: 65535,
-                    },
-                    Mf::Unpack4x8snorm => Function::UnpackBits {
-                        signed: true,
-                        dims: 4,
-                        scale: 127,
-                    },
-                    Mf::Unpack4x8unorm => Function::UnpackBits {
-                        signed: false,
-                        dims: 4,
-                        scale: 255,
-                    },
+                    Mf::Unpack2x16snorm => Function::Unpack2x16snorm,
+                    Mf::Unpack2x16unorm => Function::Unpack2x16unorm,
+                    Mf::Unpack4x8snorm => Function::Unpack4x8snorm,
+                    Mf::Unpack4x8unorm => Function::Unpack4x8unorm,
                     _ => return Err(Error::Unimplemented(format!("write_expr_math {fun:?}"))),
                 };
 
@@ -2815,7 +2789,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                                 64 => 0xffffffffffffffff,
                                 _ => {
                                     return Err(Error::Unimplemented(format!(
-                                        "write_expr_math extract_bits for scalar_width {}",
+                                        "write_expr_math insert_bits for scalar_width {}",
                                         scalar_width
                                     )))
                                 }
@@ -2859,77 +2833,72 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         self.write_expr(module, arg, func_ctx)?;
                         write!(self.out, "[1]) << 16)")?;
                     }
-                    Function::PackBits {
-                        signed,
-                        dims,
-                        scale,
-                    } => {
-                        if dims == 4 {
-                            if signed {
-                                // pack4x8snorm
-                                write!(self.out, "uint((int(floor(clamp(")?;
-                                self.write_expr(module, arg, func_ctx)?;
-                                write!(
-                                    self.out,
-                                    "[0], -1.0, 1.0) * {scale}.0 + 0.5)) & 0xFF) | ((int(floor(clamp("
-                                )?;
-                                self.write_expr(module, arg, func_ctx)?;
-                                write!(self.out, "[1], -1.0, 1.0) * {scale}.0 + 0.5)) & 0xFF) << 8) | ((int(floor(clamp(")?;
-                                self.write_expr(module, arg, func_ctx)?;
-                                write!(self.out, "[2], -1.0, 1.0) * {scale}.0 + 0.5)) & 0xFF) << 16) | ((int(floor(clamp(")?;
-                                self.write_expr(module, arg, func_ctx)?;
-                                write!(
-                                    self.out,
-                                    "[3], -1.0, 1.0) * {scale}.0 + 0.5)) & 0xFF) << 24))",
-                                )?;
-                            } else {
-                                // pack4x8unorm
-                                write!(self.out, "(uint(clamp(")?;
-                                self.write_expr(module, arg, func_ctx)?;
-                                write!(
-                                    self.out,
-                                    "[0], 0.0, 1.0) * {scale}.0 + 0.5) | uint(clamp("
-                                )?;
-                                self.write_expr(module, arg, func_ctx)?;
-                                write!(
-                                    self.out,
-                                    "[1], 0.0, 1.0) * {scale}.0 + 0.5) << 8 | uint(clamp("
-                                )?;
-                                self.write_expr(module, arg, func_ctx)?;
-                                write!(
-                                    self.out,
-                                    "[2], 0.0, 1.0) * {scale}.0 + 0.5) << 16 | uint(clamp("
-                                )?;
-                                self.write_expr(module, arg, func_ctx)?;
-                                write!(self.out, "[3], 0.0, 1.0) * {scale}.0 + 0.5) << 24)")?;
-                            }
-                        } else if dims == 2 {
-                            if signed {
-                                // pack2x16snorm
-                                write!(self.out, "uint((int(floor(clamp(")?;
-                                self.write_expr(module, arg, func_ctx)?;
-                                write!(
-                                    self.out,
-                                    "[0], -1.0, 1.0) * {scale}.0 + 0.5))) & 0xFFFF) | (((int(floor(clamp("
-                                )?;
-                                self.write_expr(module, arg, func_ctx)?;
-                                write!(
-                                    self.out,
-                                    "[1], -1.0, 1.0) * {scale}.0 + 0.5)) & 0xFFFF) << 16))",
-                                )?;
-                            } else {
-                                // pack2x16unorm
-                                write!(self.out, "uint(uint(float(clamp(")?;
-                                self.write_expr(module, arg, func_ctx)?;
-                                write!(
-                                    self.out,
-                                    "[0], 0, 1) * {scale}.0) + 0.5) | uint(float(clamp("
-                                )?;
-                                self.write_expr(module, arg, func_ctx)?;
-                                write!(self.out, "[1], 0, 1) * {scale}.0) + 0.5) << 16)")?;
-                            }
-                        }
+                    Function::Pack2x16snorm => {
+                        let scale = 32767;
+
+                        write!(self.out, "uint((int(floor(clamp(")?;
+                        self.write_expr(module, arg, func_ctx)?;
+                        write!(
+                            self.out,
+                            "[0], -1.0, 1.0) * {scale}.0 + 0.5))) & 0xFFFF) | (((int(floor(clamp("
+                        )?;
+                        self.write_expr(module, arg, func_ctx)?;
+                        write!(
+                            self.out,
+                            "[1], -1.0, 1.0) * {scale}.0 + 0.5)) & 0xFFFF) << 16))",
+                        )?;
                     }
+                    Function::Pack2x16unorm => {
+                        let scale = 65535;
+
+                        write!(self.out, "uint(uint(float(clamp(")?;
+                        self.write_expr(module, arg, func_ctx)?;
+                        write!(
+                            self.out,
+                            "[0], 0, 1) * {scale}.0) + 0.5) | uint(float(clamp("
+                        )?;
+                        self.write_expr(module, arg, func_ctx)?;
+                        write!(self.out, "[1], 0, 1) * {scale}.0) + 0.5) << 16)")?;
+                    }
+                    Function::Pack4x8snorm => {
+                        let scale = 127;
+
+                        write!(self.out, "uint((int(floor(clamp(")?;
+                        self.write_expr(module, arg, func_ctx)?;
+                        write!(
+                            self.out,
+                            "[0], -1.0, 1.0) * {scale}.0 + 0.5)) & 0xFF) | ((int(floor(clamp("
+                        )?;
+                        self.write_expr(module, arg, func_ctx)?;
+                        write!(self.out, "[1], -1.0, 1.0) * {scale}.0 + 0.5)) & 0xFF) << 8) | ((int(floor(clamp(")?;
+                        self.write_expr(module, arg, func_ctx)?;
+                        write!(self.out, "[2], -1.0, 1.0) * {scale}.0 + 0.5)) & 0xFF) << 16) | ((int(floor(clamp(")?;
+                        self.write_expr(module, arg, func_ctx)?;
+                        write!(
+                            self.out,
+                            "[3], -1.0, 1.0) * {scale}.0 + 0.5)) & 0xFF) << 24))",
+                        )?;
+                    }
+                    Function::Pack4x8unorm => {
+                        let scale = 255;
+
+                        write!(self.out, "(uint(clamp(")?;
+                        self.write_expr(module, arg, func_ctx)?;
+                        write!(self.out, "[0], 0.0, 1.0) * {scale}.0 + 0.5) | uint(clamp(")?;
+                        self.write_expr(module, arg, func_ctx)?;
+                        write!(
+                            self.out,
+                            "[1], 0.0, 1.0) * {scale}.0 + 0.5) << 8 | uint(clamp("
+                        )?;
+                        self.write_expr(module, arg, func_ctx)?;
+                        write!(
+                            self.out,
+                            "[2], 0.0, 1.0) * {scale}.0 + 0.5) << 16 | uint(clamp("
+                        )?;
+                        self.write_expr(module, arg, func_ctx)?;
+                        write!(self.out, "[3], 0.0, 1.0) * {scale}.0 + 0.5) << 24)")?;
+                    }
+
                     Function::Unpack2x16float => {
                         write!(self.out, "float2(f16tof32(")?;
                         self.write_expr(module, arg, func_ctx)?;
@@ -2937,52 +2906,49 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         self.write_expr(module, arg, func_ctx)?;
                         write!(self.out, ") >> 16))")?;
                     }
-                    Function::UnpackBits {
-                        signed,
-                        dims,
-                        scale,
-                    } => {
-                        if dims == 4 {
-                            if signed {
-                                // Unpack4x8snorm
-                                write!(self.out, "clamp(float4((int4(")?;
-                                self.write_expr(module, arg, func_ctx)?;
-                                write!(self.out, "<< 24, ")?;
-                                self.write_expr(module, arg, func_ctx)?;
-                                write!(self.out, " << 16, ")?;
-                                self.write_expr(module, arg, func_ctx)?;
-                                write!(self.out, " << 8, ")?;
-                                self.write_expr(module, arg, func_ctx)?;
-                                write!(self.out, ") >> 24)) / {scale}.0, -1.0, 1.0)")?;
-                            } else {
-                                // Unpack4x8unorm
-                                write!(self.out, "clamp(float4(")?;
-                                self.write_expr(module, arg, func_ctx)?;
-                                write!(self.out, " & 0xFF, ")?;
-                                self.write_expr(module, arg, func_ctx)?;
-                                write!(self.out, " >> 8 & 0xFF, ")?;
-                                self.write_expr(module, arg, func_ctx)?;
-                                write!(self.out, " >> 16 & 0xFF, ")?;
-                                self.write_expr(module, arg, func_ctx)?;
-                                write!(self.out, " >> 24 & 0xFF) / {scale}.0,  0.0, 1.0)")?;
-                            }
-                        } else if dims == 2 {
-                            if signed {
-                                // Unpack2x16snorm
-                                write!(self.out, "clamp(float2(int2(")?;
-                                self.write_expr(module, arg, func_ctx)?;
-                                write!(self.out, "<< 16, ")?;
-                                self.write_expr(module, arg, func_ctx)?;
-                                write!(self.out, ") >> 16) / {scale}.0, -1.0, 1.0)")?;
-                            } else {
-                                // Unpack2x16unorm
-                                write!(self.out, "clamp(float2(float(")?;
-                                self.write_expr(module, arg, func_ctx)?;
-                                write!(self.out, " & 0xFFFF), float(")?;
-                                self.write_expr(module, arg, func_ctx)?;
-                                write!(self.out, " >> 16 & 0xFFFF)) / {scale}.0, 0.0, 1.0)")?;
-                            }
-                        }
+                    Function::Unpack2x16snorm => {
+                        let scale = 32767;
+
+                        write!(self.out, "clamp(float2(int2(")?;
+                        self.write_expr(module, arg, func_ctx)?;
+                        write!(self.out, "<< 16, ")?;
+                        self.write_expr(module, arg, func_ctx)?;
+                        write!(self.out, ") >> 16) / {scale}.0, -1.0, 1.0)")?;
+                    }
+                    Function::Unpack2x16unorm => {
+                        let scale = 65535;
+
+                        write!(self.out, "clamp(float2(float(")?;
+                        self.write_expr(module, arg, func_ctx)?;
+                        write!(self.out, " & 0xFFFF), float(")?;
+                        self.write_expr(module, arg, func_ctx)?;
+                        write!(self.out, " >> 16 & 0xFFFF)) / {scale}.0, 0.0, 1.0)")?;
+                    }
+                    Function::Unpack4x8snorm => {
+                        let scale = 127;
+
+                        write!(self.out, "clamp(float4((int4(")?;
+                        self.write_expr(module, arg, func_ctx)?;
+                        write!(self.out, "<< 24, ")?;
+                        self.write_expr(module, arg, func_ctx)?;
+                        write!(self.out, " << 16, ")?;
+                        self.write_expr(module, arg, func_ctx)?;
+                        write!(self.out, " << 8, ")?;
+                        self.write_expr(module, arg, func_ctx)?;
+                        write!(self.out, ") >> 24)) / {scale}.0, -1.0, 1.0)")?;
+                    }
+                    Function::Unpack4x8unorm => {
+                        let scale = 255;
+
+                        write!(self.out, "clamp(float4(")?;
+                        self.write_expr(module, arg, func_ctx)?;
+                        write!(self.out, " & 0xFF, ")?;
+                        self.write_expr(module, arg, func_ctx)?;
+                        write!(self.out, " >> 8 & 0xFF, ")?;
+                        self.write_expr(module, arg, func_ctx)?;
+                        write!(self.out, " >> 16 & 0xFF, ")?;
+                        self.write_expr(module, arg, func_ctx)?;
+                        write!(self.out, " >> 24 & 0xFF) / {scale}.0,  0.0, 1.0)")?;
                     }
                     Function::Regular(fun_name) => {
                         write!(self.out, "{fun_name}(")?;
