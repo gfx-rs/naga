@@ -24,13 +24,13 @@ void main()
     f2_ = (0.0).xx;
     f4_ = (0.0).xxxx;
     float4 _expr28 = f4_;
-    u = uint((int(floor(clamp(_expr28[0], -1.0, 1.0) * 127.0 + 0.5)) & 0xFF) | ((int(floor(clamp(_expr28[1], -1.0, 1.0) * 127.0 + 0.5)) & 0xFF) << 8) | ((int(floor(clamp(_expr28[2], -1.0, 1.0) * 127.0 + 0.5)) & 0xFF) << 16) | ((int(floor(clamp(_expr28[3], -1.0, 1.0) * 127.0 + 0.5)) & 0xFF) << 24));
+    u = uint((int(round(clamp(_expr28[0], -1.0, 1.0) * 127.0)) & 0xFF) | ((int(round(clamp(_expr28[1], -1.0, 1.0) * 127.0)) & 0xFF) << 8) | ((int(round(clamp(_expr28[2], -1.0, 1.0) * 127.0)) & 0xFF) << 16) | ((int(round(clamp(_expr28[3], -1.0, 1.0) * 127.0)) & 0xFF) << 24));
     float4 _expr30 = f4_;
-    u = (uint(clamp(_expr30[0], 0.0, 1.0) * 255.0 + 0.5) | uint(clamp(_expr30[1], 0.0, 1.0) * 255.0 + 0.5) << 8 | uint(clamp(_expr30[2], 0.0, 1.0) * 255.0 + 0.5) << 16 | uint(clamp(_expr30[3], 0.0, 1.0) * 255.0 + 0.5) << 24);
+    u = (uint(round(clamp(_expr30[0], 0.0, 1.0) * 255.0)) | uint(round(clamp(_expr30[1], 0.0, 1.0) * 255.0)) << 8 | uint(round(clamp(_expr30[2], 0.0, 1.0) * 255.0)) << 16 | uint(round(clamp(_expr30[3], 0.0, 1.0) * 255.0)) << 24);
     float2 _expr32 = f2_;
-    u = uint((int(floor(clamp(_expr32[0], -1.0, 1.0) * 32767.0 + 0.5))) & 0xFFFF) | (((int(floor(clamp(_expr32[1], -1.0, 1.0) * 32767.0 + 0.5)) & 0xFFFF) << 16));
+    u = uint((int(round(clamp(_expr32[0], -1.0, 1.0) * 32767.0))) & 0xFFFF) | (((int(round(clamp(_expr32[1], -1.0, 1.0) * 32767.0)) & 0xFFFF) << 16));
     float2 _expr34 = f2_;
-    u = uint(uint(float(clamp(_expr34[0], 0, 1) * 65535.0) + 0.5) | uint(float(clamp(_expr34[1], 0, 1) * 65535.0) + 0.5) << 16);
+    u = (uint(round(clamp(_expr34[0], 0.0, 1.0) * 65535.0)) | uint(round(clamp(_expr34[1], 0.0, 1.0) * 65535.0)) << 16);
     float2 _expr36 = f2_;
     u = f32tof16(_expr36[0]) | (f32tof16(_expr36[1]) << 16);
     uint _expr38 = u;
