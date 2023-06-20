@@ -2827,9 +2827,9 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         }
                     }
                     Function::Pack2x16float => {
-                        write!(self.out, "f32tof16(")?;
+                        write!(self.out, "(f32tof16(")?;
                         self.write_expr(module, arg, func_ctx)?;
-                        write!(self.out, "[0]) | (f32tof16(")?;
+                        write!(self.out, "[0]) | f32tof16(")?;
                         self.write_expr(module, arg, func_ctx)?;
                         write!(self.out, "[1]) << 16)")?;
                     }
@@ -2840,7 +2840,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         self.write_expr(module, arg, func_ctx)?;
                         write!(
                             self.out,
-                            "[0], -1.0, 1.0) * {scale}.0))) & 0xFFFF) | (((int(round(clamp("
+                            "[0], -1.0, 1.0) * {scale}.0)) & 0xFFFF) | ((int(round(clamp("
                         )?;
                         self.write_expr(module, arg, func_ctx)?;
                         write!(self.out, "[1], -1.0, 1.0) * {scale}.0)) & 0xFFFF) << 16))",)?;
