@@ -9,7 +9,7 @@ void fb1_(inout bool cond) {
     while(true) {
         if (!loop_init) {
             bool _e6 = cond;
-            bool unnamed = !(_e6);
+            bool unnamed = (!_e6);
             if (unnamed) {
                 break;
             }

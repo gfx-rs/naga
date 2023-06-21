@@ -12,8 +12,8 @@ void fb1_(
     while(true) {
         if (!loop_init) {
             bool _e6 = cond;
-            bool unnamed = !(_e6);
-            if (!(cond)) {
+            bool unnamed = !_e6;
+            if (!cond) {
                 break;
             }
         }
