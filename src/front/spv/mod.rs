@@ -3116,9 +3116,13 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                             continuing: loop_continuing_idx,
                             break_if: ref mut break_if_slot @ None,
                         }] if body_idx == loop_continuing_idx => {
+                            // HACK(eddyb) work around pre-Rust2021 closure captures.
+                            let ctx_body_for_label = &ctx.body_for_label;
+                            let ctx_expressions = &mut ctx.expressions;
+
                             // Try both orderings of break-vs-backedge, because
                             // SPIR-V is symmetrical here, unlike WGSL `break if`.
-                            let break_if_cond = [true, false].into_iter().find_map(|true_breaks| {
+                            let break_if_cond = [true, false].iter().find_map(|&true_breaks| {
                                 let (break_candidate, backedge_candidate) = if true_breaks {
                                     (true_target, false_target)
                                 } else {
@@ -3136,7 +3140,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                                 // `OpLoopMerge` below (even if it looks weird).
                                 let backedge_candidate_is_backedge =
                                     backedge_candidate.merge_info.is_none()
-                                        && ctx.body_for_label.get(&backedge_candidate.label_id)
+                                        && ctx_body_for_label.get(&backedge_candidate.label_id)
                                             == Some(&loop_body_idx);
                                 if !backedge_candidate_is_backedge {
                                     return None;
@@ -3145,7 +3149,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                                 Some(if true_breaks {
                                     condition
                                 } else {
-                                    ctx.expressions.append(
+                                    ctx_expressions.append(
                                         crate::Expression::Unary {
                                             op: crate::UnaryOperator::Not,
                                             expr: condition,
