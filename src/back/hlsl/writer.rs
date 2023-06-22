@@ -121,7 +121,14 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 self.need_bake_expressions.insert(fun_handle);
             }
 
-            if let Expression::Math { fun, arg, .. } = *expr {
+            if let Expression::Math {
+                fun,
+                arg,
+                arg1,
+                arg2,
+                arg3,
+            } = *expr
+            {
                 match fun {
                     crate::MathFunction::Asinh
                     | crate::MathFunction::Acosh
@@ -131,13 +138,23 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     | crate::MathFunction::Unpack2x16unorm
                     | crate::MathFunction::Unpack4x8snorm
                     | crate::MathFunction::Unpack4x8unorm
-                    // TODO: These use multiple args, unsure how to bake them
                     | crate::MathFunction::Pack2x16float
                     | crate::MathFunction::Pack2x16snorm
                     | crate::MathFunction::Pack2x16unorm
                     | crate::MathFunction::Pack4x8snorm
                     | crate::MathFunction::Pack4x8unorm => {
                         self.need_bake_expressions.insert(arg);
+                    }
+                    crate::MathFunction::ExtractBits => {
+                        self.need_bake_expressions.insert(arg);
+                        self.need_bake_expressions.insert(arg1.unwrap());
+                        self.need_bake_expressions.insert(arg2.unwrap());
+                    }
+                    crate::MathFunction::InsertBits => {
+                        self.need_bake_expressions.insert(arg);
+                        self.need_bake_expressions.insert(arg1.unwrap());
+                        self.need_bake_expressions.insert(arg2.unwrap());
+                        self.need_bake_expressions.insert(arg3.unwrap());
                     }
                     crate::MathFunction::CountLeadingZeros => {
                         let inner = info[fun_handle].ty.inner_with(&module.types);
