@@ -2883,38 +2883,38 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     Function::Unpack2x16snorm => {
                         let scale = 32767;
 
-                        write!(self.out, "clamp(float2(int2(")?;
+                        write!(self.out, "(float2(int2(")?;
                         self.write_expr(module, arg, func_ctx)?;
-                        write!(self.out, "<< 16, ")?;
+                        write!(self.out, " << 16, ")?;
                         self.write_expr(module, arg, func_ctx)?;
-                        write!(self.out, ") >> 16) / {scale}.0, -1.0, 1.0)")?;
+                        write!(self.out, ") >> 16) / {scale}.0)")?;
                     }
                     Function::Unpack2x16unorm => {
                         let scale = 65535;
 
-                        write!(self.out, "clamp(float2(float(")?;
+                        write!(self.out, "(float2(")?;
                         self.write_expr(module, arg, func_ctx)?;
-                        write!(self.out, " & 0xFFFF), float(")?;
+                        write!(self.out, " & 0xFFFF, ")?;
                         self.write_expr(module, arg, func_ctx)?;
-                        write!(self.out, " >> 16 & 0xFFFF)) / {scale}.0, 0.0, 1.0)")?;
+                        write!(self.out, " >> 16) / {scale}.0)")?;
                     }
                     Function::Unpack4x8snorm => {
                         let scale = 127;
 
-                        write!(self.out, "clamp(float4((int4(")?;
+                        write!(self.out, "(float4(int4(")?;
                         self.write_expr(module, arg, func_ctx)?;
-                        write!(self.out, "<< 24, ")?;
+                        write!(self.out, " << 24, ")?;
                         self.write_expr(module, arg, func_ctx)?;
                         write!(self.out, " << 16, ")?;
                         self.write_expr(module, arg, func_ctx)?;
                         write!(self.out, " << 8, ")?;
                         self.write_expr(module, arg, func_ctx)?;
-                        write!(self.out, ") >> 24)) / {scale}.0, -1.0, 1.0)")?;
+                        write!(self.out, ") >> 24) / {scale}.0)")?;
                     }
                     Function::Unpack4x8unorm => {
                         let scale = 255;
 
-                        write!(self.out, "clamp(float4(")?;
+                        write!(self.out, "(float4(")?;
                         self.write_expr(module, arg, func_ctx)?;
                         write!(self.out, " & 0xFF, ")?;
                         self.write_expr(module, arg, func_ctx)?;
@@ -2922,7 +2922,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         self.write_expr(module, arg, func_ctx)?;
                         write!(self.out, " >> 16 & 0xFF, ")?;
                         self.write_expr(module, arg, func_ctx)?;
-                        write!(self.out, " >> 24 & 0xFF) / {scale}.0,  0.0, 1.0)")?;
+                        write!(self.out, " >> 24) / {scale}.0)")?;
                     }
                     Function::Regular(fun_name) => {
                         write!(self.out, "{fun_name}(")?;
