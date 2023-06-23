@@ -451,7 +451,6 @@ impl super::Validator {
                 ti.uniform_layout = Ok(Alignment::MIN_UNIFORM);
 
                 let mut min_offset = 0;
-
                 let mut prev_struct_data: Option<(u32, u32)> = None;
 
                 for (i, member) in members.iter().enumerate() {
@@ -585,6 +584,7 @@ impl super::Validator {
                     // Currently Naga only supports binding arrays of structs for non-handle types.
                     match gctx.types[base].inner {
                         crate::TypeInner::Struct { .. } => {}
+                        crate::TypeInner::Array { .. } => {}
                         _ => return Err(TypeError::BindingArrayBaseTypeNotStruct(base)),
                     };
                 }

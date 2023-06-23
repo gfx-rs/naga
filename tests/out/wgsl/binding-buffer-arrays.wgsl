@@ -34,6 +34,10 @@ fn main(fragment_in: FragmentIn) -> @location(0) @interpolate(flat) u32 {
     u1_ = (_e24 + _e23);
     let _e31 = u1_;
     u1_ = (_e31 + arrayLength((&storage_array[0].far)));
-    let _e33 = u1_;
-    return _e33;
+    let _e37 = u1_;
+    u1_ = (_e37 + arrayLength((&storage_array[uniform_index].far)));
+    let _e43 = u1_;
+    u1_ = (_e43 + arrayLength((&storage_array[non_uniform_index].far)));
+    let _e45 = u1_;
+    return _e45;
 }
