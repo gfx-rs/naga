@@ -7,7 +7,7 @@ use super::{
     Dimension, Error, Instruction, LocalType, LookupType, LoopContext, ResultMember, Writer,
     WriterFlags,
 };
-use crate::{arena::Handle, proc::TypeResolution};
+use crate::{arena::Handle, proc::TypeResolution, Statement};
 use spirv::Word;
 
 fn get_dimension(type_inner: &crate::TypeInner) -> Dimension {
@@ -1712,7 +1712,16 @@ impl<'w> BlockContext<'w> {
     ) -> Result<(), Error> {
         let mut block = Block::new(label_id);
         for (statement, span) in naga_block.span_iter() {
-            if let Some(debug_info) = debug_info {
+            if let (Some(debug_info), false) = (
+                debug_info,
+                matches!(
+                    statement,
+                    &(Statement::Block(..)
+                        | Statement::If { .. }
+                        | Statement::Switch { .. }
+                        | Statement::Loop { .. })
+                ),
+            ) {
                 let loc: crate::SourceLocation = span.location(debug_info.source_code);
                 block.body.push(Instruction::line(
                     debug_info.source_file_id,
