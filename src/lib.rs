@@ -1946,9 +1946,4 @@ pub struct Module {
     pub functions: Arena<Function>,
     /// Entry points.
     pub entry_points: Vec<EntryPoint>,
-
-    /// Source Code for debug
-    pub source_code: Option<String>,
-    /// File name for debug
-    pub file_path: Option<String>,
 }

@@ -232,6 +232,7 @@ fn write_output_spv(
         bounds_check_policies,
         binding_map: params.binding_map.clone(),
         zero_initialize_workgroup_memory: spv::ZeroInitializeWorkgroupMemoryMode::Polyfill,
+        debug_info: None,
     };
 
     if params.separate_entry_points {

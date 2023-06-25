@@ -61,7 +61,7 @@ pub enum BlockExit {
 }
 
 #[derive(Debug)]
-pub struct DebugInfo<'a> {
+pub(crate) struct DebugInfoInner<'a> {
     pub source_code: &'a str,
     pub source_file_id: Word,
 }
@@ -1708,13 +1708,11 @@ impl<'w> BlockContext<'w> {
         naga_block: &crate::Block,
         exit: BlockExit,
         loop_context: LoopContext,
-        debug_info: Option<&DebugInfo>,
+        debug_info: Option<&DebugInfoInner>,
     ) -> Result<(), Error> {
         let mut block = Block::new(label_id);
-        let statements = naga_block.iter();
-        let mut spans = naga_block.span_iter();
-        for statement in statements {
-            if let (Some(debug_info), Some((_, span))) = (debug_info, spans.next()) {
+        for (statement, span) in naga_block.span_iter() {
+            if let Some(debug_info) = debug_info {
                 let loc: crate::SourceLocation = span.location(debug_info.source_code);
                 block.body.push(Instruction::line(
                     debug_info.source_file_id,

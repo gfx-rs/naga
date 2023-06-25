@@ -1,4 +1,4 @@
-use super::helpers;
+use super::{block::DebugInfoInner, helpers};
 use spirv::{Op, Word};
 
 pub(super) enum Signedness {
@@ -31,14 +31,14 @@ impl super::Instruction {
     pub(super) fn source(
         source_language: spirv::SourceLanguage,
         version: u32,
-        source: Option<(Word, &str)>,
+        source: &Option<DebugInfoInner>,
     ) -> Self {
         let mut instruction = Self::new(Op::Source);
         instruction.add_operand(source_language as u32);
         instruction.add_operands(helpers::bytes_to_words(&version.to_le_bytes()));
-        if let Some((file, source)) = source {
-            instruction.add_operand(file);
-            instruction.add_operands(helpers::string_to_words(source));
+        if let Some(source) = source.as_ref() {
+            instruction.add_operand(source.source_file_id);
+            instruction.add_operands(helpers::string_to_words(source.source_code));
         }
         instruction
     }

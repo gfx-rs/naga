@@ -82,6 +82,12 @@ impl IdGenerator {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct DebugInfo<'a> {
+    pub source_code: &'a str,
+    pub file_name: &'a str,
+}
+
 /// A SPIR-V block to which we are still adding instructions.
 ///
 /// A `Block` represents a SPIR-V block that does not yet have a termination
@@ -621,8 +627,6 @@ pub struct Writer {
 
     gl450_ext_inst_id: Word,
 
-    //used for OpString to track source code filename
-    source_file_id: Option<Word>,
     // Just a temporary list of SPIR-V ids
     temp_list: Vec<Word>,
 }
@@ -667,7 +671,7 @@ pub enum ZeroInitializeWorkgroupMemoryMode {
 }
 
 #[derive(Debug, Clone)]
-pub struct Options {
+pub struct Options<'a> {
     /// (Major, Minor) target version of the SPIR-V.
     pub lang_version: (u8, u8),
 
@@ -689,9 +693,11 @@ pub struct Options {
 
     /// Dictates the way workgroup variables should be zero initialized
     pub zero_initialize_workgroup_memory: ZeroInitializeWorkgroupMemoryMode,
+
+    pub debug_info: Option<DebugInfo<'a>>,
 }
 
-impl Default for Options {
+impl<'a> Default for Options<'a> {
     fn default() -> Self {
         let mut flags = WriterFlags::ADJUST_COORDINATE_SPACE
             | WriterFlags::LABEL_VARYINGS
@@ -706,6 +712,7 @@ impl Default for Options {
             capabilities: None,
             bounds_check_policies: crate::proc::BoundsCheckPolicies::default(),
             zero_initialize_workgroup_memory: ZeroInitializeWorkgroupMemoryMode::Polyfill,
+            debug_info: None,
         }
     }
 }
@@ -729,8 +736,17 @@ pub fn write_vec(
     options: &Options,
     pipeline_options: Option<&PipelineOptions>,
 ) -> Result<Vec<u32>, Error> {
-    let mut words = Vec::new();
+    let mut words: Vec<u32> = Vec::new();
     let mut w = Writer::new(options)?;
-    w.write(module, info, pipeline_options, &mut words)?;
+
+    if options.flags.contains(WriterFlags::DEBUG) {}
+
+    w.write(
+        module,
+        info,
+        pipeline_options,
+        &options.debug_info,
+        &mut words,
+    )?;
     Ok(words)
 }

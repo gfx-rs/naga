@@ -148,13 +148,13 @@ impl FromStr for GlslProfileArg {
 }
 
 #[derive(Default)]
-struct Parameters {
+struct Parameters<'a> {
     validation_flags: naga::valid::ValidationFlags,
     bounds_check_policies: naga::proc::BoundsCheckPolicies,
     entry_point: Option<String>,
     keep_coordinate_space: bool,
     spv_block_ctx_dump_prefix: Option<String>,
-    spv: naga::back::spv::Options,
+    spv: naga::back::spv::Options<'a>,
     msl: naga::back::msl::Options,
     glsl: naga::back::glsl::Options,
     hlsl: naga::back::hlsl::Options,
@@ -262,7 +262,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     }
     params.keep_coordinate_space = args.keep_coordinate_space;
 
-    let (mut module, input_text) = match Path::new(&input_path)
+    let (module, input_text) = match Path::new(&input_path)
         .extension()
         .ok_or(CliError("Input filename has no extension"))?
         .to_str()
@@ -320,12 +320,6 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         _ => return Err(CliError("Unknown input file extension").into()),
     };
 
-    //Insert Debug infos
-    if args.generate_debug_symbols.unwrap_or_default() {
-        module.file_path = input_path.as_os_str().to_str().map(ToString::to_string);
-        module.source_code = input_text.clone();
-    }
-
     // Decide which capabilities our output formats can support.
     let validation_caps =
         output_paths
@@ -346,9 +340,9 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     {
         Ok(info) => Some(info),
         Err(error) => {
-            if let Some(input) = input_text {
+            if let Some(input) = &input_text {
                 let filename = input_path.file_name().and_then(std::ffi::OsStr::to_str);
-                emit_annotated_error(&error, filename.unwrap_or("input"), &input);
+                emit_annotated_error(&error, filename.unwrap_or("input"), input);
             }
             print_err(&error);
             None
@@ -425,12 +419,17 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 };
 
                 params.spv.bounds_check_policies = params.bounds_check_policies;
-                if let Some(generate_debug_symbols) = args.generate_debug_symbols {
-                    params
-                        .spv
-                        .flags
-                        .set(spv::WriterFlags::DEBUG, generate_debug_symbols);
-                };
+
+                //Insert Debug infos
+                let debug_info = args.generate_debug_symbols.and_then(|debug| {
+                    params.spv.flags.set(spv::WriterFlags::DEBUG, debug);
+                    Some(spv::DebugInfo {
+                        source_code: input_text.as_ref()?,
+                        file_name: input_path.file_name().and_then(std::ffi::OsStr::to_str)?,
+                    })
+                });
+                params.spv.debug_info = debug_info;
+
                 params.spv.flags.set(
                     spv::WriterFlags::ADJUST_COORDINATE_SPACE,
                     !params.keep_coordinate_space,
