@@ -1717,8 +1717,10 @@ impl<'w> BlockContext<'w> {
                 matches!(
                     statement,
                     &(Statement::Block(..)
-                        | Statement::If { .. }
-                        | Statement::Switch { .. }
+                        | Statement::Break
+                        | Statement::Continue
+                        | Statement::Kill
+                        | Statement::Return { .. }
                         | Statement::Loop { .. })
                 ),
             ) {
@@ -1900,6 +1902,16 @@ impl<'w> BlockContext<'w> {
                     // SPIR-V requires the continuing to the `OpLoopMerge`,
                     // so we have to start a new block with it.
                     block = Block::new(preamble_id);
+                    // HACK the loop statement is begin with branch instruction,
+                    // so we need to put `OpLine` debug info before merge instruction
+                    if let Some(debug_info) = debug_info {
+                        let loc: crate::SourceLocation = span.location(debug_info.source_code);
+                        block.body.push(Instruction::line(
+                            debug_info.source_file_id,
+                            loc.line_number,
+                            loc.line_position,
+                        ))
+                    }
                     block.body.push(Instruction::loop_merge(
                         merge_id,
                         continuing_id,

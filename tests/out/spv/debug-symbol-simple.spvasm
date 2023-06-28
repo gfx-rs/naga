@@ -9,7 +9,7 @@ OpEntryPoint Vertex %24 "vs_main" %15 %18 %20 %22
 OpEntryPoint Fragment %57 "fs_main" %51 %54 %56
 OpExecutionMode %57 OriginUpperLeft
 %3 = OpString "debug-symbol-simple"
-OpSource Unknown 450 %3 "struct VertexInput {
+OpSource Unknown 0 %3 "struct VertexInput {
     @location(0) position: vec3<f32>,
     @location(1) color: vec3<f32>,
 };
@@ -132,7 +132,6 @@ OpLine %3 17 5
 OpStore %37 %35
 OpLine %3 1 1
 %38 = OpLoad  %8  %10
-OpLine %3 18 5
 %39 = OpCompositeExtract  %7  %38 0
 OpStore %20 %39
 %40 = OpCompositeExtract  %4  %38 1
@@ -157,6 +156,7 @@ OpLine %3 26 10
 OpStore %43 %58
 OpBranch %65
 %65 = OpLabel
+OpLine %3 26 5
 OpLoopMerge %66 %68 None
 OpBranch %67
 %67 = OpLabel
@@ -164,10 +164,10 @@ OpLine %3 1 1
 %69 = OpLoad  %9  %43
 OpLine %3 26 21
 %71 = OpSLessThan  %70  %69 %59
+OpLine %3 26 20
 OpSelectionMerge %72 None
 OpBranchConditional %71 %72 %73
 %73 = OpLabel
-OpLine %3 26 20
 OpBranch %66
 %72 = OpLabel
 OpBranch %74
@@ -212,7 +212,6 @@ OpLine %3 1 1
 %93 = OpLoad  %4  %41
 OpLine %3 32 12
 %94 = OpCompositeConstruct  %7  %93 %26
-OpLine %3 32 5
 OpStore %56 %94
 OpReturn
 OpFunctionEnd

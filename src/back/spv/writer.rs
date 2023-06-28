@@ -1787,14 +1787,13 @@ impl Writer {
                 debug_info_inner = Some(DebugInfoInner {
                     source_code: debug_info.source_code,
                     source_file_id,
-                })
+                });
+                self.debugs.push(Instruction::source(
+                    spirv::SourceLanguage::Unknown,
+                    0,
+                    &debug_info_inner,
+                ));
             }
-
-            self.debugs.push(Instruction::source(
-                spirv::SourceLanguage::Unknown,
-                450,
-                &debug_info_inner,
-            ));
         }
 
         self.constant_ids.resize(ir_module.constants.len(), 0);

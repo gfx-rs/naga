@@ -89,7 +89,7 @@ struct Parameters {
 }
 
 #[allow(unused_variables)]
-fn check_targets(module: &naga::Module, name: &str, targets: Targets) {
+fn check_targets(module: &naga::Module, name: &str, targets: Targets, source_code: Option<&str>) {
     let root = env!("CARGO_MANIFEST_DIR");
     let filepath = format!("{root}/{BASE_DIR_IN}/{name}.param.ron");
     let params = match fs::read_to_string(&filepath) {
@@ -131,12 +131,22 @@ fn check_targets(module: &naga::Module, name: &str, targets: Targets) {
 
     #[cfg(all(feature = "deserialize", feature = "spv-out"))]
     {
+        let debug_info = if cfg!(feature = "span") {
+            source_code.map(|code| naga::back::spv::DebugInfo {
+                source_code: code,
+                file_name: name,
+            })
+        } else {
+            None
+        };
+
         if targets.contains(Targets::SPIRV) {
             write_output_spv(
                 module,
                 &info,
                 &dest,
                 name,
+                debug_info,
                 &params.spv,
                 params.bounds_check_policies,
             );
@@ -198,68 +208,13 @@ fn check_targets(module: &naga::Module, name: &str, targets: Targets) {
     }
 }
 
-#[allow(unused_variables)]
-fn check_targets_with_debug(
-    module: &naga::Module,
-    name: &str,
-    targets: Targets,
-    source_code: &str,
-) {
-    let root = env!("CARGO_MANIFEST_DIR");
-    let filepath = format!("{root}/{BASE_DIR_IN}/{name}.param.ron");
-    let params = match fs::read_to_string(&filepath) {
-        Ok(string) => {
-            ron::de::from_str(&string).expect(&format!("Couldn't parse param file: {}", filepath))
-        }
-        Err(_) => Parameters::default(),
-    };
-
-    let capabilities = if params.god_mode {
-        naga::valid::Capabilities::all()
-    } else {
-        naga::valid::Capabilities::default()
-    };
-
-    let dest = PathBuf::from(root).join(BASE_DIR_OUT);
-
-    let info = naga::valid::Validator::new(naga::valid::ValidationFlags::all(), capabilities)
-        .validate(module)
-        .expect(&format!("Naga module validation failed on test '{name}'"));
-
-    #[cfg(feature = "serialize")]
-    {
-        if targets.contains(Targets::ANALYSIS) {
-            let config = ron::ser::PrettyConfig::default().new_line("\n".to_string());
-            let string = ron::ser::to_string_pretty(&info, config).unwrap();
-            fs::write(dest.join(format!("analysis/{name}.info.ron")), string).unwrap();
-        }
-    }
-
-    #[cfg(all(feature = "deserialize", feature = "spv-out"))]
-    {
-        if targets.contains(Targets::SPIRV) {
-            write_output_spv_with_debug(
-                module,
-                &info,
-                &dest,
-                naga::back::spv::DebugInfo {
-                    source_code,
-                    file_name: name,
-                },
-                name,
-                &params.spv,
-                params.bounds_check_policies,
-            );
-        }
-    }
-}
-
 #[cfg(feature = "spv-out")]
 fn write_output_spv(
     module: &naga::Module,
     info: &naga::valid::ModuleInfo,
     destination: &Path,
     file_name: &str,
+    debug_info: Option<naga::back::spv::DebugInfo>,
     params: &SpirvOutParameters,
     bounds_check_policies: naga::proc::BoundsCheckPolicies,
 ) {
@@ -288,7 +243,7 @@ fn write_output_spv(
         bounds_check_policies,
         binding_map: params.binding_map.clone(),
         zero_initialize_workgroup_memory: spv::ZeroInitializeWorkgroupMemoryMode::Polyfill,
-        debug_info: None,
+        debug_info,
     };
 
     if params.separate_entry_points {
@@ -297,89 +252,50 @@ fn write_output_spv(
                 entry_point: ep.name.clone(),
                 shader_stage: ep.stage,
             };
-            let spv = spv::write_vec(module, info, &options, Some(&pipeline_options)).unwrap();
-            let dis = rspirv::dr::load_words(spv)
-                .expect("Produced invalid SPIR-V")
-                .disassemble();
-            let path = format!("spv/{}.{}.spvasm", file_name, ep.name);
-            fs::write(destination.join(path), dis).unwrap();
+            write_output_spv_inner(
+                module,
+                info,
+                &options,
+                Some(&pipeline_options),
+                destination,
+                format!("spv/{}.{}.spvasm", file_name, ep.name),
+            );
         }
     } else {
-        let spv = spv::write_vec(module, info, &options, None).unwrap();
-        let dis = rspirv::dr::load_words(spv)
-            .expect("Produced invalid SPIR-V")
-            .disassemble();
-        fs::write(destination.join(format!("spv/{file_name}.spvasm")), dis).unwrap();
+        write_output_spv_inner(
+            module,
+            info,
+            &options,
+            None,
+            destination,
+            format!("spv/{file_name}.spvasm"),
+        );
     }
 }
 
-#[cfg(all(feature = "spv-out", feature = "span"))]
-fn write_output_spv_with_debug(
+#[cfg(feature = "spv-out")]
+fn write_output_spv_inner(
     module: &naga::Module,
     info: &naga::valid::ModuleInfo,
+    options: &naga::back::spv::Options<'_>,
+    pipeline_options: Option<&naga::back::spv::PipelineOptions>,
     destination: &Path,
-    debug: naga::back::spv::DebugInfo,
-    file_name: &str,
-    params: &SpirvOutParameters,
-    bounds_check_policies: naga::proc::BoundsCheckPolicies,
+    path: String,
 ) {
     use naga::back::spv;
     use rspirv::binary::Disassemble;
-
-    println!("writing SPIR-V with debug info");
-
-    let mut flags = spv::WriterFlags::LABEL_VARYINGS;
-    flags.set(spv::WriterFlags::DEBUG, params.debug);
-    flags.set(
-        spv::WriterFlags::ADJUST_COORDINATE_SPACE,
-        params.adjust_coordinate_space,
-    );
-    flags.set(spv::WriterFlags::FORCE_POINT_SIZE, params.force_point_size);
-    flags.set(spv::WriterFlags::CLAMP_FRAG_DEPTH, params.clamp_frag_depth);
-    flags.set(spv::WriterFlags::DEBUG, true);
-
-    let options = spv::Options {
-        lang_version: (params.version.0, params.version.1),
-        flags,
-        capabilities: if params.capabilities.is_empty() {
-            None
-        } else {
-            Some(params.capabilities.clone())
-        },
-        bounds_check_policies,
-        binding_map: params.binding_map.clone(),
-        zero_initialize_workgroup_memory: spv::ZeroInitializeWorkgroupMemoryMode::Polyfill,
-        debug_info: Some(debug),
-    };
-
-    if params.separate_entry_points {
-        for ep in module.entry_points.iter() {
-            let pipeline_options = spv::PipelineOptions {
-                entry_point: ep.name.clone(),
-                shader_stage: ep.stage,
-            };
-            let spv = spv::write_vec(module, info, &options, Some(&pipeline_options)).unwrap();
-            let dis = rspirv::dr::load_words(spv)
-                .expect("Produced invalid SPIR-V")
-                .disassemble();
-            let dis = dis.replace("\\r", "\r");
-            let dis = dis.replace("\\n", "\n");
-            let path = format!("spv/{}.{}.spvasm", file_name, ep.name);
-            fs::write(destination.join(path), dis).unwrap();
-        }
-    } else {
-        let spv = spv::write_vec(module, info, &options, None).unwrap();
-        let dis = rspirv::dr::load_words(spv)
-            .expect("Produced invalid SPIR-V")
-            .disassemble();
+    let spv = spv::write_vec(module, info, options, pipeline_options).unwrap();
+    let dis = rspirv::dr::load_words(spv)
+        .expect("Produced invalid SPIR-V")
+        .disassemble();
+    // HACK escape CR/LF if source code is in side.
+    let dis = if options.debug_info.is_some() {
         let dis = dis.replace("\\r", "\r");
-        let dis = dis.replace("\\n", "\n");
-        fs::write(
-            destination.join(format!("spv_debug/{file_name}.spvasm")),
-            dis,
-        )
-        .unwrap();
-    }
+        dis.replace("\\n", "\n")
+    } else {
+        dis
+    };
+    fs::write(destination.join(path), dis).unwrap();
 }
 
 #[cfg(feature = "msl-out")]
@@ -699,31 +615,26 @@ fn convert_wgsl() {
         let file = fs::read_to_string(format!("{root}/{BASE_DIR_IN}/{name}.wgsl"))
             .expect("Couldn't find wgsl file");
         match naga::front::wgsl::parse_str(&file) {
-            Ok(module) => check_targets(&module, name, targets),
+            Ok(module) => check_targets(&module, name, targets, None),
             Err(e) => panic!("{}", e.emit_to_string(&file)),
         }
     }
-}
 
-#[cfg(all(feature = "wgsl-in", feature = "span"))]
-#[test]
-fn convert_wgsl_with_debug() {
-    let _ = env_logger::try_init();
-
-    let root = env!("CARGO_MANIFEST_DIR");
-    let inputs = [
-        ("debug-symbol-simple", Targets::SPIRV),
-        ("debug-symbol-terrain", Targets::SPIRV),
-    ];
-
-    for &(name, targets) in inputs.iter() {
-        println!("Processing '{name}'");
-        // WGSL shaders lives in root dir as a privileged.
-        let file = fs::read_to_string(format!("{root}/{BASE_DIR_IN}/{name}.wgsl"))
-            .expect("Couldn't find wgsl file");
-        match naga::front::wgsl::parse_str(&file) {
-            Ok(module) => check_targets_with_debug(&module, name, targets, &file),
-            Err(e) => panic!("{}", e.emit_to_string(&file)),
+    #[cfg(feature = "span")]
+    {
+        let inputs = [
+            ("debug-symbol-simple", Targets::SPIRV),
+            ("debug-symbol-terrain", Targets::SPIRV),
+        ];
+        for &(name, targets) in inputs.iter() {
+            println!("Processing '{name}'");
+            // WGSL shaders lives in root dir as a privileged.
+            let file = fs::read_to_string(format!("{root}/{BASE_DIR_IN}/{name}.wgsl"))
+                .expect("Couldn't find wgsl file");
+            match naga::front::wgsl::parse_str(&file) {
+                Ok(module) => check_targets(&module, name, targets, Some(&file)),
+                Err(e) => panic!("{}", e.emit_to_string(&file)),
+            }
         }
     }
 }
@@ -743,7 +654,7 @@ fn convert_spv(name: &str, adjust_coordinate_space: bool, targets: Targets) {
         },
     )
     .unwrap();
-    check_targets(&module, name, targets);
+    check_targets(&module, name, targets, None);
     naga::valid::Validator::new(
         naga::valid::ValidationFlags::all(),
         naga::valid::Capabilities::default(),
@@ -797,7 +708,7 @@ fn convert_glsl_variations_check() {
             &file,
         )
         .unwrap();
-    check_targets(&module, "variations-glsl", Targets::GLSL);
+    check_targets(&module, "variations-glsl", Targets::GLSL, None);
 }
 
 #[cfg(feature = "glsl-in")]

@@ -15,7 +15,7 @@ OpExecutionMode %351 LocalSize 64 1 1
 OpExecutionMode %475 OriginUpperLeft
 OpExecutionMode %593 OriginUpperLeft
 %3 = OpString "debug-symbol-terrain"
-OpSource Unknown 450 %3 "// Taken from https://github.com/sotrh/learn-wgpu/blob/11820796f5e1dbce42fb1119f04ddeb4b167d2a0/code/intermediate/tutorial13-terrain/src/terrain.wgsl
+OpSource Unknown 0 %3 "// Taken from https://github.com/sotrh/learn-wgpu/blob/11820796f5e1dbce42fb1119f04ddeb4b167d2a0/code/intermediate/tutorial13-terrain/src/terrain.wgsl
 // ============================
 // Terrain Generation
 // ============================
@@ -651,7 +651,6 @@ OpLine %3 10 50
 OpLine %3 10 49
 %63 = OpCompositeConstruct  %4  %57 %57 %57
 %64 = OpFRem  %4  %62 %63
-OpLine %3 10 42
 OpReturnValue %64
 OpFunctionEnd
 %78 = OpFunction  %5  None %79
@@ -819,7 +818,6 @@ OpLine %3 30 12
 %202 = OpLoad  %4  %73
 %203 = OpDot  %5  %202 %201
 %204 = OpFMul  %5  %89 %203
-OpLine %3 30 5
 OpReturnValue %204
 OpFunctionEnd
 %217 = OpFunction  %5  None %79
@@ -859,16 +857,17 @@ OpLine %3 43 10
 OpStore %212 %132
 OpBranch %235
 %235 = OpLabel
+OpLine %3 43 5
 OpLoopMerge %236 %238 None
 OpBranch %237
 %237 = OpLabel
 OpLine %3 43 22
 %239 = OpLoad  %8  %212
 %240 = OpULessThan  %108  %239 %218
+OpLine %3 43 21
 OpSelectionMerge %241 None
 OpBranchConditional %240 %241 %242
 %242 = OpLabel
-OpLine %3 43 21
 OpBranch %236
 %241 = OpLabel
 OpBranch %243
@@ -912,7 +911,6 @@ OpBranch %235
 %236 = OpLabel
 OpLine %3 1 1
 %259 = OpLoad  %5  %207
-OpLine %3 49 5
 OpReturnValue %259
 OpFunctionEnd
 %263 = OpFunction  %4  None %264
@@ -931,7 +929,6 @@ OpLine %3 76 12
 %270 = OpExtInst  %5  %1 FMix %267 %268 %269
 %271 = OpCompositeExtract  %5  %261 1
 %272 = OpCompositeConstruct  %4  %266 %270 %271
-OpLine %3 76 5
 OpReturnValue %272
 OpFunctionEnd
 %276 = OpFunction  %14  None %277
@@ -982,7 +979,6 @@ OpLine %3 94 13
 %303 = OpVectorTimesScalar  %4  %302 %85
 OpLine %3 96 12
 %304 = OpCompositeConstruct  %14  %281 %303
-OpLine %3 96 5
 OpReturnValue %304
 OpFunctionEnd
 %309 = OpFunction  %6  None %310
@@ -1007,7 +1003,6 @@ OpLine %3 100 12
 %321 = OpCompositeConstruct  %6  %316 %320
 %322 = OpConvertSToF  %6  %308
 %323 = OpFAdd  %6  %321 %322
-OpLine %3 100 5
 OpReturnValue %323
 OpFunctionEnd
 %326 = OpFunction  %4  None %327
@@ -1040,7 +1035,6 @@ OpLine %3 272 9
 OpLine %3 269 12
 %345 = OpFAdd  %5  %344 %85
 %346 = OpCompositeConstruct  %4  %335 %340 %345
-OpLine %3 269 5
 OpReturnValue %346
 OpFunctionEnd
 %351 = OpFunction  %2  None %352
@@ -1082,10 +1076,10 @@ OpLine %3 120 25
 OpLine %3 120 9
 %383 = OpIMul  %8  %382 %355
 %384 = OpUGreaterThanEqual  %108  %376 %383
+OpLine %3 120 5
 OpSelectionMerge %385 None
 OpBranchConditional %384 %386 %385
 %386 = OpLabel
-OpLine %3 120 84
 OpReturn
 %385 = OpLabel
 OpLine %3 122 28
@@ -1139,7 +1133,6 @@ OpLine %3 132 5
 OpLine %3 132 5
 %410 = OpAccessChain  %399  %34 %132 %409
 OpStore %410 %392
-OpLine %3 1 1
 OpReturn
 OpFunctionEnd
 %421 = OpFunction  %2  None %352
@@ -1191,7 +1184,6 @@ OpLine %3 168 17
 %454 = OpIAdd  %8  %451 %453
 OpLine %3 170 12
 %455 = OpCompositeConstruct  %21  %454 %438 %434
-OpLine %3 170 5
 %456 = OpCompositeExtract  %8  %455 0
 OpStore %415 %456
 %457 = OpCompositeExtract  %7  %455 1
@@ -1259,6 +1251,7 @@ OpLine %3 186 13
 %511 = OpFunctionCall  %14  %276 %508 %510
 OpLine %3 188 5
 OpStore %459 %84
+OpLine %3 190 5
 OpSelectionMerge %512 None
 OpSwitch %503 %519 0 %513 1 %514 2 %515 3 %516 4 %517 5 %518
 %513 = OpLabel
@@ -1323,6 +1316,7 @@ OpLine %3 203 15
 %541 = OpIAdd  %8  %540 %123
 OpLine %3 205 5
 OpStore %461 %132
+OpLine %3 206 5
 OpSelectionMerge %542 None
 OpSwitch %503 %547 0 %543 3 %543 2 %544 4 %544 1 %545 5 %546
 %543 = OpLabel
@@ -1354,7 +1348,6 @@ OpLine %3 222 27
 OpLine %3 223 12
 %551 = OpLoad  %8  %461
 %552 = OpCompositeConstruct  %22  %550 %551
-OpLine %3 223 5
 %553 = OpCompositeExtract  %8  %552 0
 OpStore %473 %553
 %554 = OpCompositeExtract  %8  %552 1
@@ -1381,7 +1374,6 @@ OpLine %3 255 18
 OpLine %3 256 12
 %577 = OpCompositeExtract  %4  %556 0
 %578 = OpCompositeConstruct  %26  %575 %576 %577
-OpLine %3 256 5
 %579 = OpCompositeExtract  %7  %578 0
 OpStore %562 %579
 %580 = OpCompositeExtract  %4  %578 1
@@ -1473,7 +1465,6 @@ OpLine %3 294 18
 %651 = OpFMul  %4  %649 %650
 OpLine %3 296 12
 %652 = OpCompositeConstruct  %7  %651 %56
-OpLine %3 296 5
 OpStore %592 %652
 OpReturn
 OpFunctionEnd
