@@ -106,7 +106,7 @@ pub struct BoundsCheckPolicies {
     #[cfg_attr(feature = "deserialize", serde(default))]
     pub buffer: BoundsCheckPolicy,
 
-    /// How should the generated code handle image texel references that are out
+    /// How should the generated code handle image texel loads that are out
     /// of range?
     ///
     /// This controls the behavior of [`ImageLoad`] expressions when a coordinate,
@@ -116,7 +116,7 @@ pub struct BoundsCheckPolicies {
     #[cfg_attr(feature = "deserialize", serde(default))]
     pub image_load: BoundsCheckPolicy,
 
-    /// How should the generated code handle image texel references that are out
+    /// How should the generated code handle image texel stores that are out
     /// of range?
     ///
     /// This controls the behavior of [`ImageStore`] statements when a coordinate,
