@@ -628,35 +628,55 @@ impl<'source> ParsingContext<'source> {
         loop {
             // TODO: type_qualifier
 
-            let (mut ty, mut meta) = self.parse_type_non_void(frontend)?;
-            let (name, end_meta) = self.expect_ident(frontend)?;
+            let (ty, mut meta) = self.parse_type_non_void(frontend)?;
+
+            let (name, mut end_meta) = self.expect_ident(frontend)?;
+            let mut ty_copy = ty;
+            self.parse_array_specifier(frontend, &mut meta, &mut ty_copy)?;
+
+            let mut names_ty = vec![(name, ty_copy)];
+
+            while let Some(&Token {
+                value: TokenValue::Comma,
+                ..
+            }) = self.peek(frontend)
+            {
+                self.bump(frontend)?;
+
+                let (next_name, next_end_meta) = self.expect_ident(frontend)?;
+                let mut ty_copy = ty;
+                self.parse_array_specifier(frontend, &mut meta, &mut ty_copy)?;
+
+                names_ty.push((next_name, ty_copy));
+                end_meta = next_end_meta;
+            }
 
             meta.subsume(end_meta);
 
-            self.parse_array_specifier(frontend, &mut meta, &mut ty)?;
-
             self.expect(frontend, TokenValue::Semicolon)?;
 
-            let info = offset::calculate_offset(
-                ty,
-                meta,
-                layout,
-                &mut frontend.module.types,
-                &mut frontend.errors,
-            );
+            for (name, ty) in names_ty {
+                let info = offset::calculate_offset(
+                    ty,
+                    meta,
+                    layout,
+                    &mut frontend.module.types,
+                    &mut frontend.errors,
+                );
 
-            let member_alignment = info.align;
-            span = member_alignment.round_up(span);
-            align = member_alignment.max(align);
+                let member_alignment = info.align;
+                span = member_alignment.round_up(span);
+                align = member_alignment.max(align);
 
-            members.push(StructMember {
-                name: Some(name),
-                ty: info.ty,
-                binding: None,
-                offset: span,
-            });
+                members.push(StructMember {
+                    name: Some(name),
+                    ty: info.ty,
+                    binding: None,
+                    offset: span,
+                });
 
-            span += info.span;
+                span += info.span;
+            }
 
             if let TokenValue::RightBrace = self.expect_peek(frontend)?.value {
                 break;
