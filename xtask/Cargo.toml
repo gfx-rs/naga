@@ -15,4 +15,3 @@ shell-words = "1.1.0"
 which = "4.4.0"
 
 [workspace]
-members = ["."]
