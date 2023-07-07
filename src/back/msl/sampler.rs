@@ -156,7 +156,7 @@ pub struct InlineSampler {
 
 impl Eq for InlineSampler {}
 
-#[allow(clippy::derive_hash_xor_eq)]
+#[allow(clippy::derived_hash_with_manual_eq)]
 impl std::hash::Hash for InlineSampler {
     fn hash<H: std::hash::Hasher>(&self, hasher: &mut H) {
         self.coord.hash(hasher);

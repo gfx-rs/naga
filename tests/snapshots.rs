@@ -93,9 +93,8 @@ fn check_targets(module: &naga::Module, name: &str, targets: Targets, source_cod
     let root = env!("CARGO_MANIFEST_DIR");
     let filepath = format!("{root}/{BASE_DIR_IN}/{name}.param.ron");
     let params = match fs::read_to_string(&filepath) {
-        Ok(string) => {
-            ron::de::from_str(&string).expect(&format!("Couldn't parse param file: {}", filepath))
-        }
+        Ok(string) => ron::de::from_str(&string)
+            .unwrap_or_else(|_| panic!("Couldn't parse param file: {}", filepath)),
         Err(_) => Parameters::default(),
     };
 
@@ -118,7 +117,7 @@ fn check_targets(module: &naga::Module, name: &str, targets: Targets, source_cod
 
     let info = naga::valid::Validator::new(naga::valid::ValidationFlags::all(), capabilities)
         .validate(module)
-        .expect(&format!("Naga module validation failed on test '{name}'"));
+        .unwrap_or_else(|_| panic!("Naga module validation failed on test '{name}'"));
 
     #[cfg(feature = "serialize")]
     {
