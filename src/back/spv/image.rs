@@ -1045,7 +1045,7 @@ impl<'w> BlockContext<'w> {
                 };
                 let extended_size_type_id = self.get_type_id(LookupType::Local(LocalType::Value {
                     vector_size,
-                    kind: crate::ScalarKind::Sint,
+                    kind: crate::ScalarKind::Uint,
                     width: 4,
                     pointer_space: None,
                 }));
@@ -1077,24 +1077,7 @@ impl<'w> BlockContext<'w> {
                 }
                 block.body.push(inst);
 
-                let bitcast_type_id = self.get_type_id(
-                    LocalType::Value {
-                        vector_size,
-                        kind: crate::ScalarKind::Uint,
-                        width: 4,
-                        pointer_space: None,
-                    }
-                    .into(),
-                );
-                let bitcast_id = self.gen_id();
-                block.body.push(Instruction::unary(
-                    spirv::Op::Bitcast,
-                    bitcast_type_id,
-                    bitcast_id,
-                    id_extended,
-                ));
-
-                if result_type_id != bitcast_type_id {
+                if result_type_id != extended_size_type_id {
                     let id = self.gen_id();
                     let components = match dim {
                         // always pick the first component, and duplicate it for all 3 dimensions
@@ -1104,14 +1087,14 @@ impl<'w> BlockContext<'w> {
                     block.body.push(Instruction::vector_shuffle(
                         result_type_id,
                         id,
-                        bitcast_id,
-                        bitcast_id,
+                        id_extended,
+                        id_extended,
                         components,
                     ));
 
                     id
                 } else {
-                    bitcast_id
+                    id_extended
                 }
             }
             Iq::NumLevels => {
@@ -1121,7 +1104,7 @@ impl<'w> BlockContext<'w> {
                     self.get_type_id(
                         LocalType::Value {
                             vector_size: None,
-                            kind: crate::ScalarKind::Sint,
+                            kind: crate::ScalarKind::Uint,
                             width: 4,
                             pointer_space: None,
                         }
@@ -1131,15 +1114,7 @@ impl<'w> BlockContext<'w> {
                     image_id,
                 ));
 
-                let id = self.gen_id();
-                block.body.push(Instruction::unary(
-                    spirv::Op::Bitcast,
-                    result_type_id,
-                    id,
-                    query_id,
-                ));
-
-                id
+                query_id
             }
             Iq::NumLayers => {
                 let vec_size = match dim {
@@ -1149,7 +1124,7 @@ impl<'w> BlockContext<'w> {
                 };
                 let extended_size_type_id = self.get_type_id(LookupType::Local(LocalType::Value {
                     vector_size: Some(vec_size),
-                    kind: crate::ScalarKind::Sint,
+                    kind: crate::ScalarKind::Uint,
                     width: 4,
                     pointer_space: None,
                 }));
@@ -1168,7 +1143,7 @@ impl<'w> BlockContext<'w> {
                     self.get_type_id(
                         LocalType::Value {
                             vector_size: None,
-                            kind: crate::ScalarKind::Sint,
+                            kind: crate::ScalarKind::Uint,
                             width: 4,
                             pointer_space: None,
                         }
@@ -1179,15 +1154,7 @@ impl<'w> BlockContext<'w> {
                     &[vec_size as u32 - 1],
                 ));
 
-                let id = self.gen_id();
-                block.body.push(Instruction::unary(
-                    spirv::Op::Bitcast,
-                    result_type_id,
-                    id,
-                    extract_id,
-                ));
-
-                id
+                extract_id
             }
             Iq::NumSamples => {
                 let query_id = self.gen_id();
@@ -1196,7 +1163,7 @@ impl<'w> BlockContext<'w> {
                     self.get_type_id(
                         LocalType::Value {
                             vector_size: None,
-                            kind: crate::ScalarKind::Sint,
+                            kind: crate::ScalarKind::Uint,
                             width: 4,
                             pointer_space: None,
                         }
@@ -1206,15 +1173,7 @@ impl<'w> BlockContext<'w> {
                     image_id,
                 ));
 
-                let id = self.gen_id();
-                block.body.push(Instruction::unary(
-                    spirv::Op::Bitcast,
-                    result_type_id,
-                    id,
-                    query_id,
-                ));
-
-                id
+                query_id
             }
         };
 
