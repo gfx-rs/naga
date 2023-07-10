@@ -1,0 +1,65 @@
+;; Ensure that `break`s out of `switch`es and out of `loop`s are correctly
+;; distinguished, and more specifically that a loop break from inside a switch
+;; `case` *does not* become a switch break, but actually breaks out of the loop.
+;;
+;; The SPIR-V below was made by converting this WGSL to SPIR-V with `naga`, and
+;; then optimizing the result of that with `spirv-opt -O` (which is what turned
+;; the `return 0;`, into a branch to the loop merge target i.e. a loop break):
+;; ```wgsl
+;; @fragment
+;; fn main(@location(0) dyn_case: i32) -> @location(0) i32 {
+;;     loop {
+;;         switch(dyn_case) {
+;;             case 0: {
+;;                 return 0;
+;;             }
+;;             default: {
+;;                 break;
+;;             }
+;;         }
+;;         return -9;
+;;     }
+;;     return -9999;
+;; }
+;; ```
+
+               OpCapability Shader
+          %1 = OpExtInstImport "GLSL.std.450"
+               OpMemoryModel Logical GLSL450
+               OpEntryPoint Fragment %13 "main" %8 %11
+               OpExecutionMode %13 OriginUpperLeft
+               OpDecorate %8 Location 0
+               OpDecorate %8 Flat
+               OpDecorate %11 Location 0
+       %void = OpTypeVoid
+        %int = OpTypeInt 32 1
+      %int_0 = OpConstant %int 0
+     %int_n9 = OpConstant %int -9
+%_ptr_Input_int = OpTypePointer Input %int
+          %8 = OpVariable %_ptr_Input_int Input
+%_ptr_Output_int = OpTypePointer Output %int
+         %11 = OpVariable %_ptr_Output_int Output
+         %14 = OpTypeFunction %void
+         %13 = OpFunction %void None %14
+          %7 = OpLabel
+         %10 = OpLoad %int %8
+               OpBranch %16
+         %16 = OpLabel
+               OpLoopMerge %17 %19 None
+               OpBranch %18
+         %18 = OpLabel
+               OpSelectionMerge %20 None
+               OpSwitch %10 %22 0 %21
+         %21 = OpLabel
+               OpStore %11 %int_0
+               OpBranch %17
+         %22 = OpLabel
+               OpBranch %20
+         %20 = OpLabel
+               OpStore %11 %int_n9
+               OpBranch %17
+         %19 = OpLabel
+               OpBranch %16
+         %17 = OpLabel
+               OpReturn
+               OpFunctionEnd

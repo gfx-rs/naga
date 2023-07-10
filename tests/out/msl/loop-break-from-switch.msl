@@ -1,0 +1,51 @@
+// language: metal2.0
+#include <metal_stdlib>
+#include <simd/simd.h>
+
+using metal::uint;
+
+
+void function(
+    thread int& global,
+    thread int& global_1
+) {
+    bool local = false;
+    int _e8 = global;
+    while(true) {
+        switch(_e8) {
+            case 0: {
+                global_1 = 0;
+                local = true;
+                break;
+            }
+            default: {
+                break;
+            }
+        }
+        bool _e11 = local;
+        if (_e11) {
+            break;
+        }
+        global_1 = -9;
+        break;
+    }
+    return;
+}
+
+struct main_Input {
+    int param [[user(loc0), flat]];
+};
+struct main_Output {
+    int member [[color(0)]];
+};
+fragment main_Output main_(
+  main_Input varyings [[stage_in]]
+) {
+    int global = {};
+    int global_1 = {};
+    const auto param = varyings.param;
+    global = param;
+    function(global, global_1);
+    int _e3 = global_1;
+    return main_Output { _e3 };
+}

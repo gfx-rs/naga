@@ -404,8 +404,9 @@ enum BodyFragment {
         cases: Vec<(i32, BodyIndex)>,
         default: BodyIndex,
     },
-    Break,
     Continue,
+    LoopBreak,
+    SwitchBreak,
 }
 
 /// An intermediate representation of a Naga [`Block`].
@@ -537,7 +538,7 @@ struct BlockContext<'function> {
     /// Constants arena of the module being processed
     const_arena: &'function mut Arena<crate::Constant>,
     /// Type arena of the module being processed
-    type_arena: &'function UniqueArena<crate::Type>,
+    type_arena: &'function mut UniqueArena<crate::Type>,
     /// Global arena of the module being processed
     global_arena: &'function Arena<crate::GlobalVariable>,
     /// Arguments of the function currently being processed
@@ -1283,9 +1284,8 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
         fn merger(body: &mut Body, target: &MergeBlockInformation) {
             body.data.push(match *target {
                 MergeBlockInformation::LoopContinue => BodyFragment::Continue,
-                MergeBlockInformation::LoopMerge | MergeBlockInformation::SwitchMerge => {
-                    BodyFragment::Break
-                }
+                MergeBlockInformation::LoopMerge => BodyFragment::LoopBreak,
+                MergeBlockInformation::SwitchMerge => BodyFragment::SwitchBreak,
 
                 // Finishing a selection merge means just falling off the end of
                 // the `accept` or `reject` block of the `If` statement.
