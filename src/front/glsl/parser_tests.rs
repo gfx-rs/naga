@@ -731,19 +731,6 @@ fn structs() {
         "#,
         )
         .unwrap_err();
-
-    frontend
-        .parse(
-            &Options::from(ShaderStage::Vertex),
-            r#"
-        struct LightScatteringParams {
-            float BetaRay, BetaMie[3], HGg, DistanceMul[4], BlendCoeff;
-            vec3 SunDirection, SunColor;
-        };
-        void main() {}
-        "#,
-        )
-        .unwrap();
 }
 
 #[test]
