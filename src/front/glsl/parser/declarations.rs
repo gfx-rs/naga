@@ -628,34 +628,15 @@ impl<'source> ParsingContext<'source> {
         loop {
             // TODO: type_qualifier
 
-            let (ty, mut meta) = self.parse_type_non_void(frontend)?;
+            let (base_ty, mut meta) = self.parse_type_non_void(frontend)?;
 
-            let (name, mut end_meta) = self.expect_ident(frontend)?;
-            let mut ty_copy = ty;
-            self.parse_array_specifier(frontend, &mut meta, &mut ty_copy)?;
+            loop {
+                let (name, name_meta) = self.expect_ident(frontend)?;
+                let mut ty = base_ty;
+                self.parse_array_specifier(frontend, &mut meta, &mut ty)?;
 
-            let mut names_ty = vec![(name, ty_copy)];
+                meta.subsume(name_meta);
 
-            while let Some(&Token {
-                value: TokenValue::Comma,
-                ..
-            }) = self.peek(frontend)
-            {
-                self.bump(frontend)?;
-
-                let (next_name, next_end_meta) = self.expect_ident(frontend)?;
-                let mut ty_copy = ty;
-                self.parse_array_specifier(frontend, &mut meta, &mut ty_copy)?;
-
-                names_ty.push((next_name, ty_copy));
-                end_meta = next_end_meta;
-            }
-
-            meta.subsume(end_meta);
-
-            self.expect(frontend, TokenValue::Semicolon)?;
-
-            for (name, ty) in names_ty {
                 let info = offset::calculate_offset(
                     ty,
                     meta,
@@ -676,7 +657,13 @@ impl<'source> ParsingContext<'source> {
                 });
 
                 span += info.span;
+
+                if self.bump_if(frontend, TokenValue::Comma).is_none() {
+                    break;
+                }
             }
+
+            self.expect(frontend, TokenValue::Semicolon)?;
 
             if let TokenValue::RightBrace = self.expect_peek(frontend)?.value {
                 break;
