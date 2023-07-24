@@ -1101,15 +1101,7 @@ impl<'w> BlockContext<'w> {
                 let query_id = self.gen_id();
                 block.body.push(Instruction::image_query(
                     spirv::Op::ImageQueryLevels,
-                    self.get_type_id(
-                        LocalType::Value {
-                            vector_size: None,
-                            kind: crate::ScalarKind::Uint,
-                            width: 4,
-                            pointer_space: None,
-                        }
-                        .into(),
-                    ),
+                    result_type_id,
                     query_id,
                     image_id,
                 ));
@@ -1140,15 +1132,7 @@ impl<'w> BlockContext<'w> {
 
                 let extract_id = self.gen_id();
                 block.body.push(Instruction::composite_extract(
-                    self.get_type_id(
-                        LocalType::Value {
-                            vector_size: None,
-                            kind: crate::ScalarKind::Uint,
-                            width: 4,
-                            pointer_space: None,
-                        }
-                        .into(),
-                    ),
+                    result_type_id,
                     extract_id,
                     id_extended,
                     &[vec_size as u32 - 1],
@@ -1160,15 +1144,7 @@ impl<'w> BlockContext<'w> {
                 let query_id = self.gen_id();
                 block.body.push(Instruction::image_query(
                     spirv::Op::ImageQuerySamples,
-                    self.get_type_id(
-                        LocalType::Value {
-                            vector_size: None,
-                            kind: crate::ScalarKind::Uint,
-                            width: 4,
-                            pointer_space: None,
-                        }
-                        .into(),
-                    ),
+                    result_type_id,
                     query_id,
                     image_id,
                 ));
