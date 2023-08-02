@@ -25,7 +25,7 @@ fn get_dimension(type_inner: &crate::TypeInner) -> Dimension {
 enum ExpressionPointer {
     /// The pointer to the expression's value is available, as the value of the
     /// expression with the given id.
-    Ready { pointer_id: Word },
+    Ready { pointer_id: Word, non_uniform: bool },
 
     /// The access expression must be conditional on the value of `condition`, a boolean
     /// expression that is true if all indices are in bounds. If `condition` is true, then
@@ -35,6 +35,7 @@ enum ExpressionPointer {
     Conditional {
         condition: Word,
         access: Instruction,
+        non_uniform: bool,
     },
 }
 
@@ -285,12 +286,15 @@ impl<'w> BlockContext<'w> {
                             class: helpers::map_storage_class(space),
                         });
 
-                        let result_id = match self.write_expression_pointer(
+                        let (result_id, non_uniform) = match self.write_expression_pointer(
                             expr_handle,
                             block,
                             Some(binding_array_false_pointer),
                         )? {
-                            ExpressionPointer::Ready { pointer_id } => pointer_id,
+                            ExpressionPointer::Ready {
+                                pointer_id,
+                                non_uniform,
+                            } => (pointer_id, non_uniform),
                             ExpressionPointer::Conditional { .. } => {
                                 return Err(Error::FeatureNotImplemented(
                                     "Texture array out-of-bounds handling",
@@ -307,6 +311,11 @@ impl<'w> BlockContext<'w> {
                             result_id,
                             None,
                         ));
+
+                        if non_uniform {
+                            self.writer
+                                .decorate_non_uniform_binding_array_access(load_id)?;
+                        }
 
                         load_id
                     }
@@ -361,12 +370,15 @@ impl<'w> BlockContext<'w> {
                             class: helpers::map_storage_class(space),
                         });
 
-                        let result_id = match self.write_expression_pointer(
+                        let (result_id, non_uniform) = match self.write_expression_pointer(
                             expr_handle,
                             block,
                             Some(binding_array_false_pointer),
                         )? {
-                            ExpressionPointer::Ready { pointer_id } => pointer_id,
+                            ExpressionPointer::Ready {
+                                pointer_id,
+                                non_uniform,
+                            } => (pointer_id, non_uniform),
                             ExpressionPointer::Conditional { .. } => {
                                 return Err(Error::FeatureNotImplemented(
                                     "Texture array out-of-bounds handling",
@@ -383,6 +395,11 @@ impl<'w> BlockContext<'w> {
                             result_id,
                             None,
                         ));
+
+                        if non_uniform {
+                            self.writer
+                                .decorate_non_uniform_binding_array_access(load_id)?;
+                        }
 
                         load_id
                     }
@@ -1052,7 +1069,10 @@ impl<'w> BlockContext<'w> {
             crate::Expression::LocalVariable(variable) => self.function.variables[&variable].id,
             crate::Expression::Load { pointer } => {
                 match self.write_expression_pointer(pointer, block, None)? {
-                    ExpressionPointer::Ready { pointer_id } => {
+                    ExpressionPointer::Ready {
+                        pointer_id,
+                        non_uniform,
+                    } => {
                         let id = self.gen_id();
                         let atomic_space =
                             match *self.fun_info[pointer].ty.inner_with(&self.ir_module.types) {
@@ -1079,15 +1099,23 @@ impl<'w> BlockContext<'w> {
                             Instruction::load(result_type_id, id, pointer_id, None)
                         };
                         block.body.push(instruction);
+                        if non_uniform {
+                            self.writer.decorate_non_uniform_binding_array_access(id)?;
+                        }
                         id
                     }
-                    ExpressionPointer::Conditional { condition, access } => {
+                    ExpressionPointer::Conditional {
+                        condition,
+                        access,
+                        non_uniform,
+                    } => {
                         //TODO: support atomics?
-                        self.write_conditional_indexed_load(
+                        let mut non_uniform_instruction = None;
+                        let res = self.write_conditional_indexed_load(
                             result_type_id,
                             condition,
                             block,
-                            move |id_gen, block| {
+                            |id_gen, block| {
                                 // The in-bounds path. Perform the access and the load.
                                 let pointer_id = access.result_id.unwrap();
                                 let value_id = id_gen.next();
@@ -1098,9 +1126,17 @@ impl<'w> BlockContext<'w> {
                                     pointer_id,
                                     None,
                                 ));
-                                value_id
+                                if non_uniform {
+                                    non_uniform_instruction = Some(value_id);
+                                }
+                                Ok(value_id)
                             },
-                        )
+                        )?;
+                        if let Some(value_id) = non_uniform_instruction {
+                            self.writer
+                                .decorate_non_uniform_binding_array_access(value_id)?;
+                        }
+                        res
                     }
                 }
             }
@@ -1517,13 +1553,11 @@ impl<'w> BlockContext<'w> {
             }
         };
 
-        let (pointer_id, expr_pointer) = if self.temp_list.is_empty() {
-            (
-                root_id,
-                ExpressionPointer::Ready {
-                    pointer_id: root_id,
-                },
-            )
+        let expr_pointer = if self.temp_list.is_empty() {
+            ExpressionPointer::Ready {
+                pointer_id: root_id,
+                non_uniform: is_non_uniform_binding_array,
+            }
         } else {
             self.temp_list.reverse();
             let pointer_id = self.gen_id();
@@ -1534,19 +1568,21 @@ impl<'w> BlockContext<'w> {
             // caller to generate the branch, the access, the load or store, and
             // the zero value (for loads). Otherwise, we can emit the access
             // ourselves, and just hand them the id of the pointer.
-            let expr_pointer = match accumulated_checks {
-                Some(condition) => ExpressionPointer::Conditional { condition, access },
+            match accumulated_checks {
+                Some(condition) => ExpressionPointer::Conditional {
+                    condition,
+                    access,
+                    non_uniform: is_non_uniform_binding_array,
+                },
                 None => {
                     block.body.push(access);
-                    ExpressionPointer::Ready { pointer_id }
+                    ExpressionPointer::Ready {
+                        pointer_id,
+                        non_uniform: is_non_uniform_binding_array,
+                    }
                 }
-            };
-            (pointer_id, expr_pointer)
+            }
         };
-        if is_non_uniform_binding_array {
-            self.writer
-                .decorate_non_uniform_binding_array_access(pointer_id)?;
-        }
 
         Ok(expr_pointer)
     }
@@ -2003,7 +2039,10 @@ impl<'w> BlockContext<'w> {
                 crate::Statement::Store { pointer, value } => {
                     let value_id = self.cached[value];
                     match self.write_expression_pointer(pointer, &mut block, None)? {
-                        ExpressionPointer::Ready { pointer_id } => {
+                        ExpressionPointer::Ready {
+                            pointer_id,
+                            non_uniform,
+                        } => {
                             let atomic_space = match *self.fun_info[pointer]
                                 .ty
                                 .inner_with(&self.ir_module.types)
@@ -2029,9 +2068,17 @@ impl<'w> BlockContext<'w> {
                             } else {
                                 Instruction::store(pointer_id, value_id, None)
                             };
+                            if non_uniform {
+                                self.writer
+                                    .decorate_non_uniform_binding_array_access(pointer_id)?;
+                            }
                             block.body.push(instruction);
                         }
-                        ExpressionPointer::Conditional { condition, access } => {
+                        ExpressionPointer::Conditional {
+                            condition,
+                            access,
+                            non_uniform,
+                        } => {
                             let mut selection = Selection::start(&mut block, ());
                             selection.if_true(self, condition, ());
 
@@ -2042,6 +2089,10 @@ impl<'w> BlockContext<'w> {
                                 .block()
                                 .body
                                 .push(Instruction::store(pointer_id, value_id, None));
+                            if non_uniform {
+                                self.writer
+                                    .decorate_non_uniform_binding_array_access(pointer_id)?;
+                            }
 
                             // Finish the in-bounds block and start the merge block. This
                             // is the block we'll leave current on return.
@@ -2094,7 +2145,16 @@ impl<'w> BlockContext<'w> {
 
                     let pointer_id =
                         match self.write_expression_pointer(pointer, &mut block, None)? {
-                            ExpressionPointer::Ready { pointer_id } => pointer_id,
+                            ExpressionPointer::Ready {
+                                pointer_id,
+                                non_uniform,
+                            } => {
+                                if non_uniform {
+                                    self.writer
+                                        .decorate_non_uniform_binding_array_access(pointer_id)?;
+                                }
+                                pointer_id
+                            }
                             ExpressionPointer::Conditional { .. } => {
                                 return Err(Error::FeatureNotImplemented(
                                     "Atomics out-of-bounds handling",
@@ -2269,7 +2329,11 @@ impl<'w> BlockContext<'w> {
                     let result_type_id = self.get_expression_type_id(&self.fun_info[result].ty);
                     // Embed the body of
                     match self.write_expression_pointer(pointer, &mut block, None)? {
-                        ExpressionPointer::Ready { pointer_id } => {
+                        // workgroup uniform loads can't ever be non-uniform
+                        ExpressionPointer::Ready {
+                            pointer_id,
+                            non_uniform: _,
+                        } => {
                             let id = self.gen_id();
                             block.body.push(Instruction::load(
                                 result_type_id,
@@ -2279,7 +2343,11 @@ impl<'w> BlockContext<'w> {
                             ));
                             self.cached[result] = id;
                         }
-                        ExpressionPointer::Conditional { condition, access } => {
+                        ExpressionPointer::Conditional {
+                            condition,
+                            access,
+                            non_uniform: _,
+                        } => {
                             self.cached[result] = self.write_conditional_indexed_load(
                                 result_type_id,
                                 condition,
@@ -2295,9 +2363,9 @@ impl<'w> BlockContext<'w> {
                                         pointer_id,
                                         None,
                                     ));
-                                    value_id
+                                    Ok(value_id)
                                 },
-                            )
+                            )?
                         }
                     }
                     self.writer

@@ -299,9 +299,9 @@ impl<'w> BlockContext<'w> {
         condition: Word,
         block: &mut Block,
         emit_load: F,
-    ) -> Word
+    ) -> Result<Word, Error>
     where
-        F: FnOnce(&mut IdGenerator, &mut Block) -> Word,
+        F: FnOnce(&mut IdGenerator, &mut Block) -> Result<Word, Error>,
     {
         // For the out-of-bounds case, we produce a zero value.
         let null_id = self.writer.get_constant_null(result_type);
@@ -324,9 +324,9 @@ impl<'w> BlockContext<'w> {
         selection.if_true(self, condition, null_id);
 
         // The in-bounds path. Perform the access and the load.
-        let loaded_value = emit_load(&mut self.writer.id_gen, selection.block());
+        let loaded_value = emit_load(&mut self.writer.id_gen, selection.block())?;
 
-        selection.finish(self, loaded_value)
+        Ok(selection.finish(self, loaded_value))
     }
 
     /// Emit code for bounds checks for an array, vector, or matrix access.
@@ -410,9 +410,9 @@ impl<'w> BlockContext<'w> {
                             base_id,
                             index_id,
                         ));
-                        element_id
+                        Ok(element_id)
                     },
-                )
+                )?
             }
         };
 

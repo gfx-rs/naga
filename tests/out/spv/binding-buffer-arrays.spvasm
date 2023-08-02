@@ -24,7 +24,7 @@ OpMemberDecorate %16 0 Offset 0
 OpDecorate %23 Location 0
 OpDecorate %23 Flat
 OpDecorate %26 Location 0
-OpDecorate %55 NonUniform
+OpDecorate %58 NonUniform
 %2 = OpTypeVoid
 %3 = OpTypeInt 32 0
 %4 = OpTypeStruct %3
