@@ -61,6 +61,15 @@ pub enum VaryingError {
     DuplicateBuiltIn(crate::BuiltIn),
     #[error("Capability {0:?} is not supported")]
     UnsupportedCapability(Capabilities),
+    #[error("The attribute {0:?} is not valid for stage {1:?}")]
+    InvalidAttributeInStage(&'static str, crate::ShaderStage),
+    #[error(
+        "The location index {location} cannot be used together with the attribute {attribute:?}"
+    )]
+    InvalidLocationAttributeCombination {
+        location: u32,
+        attribute: &'static str,
+    },
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
@@ -89,6 +98,10 @@ pub enum EntryPointError {
     InvalidIntegerInterpolation { location: u32 },
     #[error(transparent)]
     Function(#[from] FunctionError),
+    #[error(
+        "Invalid locations {location_mask:?} are set for blend_src_1. Only the first location may be set."
+    )]
+    InvalidLocationMaskForAlternateBlendSource { location_mask: BitSet },
 }
 
 #[cfg(feature = "validate")]
@@ -106,6 +119,7 @@ fn storage_usage(access: crate::StorageAccess) -> GlobalUse {
 struct VaryingContext<'a> {
     stage: crate::ShaderStage,
     output: bool,
+    second_blend_source: bool,
     types: &'a UniqueArena<crate::Type>,
     type_info: &'a Vec<super::r#type::TypeInfo>,
     location_mask: &'a mut BitSet,
@@ -293,6 +307,7 @@ impl VaryingContext<'_> {
                 location,
                 interpolation,
                 sampling,
+                second_blend_source,
             } => {
                 // Only IO-shareable types may be stored in locations.
                 if !self.type_info[ty.index()]
@@ -301,12 +316,15 @@ impl VaryingContext<'_> {
                 {
                     return Err(VaryingError::NotIOShareableType(ty));
                 }
-                if !self.location_mask.insert(location as usize) {
-                    #[cfg(feature = "validate")]
-                    if self.flags.contains(super::ValidationFlags::BINDINGS) {
-                        return Err(VaryingError::BindingCollision { location });
+                if !second_blend_source {
+                    if !self.location_mask.insert(location as usize) {
+                        #[cfg(feature = "validate")]
+                        if self.flags.contains(super::ValidationFlags::BINDINGS) {
+                            return Err(VaryingError::BindingCollision { location });
+                        }
                     }
                 }
+                self.second_blend_source = second_blend_source;
 
                 let needs_interpolation = match self.stage {
                     crate::ShaderStage::Vertex => self.output,
@@ -340,6 +358,29 @@ impl VaryingContext<'_> {
                         }
                     }
                     None => return Err(VaryingError::InvalidType(ty)),
+                }
+                if second_blend_source && self.output {
+                    if let crate::ShaderStage::Fragment = self.stage {
+                        if !self
+                            .capabilities
+                            .contains(Capabilities::DUAL_SOURCE_BLENDING)
+                        {
+                            return Err(VaryingError::UnsupportedCapability(
+                                Capabilities::DUAL_SOURCE_BLENDING,
+                            ));
+                        }
+                        if location != 0 {
+                            return Err(VaryingError::InvalidLocationAttributeCombination {
+                                location,
+                                attribute: "blend_src_1",
+                            });
+                        }
+                    } else {
+                        return Err(VaryingError::InvalidAttributeInStage(
+                            "blend_src_1",
+                            self.stage,
+                        ));
+                    }
                 }
             }
         }
@@ -593,6 +634,7 @@ impl super::Validator {
             let mut ctx = VaryingContext {
                 stage: ep.stage,
                 output: false,
+                second_blend_source: false,
                 types: &module.types,
                 type_info: &self.types,
                 location_mask: &mut self.location_mask,
@@ -612,6 +654,7 @@ impl super::Validator {
             let mut ctx = VaryingContext {
                 stage: ep.stage,
                 output: true,
+                second_blend_source: false,
                 types: &module.types,
                 type_info: &self.types,
                 location_mask: &mut self.location_mask,
@@ -623,6 +666,20 @@ impl super::Validator {
             };
             ctx.validate(fr.ty, fr.binding.as_ref())
                 .map_err_inner(|e| EntryPointError::Result(e).with_span())?;
+            #[cfg(feature = "validate")]
+            if ctx.second_blend_source {
+                /* Check if only the first bit in the location mask is set */
+                if !(ctx.location_mask.len() == 1 && ctx.location_mask.contains(0)) {
+                    return Err(
+                        EntryPointError::InvalidLocationMaskForAlternateBlendSource {
+                            location_mask: self.location_mask.clone(),
+                        }
+                        .with_span(),
+                    );
+                } else {
+                    ctx.second_blend_source = true;
+                }
+            }
 
             #[cfg(feature = "validate")]
             if ep.stage == crate::ShaderStage::Vertex
