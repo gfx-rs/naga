@@ -781,6 +781,7 @@ fn convert_wgsl() {
             "const-exprs",
             Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
         ),
+        ("buffer-pointer", Targets::SPIRV),
     ];
 
     for &(name, targets) in inputs.iter() {

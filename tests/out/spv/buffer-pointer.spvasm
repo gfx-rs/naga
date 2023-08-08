@@ -1,0 +1,75 @@
+; SPIR-V
+; Version: 1.5
+; Generator: rspirv
+; Bound: 52
+OpCapability Shader
+OpCapability PhysicalStorageBufferAddresses
+%1 = OpExtInstImport "GLSL.std.450"
+OpMemoryModel PhysicalStorageBuffer64 GLSL450
+OpEntryPoint Fragment %18 "main" %16 %12
+OpExecutionMode %18 OriginUpperLeft
+OpMemberDecorate %5 0 Offset 0
+OpMemberDecorate %8 0 Offset 0
+OpMemberDecorate %8 1 Offset 16
+OpMemberDecorate %11 0 Offset 0
+OpMemberDecorate %11 1 Offset 8
+OpMemberDecorate %11 2 Offset 16
+OpDecorate %13 Block
+OpMemberDecorate %13 0 Offset 0
+OpDecorate %16 Location 0
+%2 = OpTypeVoid
+%4 = OpTypeFloat 32
+%3 = OpTypeVector %4 2
+%5 = OpTypeStruct %3
+%6 = OpTypeVector %4 4
+%7 = OpTypePointer PhysicalStorageBuffer %5
+%8 = OpTypeStruct %6 %7
+%9 = OpTypePointer PhysicalStorageBuffer %8
+%10 = OpTypeInt 32 0
+%11 = OpTypeStruct %9 %10 %9
+%13 = OpTypeStruct %11
+%14 = OpTypePointer PushConstant %13
+%12 = OpVariable  %14  PushConstant
+%17 = OpTypePointer Output %6
+%16 = OpVariable  %17  Output
+%19 = OpTypeFunction %2
+%20 = OpTypePointer PushConstant %11
+%21 = OpConstant  %10  0
+%23 = OpConstant  %4  0.0
+%25 = OpTypePointer Function %6
+%26 = OpConstantNull  %6
+%28 = OpTypePointer Function %3
+%29 = OpConstantNull  %3
+%31 = OpTypePointer PushConstant %9
+%34 = OpTypePointer PhysicalStorageBuffer %6
+%37 = OpTypePointer PushConstant %9
+%38 = OpConstant  %10  2
+%41 = OpTypePointer PhysicalStorageBuffer %7
+%42 = OpConstant  %10  1
+%45 = OpTypePointer PhysicalStorageBuffer %3
+%18 = OpFunction  %2  None %19
+%15 = OpLabel
+%24 = OpVariable  %25  Function %26
+%27 = OpVariable  %28  Function %29
+%22 = OpAccessChain  %20  %12 %21
+OpBranch %30
+%30 = OpLabel
+%32 = OpAccessChain  %31  %22 %21
+%33 = OpLoad  %9  %32
+%35 = OpAccessChain  %34  %33 %21
+%36 = OpLoad  %6  %35 Aligned 16
+OpStore %24 %36
+%39 = OpAccessChain  %37  %22 %38
+%40 = OpLoad  %9  %39
+%43 = OpAccessChain  %41  %40 %42
+%44 = OpLoad  %7  %43 Aligned 4
+%46 = OpAccessChain  %45  %44 %21
+%47 = OpLoad  %3  %46 Aligned 8
+OpStore %27 %47
+%48 = OpLoad  %6  %24
+%49 = OpLoad  %3  %27
+%50 = OpCompositeConstruct  %6  %49 %23 %23
+%51 = OpFAdd  %6  %48 %50
+OpStore %16 %51
+OpReturn
+OpFunctionEnd
