@@ -168,7 +168,9 @@ fn check_member_layout(
 const fn ptr_space_argument_flag(space: crate::AddressSpace) -> TypeFlags {
     use crate::AddressSpace as As;
     match space {
-        As::Function | As::Private | As::WorkGroup => TypeFlags::ARGUMENT,
+        As::Function | As::Private | As::WorkGroup | As::PhysicalStorage { .. } => {
+            TypeFlags::ARGUMENT
+        }
         As::Uniform | As::Storage { .. } | As::Handle | As::PushConstant => TypeFlags::empty(),
     }
 }
@@ -342,11 +344,28 @@ impl super::Validator {
                 // best to set `ARGUMENT` accurately anyway.
                 let argument_flag = ptr_space_argument_flag(space);
 
-                // Pointers cannot be stored in variables, structure members, or
-                // array elements, so we do not mark them as `DATA`.
+                let data_flag = if let As::PhysicalStorage { .. } = space {
+                    // If the pointer is in the [`crate::AddressSpace::PhysicalStorage`]
+                    // address space, we require the appropriate SPIR-V capability.
+                    self.require_type_capability(Capabilities::PHYSICAL_STORAGE_BUFFER_ADDRESSES)?;
+                    TypeFlags::DATA | TypeFlags::HOST_SHAREABLE
+                } else {
+                    // Pointers that aren't in the [`crate::AddressSpace::PhysicalStorage`]
+                    // address space cannot be stored in variables, structure members, or
+                    // array elements, so we do not mark them as `DATA`.
+                    TypeFlags::empty()
+                };
+
+                let alignment = if let As::PhysicalStorage { .. } = space {
+                    // Buffer pointers require proper alignment.
+                    Alignment::BUFFER_POINTER
+                } else {
+                    Alignment::ONE
+                };
+
                 TypeInfo::new(
-                    argument_flag | TypeFlags::SIZED | TypeFlags::COPY,
-                    Alignment::ONE,
+                    data_flag | argument_flag | TypeFlags::SIZED | TypeFlags::COPY,
+                    alignment,
                 )
             }
             Ti::ValuePointer {
@@ -355,6 +374,8 @@ impl super::Validator {
                 width,
                 space,
             } => {
+                use crate::AddressSpace as As;
+
                 // ValuePointer should be treated the same way as the equivalent
                 // Pointer / Scalar / Vector combination, so each step in those
                 // variants' match arms should have a counterpart here.
@@ -370,11 +391,28 @@ impl super::Validator {
                 // best to set `ARGUMENT` accurately anyway.
                 let argument_flag = ptr_space_argument_flag(space);
 
-                // Pointers cannot be stored in variables, structure members, or
-                // array elements, so we do not mark them as `DATA`.
+                let data_flag = if let As::PhysicalStorage { .. } = space {
+                    // If the pointer is in the [`crate::AddressSpace::PhysicalStorage`]
+                    // address space, we require the appropriate SPIR-V capability.
+                    self.require_type_capability(Capabilities::PHYSICAL_STORAGE_BUFFER_ADDRESSES)?;
+                    TypeFlags::DATA | TypeFlags::HOST_SHAREABLE
+                } else {
+                    // Pointers that aren't in the [`crate::AddressSpace::PhysicalStorage`]
+                    // address space cannot be stored in variables, structure members, or
+                    // array elements, so we do not mark them as `DATA`.
+                    TypeFlags::empty()
+                };
+
+                let alignment = if let As::PhysicalStorage { .. } = space {
+                    // Buffer pointers require proper alignment.
+                    Alignment::BUFFER_POINTER
+                } else {
+                    Alignment::ONE
+                };
+
                 TypeInfo::new(
-                    argument_flag | TypeFlags::SIZED | TypeFlags::COPY,
-                    Alignment::ONE,
+                    data_flag | argument_flag | TypeFlags::SIZED | TypeFlags::COPY,
+                    alignment,
                 )
             }
             Ti::Array { base, size, stride } => {

@@ -399,6 +399,7 @@ impl crate::AddressSpace {
         match *self {
             Self::Uniform
             | Self::Storage { .. }
+            | Self::PhysicalStorage { .. }
             | Self::Private
             | Self::WorkGroup
             | Self::PushConstant
@@ -414,7 +415,7 @@ impl crate::AddressSpace {
             // rely on the actual use of a global by functions. This means we
             // may end up with "const" even if the binding is read-write,
             // and that should be OK.
-            Self::Storage { .. } => true,
+            Self::Storage { .. } | Self::PhysicalStorage { .. } => true,
             // These should always be read-write.
             Self::Private | Self::WorkGroup => false,
             // These translate to `constant` address space, no need for qualifiers.
@@ -424,11 +425,14 @@ impl crate::AddressSpace {
         }
     }
 
-    const fn to_msl_name(self) -> Option<&'static str> {
+    fn to_msl_name(self) -> Option<&'static str> {
         match self {
             Self::Handle => None,
             Self::Uniform | Self::PushConstant => Some("constant"),
             Self::Storage { .. } => Some("device"),
+            Self::PhysicalStorage { .. } => {
+                unreachable!("physical storage address space is not implemented for MSL")
+            }
             Self::Private | Self::Function => Some("thread"),
             Self::WorkGroup => Some("threadgroup"),
         }
@@ -3677,6 +3681,7 @@ impl<W: Write> Writer<W> {
                         }
                         crate::AddressSpace::Function
                         | crate::AddressSpace::Private
+                        | crate::AddressSpace::PhysicalStorage { .. }
                         | crate::AddressSpace::WorkGroup => {}
                     }
                 }

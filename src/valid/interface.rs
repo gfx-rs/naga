@@ -489,6 +489,9 @@ impl super::Validator {
                 }
                 (TypeFlags::DATA | TypeFlags::HOST_SHAREABLE, true)
             }
+            crate::AddressSpace::PhysicalStorage { .. } => {
+                return Err(GlobalVariableError::InvalidUsage(var.space))
+            }
             crate::AddressSpace::Uniform => {
                 if let Err((ty_handle, disalignment)) = type_info.uniform_layout {
                     if self.flags.contains(super::ValidationFlags::STRUCT_LAYOUTS) {
@@ -739,6 +742,7 @@ impl super::Validator {
                 crate::AddressSpace::Function => unreachable!(),
                 crate::AddressSpace::Uniform => GlobalUse::READ | GlobalUse::QUERY,
                 crate::AddressSpace::Storage { access } => storage_usage(access),
+                crate::AddressSpace::PhysicalStorage { .. } => unreachable!(),
                 crate::AddressSpace::Handle => match module.types[var.ty].inner {
                     crate::TypeInner::BindingArray { base, .. } => match module.types[base].inner {
                         crate::TypeInner::Image {

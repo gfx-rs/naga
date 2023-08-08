@@ -688,6 +688,11 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 write!(self.out, "{prefix}ByteAddressBuffer")?;
                 register
             }
+            crate::AddressSpace::PhysicalStorage { .. } => {
+                return Err(Error::Unimplemented(
+                    "physical storage address space is not implemented for HLSL".to_string(),
+                ));
+            }
             crate::AddressSpace::Handle => {
                 let handle_ty = match *inner {
                     TypeInner::BindingArray { ref base, .. } => &module.types[*base].inner,

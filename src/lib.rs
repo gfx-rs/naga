@@ -403,6 +403,12 @@ pub enum AddressSpace {
     Handle,
     /// Push constants.
     PushConstant,
+    /// Buffer device pointers, mutable. Only used for pointers, not allowed on GlobalVariables.
+    /// Pointers in this address space reference buffer memory directly.
+    /// Requires capability [`crate::valid::Capabilities::PHYSICAL_STORAGE_BUFFER_ADDRESSES`].
+    /// Required for Vulkan extension `VK_KHR_buffer_device_address`:
+    /// <https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VK_KHR_buffer_device_address.html>
+    PhysicalStorage { alignment: u32 },
 }
 
 /// Built-in inputs and outputs.

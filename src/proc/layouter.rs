@@ -14,6 +14,7 @@ impl Alignment {
     pub const EIGHT: Self = Self(unsafe { NonZeroU32::new_unchecked(8) });
     pub const SIXTEEN: Self = Self(unsafe { NonZeroU32::new_unchecked(16) });
 
+    pub const BUFFER_POINTER: Self = Self::EIGHT;
     pub const MIN_UNIFORM: Self = Self::SIXTEEN;
 
     pub const fn new(n: u32) -> Option<Self> {
@@ -200,6 +201,17 @@ impl Layouter {
                         alignment: Alignment::from(rows) * alignment,
                     }
                 }
+                Ti::Pointer {
+                    space: crate::AddressSpace::PhysicalStorage { .. },
+                    ..
+                }
+                | Ti::ValuePointer {
+                    space: crate::AddressSpace::PhysicalStorage { .. },
+                    ..
+                } => TypeLayout {
+                    size,
+                    alignment: Alignment::BUFFER_POINTER,
+                },
                 Ti::Pointer { .. } | Ti::ValuePointer { .. } => TypeLayout {
                     size,
                     alignment: Alignment::ONE,

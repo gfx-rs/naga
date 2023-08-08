@@ -446,6 +446,25 @@ impl super::Instruction {
         instruction
     }
 
+    pub(super) fn load_aligned(
+        result_type_id: Word,
+        id: Word,
+        pointer_id: Word,
+        alignment: u32,
+        memory_access: Option<spirv::MemoryAccess>,
+    ) -> Self {
+        let mut instruction = Self::new(Op::Load);
+        instruction.set_type(result_type_id);
+        instruction.set_result(id);
+        instruction.add_operand(pointer_id);
+
+        let memory_access = memory_access.unwrap_or(spirv::MemoryAccess::ALIGNED);
+        instruction.add_operand(memory_access.bits());
+        instruction.add_operand(alignment);
+
+        instruction
+    }
+
     pub(super) fn atomic_load(
         result_type_id: Word,
         id: Word,

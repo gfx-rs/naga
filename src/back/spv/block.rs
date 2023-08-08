@@ -1082,15 +1082,22 @@ impl<'w> BlockContext<'w> {
                 match self.write_expression_pointer(pointer, block, None)? {
                     ExpressionPointer::Ready { pointer_id } => {
                         let id = self.gen_id();
-                        let atomic_space =
+                        let (atomic_space, physical_alignment) =
                             match *self.fun_info[pointer].ty.inner_with(&self.ir_module.types) {
                                 crate::TypeInner::Pointer { base, space } => {
-                                    match self.ir_module.types[base].inner {
+                                    let physical_alignment = match space {
+                                        crate::AddressSpace::PhysicalStorage { alignment } => {
+                                            Some(alignment)
+                                        }
+                                        _ => None,
+                                    };
+                                    let atomic_space = match self.ir_module.types[base].inner {
                                         crate::TypeInner::Atomic { .. } => Some(space),
                                         _ => None,
-                                    }
+                                    };
+                                    (atomic_space, physical_alignment)
                                 }
-                                _ => None,
+                                _ => (None, None),
                             };
                         let instruction = if let Some(space) = atomic_space {
                             let (semantics, scope) = space.to_spirv_semantics_and_scope();
@@ -1102,6 +1109,14 @@ impl<'w> BlockContext<'w> {
                                 pointer_id,
                                 scope_constant_id,
                                 semantics_id,
+                            )
+                        } else if let Some(alignment) = physical_alignment {
+                            Instruction::load_aligned(
+                                result_type_id,
+                                id,
+                                pointer_id,
+                                alignment,
+                                None,
                             )
                         } else {
                             Instruction::load(result_type_id, id, pointer_id, None)
@@ -1548,6 +1563,9 @@ impl<'w> BlockContext<'w> {
                 }
                 crate::Expression::FunctionArgument(index) => {
                     break self.function.parameter_id(index);
+                }
+                crate::Expression::Load { .. } => {
+                    break self.cached[expr_handle];
                 }
                 ref other => unimplemented!("Unexpected pointer expression {:?}", other),
             }
