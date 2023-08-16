@@ -510,7 +510,13 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
         left: &mut Handle<crate::Expression>,
         right: &mut Handle<crate::Expression>,
     ) -> Result<(), Error<'source>> {
-        if op != crate::BinaryOperator::Multiply {
+        if matches!(
+            op,
+            crate::BinaryOperator::Add
+                | crate::BinaryOperator::Subtract
+                | crate::BinaryOperator::Divide
+                | crate::BinaryOperator::Modulo
+        ) {
             self.grow_types(*left)?.grow_types(*right)?;
 
             let left_size = match *self.resolved_inner(*left) {
