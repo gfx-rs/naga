@@ -213,6 +213,22 @@ impl<'w> BlockContext<'w> {
                 let arg = &self.ir_function.arguments[index as usize];
                 self.ir_module.types[arg.ty].inner.pointer_space().is_some()
             }
+            crate::Expression::Load { pointer } => {
+                match *self.fun_info[pointer].ty.inner_with(&self.ir_module.types) {
+                    crate::TypeInner::Pointer { base, .. } => {
+                        if let crate::TypeInner::Pointer {
+                            space: crate::AddressSpace::PhysicalStorage { .. },
+                            ..
+                        } = self.ir_module.types[base].inner
+                        {
+                            true
+                        } else {
+                            false
+                        }
+                    }
+                    _ => false,
+                }
+            }
 
             // The chain rule: if this `Access...`'s `base` operand was
             // previously omitted, then omit this one, too.
