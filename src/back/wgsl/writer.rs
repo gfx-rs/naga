@@ -110,10 +110,10 @@ impl<W: Write> Writer<W> {
         for (handle, ty) in module.types.iter() {
             if let TypeInner::Struct {
                 ref members,
-                span: _,
+                span,
             } = ty.inner
             {
-                self.write_struct(module, handle, members)?;
+                self.write_struct(module, handle, members, span)?;
                 writeln!(self.out)?;
             }
         }
@@ -377,17 +377,28 @@ impl<W: Write> Writer<W> {
         module: &Module,
         handle: Handle<crate::Type>,
         members: &[crate::StructMember],
+        struct_span: u32,
     ) -> BackendResult {
         write!(self.out, "struct ")?;
         self.write_struct_name(module, handle)?;
         write!(self.out, " {{")?;
         writeln!(self.out)?;
+
         for (index, member) in members.iter().enumerate() {
             // The indentation is only for readability
             write!(self.out, "{}", back::INDENT)?;
             if let Some(ref binding) = member.binding {
                 self.write_attributes(&map_binding_to_attribute(binding))?;
             }
+
+            let current_field_size = if index != members.len() - 1 {
+                let next_member = &members[index + 1];
+                next_member.offset - member.offset
+            } else {
+                struct_span - member.offset
+            };
+            write!(self.out, "@size({current_field_size}) ")?;
+
             // Write struct member name and type
             let member_name = &self.names[&NameKey::StructMember(handle, index as u32)];
             write!(self.out, "{member_name}: ")?;
