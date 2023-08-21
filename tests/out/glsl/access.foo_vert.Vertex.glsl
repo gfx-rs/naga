@@ -33,6 +33,11 @@ layout(std430) buffer type_12_block_2Vertex { ivec2 _group_0_binding_2_vs; };
 uniform MatCx2InArray_block_3Vertex { MatCx2InArray _group_0_binding_3_vs; };
 
 
+float read_from_private(inout float foo_1) {
+    float _e1 = foo_1;
+    return _e1;
+}
+
 void test_matrix_within_struct_accesses() {
     int idx = 0;
     Baz t = Baz(mat3x2(0.0));
@@ -66,6 +71,14 @@ void test_matrix_within_struct_accesses() {
     int _e95 = idx;
     int _e97 = idx;
     t.m[_e95][_e97] = 40.0;
+    float _e105 = read_from_private(t.m[0][1]);
+    int _e109 = idx;
+    float _e111 = read_from_private(t.m[0][_e109]);
+    int _e113 = idx;
+    float _e117 = read_from_private(t.m[_e113][1]);
+    int _e119 = idx;
+    int _e121 = idx;
+    float _e123 = read_from_private(t.m[_e119][_e121]);
     return;
 }
 
@@ -104,11 +117,19 @@ void test_matrix_within_array_within_struct_accesses() {
     int _e124 = idx_1;
     int _e126 = idx_1;
     t_1.am[0][_e124][_e126] = 40.0;
+    float _e136 = read_from_private(t_1.am[0][0][1]);
+    int _e142 = idx_1;
+    float _e144 = read_from_private(t_1.am[0][0][_e142]);
+    int _e148 = idx_1;
+    float _e152 = read_from_private(t_1.am[0][_e148][1]);
+    int _e156 = idx_1;
+    int _e158 = idx_1;
+    float _e160 = read_from_private(t_1.am[0][_e156][_e158]);
     return;
 }
 
-float read_from_private(inout float foo_1) {
-    float _e1 = foo_1;
+int read_i32_from_private(inout int foo_2) {
+    int _e1 = foo_2;
     return _e1;
 }
 
@@ -121,8 +142,8 @@ void assign_through_ptr_fn(inout uint p) {
     return;
 }
 
-void assign_array_through_ptr_fn(inout vec4 foo_2[2]) {
-    foo_2 = vec4[2](vec4(1.0), vec4(2.0));
+void assign_array_through_ptr_fn(inout vec4 foo_3[2]) {
+    foo_3 = vec4[2](vec4(1.0), vec4(2.0));
     return;
 }
 
@@ -144,7 +165,8 @@ void main() {
     c2_ = int[5](a_1, int(b), 3, 4, 5);
     c2_[(vi + 1u)] = 42;
     int value = c2_[vi];
-    float _e48 = test_arr_as_arg(float[5][10](float[10](0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), float[10](0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), float[10](0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), float[10](0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), float[10](0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)));
+    int _e48 = read_i32_from_private(c2_[vi]);
+    float _e50 = test_arr_as_arg(float[5][10](float[10](0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), float[10](0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), float[10](0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), float[10](0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), float[10](0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)));
     gl_Position = vec4((_matrix * vec4(ivec4(value))), 2.0);
     gl_Position.yz = vec2(-gl_Position.y, gl_Position.z * 2.0 - gl_Position.w);
     return;

@@ -32,6 +32,44 @@ const RAY_QUERY_FIELD_INTERSECTION: &str = "intersection";
 const RAY_QUERY_FIELD_READY: &str = "ready";
 const RAY_QUERY_FUN_MAP_INTERSECTION: &str = "_map_intersection_type";
 
+/// A custom little error type used by `checked_put_expression` to indicate that
+/// it was halfway through writing a bounds check and then realised that it
+/// needed to use an out-of-bounds local for the failure case. If you get this
+/// error, you need to write it yourself.
+///
+/// OOB locals should only ever be needed for function arguments, since every
+/// other place where an expression goes doesn't allow pointers: the expression
+/// always needs to be an index, or an image, or a boolean, etc, as well as a
+/// handful of places that accept most types but explicitly exclude pointers
+/// (e.g. return values).
+///
+/// The one exception to this is `Statement::Emit`, but the code that writes
+/// those has a special check that stops it from emitting pointers. This is why
+/// the regular `put_expression` just returns an 'invalid module' error if this
+/// happens: this is only a problem in function arguments, no need to clutter up
+/// everything else.
+///
+/// `checked_put_insert` can't just write the OOB local itself because it might
+/// not be able to resolve the right type of OOB local that it needs: although
+/// it'll always be able to resolve the `TypeInner` of the bounds-checked
+/// expression, it needs a `Handle<Type>`, and `Type`s have names. That means
+/// that if it can't guess the right name for the type, it can't get a handle,
+/// and then it can't look up the name of the OOB local.
+///
+/// Note that the only cases where it can't resolve the expression to a
+/// `Handle<Type>` is when indexing into a matrix or a vector, yielding a vector
+/// or a scalar respectively. In WGSL, I don't think these types can end up
+/// having names, and so this isn't necessary when that's the source language;
+/// however, I believe that in SPIR-V they can be assigned names, so it's
+/// necessary for that.
+#[derive(Debug, Clone, Copy)]
+struct NeedsOobLocal {
+    /// Any extra text that needs to added after the bounds-checked expression.
+    ///
+    /// This is always just either "" or ")".
+    end: &'static str,
+}
+
 /// Write the Metal name for a Naga numeric type: scalar, vector, or matrix.
 ///
 /// The `sizes` slice determines whether this function writes a
@@ -544,6 +582,32 @@ impl<'a> ExpressionContext<'a> {
         index::access_needs_check(base, index, self.module, self.function, self.info)
     }
 
+    /// Returns an iterator over the chain of `Access` and `AccessIndex`
+    /// expressions starting from `chain`.
+    ///
+    /// They're yielded as `(base, index)` pairs, where `base` is the expression
+    /// being indexed into and `index` is the index being used.
+    ///
+    /// The index is `None` if `base` is a struct, since you never need bounds
+    /// checks for accessing struct fields.
+    ///
+    /// If `chain` isn't an `Access` or `AccessIndex` expression, this just
+    /// yields nothing.
+    fn access_chain(
+        &self,
+        chain: Handle<crate::Expression>,
+    ) -> impl Iterator<Item = (Handle<crate::Expression>, Option<index::GuardedIndex>)> + '_ {
+        index::access_chain(chain, &self.module, &self.function, &self.info)
+    }
+
+    /// Returns all the types which we need out-of-bounds locals for; that is,
+    /// all of the types which the code might attempt to get an out-of-bounds
+    /// pointer to, in which case we yield a pointer to the out-of-bounds local
+    /// of the correct type.
+    fn oob_locals(&self) -> FastHashSet<Handle<crate::Type>> {
+        index::oob_locals(&self.module, &self.function, &self.info)
+    }
+
     fn get_packed_vec_kind(
         &self,
         expr_handle: Handle<crate::Expression>,
@@ -622,6 +686,78 @@ impl<W: Write> Writer<W> {
             put_expression(self, handle)?;
         }
         write!(self.out, ")")?;
+        Ok(())
+    }
+
+    /// Writes the local variables of the given function, as well as any extra
+    /// out-of-bounds locals that are needed.
+    ///
+    /// The names of the OOB locals are also added to `self.names` at the same
+    /// time.
+    fn put_locals(
+        &mut self,
+        module: &crate::Module,
+        origin: FunctionOrigin,
+        fun_info: &valid::FunctionInfo,
+    ) -> BackendResult {
+        let fun = match origin {
+            FunctionOrigin::Handle(handle) => &module.functions[handle],
+            FunctionOrigin::EntryPoint(idx) => &module.entry_points[usize::from(idx)].function,
+        };
+
+        let oob_locals = index::oob_locals(&module, &fun, &fun_info);
+        for &ty in oob_locals.iter() {
+            let name_key = match origin {
+                FunctionOrigin::Handle(handle) => NameKey::FunctionOobLocal(handle, ty),
+                FunctionOrigin::EntryPoint(idx) => NameKey::EntryPointOobLocal(idx, ty),
+            };
+            self.names.insert(name_key, self.namer.call("oob"));
+        }
+
+        for (name_key, ty, init) in fun
+            .local_variables
+            .iter()
+            .map(|(local_handle, local)| {
+                let name_key = match origin {
+                    FunctionOrigin::Handle(handle) => NameKey::FunctionLocal(handle, local_handle),
+                    FunctionOrigin::EntryPoint(idx) => NameKey::EntryPointLocal(idx, local_handle),
+                };
+                (name_key, local.ty, local.init)
+            })
+            .chain(oob_locals.iter().map(|&ty| {
+                let name_key = match origin {
+                    FunctionOrigin::Handle(handle) => NameKey::FunctionOobLocal(handle, ty),
+                    FunctionOrigin::EntryPoint(idx) => NameKey::EntryPointOobLocal(idx, ty),
+                };
+                (name_key, ty, None)
+            }))
+        {
+            let ty_name = TypeContext {
+                handle: ty,
+                gctx: module.to_ctx(),
+                names: &self.names,
+                access: crate::StorageAccess::empty(),
+                binding: None,
+                first_time: false,
+            };
+            write!(
+                self.out,
+                "{}{} {}",
+                back::INDENT,
+                ty_name,
+                self.names[&name_key]
+            )?;
+            match init {
+                Some(value) => {
+                    write!(self.out, " = ")?;
+                    self.put_const_expression(value, module)?;
+                }
+                None => {
+                    write!(self.out, " = {{}}")?;
+                }
+            };
+            writeln!(self.out, ";")?;
+        }
         Ok(())
     }
 
@@ -1299,12 +1435,31 @@ impl<W: Write> Writer<W> {
     ///
     /// - Pass `false` if it is an operand of a `?:` operator, a `[]`, or really
     ///   almost anything else.
+    #[track_caller]
     fn put_expression(
         &mut self,
         expr_handle: Handle<crate::Expression>,
         context: &ExpressionContext,
         is_scoped: bool,
     ) -> BackendResult {
+        self.checked_put_expression(expr_handle, context, is_scoped)?
+            .map_err(|_| Error::Validation)
+    }
+
+    /// A version of `put_expression` which surfaces the additional potential
+    /// error of needing to insert an out-of-bounds local.
+    ///
+    /// OOB locals are only ever needed when evaluating function arguments,
+    /// which is why the regular `put_expression` silently returns an
+    /// 'invalid module' error if that error ever comes up: if an OOB local is
+    /// ever needed anywhere else, the module must be invalid, and so there's no
+    /// need to clutter up the rest of the code with explicit checks for that.
+    fn checked_put_expression(
+        &mut self,
+        expr_handle: Handle<crate::Expression>,
+        context: &ExpressionContext,
+        is_scoped: bool,
+    ) -> Result<Result<(), NeedsOobLocal>, Error> {
         // Add to the set in order to track the stack size.
         #[cfg(test)]
         #[allow(trivial_casts)]
@@ -1313,7 +1468,7 @@ impl<W: Write> Writer<W> {
 
         if let Some(name) = self.named_expressions.get(&expr_handle) {
             write!(self.out, "{name}")?;
-            return Ok(());
+            return Ok(Ok(()));
         }
 
         let expression = &context.function.expressions[expr_handle];
@@ -1348,7 +1503,18 @@ impl<W: Write> Writer<W> {
                 {
                     write!(self.out, " ? ")?;
                     self.put_access_chain(expr_handle, policy, context)?;
-                    write!(self.out, " : DefaultConstructible()")?;
+                    write!(self.out, " : ")?;
+
+                    if context.resolve_type(base).pointer_space().is_some() {
+                        // We can't just use `DefaultConstructible` if this is a pointer, so punt it to
+                        // the caller to insert an out-of-bounds local instead.
+                        // See the docs for `NeedsOobLocal` for more details.
+                        return Ok(Err(NeedsOobLocal {
+                            end: if is_scoped { "" } else { ")" },
+                        }));
+                    }
+
+                    write!(self.out, "DefaultConstructible()")?;
 
                     if !is_scoped {
                         write!(self.out, ")")?;
@@ -1694,7 +1860,9 @@ impl<W: Write> Writer<W> {
                             ..
                         } => "dot",
                         crate::TypeInner::Vector { size, .. } => {
-                            return self.put_dot_product(arg, arg1.unwrap(), size as usize, context)
+                            return self
+                                .put_dot_product(arg, arg1.unwrap(), size as usize, context)
+                                .map(Ok)
                         }
                         _ => unreachable!(
                             "Correct TypeInner for dot product should be already validated"
@@ -1927,7 +2095,7 @@ impl<W: Write> Writer<W> {
                 write!(self.out, "}}")?;
             }
         }
-        Ok(())
+        Ok(Ok(()))
     }
 
     /// Used by expressions like Swizzle and Binary since they need packed_vec3's to be casted to a vec3
@@ -1995,7 +2163,7 @@ impl<W: Write> Writer<W> {
     #[allow(unused_variables)]
     fn put_bounds_checks(
         &mut self,
-        mut chain: Handle<crate::Expression>,
+        chain: Handle<crate::Expression>,
         context: &ExpressionContext,
         level: back::Level,
         prefix: &'static str,
@@ -2003,29 +2171,8 @@ impl<W: Write> Writer<W> {
         let mut check_written = false;
 
         // Iterate over the access chain, handling each expression.
-        loop {
-            // Produce a `GuardedIndex`, so we can shared code between the
-            // `Access` and `AccessIndex` cases.
-            let (base, guarded_index) = match context.function.expressions[chain] {
-                crate::Expression::Access { base, index } => {
-                    (base, Some(index::GuardedIndex::Expression(index)))
-                }
-                crate::Expression::AccessIndex { base, index } => {
-                    // Don't try to check indices into structs. Validation already took
-                    // care of them, and index::needs_guard doesn't handle that case.
-                    let mut base_inner = context.resolve_type(base);
-                    if let crate::TypeInner::Pointer { base, .. } = *base_inner {
-                        base_inner = &context.module.types[base].inner;
-                    }
-                    match *base_inner {
-                        crate::TypeInner::Struct { .. } => (base, None),
-                        _ => (base, Some(index::GuardedIndex::Known(index))),
-                    }
-                }
-                _ => break,
-            };
-
-            if let Some(index) = guarded_index {
+        for (base, index) in context.access_chain(chain) {
+            if let Some(index) = index {
                 if let Some(length) = context.access_needs_check(base, index) {
                     if check_written {
                         write!(self.out, " && ")?;
@@ -2053,8 +2200,6 @@ impl<W: Write> Writer<W> {
                     }
                 }
             }
-
-            chain = base
         }
 
         Ok(check_written)
@@ -2737,11 +2882,34 @@ impl<W: Write> Writer<W> {
                     let fun_name = &self.names[&NameKey::Function(function)];
                     write!(self.out, "{fun_name}(")?;
                     // first, write down the actual arguments
-                    for (i, &handle) in arguments.iter().enumerate() {
+                    for (i, (info, &handle)) in context.expression.module.functions[function]
+                        .arguments
+                        .iter()
+                        .zip(arguments)
+                        .enumerate()
+                    {
                         if i != 0 {
                             write!(self.out, ", ")?;
                         }
-                        self.put_expression(handle, &context.expression, true)?;
+                        if let Err(NeedsOobLocal { end }) =
+                            self.checked_put_expression(handle, &context.expression, true)?
+                        {
+                            let crate::TypeInner::Pointer { base, .. } =
+                                context.expression.module.types[info.ty].inner
+                            else {
+                                unreachable!()
+                            };
+                            let name_key = match context.expression.origin {
+                                FunctionOrigin::Handle(handle) => {
+                                    NameKey::FunctionOobLocal(handle, base)
+                                }
+                                FunctionOrigin::EntryPoint(idx) => {
+                                    NameKey::EntryPointOobLocal(idx, base)
+                                }
+                            };
+                            let name = &self.names[&name_key];
+                            write!(self.out, "{name}{end}")?;
+                        }
                     }
                     // follow-up with any global resources used
                     let mut separate = !arguments.is_empty();
@@ -3437,28 +3605,7 @@ impl<W: Write> Writer<W> {
 
             writeln!(self.out, ") {{")?;
 
-            for (local_handle, local) in fun.local_variables.iter() {
-                let ty_name = TypeContext {
-                    handle: local.ty,
-                    gctx: module.to_ctx(),
-                    names: &self.names,
-                    access: crate::StorageAccess::empty(),
-                    binding: None,
-                    first_time: false,
-                };
-                let local_name = &self.names[&NameKey::FunctionLocal(fun_handle, local_handle)];
-                write!(self.out, "{}{} {}", back::INDENT, ty_name, local_name)?;
-                match local.init {
-                    Some(value) => {
-                        write!(self.out, " = ")?;
-                        self.put_const_expression(value, module)?;
-                    }
-                    None => {
-                        write!(self.out, " = {{}}")?;
-                    }
-                };
-                writeln!(self.out, ";")?;
-            }
+            self.put_locals(module, FunctionOrigin::Handle(fun_handle), fun_info)?;
 
             let guarded_indices =
                 index::find_checked_indexes(module, fun, fun_info, options.bounds_check_policies);
@@ -3995,28 +4142,7 @@ impl<W: Write> Writer<W> {
 
             // Finally, declare all the local variables that we need
             //TODO: we can postpone this till the relevant expressions are emitted
-            for (local_handle, local) in fun.local_variables.iter() {
-                let name = &self.names[&NameKey::EntryPointLocal(ep_index as _, local_handle)];
-                let ty_name = TypeContext {
-                    handle: local.ty,
-                    gctx: module.to_ctx(),
-                    names: &self.names,
-                    access: crate::StorageAccess::empty(),
-                    binding: None,
-                    first_time: false,
-                };
-                write!(self.out, "{}{} {}", back::INDENT, ty_name, name)?;
-                match local.init {
-                    Some(value) => {
-                        write!(self.out, " = ")?;
-                        self.put_const_expression(value, module)?;
-                    }
-                    None => {
-                        write!(self.out, " = {{}}")?;
-                    }
-                };
-                writeln!(self.out, ";")?;
-            }
+            self.put_locals(module, FunctionOrigin::EntryPoint(ep_index as _), fun_info)?;
 
             let guarded_indices =
                 index::find_checked_indexes(module, fun, fun_info, options.bounds_check_policies);

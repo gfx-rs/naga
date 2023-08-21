@@ -3,6 +3,12 @@
 #include <simd/simd.h>
 
 using metal::uint;
+struct DefaultConstructible {
+    template<typename T>
+    operator T() && {
+        return T {};
+    }
+};
 
 struct _mslBufferSizes {
     uint size1;
@@ -39,102 +45,24 @@ struct Bar {
 struct Baz {
     metal::float3x2 m;
 };
-struct type_15 {
+struct type_17 {
     metal::float4x2 inner[2];
 };
 struct MatCx2InArray {
-    type_15 am;
-};
-struct type_18 {
-    float inner[10];
+    type_17 am;
 };
 struct type_19 {
-    type_18 inner[5];
+    float inner[10];
 };
-struct type_22 {
+struct type_20 {
+    type_19 inner[5];
+};
+struct type_23 {
     int inner[5];
 };
-struct type_26 {
+struct type_27 {
     metal::float4 inner[2];
 };
-
-void test_matrix_within_struct_accesses(
-    constant Baz& baz
-) {
-    int idx = {};
-    Baz t = {};
-    idx = 1;
-    int _e3 = idx;
-    idx = _e3 - 1;
-    metal::float3x2 l0_ = baz.m;
-    metal::float2 l1_ = baz.m[0];
-    int _e15 = idx;
-    metal::float2 l2_ = baz.m[_e15];
-    float l3_ = baz.m[0].y;
-    int _e29 = idx;
-    float l4_ = baz.m[0][_e29];
-    int _e34 = idx;
-    float l5_ = baz.m[_e34].y;
-    int _e41 = idx;
-    int _e43 = idx;
-    float l6_ = baz.m[_e41][_e43];
-    t = Baz {metal::float3x2(metal::float2(1.0), metal::float2(2.0), metal::float2(3.0))};
-    int _e56 = idx;
-    idx = _e56 + 1;
-    t.m = metal::float3x2(metal::float2(6.0), metal::float2(5.0), metal::float2(4.0));
-    t.m[0] = metal::float2(9.0);
-    int _e72 = idx;
-    t.m[_e72] = metal::float2(90.0);
-    t.m[0].y = 10.0;
-    int _e85 = idx;
-    t.m[0][_e85] = 20.0;
-    int _e89 = idx;
-    t.m[_e89].y = 30.0;
-    int _e95 = idx;
-    int _e97 = idx;
-    t.m[_e95][_e97] = 40.0;
-    return;
-}
-
-void test_matrix_within_array_within_struct_accesses(
-    constant MatCx2InArray& nested_mat_cx2_
-) {
-    int idx_1 = {};
-    MatCx2InArray t_1 = {};
-    idx_1 = 1;
-    int _e3 = idx_1;
-    idx_1 = _e3 - 1;
-    type_15 l0_1 = nested_mat_cx2_.am;
-    metal::float4x2 l1_1 = nested_mat_cx2_.am.inner[0];
-    metal::float2 l2_1 = nested_mat_cx2_.am.inner[0][0];
-    int _e24 = idx_1;
-    metal::float2 l3_1 = nested_mat_cx2_.am.inner[0][_e24];
-    float l4_1 = nested_mat_cx2_.am.inner[0][0].y;
-    int _e42 = idx_1;
-    float l5_1 = nested_mat_cx2_.am.inner[0][0][_e42];
-    int _e49 = idx_1;
-    float l6_1 = nested_mat_cx2_.am.inner[0][_e49].y;
-    int _e58 = idx_1;
-    int _e60 = idx_1;
-    float l7_ = nested_mat_cx2_.am.inner[0][_e58][_e60];
-    t_1 = MatCx2InArray {type_15 {}};
-    int _e67 = idx_1;
-    idx_1 = _e67 + 1;
-    t_1.am = type_15 {};
-    t_1.am.inner[0] = metal::float4x2(metal::float2(8.0), metal::float2(7.0), metal::float2(6.0), metal::float2(5.0));
-    t_1.am.inner[0][0] = metal::float2(9.0);
-    int _e93 = idx_1;
-    t_1.am.inner[0][_e93] = metal::float2(90.0);
-    t_1.am.inner[0][0].y = 10.0;
-    int _e110 = idx_1;
-    t_1.am.inner[0][0][_e110] = 20.0;
-    int _e116 = idx_1;
-    t_1.am.inner[0][_e116].y = 30.0;
-    int _e124 = idx_1;
-    int _e126 = idx_1;
-    t_1.am.inner[0][_e124][_e126] = 40.0;
-    return;
-}
 
 float read_from_private(
     thread float& foo_1
@@ -143,8 +71,127 @@ float read_from_private(
     return _e1;
 }
 
+void test_matrix_within_struct_accesses(
+    constant Baz& baz
+) {
+    int idx = {};
+    Baz t = {};
+    float oob = {};
+    idx = 1;
+    int _e3 = idx;
+    idx = _e3 - 1;
+    metal::float3x2 l0_ = baz.m;
+    metal::float2 l1_ = baz.m[0];
+    int _e15 = idx;
+    metal::float2 l2_ = uint(_e15) < 3 ? baz.m[_e15] : DefaultConstructible();
+    float l3_ = baz.m[0].y;
+    int _e29 = idx;
+    float l4_ = uint(_e29) < 2 ? baz.m[0][_e29] : DefaultConstructible();
+    int _e34 = idx;
+    float l5_ = uint(_e34) < 3 ? baz.m[_e34].y : DefaultConstructible();
+    int _e41 = idx;
+    int _e43 = idx;
+    float l6_ = uint(_e43) < 2 && uint(_e41) < 3 ? baz.m[_e41][_e43] : DefaultConstructible();
+    t = Baz {metal::float3x2(metal::float2(1.0), metal::float2(2.0), metal::float2(3.0))};
+    int _e56 = idx;
+    idx = _e56 + 1;
+    t.m = metal::float3x2(metal::float2(6.0), metal::float2(5.0), metal::float2(4.0));
+    t.m[0] = metal::float2(9.0);
+    int _e72 = idx;
+    if (uint(_e72) < 3) {
+        t.m[_e72] = metal::float2(90.0);
+    }
+    t.m[0].y = 10.0;
+    int _e85 = idx;
+    if (uint(_e85) < 2) {
+        t.m[0][_e85] = 20.0;
+    }
+    int _e89 = idx;
+    if (uint(_e89) < 3) {
+        t.m[_e89].y = 30.0;
+    }
+    int _e95 = idx;
+    int _e97 = idx;
+    if (uint(_e97) < 2 && uint(_e95) < 3) {
+        t.m[_e95][_e97] = 40.0;
+    }
+    float _e105 = read_from_private(t.m[0].y);
+    int _e109 = idx;
+    float _e111 = read_from_private(uint(_e109) < 2 ? t.m[0][_e109] : oob);
+    int _e113 = idx;
+    float _e117 = read_from_private(uint(_e113) < 3 ? t.m[_e113].y : oob);
+    int _e119 = idx;
+    int _e121 = idx;
+    float _e123 = read_from_private(uint(_e121) < 2 && uint(_e119) < 3 ? t.m[_e119][_e121] : oob);
+    return;
+}
+
+void test_matrix_within_array_within_struct_accesses(
+    constant MatCx2InArray& nested_mat_cx2_
+) {
+    int idx_1 = {};
+    MatCx2InArray t_1 = {};
+    float oob_1 = {};
+    idx_1 = 1;
+    int _e3 = idx_1;
+    idx_1 = _e3 - 1;
+    type_17 l0_1 = nested_mat_cx2_.am;
+    metal::float4x2 l1_1 = nested_mat_cx2_.am.inner[0];
+    metal::float2 l2_1 = nested_mat_cx2_.am.inner[0][0];
+    int _e24 = idx_1;
+    metal::float2 l3_1 = uint(_e24) < 4 ? nested_mat_cx2_.am.inner[0][_e24] : DefaultConstructible();
+    float l4_1 = nested_mat_cx2_.am.inner[0][0].y;
+    int _e42 = idx_1;
+    float l5_1 = uint(_e42) < 2 ? nested_mat_cx2_.am.inner[0][0][_e42] : DefaultConstructible();
+    int _e49 = idx_1;
+    float l6_1 = uint(_e49) < 4 ? nested_mat_cx2_.am.inner[0][_e49].y : DefaultConstructible();
+    int _e58 = idx_1;
+    int _e60 = idx_1;
+    float l7_ = uint(_e60) < 2 && uint(_e58) < 4 ? nested_mat_cx2_.am.inner[0][_e58][_e60] : DefaultConstructible();
+    t_1 = MatCx2InArray {type_17 {}};
+    int _e67 = idx_1;
+    idx_1 = _e67 + 1;
+    t_1.am = type_17 {};
+    t_1.am.inner[0] = metal::float4x2(metal::float2(8.0), metal::float2(7.0), metal::float2(6.0), metal::float2(5.0));
+    t_1.am.inner[0][0] = metal::float2(9.0);
+    int _e93 = idx_1;
+    if (uint(_e93) < 4) {
+        t_1.am.inner[0][_e93] = metal::float2(90.0);
+    }
+    t_1.am.inner[0][0].y = 10.0;
+    int _e110 = idx_1;
+    if (uint(_e110) < 2) {
+        t_1.am.inner[0][0][_e110] = 20.0;
+    }
+    int _e116 = idx_1;
+    if (uint(_e116) < 4) {
+        t_1.am.inner[0][_e116].y = 30.0;
+    }
+    int _e124 = idx_1;
+    int _e126 = idx_1;
+    if (uint(_e126) < 2 && uint(_e124) < 4) {
+        t_1.am.inner[0][_e124][_e126] = 40.0;
+    }
+    float _e136 = read_from_private(t_1.am.inner[0][0].y);
+    int _e142 = idx_1;
+    float _e144 = read_from_private(uint(_e142) < 2 ? t_1.am.inner[0][0][_e142] : oob_1);
+    int _e148 = idx_1;
+    float _e152 = read_from_private(uint(_e148) < 4 ? t_1.am.inner[0][_e148].y : oob_1);
+    int _e156 = idx_1;
+    int _e158 = idx_1;
+    float _e160 = read_from_private(uint(_e158) < 2 && uint(_e156) < 4 ? t_1.am.inner[0][_e156][_e158] : oob_1);
+    return;
+}
+
+int read_i32_from_private(
+    thread int& foo_2
+) {
+    int _e1 = foo_2;
+    return _e1;
+}
+
 float test_arr_as_arg(
-    type_19 a
+    type_20 a
 ) {
     return a.inner[4].inner[9];
 }
@@ -157,9 +204,9 @@ void assign_through_ptr_fn(
 }
 
 void assign_array_through_ptr_fn(
-    thread type_26& foo_2
+    thread type_27& foo_3
 ) {
-    foo_2 = type_26 {metal::float4(1.0), metal::float4(2.0)};
+    foo_3 = type_27 {metal::float4(1.0), metal::float4(2.0)};
     return;
 }
 
@@ -177,7 +224,8 @@ vertex foo_vertOutput foo_vert(
 , constant _mslBufferSizes& _buffer_sizes [[buffer(24)]]
 ) {
     float foo = {};
-    type_22 c2_ = {};
+    type_23 c2_ = {};
+    int oob_2 = {};
     foo = 0.0;
     float baz_1 = foo;
     foo = 1.0;
@@ -186,13 +234,18 @@ vertex foo_vertOutput foo_vert(
     metal::float4x3 _matrix = bar._matrix;
     type_9 arr_1 = bar.arr;
     float b = bar._matrix[3].x;
-    int a_1 = bar.data[(1 + (_buffer_sizes.size1 - 160 - 8) / 8) - 2u].value;
+    uint _e23 = (1 + (_buffer_sizes.size1 - 160 - 8) / 8) - 2u;
+    int a_1 = uint(_e23) < 1 + (_buffer_sizes.size1 - 160 - 8) / 8 ? bar.data[_e23].value : DefaultConstructible();
     metal::int2 c = qux;
     float _e34 = read_from_private(foo);
-    c2_ = type_22 {a_1, static_cast<int>(b), 3, 4, 5};
-    c2_.inner[vi + 1u] = 42;
-    int value = c2_.inner[vi];
-    float _e48 = test_arr_as_arg(type_19 {});
+    c2_ = type_23 {a_1, static_cast<int>(b), 3, 4, 5};
+    uint _e42 = vi + 1u;
+    if (uint(_e42) < 5) {
+        c2_.inner[_e42] = 42;
+    }
+    int value = uint(vi) < 5 ? c2_.inner[vi] : DefaultConstructible();
+    int _e48 = read_i32_from_private(uint(vi) < 5 ? c2_.inner[vi] : oob_2);
+    float _e50 = test_arr_as_arg(type_20 {});
     return foo_vertOutput { metal::float4(_matrix * static_cast<metal::float4>(metal::int4(value)), 2.0) };
 }
 
@@ -208,7 +261,9 @@ fragment foo_fragOutput foo_frag(
     bar._matrix[1].z = 1.0;
     bar._matrix = metal::float4x3(metal::float3(0.0), metal::float3(1.0), metal::float3(2.0), metal::float3(3.0));
     bar.arr = type_9 {metal::uint2(0u), metal::uint2(1u)};
-    bar.data[1].value = 1;
+    if (uint(1) < 1 + (_buffer_sizes.size1 - 160 - 8) / 8) {
+        bar.data[1].value = 1;
+    }
     qux = metal::int2 {};
     return foo_fragOutput { metal::float4(0.0) };
 }
@@ -222,8 +277,8 @@ kernel void assign_through_ptr(
         val = {};
     }
     metal::threadgroup_barrier(metal::mem_flags::mem_threadgroup);
-    type_26 arr = {};
-    arr = type_26 {metal::float4(6.0), metal::float4(7.0)};
+    type_27 arr = {};
+    arr = type_27 {metal::float4(6.0), metal::float4(7.0)};
     assign_through_ptr_fn(val);
     assign_array_through_ptr_fn(arr);
     return;

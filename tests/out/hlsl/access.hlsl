@@ -83,6 +83,12 @@ RWByteAddressBuffer qux : register(u2);
 cbuffer nested_mat_cx2_ : register(b3) { MatCx2InArray nested_mat_cx2_; }
 groupshared uint val;
 
+float read_from_private(inout float foo_1)
+{
+    float _expr1 = foo_1;
+    return _expr1;
+}
+
 Baz ConstructBaz(float3x2 arg0) {
     Baz ret = (Baz)0;
     ret.m_0 = arg0[0];
@@ -152,6 +158,14 @@ void test_matrix_within_struct_accesses()
     int _expr95 = idx;
     int _expr97 = idx;
     SetMatScalarmOnBaz(t, 40.0, _expr95, _expr97);
+    const float _e105 = read_from_private(GetMatmOnBaz(t)[0].y);
+    int _expr109 = idx;
+    const float _e111 = read_from_private(GetMatmOnBaz(t)[0][_expr109]);
+    int _expr113 = idx;
+    const float _e117 = read_from_private(GetMatmOnBaz(t)[_expr113].y);
+    int _expr119 = idx;
+    int _expr121 = idx;
+    const float _e123 = read_from_private(GetMatmOnBaz(t)[_expr119][_expr121]);
     return;
 }
 
@@ -198,12 +212,20 @@ void test_matrix_within_array_within_struct_accesses()
     int _expr124 = idx_1;
     int _expr126 = idx_1;
     __set_el_of_mat4x2(t_1.am[0], _expr124, _expr126, 40.0);
+    const float _e136 = read_from_private(t_1.am[0]._0.y);
+    int _expr142 = idx_1;
+    const float _e144 = read_from_private(t_1.am[0]._0[_expr142]);
+    int _expr148 = idx_1;
+    const float _e152 = read_from_private(__get_col_of_mat4x2(t_1.am[0], _expr148).y);
+    int _expr156 = idx_1;
+    int _expr158 = idx_1;
+    const float _e160 = read_from_private(__get_col_of_mat4x2(t_1.am[0], _expr156)[_expr158]);
     return;
 }
 
-float read_from_private(inout float foo_1)
+int read_i32_from_private(inout int foo_2)
 {
-    float _expr1 = foo_1;
+    int _expr1 = foo_2;
     return _expr1;
 }
 
@@ -224,9 +246,9 @@ ret_Constructarray2_float4_ Constructarray2_float4_(float4 arg0, float4 arg1) {
     return ret;
 }
 
-void assign_array_through_ptr_fn(inout float4 foo_2[2])
+void assign_array_through_ptr_fn(inout float4 foo_3[2])
 {
-    foo_2 = Constructarray2_float4_((1.0).xxxx, (2.0).xxxx);
+    foo_3 = Constructarray2_float4_((1.0).xxxx, (2.0).xxxx);
     return;
 }
 
@@ -268,7 +290,8 @@ float4 foo_vert(uint vi : SV_VertexID) : SV_Position
     c2_ = Constructarray5_int_(a_1, int(b), 3, 4, 5);
     c2_[(vi + 1u)] = 42;
     int value = c2_[vi];
-    const float _e48 = test_arr_as_arg((float[5][10])0);
+    const int _e48 = read_i32_from_private(c2_[vi]);
+    const float _e50 = test_arr_as_arg((float[5][10])0);
     return float4(mul(float4((value).xxxx), _matrix), 2.0);
 }
 

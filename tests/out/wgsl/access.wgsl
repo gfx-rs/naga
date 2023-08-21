@@ -36,6 +36,11 @@ var<storage, read_write> qux: vec2<i32>;
 var<uniform> nested_mat_cx2_: MatCx2InArray;
 var<workgroup> val: u32;
 
+fn read_from_private(foo_1: ptr<function, f32>) -> f32 {
+    let _e1 = (*foo_1);
+    return _e1;
+}
+
 fn test_matrix_within_struct_accesses() {
     var idx: i32;
     var t: Baz;
@@ -70,6 +75,14 @@ fn test_matrix_within_struct_accesses() {
     let _e95 = idx;
     let _e97 = idx;
     t.m[_e95][_e97] = 40.0;
+    let _e105 = read_from_private((&t.m[0][1]));
+    let _e109 = idx;
+    let _e111 = read_from_private((&t.m[0][_e109]));
+    let _e113 = idx;
+    let _e117 = read_from_private((&t.m[_e113][1]));
+    let _e119 = idx;
+    let _e121 = idx;
+    let _e123 = read_from_private((&t.m[_e119][_e121]));
     return;
 }
 
@@ -109,11 +122,19 @@ fn test_matrix_within_array_within_struct_accesses() {
     let _e124 = idx_1;
     let _e126 = idx_1;
     t_1.am[0][_e124][_e126] = 40.0;
+    let _e136 = read_from_private((&t_1.am[0][0][1]));
+    let _e142 = idx_1;
+    let _e144 = read_from_private((&t_1.am[0][0][_e142]));
+    let _e148 = idx_1;
+    let _e152 = read_from_private((&t_1.am[0][_e148][1]));
+    let _e156 = idx_1;
+    let _e158 = idx_1;
+    let _e160 = read_from_private((&t_1.am[0][_e156][_e158]));
     return;
 }
 
-fn read_from_private(foo_1: ptr<function, f32>) -> f32 {
-    let _e1 = (*foo_1);
+fn read_i32_from_private(foo_2: ptr<function, i32>) -> i32 {
+    let _e1 = (*foo_2);
     return _e1;
 }
 
@@ -126,8 +147,8 @@ fn assign_through_ptr_fn(p: ptr<workgroup, u32>) {
     return;
 }
 
-fn assign_array_through_ptr_fn(foo_2: ptr<function, array<vec4<f32>, 2>>) {
-    (*foo_2) = array<vec4<f32>, 2>(vec4<f32>(1.0), vec4<f32>(2.0));
+fn assign_array_through_ptr_fn(foo_3: ptr<function, array<vec4<f32>, 2>>) {
+    (*foo_3) = array<vec4<f32>, 2>(vec4<f32>(1.0), vec4<f32>(2.0));
     return;
 }
 
@@ -151,7 +172,8 @@ fn foo_vert(@builtin(vertex_index) vi: u32) -> @builtin(position) vec4<f32> {
     c2_ = array<i32, 5>(a_1, i32(b), 3, 4, 5);
     c2_[(vi + 1u)] = 42;
     let value = c2_[vi];
-    let _e48 = test_arr_as_arg(array<array<f32, 10>, 5>());
+    let _e48 = read_i32_from_private((&c2_[vi]));
+    let _e50 = test_arr_as_arg(array<array<f32, 10>, 5>());
     return vec4<f32>((_matrix * vec4<f32>(vec4<i32>(value))), 2.0);
 }
 
