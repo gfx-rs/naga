@@ -814,6 +814,11 @@ pub const RESERVED: &[&str] = &[
     "TextureBuffer",
     "ConstantBuffer",
     "RayQuery",
+    // Naga utilities
+    super::writer::FREXP_FUNCTION,
+    super::writer::FREXP_STRUCT,
+    super::writer::MODF_FUNCTION,
+    super::writer::MODF_STRUCT,
 ];
 
 // DXC scalar types, from https://github.com/microsoft/DirectXShaderCompiler/blob/18c9e114f9c314f93e68fbc72ce207d4ed2e65ae/tools/clang/lib/AST/ASTContextHLSL.cpp#L48-L254

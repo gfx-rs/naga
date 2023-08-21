@@ -241,6 +241,16 @@ impl Writer {
         self.get_type_id(local_type.into())
     }
 
+    pub(super) fn get_int_type_id(&mut self) -> Word {
+        let local_type = LocalType::Value {
+            vector_size: None,
+            kind: crate::ScalarKind::Sint,
+            width: 4,
+            pointer_space: None,
+        };
+        self.get_type_id(local_type.into())
+    }
+
     pub(super) fn get_float_type_id(&mut self) -> Word {
         let local_type = LocalType::Value {
             vector_size: None,
@@ -1024,6 +1034,36 @@ impl Writer {
                     }
                     Instruction::type_struct(id, member_ids.as_slice())
                 }
+                crate::TypeInner::FrexpResult | crate::TypeInner::ModfResult => {
+                    let ty_inner = crate::TypeInner::Scalar {
+                        width: 4,
+                        kind: crate::ScalarKind::Float,
+                    };
+                    self.decorate_struct_member_raw(id, 0, 0, Some("fract"), &ty_inner, arena)?;
+                    self.decorate_struct_member_raw(
+                        id,
+                        1,
+                        4,
+                        Some(if ty.inner == crate::TypeInner::FrexpResult {
+                            "exp"
+                        } else {
+                            "whole"
+                        }),
+                        &ty_inner,
+                        arena,
+                    )?;
+
+                    let float_id = self.get_float_type_id();
+                    let member_ids = [
+                        float_id,
+                        if ty.inner == crate::TypeInner::FrexpResult {
+                            self.get_int_type_id()
+                        } else {
+                            float_id
+                        },
+                    ];
+                    Instruction::type_struct(id, &member_ids)
+                }
 
                 // These all have TypeLocal representations, so they should have been
                 // handled by `write_type_declaration_local` above.
@@ -1694,17 +1734,36 @@ impl Writer {
         member: &crate::StructMember,
         arena: &UniqueArena<crate::Type>,
     ) -> Result<(), Error> {
+        self.decorate_struct_member_raw(
+            struct_id,
+            index,
+            member.offset,
+            member.name.as_deref(),
+            &arena[member.ty].inner,
+            arena,
+        )
+    }
+
+    fn decorate_struct_member_raw(
+        &mut self,
+        struct_id: Word,
+        index: usize,
+        offset: Word,
+        member_name: Option<&str>,
+        member_ty_inner: &crate::TypeInner,
+        arena: &UniqueArena<crate::Type>,
+    ) -> Result<(), Error> {
         use spirv::Decoration;
 
         self.annotations.push(Instruction::member_decorate(
             struct_id,
             index as u32,
             Decoration::Offset,
-            &[member.offset],
+            &[offset],
         ));
 
         if self.flags.contains(WriterFlags::DEBUG) {
-            if let Some(ref name) = member.name {
+            if let Some(name) = member_name {
                 self.debugs
                     .push(Instruction::member_name(struct_id, index as u32, name));
             }
@@ -1712,7 +1771,7 @@ impl Writer {
 
         // Matrices and arrays of matrices both require decorations,
         // so "see through" an array to determine if they're needed.
-        let member_array_subty_inner = match arena[member.ty].inner {
+        let member_array_subty_inner = match *member_ty_inner {
             crate::TypeInner::Array { base, .. } => &arena[base].inner,
             ref other => other,
         };

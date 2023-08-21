@@ -54,6 +54,8 @@ impl super::Validator {
                 | crate::TypeInner::Image { .. }
                 | crate::TypeInner::Sampler { .. }
                 | crate::TypeInner::AccelerationStructure
+                | crate::TypeInner::FrexpResult
+                | crate::TypeInner::ModfResult
                 | crate::TypeInner::RayQuery => (),
                 crate::TypeInner::Pointer { base, space: _ } => {
                     this_handle.check_dep(base)?;

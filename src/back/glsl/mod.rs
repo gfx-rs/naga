@@ -72,6 +72,11 @@ pub const SUPPORTED_ES_VERSIONS: &[u16] = &[300, 310, 320];
 /// of detail for bounds checking in `ImageLoad`
 const CLAMPED_LOD_SUFFIX: &str = "_clamped_lod";
 
+pub(crate) const FREXP_FUNCTION: &str = "naga_frexp";
+pub(crate) const FREXP_STRUCT: &str = "naga_frexp_result";
+pub(crate) const MODF_FUNCTION: &str = "naga_modf";
+pub(crate) const MODF_STRUCT: &str = "naga_modf_result";
+
 /// Mapping between resources and bindings.
 pub type BindingMap = std::collections::BTreeMap<crate::ResourceBinding, u8>;
 
@@ -604,6 +609,38 @@ impl<'a, W: Write> Writer<'a, W> {
             }
         }
 
+        if self.module.special_types.frexp_result.is_some() {
+            writeln!(
+                self.out,
+                "struct {FREXP_STRUCT} {{
+    float fract;
+    int exp;
+}};
+
+{FREXP_STRUCT} {FREXP_FUNCTION}(float arg) {{
+    int exp;
+    float fract = frexp(arg, exp);
+    return {FREXP_STRUCT}(fract, exp);
+}}"
+            )?;
+        }
+
+        if self.module.special_types.modf_result.is_some() {
+            writeln!(
+                self.out,
+                "struct {MODF_STRUCT} {{
+    float fract;
+    float whole;
+}};
+
+{MODF_STRUCT} {MODF_FUNCTION}(float arg) {{
+    float whole;
+    float fract = modf(arg, whole);
+    return {MODF_STRUCT}(fract, whole);
+}}"
+            )?;
+        }
+
         // Write struct types.
         //
         // This are always ordered because the IR is structured in a way that
@@ -860,6 +897,8 @@ impl<'a, W: Write> Writer<'a, W> {
             | TypeInner::Sampler { .. }
             | TypeInner::AccelerationStructure
             | TypeInner::RayQuery
+            | TypeInner::ModfResult
+            | TypeInner::FrexpResult
             | TypeInner::BindingArray { .. } => {
                 return Err(Error::Custom(format!("Unable to write type {inner:?}")))
             }
@@ -885,6 +924,14 @@ impl<'a, W: Write> Writer<'a, W> {
             }
             // glsl array has the size separated from the base type
             TypeInner::Array { base, .. } => self.write_type(base),
+            TypeInner::FrexpResult => {
+                write!(self.out, "{FREXP_STRUCT}")?;
+                Ok(())
+            }
+            TypeInner::ModfResult => {
+                write!(self.out, "{MODF_STRUCT}")?;
+                Ok(())
+            }
             ref other => self.write_value_type(other),
         }
     }
@@ -2325,6 +2372,12 @@ impl<'a, W: Write> Writer<'a, W> {
                             &self.names[&NameKey::StructMember(ty, index)]
                         )?
                     }
+                    TypeInner::FrexpResult => {
+                        write!(self.out, ".{}", if index == 0 { "fract" } else { "exp" })?
+                    }
+                    TypeInner::ModfResult => {
+                        write!(self.out, ".{}", if index == 0 { "fract" } else { "whole" })?
+                    }
                     ref other => return Err(Error::Custom(format!("Cannot index {other:?}"))),
                 }
             }
@@ -2985,8 +3038,8 @@ impl<'a, W: Write> Writer<'a, W> {
                     Mf::Round => "roundEven",
                     Mf::Fract => "fract",
                     Mf::Trunc => "trunc",
-                    Mf::Modf => "modf",
-                    Mf::Frexp => "frexp",
+                    Mf::Modf => MODF_FUNCTION,
+                    Mf::Frexp => FREXP_FUNCTION,
                     Mf::Ldexp => "ldexp",
                     // exponent
                     Mf::Exp => "exp",

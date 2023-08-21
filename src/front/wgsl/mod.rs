@@ -185,6 +185,8 @@ impl crate::TypeInner {
             Ti::Sampler { .. } => "sampler".to_string(),
             Ti::AccelerationStructure => "acceleration_structure".to_string(),
             Ti::RayQuery => "ray_query".to_string(),
+            Ti::FrexpResult => "__frexp_result_f32".to_string(),
+            Ti::ModfResult => "__modf_result_f32".to_string(),
             Ti::BindingArray { base, size, .. } => {
                 let member_type = &gctx.types[base];
                 let base = member_type.name.as_deref().unwrap_or("unknown");

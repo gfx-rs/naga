@@ -234,6 +234,10 @@ impl Layouter {
                         alignment,
                     }
                 }
+                Ti::FrexpResult { .. } | Ti::ModfResult { .. } => TypeLayout {
+                    size: 8,
+                    alignment: Alignment::EIGHT,
+                },
                 Ti::Image { .. }
                 | Ti::Sampler { .. }
                 | Ti::AccelerationStructure

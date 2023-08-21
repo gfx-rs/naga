@@ -32,6 +32,11 @@ const RAY_QUERY_FIELD_INTERSECTION: &str = "intersection";
 const RAY_QUERY_FIELD_READY: &str = "ready";
 const RAY_QUERY_FUN_MAP_INTERSECTION: &str = "_map_intersection_type";
 
+pub(crate) const FREXP_FUNCTION: &str = "naga_frexp";
+pub(crate) const FREXP_STRUCT: &str = "naga_frexp_result";
+pub(crate) const MODF_FUNCTION: &str = "naga_modf";
+pub(crate) const MODF_STRUCT: &str = "naga_modf_result";
+
 /// Write the Metal name for a Naga numeric type: scalar, vector, or matrix.
 ///
 /// The `sizes` slice determines whether this function writes a
@@ -140,7 +145,15 @@ impl<'a> Display for TypeContext<'a> {
                 // so just print the element type here.
                 write!(out, "{sub}")
             }
-            crate::TypeInner::Struct { .. } => unreachable!(),
+            crate::TypeInner::Struct { .. } => {
+                unreachable!()
+            }
+            crate::TypeInner::FrexpResult { .. } => {
+                write!(out, "{}", FREXP_STRUCT)
+            }
+            crate::TypeInner::ModfResult { .. } => {
+                write!(out, "{}", MODF_STRUCT)
+            }
             crate::TypeInner::Image {
                 dim,
                 arrayed,
@@ -452,6 +465,8 @@ impl crate::Type {
             | Ti::Sampler { .. }
             | Ti::AccelerationStructure
             | Ti::RayQuery
+            | Ti::FrexpResult
+            | Ti::ModfResult
             | Ti::BindingArray { .. } => false,
         }
     }
@@ -1636,6 +1651,24 @@ impl<W: Write> Writer<W> {
                 self.put_call_parameters(iter::once(argument), context)?;
             }
             crate::Expression::Math {
+                fun: crate::MathFunction::Frexp,
+                arg,
+                ..
+            } => {
+                write!(self.out, "{FREXP_FUNCTION}(")?;
+                self.put_expression(arg, context, false)?;
+                write!(self.out, ")")?;
+            }
+            crate::Expression::Math {
+                fun: crate::MathFunction::Modf,
+                arg,
+                ..
+            } => {
+                write!(self.out, "{MODF_FUNCTION}(")?;
+                self.put_expression(arg, context, false)?;
+                write!(self.out, ")")?;
+            }
+            crate::Expression::Math {
                 fun,
                 arg,
                 arg1,
@@ -1644,7 +1677,7 @@ impl<W: Write> Writer<W> {
             } => {
                 use crate::MathFunction as Mf;
 
-                let scalar_argument = match *context.resolve_type(arg) {
+                let scalar_argument: bool = match *context.resolve_type(arg) {
                     crate::TypeInner::Scalar { .. } => true,
                     _ => false,
                 };
@@ -2018,7 +2051,9 @@ impl<W: Write> Writer<W> {
                         base_inner = &context.module.types[base].inner;
                     }
                     match *base_inner {
-                        crate::TypeInner::Struct { .. } => (base, None),
+                        crate::TypeInner::Struct { .. }
+                        | crate::TypeInner::FrexpResult
+                        | crate::TypeInner::ModfResult { .. } => (base, None),
                         _ => (base, Some(index::GuardedIndex::Known(index))),
                     }
                 }
@@ -2132,6 +2167,20 @@ impl<W: Write> Writer<W> {
                         } else {
                             write!(self.out, ".{}", back::COMPONENTS[index as usize])?;
                         }
+                    }
+                    crate::TypeInner::FrexpResult | crate::TypeInner::ModfResult => {
+                        self.put_access_chain(base, policy, context)?;
+                        write!(
+                            self.out,
+                            ".{}",
+                            if index == 0 {
+                                "fract"
+                            } else if *base_ty == crate::TypeInner::FrexpResult {
+                                "exp"
+                            } else {
+                                "whole"
+                            }
+                        )?;
                     }
                     _ => {
                         self.put_subscripted_access_chain(
@@ -3236,6 +3285,41 @@ impl<W: Write> Writer<W> {
                 }
             }
         }
+
+        if module.special_types.frexp_result.is_some() {
+            writeln!(
+                self.out,
+                "
+struct {FREXP_STRUCT} {{
+    float fract;
+    int exp;
+}};
+
+struct {FREXP_STRUCT} {FREXP_FUNCTION}(float arg) {{
+    int exp;
+    float fract = {NAMESPACE}::frexp(arg, exp);
+    return {FREXP_STRUCT}{{ fract, exp }};
+}};"
+            )?;
+        }
+
+        if module.special_types.modf_result.is_some() {
+            writeln!(
+                self.out,
+                "
+struct {MODF_STRUCT} {{
+    float fract;
+    float whole;
+}};
+
+struct {MODF_STRUCT} {MODF_FUNCTION}(float arg) {{
+    float whole;
+    float fract = {NAMESPACE}::modf(arg, whole);
+    return {MODF_STRUCT}{{ fract, whole }};
+}};"
+            )?;
+        }
+
         Ok(())
     }
 

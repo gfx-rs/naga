@@ -1587,6 +1587,38 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                             ),
                         }
                     }
+                    crate::TypeInner::FrexpResult => {
+                        let index = if field.name == "fract" {
+                            0
+                        } else if field.name == "exp" {
+                            1
+                        } else {
+                            return Err(Error::BadAccessor(field.span));
+                        };
+                        (
+                            crate::Expression::AccessIndex {
+                                base: handle,
+                                index,
+                            },
+                            is_reference,
+                        )
+                    }
+                    crate::TypeInner::ModfResult => {
+                        let index = if field.name == "fract" {
+                            0
+                        } else if field.name == "whole" {
+                            1
+                        } else {
+                            return Err(Error::BadAccessor(field.span));
+                        };
+                        (
+                            crate::Expression::AccessIndex {
+                                base: handle,
+                                index,
+                            },
+                            is_reference,
+                        )
+                    }
                     _ => return Err(Error::BadAccessor(field.span)),
                 };
 
@@ -1713,6 +1745,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     let mut args = ctx.prepare_args(arguments, expected, span);
 
                     let arg = self.expression(args.next()?, ctx.reborrow())?;
+
                     let arg1 = args
                         .next()
                         .map(|x| self.expression(x, ctx.reborrow()))
@@ -1730,6 +1763,12 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         .transpose()?;
 
                     args.finish()?;
+
+                    if fun == crate::MathFunction::Frexp {
+                        ctx.module.generate_frexp_result();
+                    } else if fun == crate::MathFunction::Modf {
+                        ctx.module.generate_modf_result();
+                    };
 
                     crate::Expression::Math {
                         fun,

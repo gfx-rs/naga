@@ -1,3 +1,31 @@
+struct naga_frexp_result {
+    float fract;
+    int exp;
+};
+
+naga_frexp_result naga_frexp(in float arg) {
+    float exp;
+    float fract = frexp(arg, exp);
+    naga_frexp_result result;
+    result.exp = exp;
+    result.fract = fract;
+    return result;
+}
+
+struct naga_modf_result {
+    float fract;
+    float whole;
+};
+
+naga_modf_result naga_modf(in float arg) {
+    float whole;
+    float fract = modf(arg, whole);
+    naga_modf_result result;
+    result.whole = whole;
+    result.fract = fract;
+    return result;
+}
+
 void main()
 {
     float4 v = (0.0).xxxx;
@@ -29,4 +57,10 @@ void main()
     int2 _expr58 = (-1).xx;
     int2 clz_c = (_expr58 < (0).xx ? (0).xx : (31).xx - asint(firstbithigh(_expr58)));
     uint2 clz_d = ((31u).xx - firstbithigh((1u).xx));
+    struct naga_modf_result modf_a = naga_modf(1.5);
+    float modf_b = naga_modf(1.5).fract;
+    float modf_c = naga_modf(1.5).whole;
+    struct naga_frexp_result frexp_a = naga_frexp(1.5);
+    float frexp_b = naga_frexp(1.5).fract;
+    int frexp_c = naga_frexp(1.5).exp;
 }

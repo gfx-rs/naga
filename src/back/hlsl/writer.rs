@@ -17,6 +17,11 @@ const SPECIAL_BASE_VERTEX: &str = "base_vertex";
 const SPECIAL_BASE_INSTANCE: &str = "base_instance";
 const SPECIAL_OTHER: &str = "other";
 
+pub(crate) const FREXP_FUNCTION: &str = "naga_frexp";
+pub(crate) const FREXP_STRUCT: &str = "naga_frexp_result";
+pub(crate) const MODF_FUNCTION: &str = "naga_modf";
+pub(crate) const MODF_STRUCT: &str = "naga_modf_result";
+
 struct EpStructMember {
     name: String,
     ty: Handle<crate::Type>,
@@ -243,6 +248,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 writeln!(self.out)?;
             }
         }
+
+        self.write_special_functions(module)?;
 
         self.write_wrapped_compose_functions(module, &module.const_expressions)?;
 
@@ -1057,6 +1064,12 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             // Base `type` and `name` should be written outside
             TypeInner::Array { base, size, .. } | TypeInner::BindingArray { base, size } => {
                 self.write_array_size(module, base, size)?;
+            }
+            TypeInner::FrexpResult => {
+                write!(self.out, "struct {FREXP_STRUCT}")?;
+            }
+            TypeInner::ModfResult => {
+                write!(self.out, "struct {MODF_STRUCT}")?;
             }
             _ => return Err(Error::Unimplemented(format!("write_value_type {inner:?}"))),
         }
@@ -2276,6 +2289,14 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                                     &writer.names[&NameKey::StructMember(ty, index)]
                                 )?
                             }
+                            TypeInner::FrexpResult => {
+                                write!(writer.out, ".{}", if index == 0 { "fract" } else { "exp" })?
+                            }
+                            TypeInner::ModfResult => write!(
+                                writer.out,
+                                ".{}",
+                                if index == 0 { "fract" } else { "whole" }
+                            )?,
                             ref other => {
                                 return Err(Error::Custom(format!("Cannot index {other:?}")))
                             }
@@ -2665,8 +2686,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     Mf::Round => Function::Regular("round"),
                     Mf::Fract => Function::Regular("frac"),
                     Mf::Trunc => Function::Regular("trunc"),
-                    Mf::Modf => Function::Regular("modf"),
-                    Mf::Frexp => Function::Regular("frexp"),
+                    Mf::Modf => Function::Regular(MODF_FUNCTION),
+                    Mf::Frexp => Function::Regular(FREXP_FUNCTION),
                     Mf::Ldexp => Function::Regular("ldexp"),
                     // exponent
                     Mf::Exp => Function::Regular("exp"),

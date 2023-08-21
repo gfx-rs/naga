@@ -672,7 +672,10 @@ pub struct Type {
 #[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
 pub enum TypeInner {
     /// Number of integral or floating-point kind.
-    Scalar { kind: ScalarKind, width: Bytes },
+    Scalar {
+        kind: ScalarKind,
+        width: Bytes,
+    },
     /// Vector of numbers.
     Vector {
         size: VectorSize,
@@ -686,7 +689,10 @@ pub enum TypeInner {
         width: Bytes,
     },
     /// Atomic scalar.
-    Atomic { kind: ScalarKind, width: Bytes },
+    Atomic {
+        kind: ScalarKind,
+        width: Bytes,
+    },
     /// Pointer to another type.
     ///
     /// Pointers to scalars and vectors should be treated as equivalent to
@@ -795,13 +801,21 @@ pub enum TypeInner {
         class: ImageClass,
     },
     /// Can be used to sample values from images.
-    Sampler { comparison: bool },
+    Sampler {
+        comparison: bool,
+    },
 
     /// Opaque object representing an acceleration structure of geometry.
     AccelerationStructure,
 
     /// Locally used handle for ray queries.
     RayQuery,
+
+    // The built-in structure returned by frexp.
+    FrexpResult,
+
+    // The built-in structure returned by modf.
+    ModfResult,
 
     /// Array of bindings.
     ///
@@ -842,7 +856,10 @@ pub enum TypeInner {
     /// [`DATA`]: crate::valid::TypeFlags::DATA
     /// [`ARGUMENT`]: crate::valid::TypeFlags::ARGUMENT
     /// [naga#1864]: https://github.com/gfx-rs/naga/issues/1864
-    BindingArray { base: Handle<Type>, size: ArraySize },
+    BindingArray {
+        base: Handle<Type>,
+        size: ArraySize,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialOrd)]
@@ -1961,6 +1978,14 @@ pub struct SpecialTypes {
     /// Call [`Module::generate_ray_intersection_type`] to populate
     /// this if needed and return the handle.
     pub ray_intersection: Option<Handle<Type>>,
+
+    // Type for `__modf_result_f32`.
+    //
+    pub modf_result: Option<Handle<Type>>,
+
+    // Type for `__frexp_result_f32 `.
+    //
+    pub frexp_result: Option<Handle<Type>>,
 }
 
 /// Shader module.

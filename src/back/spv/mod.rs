@@ -403,6 +403,8 @@ fn make_local(inner: &crate::TypeInner) -> Option<LocalType> {
         crate::TypeInner::RayQuery => LocalType::RayQuery,
         crate::TypeInner::Array { .. }
         | crate::TypeInner::Struct { .. }
+        | crate::TypeInner::FrexpResult
+        | crate::TypeInner::ModfResult
         | crate::TypeInner::BindingArray { .. } => return None,
     })
 }

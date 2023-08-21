@@ -311,4 +311,34 @@ impl crate::Module {
         self.special_types.ray_intersection = Some(handle);
         handle
     }
+
+    /// Populate this module's [`crate::SpecialTypes::modf_result`] type.
+    pub fn generate_modf_result(&mut self) {
+        if self.special_types.modf_result.is_some() {
+            return;
+        }
+        let handle = self.types.insert(
+            crate::Type {
+                name: Some("__naga_modf_result".to_string()),
+                inner: crate::TypeInner::ModfResult,
+            },
+            Span::UNDEFINED,
+        );
+        self.special_types.modf_result = Some(handle);
+    }
+
+    /// Populate this module's [`crate::SpecialTypes::frexp_result`] type.
+    pub fn generate_frexp_result(&mut self) {
+        if self.special_types.frexp_result.is_some() {
+            return;
+        }
+        let handle = self.types.insert(
+            crate::Type {
+                name: Some("__naga_frexp_result".to_string()),
+                inner: crate::TypeInner::FrexpResult,
+            },
+            Span::UNDEFINED,
+        );
+        self.special_types.frexp_result = Some(handle);
+    }
 }

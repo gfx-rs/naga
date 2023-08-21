@@ -568,6 +568,9 @@ impl super::Validator {
                 self.require_type_capability(Capabilities::RAY_QUERY)?;
                 TypeInfo::new(TypeFlags::DATA | TypeFlags::SIZED, Alignment::ONE)
             }
+            Ti::FrexpResult | Ti::ModfResult => {
+                TypeInfo::new(TypeFlags::DATA | TypeFlags::SIZED, Alignment::EIGHT)
+            }
             Ti::BindingArray { base, size } => {
                 if base >= handle {
                     return Err(TypeError::InvalidArrayBaseType(base));

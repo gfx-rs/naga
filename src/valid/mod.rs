@@ -255,6 +255,8 @@ impl crate::TypeInner {
             | Self::Atomic { .. }
             | Self::Pointer { .. }
             | Self::ValuePointer { .. }
+            | Self::FrexpResult { .. }
+            | Self::ModfResult { .. }
             | Self::Struct { .. } => true,
             Self::Array { .. }
             | Self::Image { .. }

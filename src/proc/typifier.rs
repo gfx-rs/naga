@@ -391,6 +391,22 @@ impl<'a> ResolveContext<'a> {
                             }
                         }
                         Ti::BindingArray { base, .. } => Ti::Pointer { base, space },
+                        Ti::FrexpResult if (0..=1).contains(&index) => Ti::ValuePointer {
+                            size: None,
+                            kind: if index == 0 {
+                                crate::ScalarKind::Float
+                            } else {
+                                crate::ScalarKind::Sint
+                            },
+                            width: 4,
+                            space,
+                        },
+                        Ti::ModfResult if (0..=1).contains(&index) => Ti::ValuePointer {
+                            size: None,
+                            kind: crate::ScalarKind::Float,
+                            width: 4,
+                            space,
+                        },
                         ref other => {
                             log::error!("Access index sub-type {:?}", other);
                             return Err(ResolveError::InvalidSubAccess {
@@ -400,6 +416,22 @@ impl<'a> ResolveContext<'a> {
                         }
                     }),
                     Ti::BindingArray { base, .. } => TypeResolution::Handle(base),
+                    Ti::FrexpResult if (0..=1).contains(&index) => {
+                        TypeResolution::Value(Ti::Scalar {
+                            kind: if index == 0 {
+                                crate::ScalarKind::Float
+                            } else {
+                                crate::ScalarKind::Sint
+                            },
+                            width: 4,
+                        })
+                    }
+                    Ti::ModfResult if (0..=1).contains(&index) => {
+                        TypeResolution::Value(Ti::Scalar {
+                            kind: crate::ScalarKind::Float,
+                            width: 4,
+                        })
+                    }
                     ref other => {
                         log::error!("Access index type {:?}", other);
                         return Err(ResolveError::InvalidAccess {
@@ -706,8 +738,6 @@ impl<'a> ResolveContext<'a> {
                     Mf::Round |
                     Mf::Fract |
                     Mf::Trunc |
-                    Mf::Modf |
-                    Mf::Frexp |
                     Mf::Ldexp |
                     // exponent
                     Mf::Exp |
@@ -715,6 +745,20 @@ impl<'a> ResolveContext<'a> {
                     Mf::Log |
                     Mf::Log2 |
                     Mf::Pow => res_arg.clone(),
+                    Mf::Frexp => {
+                        let result = self
+                        .special_types
+                        .frexp_result
+                        .ok_or(ResolveError::MissingSpecialType)?;
+                        TypeResolution::Handle(result)
+                    },
+                    Mf::Modf => {
+                        let result = self
+                        .special_types
+                        .modf_result
+                        .ok_or(ResolveError::MissingSpecialType)?;
+                        TypeResolution::Handle(result)
+                    },
                     // geometry
                     Mf::Dot => match *res_arg.inner_with(types) {
                         Ti::Vector {

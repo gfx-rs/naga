@@ -1223,6 +1223,12 @@ impl<W: Write> Writer<W> {
                             &self.names[&NameKey::StructMember(ty, index)]
                         )?
                     }
+                    TypeInner::FrexpResult => {
+                        write!(self.out, ".{}", if index == 0 { "fract" } else { "exp" })?
+                    }
+                    TypeInner::ModfResult => {
+                        write!(self.out, ".{}", if index == 0 { "fract" } else { "whole" })?
+                    }
                     ref other => return Err(Error::Custom(format!("Cannot index {other:?}"))),
                 }
             }
