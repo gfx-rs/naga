@@ -1961,6 +1961,18 @@ pub struct SpecialTypes {
     /// Call [`Module::generate_ray_intersection_type`] to populate
     /// this if needed and return the handle.
     pub ray_intersection: Option<Handle<Type>>,
+
+    // Type for `__modf_result_f32`, the abstract modf() return type.
+    //
+    /// Call [`Module::generate_modf_result`] to populate this if
+    /// needed and return the handle.
+    pub modf_result: Option<Handle<Type>>,
+
+    // Type for `__frexp_result_f32`, the abstract frexp() return type.
+    //
+    /// Call [`Module::generate_frexp_result`] to populate this if
+    /// needed and return the handle.
+    pub frexp_result: Option<Handle<Type>>,
 }
 
 /// Shader module.

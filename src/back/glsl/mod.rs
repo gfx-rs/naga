@@ -72,6 +72,9 @@ pub const SUPPORTED_ES_VERSIONS: &[u16] = &[300, 310, 320];
 /// of detail for bounds checking in `ImageLoad`
 const CLAMPED_LOD_SUFFIX: &str = "_clamped_lod";
 
+pub(crate) const MODF_FUNCTION: &str = "naga_modf";
+pub(crate) const FREXP_FUNCTION: &str = "naga_frexp";
+
 /// Mapping between resources and bindings.
 pub type BindingMap = std::collections::BTreeMap<crate::ResourceBinding, u8>;
 
@@ -623,6 +626,33 @@ impl<'a, W: Write> Writer<'a, W> {
                     writeln!(self.out, ";")?;
                 }
             }
+        }
+
+        // Write functions to create special types.
+        if let Some(ty_struct) = self.module.special_types.modf_result {
+            let struct_name = &self.names[&NameKey::Type(ty_struct)];
+            writeln!(self.out)?;
+            writeln!(
+                self.out,
+                "{} {MODF_FUNCTION}(float arg) {{
+    float whole;
+    float fract = modf(arg, whole);
+    return {}(fract, whole);
+}}",
+                struct_name, struct_name
+            )?;
+        }
+        if let Some(ty_struct) = self.module.special_types.frexp_result {
+            let struct_name = &self.names[&NameKey::Type(ty_struct)];
+            writeln!(self.out)?;
+            writeln!(
+                self.out,
+                "{struct_name} {FREXP_FUNCTION}(float arg) {{
+    int exp;
+    float fract = frexp(arg, exp);
+    return {struct_name}(fract, exp);
+}}"
+            )?;
         }
 
         // Write all named constants
@@ -2985,8 +3015,8 @@ impl<'a, W: Write> Writer<'a, W> {
                     Mf::Round => "roundEven",
                     Mf::Fract => "fract",
                     Mf::Trunc => "trunc",
-                    Mf::Modf => "modf",
-                    Mf::Frexp => "frexp",
+                    Mf::Modf => MODF_FUNCTION,
+                    Mf::Frexp => FREXP_FUNCTION,
                     Mf::Ldexp => "ldexp",
                     // exponent
                     Mf::Exp => "exp",

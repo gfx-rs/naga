@@ -311,4 +311,101 @@ impl crate::Module {
         self.special_types.ray_intersection = Some(handle);
         handle
     }
+
+    /// Populate this module's [`crate::SpecialTypes::modf_result`] type.
+    pub fn generate_modf_result(&mut self) {
+        if self.special_types.modf_result.is_some() {
+            return;
+        }
+
+        let float_ty = self.types.insert(
+            crate::Type {
+                name: None,
+                inner: crate::TypeInner::Scalar {
+                    kind: crate::ScalarKind::Float,
+                    width: 4,
+                },
+            },
+            Span::UNDEFINED,
+        );
+
+        let handle = self.types.insert(
+            crate::Type {
+                name: Some("__modf_result_f32".to_string()),
+                inner: crate::TypeInner::Struct {
+                    members: vec![
+                        crate::StructMember {
+                            name: Some("fract".to_string()),
+                            ty: float_ty,
+                            binding: None,
+                            offset: 0,
+                        },
+                        crate::StructMember {
+                            name: Some("whole".to_string()),
+                            ty: float_ty,
+                            binding: None,
+                            offset: 4,
+                        },
+                    ],
+                    span: 8,
+                },
+            },
+            Span::UNDEFINED,
+        );
+        self.special_types.modf_result = Some(handle);
+    }
+
+    /// Populate this module's [`crate::SpecialTypes::frexp_result`] type.
+    pub fn generate_frexp_result(&mut self) {
+        if self.special_types.frexp_result.is_some() {
+            return;
+        }
+
+        let sint_ty = self.types.insert(
+            crate::Type {
+                name: None,
+                inner: crate::TypeInner::Scalar {
+                    kind: crate::ScalarKind::Sint,
+                    width: 4,
+                },
+            },
+            Span::UNDEFINED,
+        );
+
+        let float_ty = self.types.insert(
+            crate::Type {
+                name: None,
+                inner: crate::TypeInner::Scalar {
+                    kind: crate::ScalarKind::Float,
+                    width: 4,
+                },
+            },
+            Span::UNDEFINED,
+        );
+
+        let handle = self.types.insert(
+            crate::Type {
+                name: Some("__frexp_result_f32".to_string()),
+                inner: crate::TypeInner::Struct {
+                    members: vec![
+                        crate::StructMember {
+                            name: Some("fract".to_string()),
+                            ty: float_ty,
+                            binding: None,
+                            offset: 0,
+                        },
+                        crate::StructMember {
+                            name: Some("exp".to_string()),
+                            ty: sint_ty,
+                            binding: None,
+                            offset: 4,
+                        },
+                    ],
+                    span: 8,
+                },
+            },
+            Span::UNDEFINED,
+        );
+        self.special_types.frexp_result = Some(handle);
+    }
 }

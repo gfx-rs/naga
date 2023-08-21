@@ -96,6 +96,13 @@ impl<W: Write> Writer<W> {
         self.ep_results.clear();
     }
 
+    fn is_builtin_wgsl_struct(&self, ty_struct: &crate::Type) -> bool {
+        ty_struct
+            .name
+            .as_ref()
+            .map_or(false, |name| name.starts_with("__"))
+    }
+
     pub fn write(&mut self, module: &Module, info: &valid::ModuleInfo) -> BackendResult {
         self.reset(module);
 
@@ -108,13 +115,13 @@ impl<W: Write> Writer<W> {
 
         // Write all structs
         for (handle, ty) in module.types.iter() {
-            if let TypeInner::Struct {
-                ref members,
-                span: _,
-            } = ty.inner
-            {
-                self.write_struct(module, handle, members)?;
-                writeln!(self.out)?;
+            if let TypeInner::Struct { ref members, .. } = ty.inner {
+                {
+                    if !self.is_builtin_wgsl_struct(ty) {
+                        self.write_struct(module, handle, members)?;
+                        writeln!(self.out)?;
+                    }
+                }
             }
         }
 

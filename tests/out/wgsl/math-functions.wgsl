@@ -28,4 +28,10 @@ fn main() {
     let clz_b = countLeadingZeros(1u);
     let clz_c = countLeadingZeros(vec2<i32>(-1));
     let clz_d = countLeadingZeros(vec2<u32>(1u));
+    let modf_a = modf(1.5);
+    let modf_b = modf(1.5).fract;
+    let modf_c = modf(1.5).whole;
+    let frexp_a = frexp(1.5);
+    let frexp_b = frexp(1.5).fract;
+    let frexp_c = frexp(1.5).exp;
 }

@@ -1015,33 +1015,16 @@ impl super::Validator {
                         }
                     }
                     Mf::Modf | Mf::Frexp | Mf::Ldexp => {
-                        let arg1_ty = match (arg1_ty, arg2_ty, arg3_ty) {
-                            (Some(ty1), None, None) => ty1,
-                            _ => return Err(ExpressionError::WrongArgumentCount(fun)),
-                        };
-                        let (size0, width0) = match *arg_ty {
+                        if arg1_ty.is_some() | arg2_ty.is_some() | arg3_ty.is_some() {
+                            return Err(ExpressionError::WrongArgumentCount(fun));
+                        }
+                        if !matches!(
+                            *arg_ty,
                             Ti::Scalar {
                                 kind: Sk::Float,
-                                width,
-                            } => (None, width),
-                            Ti::Vector {
-                                kind: Sk::Float,
-                                size,
-                                width,
-                            } => (Some(size), width),
-                            _ => return Err(ExpressionError::InvalidArgumentType(fun, 0, arg)),
-                        };
-                        let good = match *arg1_ty {
-                            Ti::Pointer { base, space: _ } => module.types[base].inner == *arg_ty,
-                            Ti::ValuePointer {
-                                size,
-                                kind: Sk::Float,
-                                width,
-                                space: _,
-                            } => size == size0 && width == width0,
-                            _ => false,
-                        };
-                        if !good {
+                                width: 4,
+                            },
+                        ) {
                             return Err(ExpressionError::InvalidArgumentType(
                                 fun,
                                 1,

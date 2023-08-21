@@ -4,6 +4,24 @@
 
 using metal::uint;
 
+struct __modf_result_f32_ {
+    float fract;
+    float whole;
+};
+struct __frexp_result_f32_ {
+    float fract;
+    int exp;
+};
+struct __modf_result_f32_ naga_modf(float arg) {
+    float whole;
+    float fract = metal::modf(arg, whole);
+    return __modf_result_f32_{ fract, whole };
+};
+struct __frexp_result_f32_ naga_frexp(float arg) {
+    int exp;
+    float fract = metal::frexp(arg, exp);
+    return __frexp_result_f32_{ fract, exp };
+};
 
 fragment void main_(
 ) {
@@ -38,4 +56,10 @@ fragment void main_(
     uint clz_b = metal::clz(1u);
     metal::int2 clz_c = metal::clz(metal::int2(-1));
     metal::uint2 clz_d = metal::clz(metal::uint2(1u));
+    __modf_result_f32_ modf_a = naga_modf(1.5);
+    float modf_b = naga_modf(1.5).fract;
+    float modf_c = naga_modf(1.5).whole;
+    __frexp_result_f32_ frexp_a = naga_frexp(1.5);
+    float frexp_b = naga_frexp(1.5).fract;
+    int frexp_c = naga_frexp(1.5).exp;
 }

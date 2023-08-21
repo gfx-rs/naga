@@ -1731,6 +1731,12 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
                     args.finish()?;
 
+                    if fun == crate::MathFunction::Modf {
+                        ctx.module.generate_modf_result();
+                    } else if fun == crate::MathFunction::Frexp {
+                        ctx.module.generate_frexp_result();
+                    };
+
                     crate::Expression::Math {
                         fun,
                         arg,

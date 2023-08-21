@@ -3,6 +3,26 @@
 precision highp float;
 precision highp int;
 
+struct __modf_result_f32_ {
+    float fract_;
+    float whole;
+};
+struct __frexp_result_f32_ {
+    float fract_;
+    int exp_;
+};
+
+__modf_result_f32_ naga_modf(float arg) {
+    float whole;
+    float fract = modf(arg, whole);
+    return __modf_result_f32_(fract, whole);
+}
+
+__frexp_result_f32_ naga_frexp(float arg) {
+    int exp;
+    float fract = frexp(arg, exp);
+    return __frexp_result_f32_(fract, exp);
+}
 
 void main() {
     vec4 v = vec4(0.0);
@@ -34,5 +54,11 @@ void main() {
     ivec2 _e58 = ivec2(-1);
     ivec2 clz_c = mix(ivec2(31) - findMSB(_e58), ivec2(0), lessThan(_e58, ivec2(0)));
     uvec2 clz_d = uvec2(ivec2(31) - findMSB(uvec2(1u)));
+    __modf_result_f32_ modf_a = naga_modf(1.5);
+    float modf_b = naga_modf(1.5).fract_;
+    float modf_c = naga_modf(1.5).whole;
+    __frexp_result_f32_ frexp_a = naga_frexp(1.5);
+    float frexp_b = naga_frexp(1.5).fract_;
+    int frexp_c = naga_frexp(1.5).exp_;
 }
 

@@ -706,8 +706,6 @@ impl<'a> ResolveContext<'a> {
                     Mf::Round |
                     Mf::Fract |
                     Mf::Trunc |
-                    Mf::Modf |
-                    Mf::Frexp |
                     Mf::Ldexp |
                     // exponent
                     Mf::Exp |
@@ -715,6 +713,20 @@ impl<'a> ResolveContext<'a> {
                     Mf::Log |
                     Mf::Log2 |
                     Mf::Pow => res_arg.clone(),
+                    Mf::Modf => {
+                        let result = self
+                        .special_types
+                        .modf_result
+                        .ok_or(ResolveError::MissingSpecialType)?;
+                        TypeResolution::Handle(result)
+                    },
+                    Mf::Frexp => {
+                        let result = self
+                        .special_types
+                        .frexp_result
+                        .ok_or(ResolveError::MissingSpecialType)?;
+                        TypeResolution::Handle(result)
+                    },
                     // geometry
                     Mf::Dot => match *res_arg.inner_with(types) {
                         Ti::Vector {

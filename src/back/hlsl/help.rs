@@ -781,6 +781,42 @@ impl<'a, W: Write> super::Writer<'a, W> {
         Ok(())
     }
 
+    pub(super) fn write_special_functions(&mut self, module: &crate::Module) -> BackendResult {
+        if let Some(ty_struct) = module.special_types.modf_result {
+            let struct_name = &self.names[&NameKey::Type(ty_struct)];
+            writeln!(
+                self.out,
+                "{struct_name} {}(in float arg) {{
+    float whole;
+    float fract = modf(arg, whole);
+    {struct_name} result;
+    result.whole = whole;
+    result.fract = fract;
+    return result;
+}}",
+                super::writer::MODF_FUNCTION,
+            )?;
+            writeln!(self.out)?;
+        }
+        if let Some(ty_struct) = module.special_types.frexp_result {
+            let struct_name = &self.names[&NameKey::Type(ty_struct)];
+            writeln!(
+                self.out,
+                "{struct_name} {}(in float arg) {{
+    float exp_;
+    float fract = frexp(arg, exp_);
+    {struct_name} result;
+    result.exp_ = exp_;
+    result.fract = fract;
+    return result;
+}}",
+                super::writer::FREXP_FUNCTION
+            )?;
+            writeln!(self.out)?;
+        }
+        Ok(())
+    }
+
     /// Helper function that writes compose wrapped functions
     pub(super) fn write_wrapped_compose_functions(
         &mut self,

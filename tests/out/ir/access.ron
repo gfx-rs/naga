@@ -334,6 +334,8 @@
     special_types: (
         ray_desc: None,
         ray_intersection: None,
+        modf_result: None,
+        frexp_result: None,
     ),
     constants: [],
     global_variables: [

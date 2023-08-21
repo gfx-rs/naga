@@ -32,6 +32,9 @@ const RAY_QUERY_FIELD_INTERSECTION: &str = "intersection";
 const RAY_QUERY_FIELD_READY: &str = "ready";
 const RAY_QUERY_FUN_MAP_INTERSECTION: &str = "_map_intersection_type";
 
+pub(crate) const MODF_FUNCTION: &str = "naga_modf";
+pub(crate) const FREXP_FUNCTION: &str = "naga_frexp";
+
 /// Write the Metal name for a Naga numeric type: scalar, vector, or matrix.
 ///
 /// The `sizes` slice determines whether this function writes a
@@ -1678,8 +1681,8 @@ impl<W: Write> Writer<W> {
                     Mf::Round => "rint",
                     Mf::Fract => "fract",
                     Mf::Trunc => "trunc",
-                    Mf::Modf => "modf",
-                    Mf::Frexp => "frexp",
+                    Mf::Modf => MODF_FUNCTION,
+                    Mf::Frexp => FREXP_FUNCTION,
                     Mf::Ldexp => "ldexp",
                     // exponent
                     Mf::Exp => "exp",
@@ -1813,6 +1816,9 @@ impl<W: Write> Writer<W> {
                     write!(self.out, "((")?;
                     self.put_expression(arg, context, false)?;
                     write!(self.out, ") * 57.295779513082322865)")?;
+                } else if fun == Mf::Modf || fun == Mf::Frexp {
+                    write!(self.out, "{fun_name}")?;
+                    self.put_call_parameters(iter::once(arg), context)?;
                 } else {
                     write!(self.out, "{NAMESPACE}::{fun_name}")?;
                     self.put_call_parameters(
@@ -3236,6 +3242,31 @@ impl<W: Write> Writer<W> {
                 }
             }
         }
+
+        if let Some(struct_ty) = module.special_types.modf_result {
+            let struct_name = &self.names[&NameKey::Type(struct_ty)];
+            writeln!(
+                self.out,
+                "struct {struct_name} {MODF_FUNCTION}(float arg) {{
+    float whole;
+    float fract = {NAMESPACE}::modf(arg, whole);
+    return {struct_name}{{ fract, whole }};
+}};"
+            )?;
+        }
+
+        if let Some(struct_ty) = module.special_types.frexp_result {
+            let struct_name = &self.names[&NameKey::Type(struct_ty)];
+            writeln!(
+                self.out,
+                "struct {struct_name} {FREXP_FUNCTION}(float arg) {{
+    int exp;
+    float fract = {NAMESPACE}::frexp(arg, exp);
+    return {struct_name}{{ fract, exp }};
+}};"
+            )?;
+        }
+
         Ok(())
     }
 
