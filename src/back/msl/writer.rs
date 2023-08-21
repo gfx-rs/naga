@@ -597,7 +597,7 @@ impl<'a> ExpressionContext<'a> {
         &self,
         chain: Handle<crate::Expression>,
     ) -> impl Iterator<Item = (Handle<crate::Expression>, Option<index::GuardedIndex>)> + '_ {
-        index::access_chain(chain, &self.module, &self.function, &self.info)
+        index::access_chain(chain, self.module, self.function, self.info)
     }
 
     /// Returns all the types which we need out-of-bounds locals for; that is,
@@ -605,7 +605,7 @@ impl<'a> ExpressionContext<'a> {
     /// pointer to, in which case we yield a pointer to the out-of-bounds local
     /// of the correct type.
     fn oob_locals(&self) -> FastHashSet<Handle<crate::Type>> {
-        index::oob_locals(&self.module, &self.function, &self.info)
+        index::oob_locals(self.module, self.function, self.info)
     }
 
     fn get_packed_vec_kind(
@@ -705,7 +705,7 @@ impl<W: Write> Writer<W> {
             FunctionOrigin::EntryPoint(idx) => &module.entry_points[usize::from(idx)].function,
         };
 
-        let oob_locals = index::oob_locals(&module, &fun, &fun_info);
+        let oob_locals = index::oob_locals(module, fun, fun_info);
         for &ty in oob_locals.iter() {
             let name_key = match origin {
                 FunctionOrigin::Handle(handle) => NameKey::FunctionOobLocal(handle, ty),

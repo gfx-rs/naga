@@ -401,12 +401,12 @@ pub fn oob_locals(
         // pointer.
         if let crate::Statement::Call {
             function: callee,
-            arguments,
+            ref arguments,
             ..
-        } = statement
+        } = *statement
         {
             // Now go through the arguments of the function looking for pointers which need bounds checks.
-            for (arg_info, &arg) in zip(&module.functions[*callee].arguments, arguments) {
+            for (arg_info, &arg) in zip(&module.functions[callee].arguments, arguments) {
                 match module.types[arg_info.ty].inner {
                     crate::TypeInner::ValuePointer { .. } => {
                         // `ValuePointer`s should only ever be used when resolving the types of
