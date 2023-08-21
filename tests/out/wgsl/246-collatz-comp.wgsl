@@ -1,5 +1,5 @@
 struct PrimeIndices {
-    indices: array<u32>,
+    @size(4) indices: array<u32>,
 }
 
 @group(0) @binding(0) 

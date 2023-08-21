@@ -1,20 +1,20 @@
 struct S {
-    a: vec3<f32>,
+    @size(16) a: vec3<f32>,
 }
 
 struct Test {
-    a: S,
-    b: f32,
+    @size(16) a: S,
+    @size(16) b: f32,
 }
 
 struct Test2_ {
-    a: array<vec3<f32>, 2>,
-    b: f32,
+    @size(32) a: array<vec3<f32>, 2>,
+    @size(16) b: f32,
 }
 
 struct Test3_ {
-    a: mat4x3<f32>,
-    b: f32,
+    @size(64) a: mat4x3<f32>,
+    @size(16) b: f32,
 }
 
 @group(0) @binding(0) 

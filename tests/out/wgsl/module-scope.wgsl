@@ -1,5 +1,5 @@
 struct S {
-    x: i32,
+    @size(4) x: i32,
 }
 
 const Value: i32 = 1;

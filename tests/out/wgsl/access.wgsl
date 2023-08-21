@@ -1,28 +1,28 @@
 struct GlobalConst {
-    a: u32,
-    b: vec3<u32>,
-    c: i32,
+    @size(16) a: u32,
+    @size(12) b: vec3<u32>,
+    @size(4) c: i32,
 }
 
 struct AlignedWrapper {
-    value: i32,
+    @size(8) value: i32,
 }
 
 struct Bar {
-    _matrix: mat4x3<f32>,
-    matrix_array: array<mat2x2<f32>, 2>,
-    atom: atomic<i32>,
-    atom_arr: array<atomic<i32>, 10>,
-    arr: array<vec2<u32>, 2>,
-    data: array<AlignedWrapper>,
+    @size(64) _matrix: mat4x3<f32>,
+    @size(32) matrix_array: array<mat2x2<f32>, 2>,
+    @size(4) atom: atomic<i32>,
+    @size(44) atom_arr: array<atomic<i32>, 10>,
+    @size(16) arr: array<vec2<u32>, 2>,
+    @size(16) data: array<AlignedWrapper>,
 }
 
 struct Baz {
-    m: mat3x2<f32>,
+    @size(24) m: mat3x2<f32>,
 }
 
 struct MatCx2InArray {
-    am: array<mat4x2<f32>, 2>,
+    @size(64) am: array<mat4x2<f32>, 2>,
 }
 
 var<private> global_const: GlobalConst = GlobalConst(0u, vec3<u32>(0u, 0u, 0u), 0);

@@ -1,12 +1,12 @@
 struct FragmentInput {
-    @builtin(position) position: vec4<f32>,
-    @location(0) @interpolate(flat) _flat: u32,
-    @location(1) @interpolate(linear) _linear: f32,
-    @location(2) @interpolate(linear, centroid) linear_centroid: vec2<f32>,
-    @location(3) @interpolate(linear, sample) linear_sample: vec3<f32>,
-    @location(4) perspective: vec4<f32>,
-    @location(5) @interpolate(perspective, centroid) perspective_centroid: f32,
-    @location(6) @interpolate(perspective, sample) perspective_sample: f32,
+    @builtin(position) @size(16) position: vec4<f32>,
+    @location(0) @interpolate(flat) @size(4) _flat: u32,
+    @location(1) @interpolate(linear) @size(4) _linear: f32,
+    @location(2) @interpolate(linear, centroid) @size(8) linear_centroid: vec2<f32>,
+    @location(3) @interpolate(linear, sample) @size(16) linear_sample: vec3<f32>,
+    @location(4) @size(16) perspective: vec4<f32>,
+    @location(5) @interpolate(perspective, centroid) @size(4) perspective_centroid: f32,
+    @location(6) @interpolate(perspective, sample) @size(12) perspective_sample: f32,
 }
 
 @vertex 

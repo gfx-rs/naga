@@ -1,9 +1,9 @@
 struct testBufferBlock {
-    data: array<u32>,
+    @size(4) data: array<u32>,
 }
 
 struct testBufferReadOnlyBlock {
-    data: array<u32>,
+    @size(4) data: array<u32>,
 }
 
 @group(0) @binding(0) 

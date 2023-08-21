@@ -108,11 +108,7 @@ impl<W: Write> Writer<W> {
 
         // Write all structs
         for (handle, ty) in module.types.iter() {
-            if let TypeInner::Struct {
-                ref members,
-                span,
-            } = ty.inner
-            {
+            if let TypeInner::Struct { ref members, span } = ty.inner {
                 self.write_struct(module, handle, members, span)?;
                 writeln!(self.out)?;
             }

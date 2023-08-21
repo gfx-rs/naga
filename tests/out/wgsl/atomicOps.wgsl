@@ -1,6 +1,6 @@
 struct Struct {
-    atomic_scalar: atomic<u32>,
-    atomic_arr: array<atomic<i32>, 2>,
+    @size(4) atomic_scalar: atomic<u32>,
+    @size(8) atomic_arr: array<atomic<i32>, 2>,
 }
 
 @group(0) @binding(0) 

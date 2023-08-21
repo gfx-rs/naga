@@ -1,11 +1,11 @@
 struct VertexOutput {
-    @builtin(position) position: vec4<f32>,
-    @location(0) uv: vec3<f32>,
+    @builtin(position) @size(16) position: vec4<f32>,
+    @location(0) @size(16) uv: vec3<f32>,
 }
 
 struct Data {
-    proj_inv: mat4x4<f32>,
-    view: mat4x4<f32>,
+    @size(64) proj_inv: mat4x4<f32>,
+    @size(64) view: mat4x4<f32>,
 }
 
 @group(0) @binding(0) 

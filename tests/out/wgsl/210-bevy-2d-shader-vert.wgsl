@@ -1,18 +1,18 @@
 struct Camera {
-    ViewProj: mat4x4<f32>,
+    @size(64) ViewProj: mat4x4<f32>,
 }
 
 struct Transform {
-    Model: mat4x4<f32>,
+    @size(64) Model: mat4x4<f32>,
 }
 
 struct Sprite_size {
-    size: vec2<f32>,
+    @size(8) size: vec2<f32>,
 }
 
 struct VertexOutput {
-    @location(0) v_Uv: vec2<f32>,
-    @builtin(position) member: vec4<f32>,
+    @location(0) @size(8) v_Uv: vec2<f32>,
+    @builtin(position) @size(16) member: vec4<f32>,
 }
 
 var<private> Vertex_Position_1: vec3<f32>;

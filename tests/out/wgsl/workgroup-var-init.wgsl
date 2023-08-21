@@ -1,7 +1,7 @@
 struct WStruct {
-    arr: array<u32, 512>,
-    atom: atomic<i32>,
-    atom_arr: array<array<atomic<i32>, 8>, 8>,
+    @size(2048) arr: array<u32, 512>,
+    @size(4) atom: atomic<i32>,
+    @size(256) atom_arr: array<array<atomic<i32>, 8>, 8>,
 }
 
 var<workgroup> w_mem: WStruct;

@@ -1,6 +1,6 @@
 struct FooStruct {
-    v3_: vec3<f32>,
-    v1_: f32,
+    @size(12) v3_: vec3<f32>,
+    @size(4) v1_: f32,
 }
 
 const Foo_1: bool = true;

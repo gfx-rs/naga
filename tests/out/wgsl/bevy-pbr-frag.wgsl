@@ -1,51 +1,51 @@
 struct PointLight {
-    pos: vec4<f32>,
-    color: vec4<f32>,
-    lightParams: vec4<f32>,
+    @size(16) pos: vec4<f32>,
+    @size(16) color: vec4<f32>,
+    @size(16) lightParams: vec4<f32>,
 }
 
 struct DirectionalLight {
-    direction: vec4<f32>,
-    color: vec4<f32>,
+    @size(16) direction: vec4<f32>,
+    @size(16) color: vec4<f32>,
 }
 
 struct CameraViewProj {
-    ViewProj: mat4x4<f32>,
+    @size(64) ViewProj: mat4x4<f32>,
 }
 
 struct CameraPosition {
-    CameraPos: vec4<f32>,
+    @size(16) CameraPos: vec4<f32>,
 }
 
 struct Lights {
-    AmbientColor: vec4<f32>,
-    NumLights: vec4<u32>,
-    PointLights: array<PointLight, 10>,
-    DirectionalLights: array<DirectionalLight, 1>,
+    @size(16) AmbientColor: vec4<f32>,
+    @size(16) NumLights: vec4<u32>,
+    @size(480) PointLights: array<PointLight, 10>,
+    @size(32) DirectionalLights: array<DirectionalLight, 1>,
 }
 
 struct StandardMaterial_base_color {
-    base_color: vec4<f32>,
+    @size(16) base_color: vec4<f32>,
 }
 
 struct StandardMaterial_roughness {
-    perceptual_roughness: f32,
+    @size(4) perceptual_roughness: f32,
 }
 
 struct StandardMaterial_metallic {
-    metallic: f32,
+    @size(4) metallic: f32,
 }
 
 struct StandardMaterial_reflectance {
-    reflectance: f32,
+    @size(4) reflectance: f32,
 }
 
 struct StandardMaterial_emissive {
-    emissive: vec4<f32>,
+    @size(16) emissive: vec4<f32>,
 }
 
 struct FragmentOutput {
-    @location(0) o_Target: vec4<f32>,
+    @location(0) @size(16) o_Target: vec4<f32>,
 }
 
 const MAX_POINT_LIGHTS: i32 = 10;
