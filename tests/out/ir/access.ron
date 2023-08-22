@@ -201,20 +201,6 @@
         ),
         (
             name: None,
-            inner: Scalar(
-                kind: Float,
-                width: 4,
-            ),
-        ),
-        (
-            name: None,
-            inner: Pointer(
-                base: 18,
-                space: Function,
-            ),
-        ),
-        (
-            name: None,
             inner: Vector(
                 size: Bi,
                 kind: Float,
@@ -232,7 +218,7 @@
         (
             name: None,
             inner: Array(
-                base: 21,
+                base: 19,
                 size: Constant(2),
                 stride: 32,
             ),
@@ -243,12 +229,26 @@
                 members: [
                     (
                         name: Some("am"),
-                        ty: 22,
+                        ty: 20,
                         binding: None,
                         offset: 0,
                     ),
                 ],
                 span: 64,
+            ),
+        ),
+        (
+            name: None,
+            inner: Scalar(
+                kind: Float,
+                width: 4,
+            ),
+        ),
+        (
+            name: None,
+            inner: Pointer(
+                base: 22,
+                space: Function,
             ),
         ),
         (
@@ -261,7 +261,7 @@
         (
             name: None,
             inner: Array(
-                base: 18,
+                base: 22,
                 size: Constant(10),
                 stride: 4,
             ),
@@ -392,7 +392,7 @@
                 group: 0,
                 binding: 3,
             )),
-            ty: 23,
+            ty: 21,
             init: None,
         ),
         (
@@ -442,39 +442,6 @@
         Literal(I32(2)),
     ],
     functions: [
-        (
-            name: Some("read_from_private"),
-            arguments: [
-                (
-                    name: Some("foo"),
-                    ty: 19,
-                    binding: None,
-                ),
-            ],
-            result: Some((
-                ty: 18,
-                binding: None,
-            )),
-            local_variables: [],
-            expressions: [
-                FunctionArgument(0),
-                Load(
-                    pointer: 1,
-                ),
-            ],
-            named_expressions: {
-                1: "foo",
-            },
-            body: [
-                Emit((
-                    start: 1,
-                    end: 2,
-                )),
-                Return(
-                    value: Some(2),
-                ),
-            ],
-        ),
         (
             name: Some("test_matrix_within_struct_accesses"),
             arguments: [],
@@ -783,74 +750,6 @@
                     index: 98,
                 ),
                 Literal(F32(40.0)),
-                AccessIndex(
-                    base: 55,
-                    index: 0,
-                ),
-                Literal(I32(0)),
-                AccessIndex(
-                    base: 101,
-                    index: 0,
-                ),
-                Literal(I32(1)),
-                AccessIndex(
-                    base: 103,
-                    index: 1,
-                ),
-                CallResult(1),
-                AccessIndex(
-                    base: 55,
-                    index: 0,
-                ),
-                Literal(I32(0)),
-                AccessIndex(
-                    base: 107,
-                    index: 0,
-                ),
-                Load(
-                    pointer: 2,
-                ),
-                Access(
-                    base: 109,
-                    index: 110,
-                ),
-                CallResult(1),
-                AccessIndex(
-                    base: 55,
-                    index: 0,
-                ),
-                Load(
-                    pointer: 2,
-                ),
-                Access(
-                    base: 113,
-                    index: 114,
-                ),
-                Literal(I32(1)),
-                AccessIndex(
-                    base: 115,
-                    index: 1,
-                ),
-                CallResult(1),
-                AccessIndex(
-                    base: 55,
-                    index: 0,
-                ),
-                Load(
-                    pointer: 2,
-                ),
-                Access(
-                    base: 119,
-                    index: 120,
-                ),
-                Load(
-                    pointer: 2,
-                ),
-                Access(
-                    base: 121,
-                    index: 122,
-                ),
-                CallResult(1),
             ],
             named_expressions: {
                 8: "l0",
@@ -860,10 +759,6 @@
                 32: "l4",
                 39: "l5",
                 46: "l6",
-                106: "pl0",
-                112: "pl1",
-                118: "pl2",
-                124: "pl3",
             },
             body: [
                 Store(
@@ -1046,66 +941,6 @@
                     pointer: 99,
                     value: 100,
                 ),
-                Emit((
-                    start: 100,
-                    end: 101,
-                )),
-                Emit((
-                    start: 102,
-                    end: 103,
-                )),
-                Emit((
-                    start: 104,
-                    end: 105,
-                )),
-                Call(
-                    function: 1,
-                    arguments: [
-                        105,
-                    ],
-                    result: Some(106),
-                ),
-                Emit((
-                    start: 106,
-                    end: 107,
-                )),
-                Emit((
-                    start: 108,
-                    end: 111,
-                )),
-                Call(
-                    function: 1,
-                    arguments: [
-                        111,
-                    ],
-                    result: Some(112),
-                ),
-                Emit((
-                    start: 112,
-                    end: 115,
-                )),
-                Emit((
-                    start: 116,
-                    end: 117,
-                )),
-                Call(
-                    function: 1,
-                    arguments: [
-                        117,
-                    ],
-                    result: Some(118),
-                ),
-                Emit((
-                    start: 118,
-                    end: 123,
-                )),
-                Call(
-                    function: 1,
-                    arguments: [
-                        123,
-                    ],
-                    result: Some(124),
-                ),
                 Return(
                     value: None,
                 ),
@@ -1123,7 +958,7 @@
                 ),
                 (
                     name: Some("t"),
-                    ty: 23,
+                    ty: 21,
                     init: None,
                 ),
             ],
@@ -1298,9 +1133,9 @@
                 Load(
                     pointer: 62,
                 ),
-                ZeroValue(22),
+                ZeroValue(20),
                 Compose(
-                    ty: 23,
+                    ty: 21,
                     components: [
                         64,
                     ],
@@ -1319,7 +1154,7 @@
                     base: 66,
                     index: 0,
                 ),
-                ZeroValue(22),
+                ZeroValue(20),
                 AccessIndex(
                     base: 66,
                     index: 0,
@@ -1350,7 +1185,7 @@
                     value: 81,
                 ),
                 Compose(
-                    ty: 21,
+                    ty: 19,
                     components: [
                         76,
                         78,
@@ -1486,94 +1321,6 @@
                     index: 127,
                 ),
                 Literal(F32(40.0)),
-                AccessIndex(
-                    base: 66,
-                    index: 0,
-                ),
-                Literal(I32(0)),
-                AccessIndex(
-                    base: 130,
-                    index: 0,
-                ),
-                Literal(I32(0)),
-                AccessIndex(
-                    base: 132,
-                    index: 0,
-                ),
-                Literal(I32(1)),
-                AccessIndex(
-                    base: 134,
-                    index: 1,
-                ),
-                CallResult(1),
-                AccessIndex(
-                    base: 66,
-                    index: 0,
-                ),
-                Literal(I32(0)),
-                AccessIndex(
-                    base: 138,
-                    index: 0,
-                ),
-                Literal(I32(0)),
-                AccessIndex(
-                    base: 140,
-                    index: 0,
-                ),
-                Load(
-                    pointer: 2,
-                ),
-                Access(
-                    base: 142,
-                    index: 143,
-                ),
-                CallResult(1),
-                AccessIndex(
-                    base: 66,
-                    index: 0,
-                ),
-                Literal(I32(0)),
-                AccessIndex(
-                    base: 146,
-                    index: 0,
-                ),
-                Load(
-                    pointer: 2,
-                ),
-                Access(
-                    base: 148,
-                    index: 149,
-                ),
-                Literal(I32(1)),
-                AccessIndex(
-                    base: 150,
-                    index: 1,
-                ),
-                CallResult(1),
-                AccessIndex(
-                    base: 66,
-                    index: 0,
-                ),
-                Literal(I32(0)),
-                AccessIndex(
-                    base: 154,
-                    index: 0,
-                ),
-                Load(
-                    pointer: 2,
-                ),
-                Access(
-                    base: 156,
-                    index: 157,
-                ),
-                Load(
-                    pointer: 2,
-                ),
-                Access(
-                    base: 158,
-                    index: 159,
-                ),
-                CallResult(1),
             ],
             named_expressions: {
                 8: "l0",
@@ -1584,10 +1331,6 @@
                 45: "l5",
                 54: "l6",
                 63: "l7",
-                137: "pl0",
-                145: "pl1",
-                153: "pl2",
-                161: "pl3",
             },
             body: [
                 Store(
@@ -1834,84 +1577,41 @@
                     pointer: 128,
                     value: 129,
                 ),
-                Emit((
-                    start: 129,
-                    end: 130,
-                )),
-                Emit((
-                    start: 131,
-                    end: 132,
-                )),
-                Emit((
-                    start: 133,
-                    end: 134,
-                )),
-                Emit((
-                    start: 135,
-                    end: 136,
-                )),
-                Call(
-                    function: 1,
-                    arguments: [
-                        136,
-                    ],
-                    result: Some(137),
-                ),
-                Emit((
-                    start: 137,
-                    end: 138,
-                )),
-                Emit((
-                    start: 139,
-                    end: 140,
-                )),
-                Emit((
-                    start: 141,
-                    end: 144,
-                )),
-                Call(
-                    function: 1,
-                    arguments: [
-                        144,
-                    ],
-                    result: Some(145),
-                ),
-                Emit((
-                    start: 145,
-                    end: 146,
-                )),
-                Emit((
-                    start: 147,
-                    end: 150,
-                )),
-                Emit((
-                    start: 151,
-                    end: 152,
-                )),
-                Call(
-                    function: 1,
-                    arguments: [
-                        152,
-                    ],
-                    result: Some(153),
-                ),
-                Emit((
-                    start: 153,
-                    end: 154,
-                )),
-                Emit((
-                    start: 155,
-                    end: 160,
-                )),
-                Call(
-                    function: 1,
-                    arguments: [
-                        160,
-                    ],
-                    result: Some(161),
-                ),
                 Return(
                     value: None,
+                ),
+            ],
+        ),
+        (
+            name: Some("read_from_private"),
+            arguments: [
+                (
+                    name: Some("foo"),
+                    ty: 23,
+                    binding: None,
+                ),
+            ],
+            result: Some((
+                ty: 22,
+                binding: None,
+            )),
+            local_variables: [],
+            expressions: [
+                FunctionArgument(0),
+                Load(
+                    pointer: 1,
+                ),
+            ],
+            named_expressions: {
+                1: "foo",
+            },
+            body: [
+                Emit((
+                    start: 1,
+                    end: 2,
+                )),
+                Return(
+                    value: Some(2),
                 ),
             ],
         ),
@@ -1958,7 +1658,7 @@
                 ),
             ],
             result: Some((
-                ty: 18,
+                ty: 22,
                 binding: None,
             )),
             local_variables: [],
@@ -2097,7 +1797,7 @@
                 local_variables: [
                     (
                         name: Some("foo"),
-                        ty: 18,
+                        ty: 22,
                         init: None,
                     ),
                     (
@@ -2193,7 +1893,7 @@
                         base: 33,
                         index: 0,
                     ),
-                    CallResult(1),
+                    CallResult(3),
                     As(
                         expr: 17,
                         kind: Sint,
@@ -2289,12 +1989,12 @@
                         value: 5,
                     ),
                     Call(
-                        function: 2,
+                        function: 1,
                         arguments: [],
                         result: None,
                     ),
                     Call(
-                        function: 3,
+                        function: 2,
                         arguments: [],
                         result: None,
                     ),
@@ -2335,7 +2035,7 @@
                         end: 34,
                     )),
                     Call(
-                        function: 1,
+                        function: 3,
                         arguments: [
                             3,
                         ],
