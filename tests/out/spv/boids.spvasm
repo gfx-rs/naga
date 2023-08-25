@@ -48,6 +48,7 @@ OpMemberDecorate %7 5 Offset 20
 OpMemberDecorate %7 6 Offset 24
 OpDecorate %8 ArrayStride 16
 OpMemberDecorate %9 0 Offset 0
+OpDecorate %9 Block
 OpDecorate %13 DescriptorSet 0
 OpDecorate %13 Binding 0
 OpDecorate %14 Block

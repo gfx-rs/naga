@@ -73,6 +73,7 @@ OpMemberDecorate %20 2 Offset 96
 OpMemberDecorate %20 3 Offset 100
 OpMemberDecorate %20 4 Offset 144
 OpMemberDecorate %20 5 Offset 160
+OpDecorate %20 Block
 OpMemberDecorate %22 0 Offset 0
 OpMemberDecorate %22 0 ColMajor
 OpMemberDecorate %22 0 MatrixStride 8
