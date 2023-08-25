@@ -9,6 +9,11 @@ pub fn map_address_space(word: &str, span: Span) -> Result<crate::AddressSpace, 
         "storage" => Ok(crate::AddressSpace::Storage {
             access: crate::StorageAccess::default(),
         }),
+        "buffer" => Ok(crate::AddressSpace::PhysicalStorage {
+            // Follow the GLSL spec and use 16 byte alignment as the default
+            // https://github.com/KhronosGroup/GLSL/blob/ad383324612d8493c78d52d0c903969fe1dddd0a/extensions/ext/GLSL_EXT_buffer_reference.txt#L139
+            alignment: 16,
+        }),
         "push_constant" => Ok(crate::AddressSpace::PushConstant),
         "function" => Ok(crate::AddressSpace::Function),
         _ => Err(Error::UnknownAddressSpace(span)),

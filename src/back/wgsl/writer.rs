@@ -1870,9 +1870,7 @@ const fn sampling_str(sampling: crate::Sampling) -> &'static str {
     }
 }
 
-const fn address_space_str(
-    space: crate::AddressSpace,
-) -> (Option<&'static str>, Option<&'static str>) {
+fn address_space_str(space: crate::AddressSpace) -> (Option<&'static str>, Option<String>) {
     use crate::AddressSpace as As;
 
     (
@@ -1881,10 +1879,13 @@ const fn address_space_str(
             As::Uniform => "uniform",
             As::Storage { access } => {
                 if access.contains(crate::StorageAccess::STORE) {
-                    return (Some("storage"), Some("read_write"));
+                    return (Some("storage"), Some("read_write".to_string()));
                 } else {
                     "storage"
                 }
+            }
+            As::PhysicalStorage { alignment } => {
+                return (Some("buffer"), Some(alignment.to_string()))
             }
             As::PushConstant => "push_constant",
             As::WorkGroup => "workgroup",
