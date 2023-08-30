@@ -99,9 +99,9 @@ pub enum EntryPointError {
     #[error(transparent)]
     Function(#[from] FunctionError),
     #[error(
-        "Invalid locations {location_mask:?} are set for blend_src_1. Only the first location may be set."
+        "Invalid locations {location_mask:?} are set while dual source blending. Only location 0 may be set."
     )]
-    InvalidLocationMaskForAlternateBlendSource { location_mask: BitSet },
+    InvalidLocationsWhileDualSourceBlending { location_mask: BitSet },
 }
 
 #[cfg(feature = "validate")]
@@ -670,12 +670,10 @@ impl super::Validator {
             if ctx.second_blend_source {
                 /* Check if only the first bit in the location mask is set */
                 if !(ctx.location_mask.len() == 1 && ctx.location_mask.contains(0)) {
-                    return Err(
-                        EntryPointError::InvalidLocationMaskForAlternateBlendSource {
-                            location_mask: self.location_mask.clone(),
-                        }
-                        .with_span(),
-                    );
+                    return Err(EntryPointError::InvalidLocationsWhileDualSourceBlending {
+                        location_mask: self.location_mask.clone(),
+                    }
+                    .with_span());
                 } else {
                     ctx.second_blend_source = true;
                 }
