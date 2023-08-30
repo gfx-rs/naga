@@ -372,12 +372,12 @@ impl VaryingContext<'_> {
                         if location != 0 {
                             return Err(VaryingError::InvalidLocationAttributeCombination {
                                 location,
-                                attribute: "blend_src_1",
+                                attribute: "second_blend_source",
                             });
                         }
                     } else {
                         return Err(VaryingError::InvalidAttributeInStage(
-                            "blend_src_1",
+                            "second_blend_source",
                             self.stage,
                         ));
                     }

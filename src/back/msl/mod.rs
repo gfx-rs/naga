@@ -253,7 +253,9 @@ impl Options {
                 LocationMode::VertexInput => Ok(ResolvedBinding::Attribute(location)),
                 LocationMode::FragmentOutput => {
                     if second_blend_source && self.lang_version < (1, 2) {
-                        return Err(Error::UnsupportedAttribute("blend_src_1".to_string()));
+                        return Err(Error::UnsupportedAttribute(
+                            "second_blend_source".to_string(),
+                        ));
                     }
                     Ok(ResolvedBinding::Color {
                         location,

@@ -320,7 +320,7 @@ impl<W: Write> Writer<W> {
         for attribute in attributes {
             match *attribute {
                 Attribute::Location(id) => write!(self.out, "@location({id}) ")?,
-                Attribute::SecondBlendSource => write!(self.out, "@blend_src_1 ")?,
+                Attribute::SecondBlendSource => write!(self.out, "@second_blend_source ")?,
                 Attribute::BuiltIn(builtin_attrib) => {
                     let builtin = builtin_str(builtin_attrib)?;
                     write!(self.out, "@builtin({builtin}) ")?;

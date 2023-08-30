@@ -183,7 +183,7 @@ impl BindingParser {
                 }
                 lexer.expect(Token::Paren(')'))?;
             }
-            "blend_src_1" => {
+            "second_blend_source" => {
                 self.second_blend_source.set(true, name_span)?;
             }
             "invariant" => {
