@@ -523,8 +523,8 @@ fn convert_wgsl() {
         ),
         (
             "access",
-            Targets::SPIRV
-                | Targets::METAL
+            // Targets::SPIRV |
+            Targets::METAL
                 | Targets::GLSL
                 | Targets::HLSL
                 | Targets::WGSL

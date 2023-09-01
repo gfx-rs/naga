@@ -35,6 +35,11 @@ float read_from_private(inout float foo_1) {
     return _e1;
 }
 
+int read_i32_from_private(inout int foo_2) {
+    int _e1 = foo_2;
+    return _e1;
+}
+
 float test_arr_as_arg(float a[5][10]) {
     return a[4][9];
 }
@@ -44,8 +49,8 @@ void assign_through_ptr_fn(inout uint p) {
     return;
 }
 
-void assign_array_through_ptr_fn(inout vec4 foo_2[2]) {
-    foo_2 = vec4[2](vec4(1.0), vec4(2.0));
+void assign_array_through_ptr_fn(inout vec4 foo_3[2]) {
+    foo_3 = vec4[2](vec4(1.0), vec4(2.0));
     return;
 }
 

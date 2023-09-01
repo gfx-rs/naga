@@ -117,6 +117,11 @@ fn read_from_private(foo_1: ptr<function, f32>) -> f32 {
     return _e1;
 }
 
+fn read_i32_from_private(foo_2: ptr<function, i32>) -> i32 {
+    let _e1 = (*foo_2);
+    return _e1;
+}
+
 fn test_arr_as_arg(a: array<array<f32, 10>, 5>) -> f32 {
     return a[4][9];
 }
@@ -126,8 +131,8 @@ fn assign_through_ptr_fn(p: ptr<workgroup, u32>) {
     return;
 }
 
-fn assign_array_through_ptr_fn(foo_2: ptr<function, array<vec4<f32>, 2>>) {
-    (*foo_2) = array<vec4<f32>, 2>(vec4<f32>(1.0), vec4<f32>(2.0));
+fn assign_array_through_ptr_fn(foo_3: ptr<function, array<vec4<f32>, 2>>) {
+    (*foo_3) = array<vec4<f32>, 2>(vec4<f32>(1.0), vec4<f32>(2.0));
     return;
 }
 
@@ -151,7 +156,8 @@ fn foo_vert(@builtin(vertex_index) vi: u32) -> @builtin(position) vec4<f32> {
     c2_ = array<i32, 5>(a_1, i32(b), 3, 4, 5);
     c2_[(vi + 1u)] = 42;
     let value = c2_[vi];
-    let _e48 = test_arr_as_arg(array<array<f32, 10>, 5>());
+    let _e48 = read_i32_from_private((&c2_[vi]));
+    let _e50 = test_arr_as_arg(array<array<f32, 10>, 5>());
     return vec4<f32>((_matrix * vec4<f32>(vec4<i32>(value))), 2.0);
 }
 

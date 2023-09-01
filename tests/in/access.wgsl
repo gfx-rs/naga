@@ -60,6 +60,14 @@ fn test_matrix_within_struct_accesses() {
     t.m[0][idx] = 20.0;
     t.m[idx][1] = 30.0;
     t.m[idx][idx] = 40.0;
+
+    // passing pointers to a function
+    // FIXME: these are currently commented out because getting pointers to
+    // vector/matrix elements is broken in Metal and HLSL.
+    // let pl0 = read_from_private(&t.m[0][1]);
+    // let pl1 = read_from_private(&t.m[0][idx]);
+    // let pl2 = read_from_private(&t.m[idx][1]);
+    // let pl3 = read_from_private(&t.m[idx][idx]);
 }
 
 struct MatCx2InArray {
@@ -97,9 +105,21 @@ fn test_matrix_within_array_within_struct_accesses() {
     t.am[0][0][idx] = 20.0;
     t.am[0][idx][1] = 30.0;
     t.am[0][idx][idx] = 40.0;
+
+    // passing pointers to a function
+    // FIXME: these are currently commented out because getting pointers to
+    // vector/matrix elements is broken in Metal and HLSL.
+    // let pl0 = read_from_private(&t.am[0][0][1]);
+    // let pl1 = read_from_private(&t.am[0][0][idx]);
+    // let pl2 = read_from_private(&t.am[0][idx][1]);
+    // let pl3 = read_from_private(&t.am[0][idx][idx]);
 }
 
 fn read_from_private(foo: ptr<function, f32>) -> f32 {
+    return *foo;
+}
+
+fn read_i32_from_private(foo: ptr<function, i32>) -> i32 {
     return *foo;
 }
 
@@ -133,6 +153,7 @@ fn foo_vert(@builtin(vertex_index) vi: u32) -> @builtin(position) vec4<f32> {
 	var c2 = array<i32, 5>(a, i32(b), 3, 4, 5);
 	c2[vi + 1u] = 42;
 	let value = c2[vi];
+	let value_again = read_i32_from_private(&c2[vi]);
 
 	test_arr_as_arg(array<array<f32, 10>, 5>());
 

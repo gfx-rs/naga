@@ -253,6 +253,13 @@
         ),
         (
             name: None,
+            inner: Pointer(
+                base: 3,
+                space: Function,
+            ),
+        ),
+        (
+            name: None,
             inner: Array(
                 base: 22,
                 size: Constant(10),
@@ -262,7 +269,7 @@
         (
             name: None,
             inner: Array(
-                base: 24,
+                base: 25,
                 size: Constant(5),
                 stride: 40,
             ),
@@ -318,7 +325,7 @@
         (
             name: None,
             inner: Array(
-                base: 26,
+                base: 27,
                 size: Constant(2),
                 stride: 16,
             ),
@@ -326,7 +333,7 @@
         (
             name: None,
             inner: Pointer(
-                base: 32,
+                base: 33,
                 space: Function,
             ),
         ),
@@ -1609,11 +1616,44 @@
             ],
         ),
         (
+            name: Some("read_i32_from_private"),
+            arguments: [
+                (
+                    name: Some("foo"),
+                    ty: 24,
+                    binding: None,
+                ),
+            ],
+            result: Some((
+                ty: 3,
+                binding: None,
+            )),
+            local_variables: [],
+            expressions: [
+                FunctionArgument(0),
+                Load(
+                    pointer: 1,
+                ),
+            ],
+            named_expressions: {
+                1: "foo",
+            },
+            body: [
+                Emit((
+                    start: 1,
+                    end: 2,
+                )),
+                Return(
+                    value: Some(2),
+                ),
+            ],
+        ),
+        (
             name: Some("test_arr_as_arg"),
             arguments: [
                 (
                     name: Some("a"),
-                    ty: 25,
+                    ty: 26,
                     binding: None,
                 ),
             ],
@@ -1657,7 +1697,7 @@
             arguments: [
                 (
                     name: Some("p"),
-                    ty: 31,
+                    ty: 32,
                     binding: None,
                 ),
             ],
@@ -1685,7 +1725,7 @@
             arguments: [
                 (
                     name: Some("foo"),
-                    ty: 33,
+                    ty: 34,
                     binding: None,
                 ),
             ],
@@ -1704,7 +1744,7 @@
                     value: 4,
                 ),
                 Compose(
-                    ty: 32,
+                    ty: 33,
                     components: [
                         3,
                         5,
@@ -1749,7 +1789,7 @@
                     ),
                 ],
                 result: Some((
-                    ty: 26,
+                    ty: 27,
                     binding: Some(BuiltIn(Position(
                         invariant: false,
                     ))),
@@ -1762,7 +1802,7 @@
                     ),
                     (
                         name: Some("c2"),
-                        ty: 28,
+                        ty: 29,
                         init: None,
                     ),
                 ],
@@ -1863,7 +1903,7 @@
                     Literal(I32(4)),
                     Literal(I32(5)),
                     Compose(
-                        ty: 28,
+                        ty: 29,
                         components: [
                             27,
                             36,
@@ -1891,28 +1931,33 @@
                     Load(
                         pointer: 46,
                     ),
-                    ZeroValue(25),
+                    Access(
+                        base: 41,
+                        index: 1,
+                    ),
                     CallResult(4),
+                    ZeroValue(26),
+                    CallResult(5),
                     Splat(
                         size: Quad,
                         value: 47,
                     ),
                     As(
-                        expr: 50,
+                        expr: 52,
                         kind: Float,
                         convert: Some(4),
                     ),
                     Binary(
                         op: Multiply,
                         left: 8,
-                        right: 51,
+                        right: 53,
                     ),
                     Literal(F32(2.0)),
                     Compose(
-                        ty: 26,
+                        ty: 27,
                         components: [
-                            52,
-                            53,
+                            54,
+                            55,
                         ],
                     ),
                 ],
@@ -1928,6 +1973,7 @@
                     34: "data_pointer",
                     35: "foo_value",
                     47: "value",
+                    49: "value_again",
                 },
                 body: [
                     Store(
@@ -2019,6 +2065,10 @@
                         start: 45,
                         end: 47,
                     )),
+                    Emit((
+                        start: 47,
+                        end: 48,
+                    )),
                     Call(
                         function: 4,
                         arguments: [
@@ -2026,16 +2076,23 @@
                         ],
                         result: Some(49),
                     ),
+                    Call(
+                        function: 5,
+                        arguments: [
+                            50,
+                        ],
+                        result: Some(51),
+                    ),
                     Emit((
-                        start: 49,
-                        end: 52,
-                    )),
-                    Emit((
-                        start: 53,
+                        start: 51,
                         end: 54,
                     )),
+                    Emit((
+                        start: 55,
+                        end: 56,
+                    )),
                     Return(
-                        value: Some(54),
+                        value: Some(56),
                     ),
                 ],
             ),
@@ -2049,7 +2106,7 @@
                 name: Some("foo_frag"),
                 arguments: [],
                 result: Some((
-                    ty: 26,
+                    ty: 27,
                     binding: Some(Location(
                         location: 0,
                         second_blend_source: false,
@@ -2245,7 +2302,7 @@
                 local_variables: [
                     (
                         name: Some("arr"),
-                        ty: 32,
+                        ty: 33,
                         init: None,
                     ),
                 ],
@@ -2261,7 +2318,7 @@
                         value: 3,
                     ),
                     Compose(
-                        ty: 32,
+                        ty: 33,
                         components: [
                             2,
                             4,
@@ -2285,14 +2342,14 @@
                         value: 5,
                     ),
                     Call(
-                        function: 5,
+                        function: 6,
                         arguments: [
                             7,
                         ],
                         result: None,
                     ),
                     Call(
-                        function: 6,
+                        function: 7,
                         arguments: [
                             6,
                         ],

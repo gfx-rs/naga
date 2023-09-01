@@ -112,6 +112,11 @@ float read_from_private(inout float foo_1) {
     return _e1;
 }
 
+int read_i32_from_private(inout int foo_2) {
+    int _e1 = foo_2;
+    return _e1;
+}
+
 float test_arr_as_arg(float a[5][10]) {
     return a[4][9];
 }
@@ -121,8 +126,8 @@ void assign_through_ptr_fn(inout uint p) {
     return;
 }
 
-void assign_array_through_ptr_fn(inout vec4 foo_2[2]) {
-    foo_2 = vec4[2](vec4(1.0), vec4(2.0));
+void assign_array_through_ptr_fn(inout vec4 foo_3[2]) {
+    foo_3 = vec4[2](vec4(1.0), vec4(2.0));
     return;
 }
 
@@ -144,7 +149,8 @@ void main() {
     c2_ = int[5](a_1, int(b), 3, 4, 5);
     c2_[(vi + 1u)] = 42;
     int value = c2_[vi];
-    float _e48 = test_arr_as_arg(float[5][10](float[10](0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), float[10](0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), float[10](0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), float[10](0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), float[10](0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)));
+    int _e48 = read_i32_from_private(c2_[vi]);
+    float _e50 = test_arr_as_arg(float[5][10](float[10](0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), float[10](0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), float[10](0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), float[10](0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), float[10](0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)));
     gl_Position = vec4((_matrix * vec4(ivec4(value))), 2.0);
     gl_Position.yz = vec2(-gl_Position.y, gl_Position.z * 2.0 - gl_Position.w);
     return;

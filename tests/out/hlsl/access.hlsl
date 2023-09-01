@@ -207,6 +207,12 @@ float read_from_private(inout float foo_1)
     return _expr1;
 }
 
+int read_i32_from_private(inout int foo_2)
+{
+    int _expr1 = foo_2;
+    return _expr1;
+}
+
 float test_arr_as_arg(float a[5][10])
 {
     return a[4][9];
@@ -224,9 +230,9 @@ ret_Constructarray2_float4_ Constructarray2_float4_(float4 arg0, float4 arg1) {
     return ret;
 }
 
-void assign_array_through_ptr_fn(inout float4 foo_2[2])
+void assign_array_through_ptr_fn(inout float4 foo_3[2])
 {
-    foo_2 = Constructarray2_float4_((1.0).xxxx, (2.0).xxxx);
+    foo_3 = Constructarray2_float4_((1.0).xxxx, (2.0).xxxx);
     return;
 }
 
@@ -268,7 +274,8 @@ float4 foo_vert(uint vi : SV_VertexID) : SV_Position
     c2_ = Constructarray5_int_(a_1, int(b), 3, 4, 5);
     c2_[(vi + 1u)] = 42;
     int value = c2_[vi];
-    const float _e48 = test_arr_as_arg((float[5][10])0);
+    const int _e48 = read_i32_from_private(c2_[vi]);
+    const float _e50 = test_arr_as_arg((float[5][10])0);
     return float4(mul(float4((value).xxxx), _matrix), 2.0);
 }
 
