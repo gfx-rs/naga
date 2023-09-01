@@ -345,7 +345,7 @@ impl crate::Module {
                     );
                     (vec_ty, size as u32 * width as u32)
                 } else {
-                    (float_ty, 4)
+                    (float_ty, width as u32)
                 };
 
                 let mut type_name = "__modf_result_".to_string();
@@ -416,14 +416,14 @@ impl crate::Module {
                             inner: crate::TypeInner::Vector {
                                 size,
                                 kind: crate::ScalarKind::Sint,
-                                width: 4,
+                                width,
                             },
                         },
                         Span::UNDEFINED,
                     );
                     (vec_float_ty, vec_int_ty, size as u32 * width as u32)
                 } else {
-                    (float_ty, int_ty, 4)
+                    (float_ty, int_ty, width as u32)
                 };
 
                 let mut type_name = "__frexp_result_".to_string();
