@@ -1,11 +1,11 @@
 struct Mat4x3_ {
-    mx: vec4<f32>,
-    my: vec4<f32>,
-    mz: vec4<f32>,
+    @size(16) mx: vec4<f32>,
+    @size(16) my: vec4<f32>,
+    @size(16) mz: vec4<f32>,
 }
 
 struct FragmentOutput {
-    @location(0) o_color: vec4<f32>,
+    @location(0) @size(16) o_color: vec4<f32>,
 }
 
 var<private> o_color: vec4<f32>;

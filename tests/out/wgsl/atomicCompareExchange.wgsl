@@ -1,11 +1,11 @@
 struct gen___atomic_compare_exchange_resultSint4_ {
-    old_value: i32,
-    exchanged: bool,
+    @size(4) old_value: i32,
+    @size(4) exchanged: bool,
 }
 
 struct gen___atomic_compare_exchange_resultUint4_ {
-    old_value: u32,
-    exchanged: bool,
+    @size(4) old_value: u32,
+    @size(4) exchanged: bool,
 }
 
 const SIZE: u32 = 128u;

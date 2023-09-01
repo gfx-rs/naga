@@ -1,5 +1,5 @@
 struct PushConstants {
-    example: f32,
+    @size(4) example: f32,
 }
 
 var<push_constant> c: PushConstants;

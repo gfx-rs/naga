@@ -1,13 +1,13 @@
 struct gl_PerVertex {
-    @builtin(position) gl_Position: vec4<f32>,
-    gl_PointSize: f32,
-    gl_ClipDistance: array<f32, 1>,
-    gl_CullDistance: array<f32, 1>,
+    @builtin(position) @size(16) gl_Position: vec4<f32>,
+    @size(4) gl_PointSize: f32,
+    @size(4) gl_ClipDistance: array<f32, 1>,
+    @size(8) gl_CullDistance: array<f32, 1>,
 }
 
 struct VertexOutput {
-    @location(0) member: vec2<f32>,
-    @builtin(position) gl_Position: vec4<f32>,
+    @location(0) @size(0) member: vec2<f32>,
+    @builtin(position) @size(65535) gl_Position: vec4<f32>,
 }
 
 var<private> v_uv: vec2<f32>;

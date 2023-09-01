@@ -1,6 +1,6 @@
 struct VertexOutput {
-    @location(0) v_uv: vec2<f32>,
-    @builtin(position) member: vec4<f32>,
+    @location(0) @size(8) v_uv: vec2<f32>,
+    @builtin(position) @size(16) member: vec4<f32>,
 }
 
 const c_scale: f32 = 1.2;

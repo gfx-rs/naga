@@ -1,17 +1,17 @@
 struct BST {
-    data: i32,
+    @size(4) data: i32,
 }
 
 struct a_buf {
-    a: array<f32>,
+    @size(4) a: array<f32>,
 }
 
 struct TestStruct {
-    array_: array<vec4<u32>, 2>,
+    @size(32) array_: array<vec4<u32>, 2>,
 }
 
 struct FragmentOutput {
-    @location(0) o_color: vec4<f32>,
+    @location(0) @size(16) o_color: vec4<f32>,
 }
 
 const strct: TestStruct = TestStruct(array<vec4<u32>, 2>(vec4<u32>(0u, 0u, 0u, 0u), vec4<u32>(1u, 1u, 1u, 1u)));

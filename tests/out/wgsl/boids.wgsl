@@ -1,20 +1,20 @@
 struct Particle {
-    pos: vec2<f32>,
-    vel: vec2<f32>,
+    @size(8) pos: vec2<f32>,
+    @size(8) vel: vec2<f32>,
 }
 
 struct SimParams {
-    deltaT: f32,
-    rule1Distance: f32,
-    rule2Distance: f32,
-    rule3Distance: f32,
-    rule1Scale: f32,
-    rule2Scale: f32,
-    rule3Scale: f32,
+    @size(4) deltaT: f32,
+    @size(4) rule1Distance: f32,
+    @size(4) rule2Distance: f32,
+    @size(4) rule3Distance: f32,
+    @size(4) rule1Scale: f32,
+    @size(4) rule2Scale: f32,
+    @size(4) rule3Scale: f32,
 }
 
 struct Particles {
-    particles: array<Particle>,
+    @size(16) particles: array<Particle>,
 }
 
 const NUM_PARTICLES: u32 = 1500u;

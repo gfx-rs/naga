@@ -1,13 +1,13 @@
 struct UniformIndex {
-    index: u32,
+    @size(4) index: u32,
 }
 
 struct Foo {
-    x: u32,
+    @size(4) x: u32,
 }
 
 struct FragmentIn {
-    @location(0) @interpolate(flat) index: u32,
+    @location(0) @interpolate(flat) @size(4) index: u32,
 }
 
 @group(0) @binding(0) 
