@@ -1667,8 +1667,9 @@ impl Writer {
         } else {
             // This is a global variable in the Storage address space. The only
             // way it could have `global_needs_wrapper() == false` is if it has
-            // a runtime-sized array. In this case, we need to decorate it with
-            // Block.
+            // a runtime-sized or binding array.
+            // Runtime-sized arrays were decorated when iterating through struct content.
+            // Now binding arrays require Block decorating.
             if let crate::AddressSpace::Storage { .. } = global_variable.space {
                 match ir_module.types[global_variable.ty].inner {
                     crate::TypeInner::BindingArray { base, .. } => {
