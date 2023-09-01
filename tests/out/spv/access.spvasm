@@ -87,7 +87,6 @@ OpDecorate %33 ArrayStride 4
 OpDecorate %36 ArrayStride 16
 OpDecorate %47 DescriptorSet 0
 OpDecorate %47 Binding 0
-OpDecorate %20 Block
 OpDecorate %49 DescriptorSet 0
 OpDecorate %49 Binding 1
 OpDecorate %50 Block

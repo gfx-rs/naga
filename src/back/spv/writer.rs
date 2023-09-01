@@ -1670,13 +1670,13 @@ impl Writer {
             // a runtime-sized array. In this case, we need to decorate it with
             // Block.
             if let crate::AddressSpace::Storage { .. } = global_variable.space {
-                let decorated_id = match ir_module.types[global_variable.ty].inner {
+                match ir_module.types[global_variable.ty].inner {
                     crate::TypeInner::BindingArray { base, .. } => {
-                        self.get_type_id(LookupType::Handle(base))
+                        let decorated_id = self.get_type_id(LookupType::Handle(base));
+                        self.decorate(decorated_id, Decoration::Block, &[]);
                     }
-                    _ => inner_type_id,
+                    _ => (),
                 };
-                self.decorate(decorated_id, Decoration::Block, &[]);
             }
             if substitute_inner_type_lookup.is_some() {
                 inner_type_id

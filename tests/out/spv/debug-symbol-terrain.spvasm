@@ -444,10 +444,8 @@ OpDecorate %30 Block
 OpMemberDecorate %30 0 Offset 0
 OpDecorate %32 DescriptorSet 0
 OpDecorate %32 Binding 1
-OpDecorate %16 Block
 OpDecorate %34 DescriptorSet 0
 OpDecorate %34 Binding 2
-OpDecorate %18 Block
 OpDecorate %36 DescriptorSet 0
 OpDecorate %36 Binding 0
 OpDecorate %37 Block
