@@ -10,6 +10,10 @@ struct VertexOutput {
 };
 constant float c_scale = 1.2;
 
+template <typename T> inline T naga_isign(T arg) {
+    return metal::select(metal::select(T(-1), T(1), (arg > 0)), 0, (arg == 0));
+}
+
 struct vert_mainInput {
     metal::float2 pos [[attribute(0)]];
     metal::float2 uv [[attribute(1)]];

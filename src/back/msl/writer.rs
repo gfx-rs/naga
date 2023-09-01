@@ -34,6 +34,7 @@ const RAY_QUERY_FUN_MAP_INTERSECTION: &str = "_map_intersection_type";
 
 pub(crate) const MODF_FUNCTION: &str = "naga_modf";
 pub(crate) const FREXP_FUNCTION: &str = "naga_frexp";
+pub(crate) const ISIGN_FUNCTION: &str = "naga_isign";
 
 /// Write the Metal name for a Naga numeric type: scalar, vector, or matrix.
 ///
@@ -1647,8 +1648,9 @@ impl<W: Write> Writer<W> {
             } => {
                 use crate::MathFunction as Mf;
 
-                let scalar_argument = match *context.resolve_type(arg) {
-                    crate::TypeInner::Scalar { .. } => true,
+                let arg_type = context.resolve_type(arg);
+                let scalar_argument = match arg_type {
+                    &crate::TypeInner::Scalar { .. } => true,
                     _ => false,
                 };
 
@@ -1713,7 +1715,17 @@ impl<W: Write> Writer<W> {
                     Mf::Reflect => "reflect",
                     Mf::Refract => "refract",
                     // computational
-                    Mf::Sign => "sign",
+                    Mf::Sign => match arg_type {
+                        &crate::TypeInner::Scalar {
+                            kind: crate::ScalarKind::Sint,
+                            ..
+                        }
+                        | &crate::TypeInner::Vector {
+                            kind: crate::ScalarKind::Sint,
+                            ..
+                        } => ISIGN_FUNCTION,
+                        _ => "sign",
+                    },
                     Mf::Fma => "fma",
                     Mf::Mix => "mix",
                     Mf::Step => "step",
@@ -1816,7 +1828,7 @@ impl<W: Write> Writer<W> {
                     write!(self.out, "((")?;
                     self.put_expression(arg, context, false)?;
                     write!(self.out, ") * 57.295779513082322865)")?;
-                } else if fun == Mf::Modf || fun == Mf::Frexp {
+                } else if fun == Mf::Modf || fun == Mf::Frexp || fun_name == ISIGN_FUNCTION {
                     write!(self.out, "{fun_name}")?;
                     self.put_call_parameters(iter::once(arg), context)?;
                 } else {
@@ -3091,6 +3103,7 @@ impl<W: Write> Writer<W> {
 
         self.write_type_defs(module)?;
         self.write_global_constants(module)?;
+        self.write_polyfills()?;
         self.write_functions(module, info, options, pipeline_options)
     }
 
@@ -4101,6 +4114,16 @@ impl<W: Write> Writer<W> {
         }
 
         Ok(info)
+    }
+
+    fn write_polyfills(&mut self) -> Result<(), Error> {
+        writeln!(
+            self.out,
+            "\ntemplate <typename T> inline T {ISIGN_FUNCTION}(T arg) {{
+    return {NAMESPACE}::select({NAMESPACE}::select(T(-1), T(1), (arg > 0)), 0, (arg == 0));
+}}"
+        )?;
+        Ok(())
     }
 
     fn write_barrier(&mut self, flags: crate::Barrier, level: back::Level) -> BackendResult {

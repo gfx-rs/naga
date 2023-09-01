@@ -23,6 +23,10 @@ struct Input2_ {
     uint index;
 };
 
+template <typename T> inline T naga_isign(T arg) {
+    return metal::select(metal::select(T(-1), T(1), (arg > 0)), 0, (arg == 0));
+}
+
 struct vertex_Input {
     uint color [[attribute(10)]];
 };

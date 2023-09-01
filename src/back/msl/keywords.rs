@@ -216,4 +216,5 @@ pub const RESERVED: &[&str] = &[
     "clamped_lod_e",
     super::writer::FREXP_FUNCTION,
     super::writer::MODF_FUNCTION,
+    super::writer::ISIGN_FUNCTION,
 ];

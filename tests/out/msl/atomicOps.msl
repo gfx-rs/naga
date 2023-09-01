@@ -12,6 +12,10 @@ struct Struct {
     type_2 atomic_arr;
 };
 
+template <typename T> inline T naga_isign(T arg) {
+    return metal::select(metal::select(T(-1), T(1), (arg > 0)), 0, (arg == 0));
+}
+
 struct cs_mainInput {
 };
 kernel void cs_main(

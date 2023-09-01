@@ -15,6 +15,10 @@ struct FragmentInput {
     float perspective_sample;
 };
 
+template <typename T> inline T naga_isign(T arg) {
+    return metal::select(metal::select(T(-1), T(1), (arg > 0)), 0, (arg == 0));
+}
+
 struct vert_mainOutput {
     metal::float4 position [[position]];
     uint _flat [[user(loc0), flat]];

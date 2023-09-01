@@ -33,6 +33,10 @@ struct type_7 {
 constant metal::float3 c_ambient = metal::float3(0.05, 0.05, 0.05);
 constant uint c_max_lights = 10u;
 
+template <typename T> inline T naga_isign(T arg) {
+    return metal::select(metal::select(T(-1), T(1), (arg > 0)), 0, (arg == 0));
+}
+
 float fetch_shadow(
     uint light_id,
     metal::float4 homogeneous_coords,
