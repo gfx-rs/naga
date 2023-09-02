@@ -6,8 +6,8 @@ use super::{
 };
 use crate::{
     AddressSpace, Binding, Block, BuiltIn, Constant, Expression, GlobalVariable, Handle,
-    Interpolation, LocalVariable, ResourceBinding, ScalarKind, ShaderStage, SwizzleComponent, Type,
-    TypeInner, VectorSize,
+    Interpolation, LocalVariable, ResourceBinding, ScalarKind, ShaderStage, StorageAccess,
+    SwizzleComponent, Type, TypeInner, VectorSize,
 };
 
 pub struct VarDeclaration<'a, 'key> {
@@ -536,14 +536,17 @@ impl Frontend {
 
                                 match qualifiers.layout_qualifiers.remove(&QualifierKey::Format) {
                                     Some((QualifierValue::Format(f), _)) => format = f,
-                                    // TODO: glsl supports images without format qualifier
-                                    // if they are `writeonly`
-                                    None => self.errors.push(Error {
-                                        kind: ErrorKind::SemanticError(
-                                            "image types require a format layout qualifier".into(),
-                                        ),
-                                        meta,
-                                    }),
+                                    None => {
+                                        if access.contains(StorageAccess::LOAD) {
+                                            self.errors.push(Error {
+                                                kind: ErrorKind::SemanticError(
+                                                    "image types require a format layout qualifier"
+                                                        .into(),
+                                                ),
+                                                meta,
+                                            })
+                                        }
+                                    }
                                     _ => unreachable!(),
                                 }
 
