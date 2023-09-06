@@ -18,10 +18,6 @@ struct type_9 {
     metal::float4 gl_Position;
 };
 
-template <typename T> inline T naga_isign(T arg) {
-    return metal::select(metal::select(T(-1), T(1), (arg > 0)), 0, (arg == 0));
-}
-
 void main_1(
     thread metal::float2& v_uv,
     thread metal::float2& a_uv_1,

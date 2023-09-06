@@ -33,10 +33,6 @@ struct type_15 {
 };
 constant bool Foo_1 = true;
 
-template <typename T> inline T naga_isign(T arg) {
-    return metal::select(metal::select(T(-1), T(1), (arg > 0)), 0, (arg == 0));
-}
-
 void test_msl_packed_vec3_as_arg(
     metal::float3 arg
 ) {

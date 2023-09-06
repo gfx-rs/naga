@@ -13,10 +13,6 @@ struct Data {
     metal::float4x4 view;
 };
 
-template <typename T> inline T naga_isign(T arg) {
-    return metal::select(metal::select(T(-1), T(1), (arg > 0)), 0, (arg == 0));
-}
-
 struct vs_mainInput {
 };
 struct vs_mainOutput {

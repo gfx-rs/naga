@@ -58,10 +58,6 @@ struct type_26 {
     metal::float4 inner[2];
 };
 
-template <typename T> inline T naga_isign(T arg) {
-    return metal::select(metal::select(T(-1), T(1), (arg > 0)), 0, (arg == 0));
-}
-
 void test_matrix_within_struct_accesses(
     constant Baz& baz
 ) {

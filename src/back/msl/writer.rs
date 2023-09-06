@@ -34,7 +34,6 @@ const RAY_QUERY_FUN_MAP_INTERSECTION: &str = "_map_intersection_type";
 
 pub(crate) const MODF_FUNCTION: &str = "naga_modf";
 pub(crate) const FREXP_FUNCTION: &str = "naga_frexp";
-pub(crate) const ISIGN_FUNCTION: &str = "naga_isign";
 
 /// Write the Metal name for a Naga numeric type: scalar, vector, or matrix.
 ///
@@ -1185,6 +1184,31 @@ impl<W: Write> Writer<W> {
         Ok(())
     }
 
+    /// Emit code for the sign(i32) expression.
+    ///
+    fn put_isign(
+        &mut self,
+        arg: Handle<crate::Expression>,
+        context: &ExpressionContext,
+    ) -> BackendResult {
+        write!(self.out, "{NAMESPACE}::select({NAMESPACE}::select(")?;
+        match context.resolve_type(arg) {
+            &crate::TypeInner::Vector { size, .. } => {
+                let size = back::vector_size_str(size);
+                write!(self.out, "int{size}(-1), int{size}(1)")?;
+            }
+            _ => {
+                write!(self.out, "-1, 1")?;
+            }
+        }
+        write!(self.out, ", (")?;
+        self.put_expression(arg, context, true)?;
+        write!(self.out, " > 0)), 0, (")?;
+        self.put_expression(arg, context, true)?;
+        write!(self.out, " == 0))")?;
+        Ok(())
+    }
+
     fn put_const_expression(
         &mut self,
         expr_handle: Handle<crate::Expression>,
@@ -1716,7 +1740,9 @@ impl<W: Write> Writer<W> {
                     Mf::Refract => "refract",
                     // computational
                     Mf::Sign => match arg_type.scalar_kind() {
-                        Some(crate::ScalarKind::Sint) => ISIGN_FUNCTION,
+                        Some(crate::ScalarKind::Sint) => {
+                            return self.put_isign(arg, context);
+                        }
                         _ => "sign",
                     },
                     Mf::Fma => "fma",
@@ -1821,7 +1847,7 @@ impl<W: Write> Writer<W> {
                     write!(self.out, "((")?;
                     self.put_expression(arg, context, false)?;
                     write!(self.out, ") * 57.295779513082322865)")?;
-                } else if fun == Mf::Modf || fun == Mf::Frexp || fun_name == ISIGN_FUNCTION {
+                } else if fun == Mf::Modf || fun == Mf::Frexp {
                     write!(self.out, "{fun_name}")?;
                     self.put_call_parameters(iter::once(arg), context)?;
                 } else {
@@ -2427,6 +2453,16 @@ impl<W: Write> Writer<W> {
                     }
                     crate::MathFunction::FindMsb => {
                         self.need_bake_expressions.insert(arg);
+                    }
+                    crate::MathFunction::Sign => {
+                        // WGSL's `sign` function works also on signed ints, but Metal's only
+                        // works on floating points, so we emit inline code for integer `sign`
+                        // calls. But that code uses each argument 2 times (see `put_isign`),
+                        // so to avoid duplicated evaluation, we must bake the argument.
+                        let inner = context.resolve_type(expr_handle);
+                        if inner.scalar_kind() == Some(crate::ScalarKind::Sint) {
+                            self.need_bake_expressions.insert(arg);
+                        }
                     }
                     _ => {}
                 }
@@ -3096,7 +3132,6 @@ impl<W: Write> Writer<W> {
 
         self.write_type_defs(module)?;
         self.write_global_constants(module)?;
-        self.write_polyfills()?;
         self.write_functions(module, info, options, pipeline_options)
     }
 
@@ -4107,16 +4142,6 @@ impl<W: Write> Writer<W> {
         }
 
         Ok(info)
-    }
-
-    fn write_polyfills(&mut self) -> Result<(), Error> {
-        writeln!(
-            self.out,
-            "\ntemplate <typename T> inline T {ISIGN_FUNCTION}(T arg) {{
-    return {NAMESPACE}::select({NAMESPACE}::select(T(-1), T(1), (arg > 0)), 0, (arg == 0));
-}}"
-        )?;
-        Ok(())
     }
 
     fn write_barrier(&mut self, flags: crate::Barrier, level: back::Level) -> BackendResult {

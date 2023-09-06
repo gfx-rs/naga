@@ -992,7 +992,7 @@ impl super::Validator {
                         }
                     }
                     Mf::Sign => {
-                        if arg1_ty.is_some() | arg2_ty.is_some() | arg3_ty.is_some() {
+                        if arg1_ty.is_some() || arg2_ty.is_some() || arg3_ty.is_some() {
                             return Err(ExpressionError::WrongArgumentCount(fun));
                         }
                         match *arg_ty {

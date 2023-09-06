@@ -55,10 +55,6 @@ __frexp_result_vec4_f32_ naga_frexp(metal::float4 arg) {
     return __frexp_result_vec4_f32_{ fract, other };
 }
 
-template <typename T> inline T naga_isign(T arg) {
-    return metal::select(metal::select(T(-1), T(1), (arg > 0)), 0, (arg == 0));
-}
-
 fragment void main_(
 ) {
     metal::float4 v = metal::float4(0.0);
@@ -68,8 +64,9 @@ fragment void main_(
     metal::float4 d = ((v) * 0.017453292519943295474);
     metal::float4 e = metal::saturate(v);
     metal::float4 g = metal::refract(v, v, 1.0);
-    int sign_a = naga_isign(-1);
-    metal::int4 sign_b = naga_isign(metal::int4(-1));
+    int sign_a = metal::select(metal::select(-1, 1, (-1 > 0)), 0, (-1 == 0));
+    metal::int4 _e12 = metal::int4(-1);
+    metal::int4 sign_b = metal::select(metal::select(int4(-1), int4(1), (_e12 > 0)), 0, (_e12 == 0));
     float sign_c = metal::sign(-1.0);
     metal::float4 sign_d = metal::sign(metal::float4(-1.0));
     int const_dot = ( + metal::int2 {}.x * metal::int2 {}.x + metal::int2 {}.y * metal::int2 {}.y);

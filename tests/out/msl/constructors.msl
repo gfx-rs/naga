@@ -30,10 +30,6 @@ constant type_10 cz6_ = type_10 {};
 constant Foo cz7_ = Foo {};
 constant type_11 cp3_ = type_11 {0, 1, 2, 3};
 
-template <typename T> inline T naga_isign(T arg) {
-    return metal::select(metal::select(T(-1), T(1), (arg > 0)), 0, (arg == 0));
-}
-
 kernel void main_(
 ) {
     Foo foo = {};

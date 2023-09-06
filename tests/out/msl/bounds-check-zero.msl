@@ -26,10 +26,6 @@ struct Globals {
     type_4 d;
 };
 
-template <typename T> inline T naga_isign(T arg) {
-    return metal::select(metal::select(T(-1), T(1), (arg > 0)), 0, (arg == 0));
-}
-
 float index_array(
     int i,
     device Globals const& globals,

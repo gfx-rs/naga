@@ -9,10 +9,6 @@ constant metal::float4 v_f32_zero = metal::float4(0.0, 0.0, 0.0, 0.0);
 constant metal::float4 v_f32_half = metal::float4(0.5, 0.5, 0.5, 0.5);
 constant metal::int4 v_i32_one = metal::int4(1, 1, 1, 1);
 
-template <typename T> inline T naga_isign(T arg) {
-    return metal::select(metal::select(T(-1), T(1), (arg > 0)), 0, (arg == 0));
-}
-
 metal::float4 builtins(
 ) {
     int s1_ = true ? 1 : 0;
