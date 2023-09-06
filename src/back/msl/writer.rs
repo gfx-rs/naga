@@ -1715,15 +1715,8 @@ impl<W: Write> Writer<W> {
                     Mf::Reflect => "reflect",
                     Mf::Refract => "refract",
                     // computational
-                    Mf::Sign => match arg_type {
-                        &crate::TypeInner::Scalar {
-                            kind: crate::ScalarKind::Sint,
-                            ..
-                        }
-                        | &crate::TypeInner::Vector {
-                            kind: crate::ScalarKind::Sint,
-                            ..
-                        } => ISIGN_FUNCTION,
+                    Mf::Sign => match arg_type.scalar_kind() {
+                        Some(crate::ScalarKind::Sint) => ISIGN_FUNCTION,
                         _ => "sign",
                     },
                     Mf::Fma => "fma",
