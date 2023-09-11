@@ -83,6 +83,10 @@ struct Args {
     #[argh(switch)]
     version: bool,
 
+    /// dump IR before validation
+    #[argh(option)]
+    dump_before_validation: Option<String>,
+
     /// the input and output files.
     ///
     /// First positional argument is the input file. If not specified, the
@@ -330,6 +334,16 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         }
         _ => return Err(CliError("Unknown input file extension").into()),
     };
+
+    // If requested, dump the IR before validation. Note that this is
+    // not equivalent to the `"txt"` output, because that includes the
+    // `ModuleInfo` produced by validation; this obviously cannot.
+    if let Some(ref dump_before_validation) = args.dump_before_validation {
+        use std::io::Write;
+
+        let mut file = fs::File::create(dump_before_validation)?;
+        writeln!(file, "{module:#?}")?;
+    }
 
     // Decide which capabilities our output formats can support.
     let validation_caps =
