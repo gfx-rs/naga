@@ -1,10 +1,10 @@
 use super::{sampler as sm, Error, LocationMode, Options, PipelineOptions, TranslationInfo};
 use crate::{
     arena::Handle,
-    back,
+    back::{self},
     proc::index,
     proc::{self, NameKey, TypeResolution},
-    valid, FastHashMap, FastHashSet,
+    valid, FastHashMap, FastHashSet, StorageAccess,
 };
 use bit_set::BitSet;
 use std::{
@@ -4151,31 +4151,42 @@ impl<W: Write> Writer<W> {
                 )?;
             }
 
-
             // write this member
             let name = &self.names[&NameKey::GlobalVariable(handle)];
-            let (space, access, reference) = match var.space.to_msl_name() {
+            let (space, access, storage_access, reference) = match var.space.to_msl_name() {
                 Some(space) => {
-                    let access = if var.space.needs_access_qualifier() {
-                        "const"
+                    let (storage_access, access) = if var.space.needs_access_qualifier() {
+                        (StorageAccess::LOAD, "const")
                     } else {
-                        ""
+                        (StorageAccess::all(), "")
                     };
-                    (space, access, "&")
+                    (space, access, storage_access, "&")
                 }
-                _ => ("", "", ""),
+                _ => ("", "", StorageAccess::empty(), ""),
             };
 
-            log::trace!("Type: {:?}", var.ty);
+            let ty_name = TypeContext {
+                handle: var.ty,
+                gctx: module.to_ctx(),
+                names: &self.names,
+                access: storage_access,
+                binding: None,
+                first_time: false,
+            };
 
-            // let ty_name = TypeContext {
-            //     handle: var.ty,
-            //     gctx: module.to_ctx(),
-            //     names: &self.names,
-            //     access: storage_access,
-            //     binding: resolved_binding,
-            //     first_time: false,
-            // };
+            writeln!(
+                self.out,
+                "{}{}{}{}{}{}{} {} [[id({})]];",
+                back::INDENT,
+                space,
+                if space.is_empty() { "" } else { " " },
+                ty_name,
+                if access.is_empty() { "" } else { " " },
+                access,
+                reference,
+                name,
+                binding.binding
+            )?;
         }
 
         // finish the struct
