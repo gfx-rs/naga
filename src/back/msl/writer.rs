@@ -3583,10 +3583,10 @@ impl<W: Write> Writer<W> {
         let mut info = TranslationInfo {
             entry_point_names: Vec::with_capacity(module.entry_points.len()),
         };
+
         for (ep_index, ep) in module.entry_points.iter().enumerate() {
             let fun = &ep.function;
             let fun_info = mod_info.get_entry_point(ep_index);
-            let mut ep_error = None;
 
             log::trace!(
                 "entry point {:?}, index {:?}",
@@ -3595,7 +3595,7 @@ impl<W: Write> Writer<W> {
             );
 
             // Is any global variable used by this entry point dynamically sized?
-            let supports_array_length = module
+            let has_dynamically_sized_global_variable = module
                 .global_variables
                 .iter()
                 .filter(|&(handle, _)| !fun_info[handle].is_empty())
@@ -3603,73 +3603,20 @@ impl<W: Write> Writer<W> {
 
             // skip this entry point if any global bindings are missing,
             // or their types are incompatible.
-            if !options.fake_missing_bindings {
-                for (var_handle, var) in module.global_variables.iter() {
-                    if fun_info[var_handle].is_empty() {
-                        continue;
-                    }
-                    match var.space {
-                        crate::AddressSpace::Uniform
-                        | crate::AddressSpace::Storage { .. }
-                        | crate::AddressSpace::Handle => {
-                            let br = match var.binding {
-                                Some(ref br) => br,
-                                None => {
-                                    let var_name = var.name.clone().unwrap_or_default();
-                                    ep_error =
-                                        Some(super::EntryPointError::MissingBinding(var_name));
-                                    break;
-                                }
-                            };
-                            let target = options.get_resource_binding_target(ep, br);
-                            let good = match target {
-                                Some(target) => {
-                                    let binding_ty = match module.types[var.ty].inner {
-                                        crate::TypeInner::BindingArray { base, .. } => {
-                                            &module.types[base].inner
-                                        }
-                                        ref ty => ty,
-                                    };
-                                    match *binding_ty {
-                                        crate::TypeInner::Image { .. } => target.texture.is_some(),
-                                        crate::TypeInner::Sampler { .. } => {
-                                            target.sampler.is_some()
-                                        }
-                                        _ => target.buffer.is_some(),
-                                    }
-                                }
-                                None => false,
-                            };
-                            if !good {
-                                ep_error =
-                                    Some(super::EntryPointError::MissingBindTarget(br.clone()));
-                                break;
-                            }
-                        }
-                        crate::AddressSpace::PushConstant => {
-                            if let Err(e) = options.resolve_push_constants(ep) {
-                                ep_error = Some(e);
-                                break;
-                            }
-                        }
-                        crate::AddressSpace::Function
-                        | crate::AddressSpace::Private
-                        | crate::AddressSpace::WorkGroup => {}
-                    }
-                }
-                if supports_array_length {
-                    if let Err(err) = options.resolve_sizes_buffer(ep) {
-                        ep_error = Some(err);
-                    }
-                }
-            }
-
-            if let Some(err) = ep_error {
-                info.entry_point_names.push(Err(err));
-                continue;
-            }
             let fun_name = &self.names[&NameKey::EntryPoint(ep_index as _)];
-            info.entry_point_names.push(Ok(fun_name.clone()));
+            match validate_entry_point(
+                options,
+                module,
+                fun_info,
+                ep,
+                has_dynamically_sized_global_variable,
+            ) {
+                Err(e) => {
+                    info.entry_point_names.push(Err(e));
+                    continue;
+                }
+                _ => info.entry_point_names.push(Ok(fun_name.clone())),
+            }
 
             writeln!(self.out)?;
 
@@ -3958,7 +3905,7 @@ impl<W: Write> Writer<W> {
 
             // If this entry uses any variable-length arrays, their sizes are
             // passed as a final struct-typed argument.
-            if supports_array_length {
+            if has_dynamically_sized_global_variable {
                 // this is checked earlier
                 let resolved = options.resolve_sizes_buffer(ep).unwrap();
                 let separator = if module.global_variables.is_empty() {
@@ -4167,6 +4114,68 @@ impl<W: Write> Writer<W> {
         }
         Ok(())
     }
+}
+
+/// Check this entry point to determine if any global bindings are missing, or their types are
+/// incompatible
+fn validate_entry_point(
+    options: &Options,
+    module: &crate::Module,
+    fun_info: &valid::FunctionInfo,
+    ep: &crate::EntryPoint,
+    supports_array_length: bool,
+) -> Result<(), super::EntryPointError> {
+    if !options.fake_missing_bindings {
+        for (var_handle, var) in module.global_variables.iter() {
+            if fun_info[var_handle].is_empty() {
+                continue;
+            }
+            match var.space {
+                crate::AddressSpace::Uniform
+                | crate::AddressSpace::Storage { .. }
+                | crate::AddressSpace::Handle => {
+                    let br = match var.binding {
+                        Some(ref br) => br,
+                        None => {
+                            let var_name = var.name.clone().unwrap_or_default();
+                            return Err(super::EntryPointError::MissingBinding(var_name));
+                        }
+                    };
+                    let target = options.get_resource_binding_target(ep, br);
+                    let good = match target {
+                        Some(target) => {
+                            let binding_ty = match module.types[var.ty].inner {
+                                crate::TypeInner::BindingArray { base, .. } => {
+                                    &module.types[base].inner
+                                }
+                                ref ty => ty,
+                            };
+                            match *binding_ty {
+                                crate::TypeInner::Image { .. } => target.texture.is_some(),
+                                crate::TypeInner::Sampler { .. } => target.sampler.is_some(),
+                                _ => target.buffer.is_some(),
+                            }
+                        }
+                        None => false,
+                    };
+                    if !good {
+                        return Err(super::EntryPointError::MissingBindTarget(br.clone()));
+                    }
+                }
+                crate::AddressSpace::PushConstant => {
+                    options.resolve_push_constants(ep)?;
+                }
+                crate::AddressSpace::Function
+                | crate::AddressSpace::Private
+                | crate::AddressSpace::WorkGroup => {}
+            }
+        }
+        if supports_array_length {
+            options.resolve_sizes_buffer(ep)?;
+        }
+    }
+
+    Ok(())
 }
 
 /// Initializing workgroup variables is more tricky for Metal because we have to deal
