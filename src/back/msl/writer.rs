@@ -3078,28 +3078,7 @@ impl<W: Write> Writer<W> {
             crate::TypeInner::RayQuery => true,
             _ => false,
         }) {
-            let tab = back::INDENT;
-            writeln!(self.out, "struct {RAY_QUERY_TYPE} {{")?;
-            let full_type = format!("{RT_NAMESPACE}::intersector<{RT_NAMESPACE}::instancing, {RT_NAMESPACE}::triangle_data, {RT_NAMESPACE}::world_space_data>");
-            writeln!(self.out, "{tab}{full_type} {RAY_QUERY_FIELD_INTERSECTOR};")?;
-            writeln!(
-                self.out,
-                "{tab}{full_type}::result_type {RAY_QUERY_FIELD_INTERSECTION};"
-            )?;
-            writeln!(self.out, "{tab}bool {RAY_QUERY_FIELD_READY} = false;")?;
-            writeln!(self.out, "}};")?;
-            writeln!(self.out, "constexpr {NAMESPACE}::uint {RAY_QUERY_FUN_MAP_INTERSECTION}(const {RT_NAMESPACE}::intersection_type ty) {{")?;
-            let v_triangle = back::RayIntersectionType::Triangle as u32;
-            let v_bbox = back::RayIntersectionType::BoundingBox as u32;
-            writeln!(
-                self.out,
-                "{tab}return ty=={RT_NAMESPACE}::intersection_type::triangle ? {v_triangle} : "
-            )?;
-            writeln!(
-                self.out,
-                "{tab}{tab}ty=={RT_NAMESPACE}::intersection_type::bounding_box ? {v_bbox} : 0;"
-            )?;
-            writeln!(self.out, "}}")?;
+            self.write_ray_queries()?;
         }
         if options
             .bounds_check_policies
@@ -3132,7 +3111,34 @@ impl<W: Write> Writer<W> {
 
         self.write_type_defs(module)?;
         self.write_global_constants(module)?;
+        self.write_argument_buffers(module, options)?;
         self.write_functions(module, info, options, pipeline_options)
+    }
+
+    fn write_ray_queries(&mut self) -> Result<(), Error> {
+        let tab = back::INDENT;
+        writeln!(self.out, "struct {RAY_QUERY_TYPE} {{")?;
+        let full_type = format!("{RT_NAMESPACE}::intersector<{RT_NAMESPACE}::instancing, {RT_NAMESPACE}::triangle_data, {RT_NAMESPACE}::world_space_data>");
+        writeln!(self.out, "{tab}{full_type} {RAY_QUERY_FIELD_INTERSECTOR};")?;
+        writeln!(
+            self.out,
+            "{tab}{full_type}::result_type {RAY_QUERY_FIELD_INTERSECTION};"
+        )?;
+        writeln!(self.out, "{tab}bool {RAY_QUERY_FIELD_READY} = false;")?;
+        writeln!(self.out, "}};")?;
+        writeln!(self.out, "constexpr {NAMESPACE}::uint {RAY_QUERY_FUN_MAP_INTERSECTION}(const {RT_NAMESPACE}::intersection_type ty) {{")?;
+        let v_triangle = back::RayIntersectionType::Triangle as u32;
+        let v_bbox = back::RayIntersectionType::BoundingBox as u32;
+        writeln!(
+            self.out,
+            "{tab}return ty=={RT_NAMESPACE}::intersection_type::triangle ? {v_triangle} : "
+        )?;
+        writeln!(
+            self.out,
+            "{tab}{tab}ty=={RT_NAMESPACE}::intersection_type::bounding_box ? {v_bbox} : 0;"
+        )?;
+        writeln!(self.out, "}}")?;
+        Ok(())
     }
 
     /// Write the definition for the `DefaultConstructible` class.
@@ -3595,7 +3601,7 @@ impl<W: Write> Writer<W> {
             );
 
             // Is any global variable used by this entry point dynamically sized?
-            let has_dynamically_sized_global_variable = module
+            let has_dynamically_sized_global_variables = module
                 .global_variables
                 .iter()
                 .filter(|&(handle, _)| !fun_info[handle].is_empty())
@@ -3609,7 +3615,7 @@ impl<W: Write> Writer<W> {
                 module,
                 fun_info,
                 ep,
-                has_dynamically_sized_global_variable,
+                has_dynamically_sized_global_variables,
             ) {
                 Err(e) => {
                     info.entry_point_names.push(Err(e));
@@ -3903,9 +3909,13 @@ impl<W: Write> Writer<W> {
                 writeln!(self.out)?;
             }
 
+            {
+                log::trace!("Write argument buffer parameters here");
+            }
+
             // If this entry uses any variable-length arrays, their sizes are
             // passed as a final struct-typed argument.
-            if has_dynamically_sized_global_variable {
+            if has_dynamically_sized_global_variables {
                 // this is checked earlier
                 let resolved = options.resolve_sizes_buffer(ep).unwrap();
                 let separator = if module.global_variables.is_empty() {
@@ -4112,6 +4122,65 @@ impl<W: Write> Writer<W> {
                 "{level}{NAMESPACE}::threadgroup_barrier({NAMESPACE}::mem_flags::mem_threadgroup);",
             )?;
         }
+        Ok(())
+    }
+
+    fn write_argument_buffers(
+        &mut self,
+        module: &crate::Module,
+        options: &Options,
+    ) -> BackendResult {
+        let mut current_bind_group = 0;
+
+        // TODO: check for case where there are no global bindings
+
+        // begin the first argument buffer
+        writeln!(self.out, "struct ArgumentBufferGroup0 {{")?;
+
+        for (handle, var) in module.global_variables.iter() {
+            let Some(ref binding) = var.binding else {continue };
+            if binding.group != current_bind_group {
+                // finish the struct
+                writeln!(self.out, "}};")?;
+
+                // begin another argument buffer
+                current_bind_group = binding.group;
+                writeln!(
+                    self.out,
+                    "struct ArgumentBufferGroup{current_bind_group} {{"
+                )?;
+            }
+
+
+            // write this member
+            let name = &self.names[&NameKey::GlobalVariable(handle)];
+            let (space, access, reference) = match var.space.to_msl_name() {
+                Some(space) => {
+                    let access = if var.space.needs_access_qualifier() {
+                        "const"
+                    } else {
+                        ""
+                    };
+                    (space, access, "&")
+                }
+                _ => ("", "", ""),
+            };
+
+            log::trace!("Type: {:?}", var.ty);
+
+            // let ty_name = TypeContext {
+            //     handle: var.ty,
+            //     gctx: module.to_ctx(),
+            //     names: &self.names,
+            //     access: storage_access,
+            //     binding: resolved_binding,
+            //     first_time: false,
+            // };
+        }
+
+        // finish the struct
+        writeln!(self.out, "}};")?;
+
         Ok(())
     }
 }
