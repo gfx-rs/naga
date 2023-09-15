@@ -4,6 +4,7 @@ Shader validator.
 
 mod analyzer;
 mod compose;
+#[cfg(feature = "validate")]
 mod expression;
 mod function;
 mod handles;
@@ -12,7 +13,7 @@ mod r#type;
 
 use crate::{
     arena::Handle,
-    proc::{LayoutError, Layouter, TypeResolution},
+    proc::{IndexableLengthError, LayoutError, Layouter, ResolveError, TypeResolution},
     FastHashSet,
 };
 use bit_set::BitSet;
@@ -24,7 +25,6 @@ use std::ops;
 use crate::span::{AddSpan as _, WithSpan};
 pub use analyzer::{ExpressionInfo, FunctionInfo, GlobalUse, Uniformity, UniformityRequirements};
 pub use compose::ComposeError;
-pub use expression::ExpressionError;
 pub use function::{CallError, FunctionError, LocalVariableError};
 pub use interface::{EntryPointError, GlobalVariableError, VaryingError};
 pub use r#type::{Disalignment, TypeError, TypeFlags};
@@ -187,7 +187,7 @@ pub enum ConstExpressionError {
     #[error(transparent)]
     Compose(#[from] ComposeError),
     #[error("Type resolution failed")]
-    Type(#[from] crate::proc::ResolveError),
+    Type(#[from] ResolveError),
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
@@ -241,6 +241,121 @@ pub enum ValidationError {
     },
     #[error("Module is corrupted")]
     Corrupted,
+}
+
+#[derive(Clone, Debug, thiserror::Error)]
+#[cfg_attr(test, derive(PartialEq))]
+pub enum ExpressionError {
+    #[error("Doesn't exist")]
+    DoesntExist,
+    #[error("Used by a statement before it was introduced into the scope by any of the dominating blocks")]
+    NotInScope,
+    #[error("Base type {0:?} is not compatible with this expression")]
+    InvalidBaseType(Handle<crate::Expression>),
+    #[error("Accessing with index {0:?} can't be done")]
+    InvalidIndexType(Handle<crate::Expression>),
+    #[error("Accessing {0:?} via a negative index is invalid")]
+    NegativeIndex(Handle<crate::Expression>),
+    #[error("Accessing index {1} is out of {0:?} bounds")]
+    IndexOutOfBounds(Handle<crate::Expression>, u32),
+    #[error("The expression {0:?} may only be indexed by a constant")]
+    IndexMustBeConstant(Handle<crate::Expression>),
+    #[error("Function argument {0:?} doesn't exist")]
+    FunctionArgumentDoesntExist(u32),
+    #[error("Loading of {0:?} can't be done")]
+    InvalidPointerType(Handle<crate::Expression>),
+    #[error("Array length of {0:?} can't be done")]
+    InvalidArrayType(Handle<crate::Expression>),
+    #[error("Get intersection of {0:?} can't be done")]
+    InvalidRayQueryType(Handle<crate::Expression>),
+    #[error("Splatting {0:?} can't be done")]
+    InvalidSplatType(Handle<crate::Expression>),
+    #[error("Swizzling {0:?} can't be done")]
+    InvalidVectorType(Handle<crate::Expression>),
+    #[error("Swizzle component {0:?} is outside of vector size {1:?}")]
+    InvalidSwizzleComponent(crate::SwizzleComponent, crate::VectorSize),
+    #[error(transparent)]
+    Compose(#[from] ComposeError),
+    #[error(transparent)]
+    IndexableLength(#[from] IndexableLengthError),
+    #[error("Operation {0:?} can't work with {1:?}")]
+    InvalidUnaryOperandType(crate::UnaryOperator, Handle<crate::Expression>),
+    #[error("Operation {0:?} can't work with {1:?} and {2:?}")]
+    InvalidBinaryOperandTypes(
+        crate::BinaryOperator,
+        Handle<crate::Expression>,
+        Handle<crate::Expression>,
+    ),
+    #[error("Selecting is not possible")]
+    InvalidSelectTypes,
+    #[error("Relational argument {0:?} is not a boolean vector")]
+    InvalidBooleanVector(Handle<crate::Expression>),
+    #[error("Relational argument {0:?} is not a float")]
+    InvalidFloatArgument(Handle<crate::Expression>),
+    #[error("Type resolution failed")]
+    Type(#[from] ResolveError),
+    #[error("Not a global variable")]
+    ExpectedGlobalVariable,
+    #[error("Not a global variable or a function argument")]
+    ExpectedGlobalOrArgument,
+    #[error("Needs to be an binding array instead of {0:?}")]
+    ExpectedBindingArrayType(Handle<crate::Type>),
+    #[error("Needs to be an image instead of {0:?}")]
+    ExpectedImageType(Handle<crate::Type>),
+    #[error("Needs to be an image instead of {0:?}")]
+    ExpectedSamplerType(Handle<crate::Type>),
+    #[error("Unable to operate on image class {0:?}")]
+    InvalidImageClass(crate::ImageClass),
+    #[error("Derivatives can only be taken from scalar and vector floats")]
+    InvalidDerivative,
+    #[error("Image array index parameter is misplaced")]
+    InvalidImageArrayIndex,
+    #[error("Inappropriate sample or level-of-detail index for texel access")]
+    InvalidImageOtherIndex,
+    #[error("Image array index type of {0:?} is not an integer scalar")]
+    InvalidImageArrayIndexType(Handle<crate::Expression>),
+    #[error("Image sample or level-of-detail index's type of {0:?} is not an integer scalar")]
+    InvalidImageOtherIndexType(Handle<crate::Expression>),
+    #[error("Image coordinate type of {1:?} does not match dimension {0:?}")]
+    InvalidImageCoordinateType(crate::ImageDimension, Handle<crate::Expression>),
+    #[error("Comparison sampling mismatch: image has class {image:?}, but the sampler is comparison={sampler}, and the reference was provided={has_ref}")]
+    ComparisonSamplingMismatch {
+        image: crate::ImageClass,
+        sampler: bool,
+        has_ref: bool,
+    },
+    #[error("Sample offset constant {1:?} doesn't match the image dimension {0:?}")]
+    InvalidSampleOffset(crate::ImageDimension, Handle<crate::Expression>),
+    #[error("Depth reference {0:?} is not a scalar float")]
+    InvalidDepthReference(Handle<crate::Expression>),
+    #[error("Depth sample level can only be Auto or Zero")]
+    InvalidDepthSampleLevel,
+    #[error("Gather level can only be Zero")]
+    InvalidGatherLevel,
+    #[error("Gather component {0:?} doesn't exist in the image")]
+    InvalidGatherComponent(crate::SwizzleComponent),
+    #[error("Gather can't be done for image dimension {0:?}")]
+    InvalidGatherDimension(crate::ImageDimension),
+    #[error("Sample level (exact) type {0:?} is not a scalar float")]
+    InvalidSampleLevelExactType(Handle<crate::Expression>),
+    #[error("Sample level (bias) type {0:?} is not a scalar float")]
+    InvalidSampleLevelBiasType(Handle<crate::Expression>),
+    #[error("Sample level (gradient) of {1:?} doesn't match the image dimension {0:?}")]
+    InvalidSampleLevelGradientType(crate::ImageDimension, Handle<crate::Expression>),
+    #[error("Unable to cast")]
+    InvalidCastArgument,
+    #[error("Invalid argument count for {0:?}")]
+    WrongArgumentCount(crate::MathFunction),
+    #[error("Argument [{1}] to {0:?} as expression {2:?} has an invalid type.")]
+    InvalidArgumentType(crate::MathFunction, u32, Handle<crate::Expression>),
+    #[error("Atomic result type can't be {0:?}")]
+    InvalidAtomicResultType(Handle<crate::Type>),
+    #[error(
+        "workgroupUniformLoad result type can't be {0:?}. It can only be a constructible type."
+    )]
+    InvalidWorkGroupUniformLoadResultType(Handle<crate::Type>),
+    #[error("Shader requires capability {0:?}")]
+    MissingCapabilities(Capabilities),
 }
 
 impl crate::TypeInner {
