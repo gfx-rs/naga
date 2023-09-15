@@ -6,6 +6,7 @@ mod analyzer;
 mod compose;
 mod expression;
 mod function;
+#[cfg(feature = "validate")]
 mod handles;
 mod interface;
 mod r#type;
@@ -29,7 +30,29 @@ pub use function::{CallError, FunctionError, LocalVariableError};
 pub use interface::{EntryPointError, GlobalVariableError, VaryingError};
 pub use r#type::{Disalignment, TypeError, TypeFlags};
 
-use self::handles::InvalidHandleError;
+#[derive(Clone, Debug, thiserror::Error)]
+pub enum InvalidHandleError {
+    #[error(transparent)]
+    BadHandle(#[from] crate::arena::BadHandle),
+    #[error(transparent)]
+    ForwardDependency(#[from] FwdDepError),
+    #[error(transparent)]
+    BadRange(#[from] crate::arena::BadRangeError),
+}
+
+#[derive(Clone, Debug, thiserror::Error)]
+#[error(
+    "{subject:?} of kind {subject_kind:?} depends on {depends_on:?} of kind {depends_on_kind}, \
+    which has not been processed yet"
+)]
+pub struct FwdDepError {
+    // This error is used for many `Handle` types, but there's no point in making this generic, so
+    // we just flatten them all to `Handle<()>` here.
+    subject: Handle<()>,
+    subject_kind: &'static str,
+    depends_on: Handle<()>,
+    depends_on_kind: &'static str,
+}
 
 bitflags::bitflags! {
     /// Validation flags.
