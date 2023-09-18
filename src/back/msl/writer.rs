@@ -1417,15 +1417,19 @@ impl<W: Write> Writer<W> {
                 write!(self.out, "{name}")?;
             }
             crate::Expression::GlobalVariable(handle) => {
-                // If this variable belongs to binding, we must prefix it with the
-                // appropriate argument buffer name.
+                // If this variable belongs to a binding, and we are in the entry point,
+                // we must prefix it with the appropriate argument buffer name.
                 let variable = &context.module.global_variables[handle];
                 let name = &self.names[&NameKey::GlobalVariable(handle)];
-                if let Some(ref binding) = variable.binding {
-                    let id = binding.group;
-                    write!(self.out, "argumentBufferGroup{id}.{name}")?;
-                } else {
-                    write!(self.out, "{name}")?;
+
+                match (variable.binding.as_ref(), &context.origin) {
+                    (Some(binding), FunctionOrigin::EntryPoint(_)) => {
+                        let id = binding.group;
+                        write!(self.out, "argumentBufferGroup{id}.{name}")?;
+                    }
+                    _ => {
+                        write!(self.out, "{name}")?;
+                    }
                 }
             }
             crate::Expression::LocalVariable(handle) => {
@@ -2813,6 +2817,13 @@ impl<W: Write> Writer<W> {
                             } else {
                                 separate = true;
                             }
+
+                            // If this global variable is part of a binding, prefix its name
+                            // with the name of the corresponding argument buffer.
+                            if let Some(ref binding) = var.binding {
+                                write!(self.out, "argumentBufferGroup{}.", binding.group)?;
+                            }
+
                             write!(self.out, "{name}")?;
                         }
                         supports_array_length |=
