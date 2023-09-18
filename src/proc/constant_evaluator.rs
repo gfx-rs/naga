@@ -80,6 +80,8 @@ pub enum ConstantEvaluatorError {
     SplatScalarOnly,
     #[error("Can only swizzle vector constants")]
     SwizzleVectorOnly,
+    #[error("swizzle component not present in source expression")]
+    SwizzleOutOfBounds,
     #[error("Type is not constructible")]
     TypeNotConstructible,
     #[error("Subexpression(s) are not constant")]
@@ -305,20 +307,31 @@ impl ConstantEvaluator<'_> {
                 let expr = Expression::Splat { size, value };
                 Ok(self.register_constant(expr, span))
             }
-            Expression::Compose {
-                ty,
-                components: ref src_components,
-            } => {
+            Expression::Compose { ty, ref components } => {
                 let dst_ty = get_dst_ty(ty)?;
 
-                let components = pattern
+                let mut flattened = [src_constant; 4]; // dummy value
+                let len = self
+                    .flatten_compose(ty, components)
+                    .zip(flattened.iter_mut())
+                    .map(|(component, elt)| *elt = component)
+                    .count();
+                let flattened = &flattened[..len];
+
+                let swizzled_components = pattern[..size as usize]
                     .iter()
-                    .take(size as usize)
-                    .map(|&sc| src_components[sc as usize])
-                    .collect();
+                    .map(|&sc| {
+                        let sc = sc as usize;
+                        if let Some(elt) = flattened.get(sc) {
+                            Ok(*elt)
+                        } else {
+                            Err(ConstantEvaluatorError::SwizzleOutOfBounds)
+                        }
+                    })
+                    .collect::<Result<Vec<Handle<Expression>>, _>>()?;
                 let expr = Expression::Compose {
                     ty: dst_ty,
-                    components,
+                    components: swizzled_components,
                 };
                 Ok(self.register_constant(expr, span))
             }
@@ -454,9 +467,8 @@ impl ConstantEvaluator<'_> {
                     .components()
                     .ok_or(ConstantEvaluatorError::InvalidAccessBase)?;
 
-                components
-                    .get(index)
-                    .copied()
+                self.flatten_compose(ty, components)
+                    .nth(index)
                     .ok_or(ConstantEvaluatorError::InvalidAccessIndex)
             }
             _ => Err(ConstantEvaluatorError::InvalidAccessBase),
@@ -826,6 +838,53 @@ impl ConstantEvaluator<'_> {
         }
 
         self.expressions.append(expr, span)
+    }
+
+    /// Return an iterator over the individual components assembled by a
+    /// `Compose` expression.
+    ///
+    /// Given `ty` and `components` from an `Expression::Compose`, return an
+    /// iterator over the components of the resulting value.
+    ///
+    /// Normally, this would just be an iterator over `components`. However,
+    /// `Compose` expressions can concatenate vectors, in which case the i'th
+    /// value being composed is not generally the i'th element of `components`.
+    /// This function consults `ty` to decide if this concatenation is occuring,
+    /// and returns an iterator that produces the components of the result of
+    /// the `Compose` expression in either case.
+    fn flatten_compose<'c>(
+        &'c self,
+        ty: Handle<Type>,
+        components: &'c [Handle<Expression>],
+    ) -> impl Iterator<Item = Handle<Expression>> + 'c {
+        // Returning `impl Iterator` is a bit tricky. We may or may not want to
+        // flatten the components, but we have to settle on a single concrete
+        // type to return. The below is a single iterator chain that handles
+        // both the flattening and non-flattening cases.
+        let (size, is_vector) = if let TypeInner::Vector { size, .. } = self.types[ty].inner {
+            (size as usize, true)
+        } else {
+            (components.len(), false)
+        };
+
+        components
+            .iter()
+            .flat_map(move |component| {
+                if let (
+                    true,
+                    &Expression::Compose {
+                        ty: _,
+                        components: ref subcomponents,
+                    },
+                ) = (is_vector, &self.expressions[*component])
+                {
+                    subcomponents
+                } else {
+                    std::slice::from_ref(component)
+                }
+            })
+            .take(size)
+            .cloned()
     }
 }
 
