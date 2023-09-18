@@ -19,6 +19,9 @@ struct Globals {
     metal::float3x4 m;
     type_4 d;
 };
+struct ArgumentBufferGroup0 {
+    device Globals& globals [[id(0)]];
+};
 
 float index_array(
     int i,

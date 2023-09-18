@@ -31,6 +31,11 @@ struct type_6 {
 struct type_9 {
     metal::float4 inner[2];
 };
+struct ArgumentBufferGroup0 {
+    device InStorage const& in_storage [[id(0)]];
+    constant InUniform& in_uniform [[id(1)]];
+    metal::texture2d_array<float, metal::access::sample> image_2d_array [[id(2)]];
+};
 
 metal::float4 mock_function(
     metal::int2 c,

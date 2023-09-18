@@ -12,6 +12,9 @@ typedef uint type_1[1];
 struct PrimeIndices {
     type_1 data;
 };
+struct ArgumentBufferGroup0 {
+    device PrimeIndices& v_indices [[id(0)]];
+};
 
 uint collatz_iterations(
     uint n_base
@@ -47,11 +50,11 @@ struct main_Input {
 };
 kernel void main_(
   metal::uint3 global_id [[thread_position_in_grid]]
-, device PrimeIndices& v_indices [[user(fake0)]]
+, device ArgumentBufferGroup0& argumentBufferGroup0 [[buffer(0)]]
 , constant _mslBufferSizes& _buffer_sizes [[user(fake0)]]
 ) {
-    uint _e9 = v_indices.data[global_id.x];
+    uint _e9 = argumentBufferGroup0.v_indices.data[global_id.x];
     uint _e10 = collatz_iterations(_e9);
-    v_indices.data[global_id.x] = _e10;
+    argumentBufferGroup0.v_indices.data[global_id.x] = _e10;
     return;
 }

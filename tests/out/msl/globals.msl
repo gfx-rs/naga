@@ -32,6 +32,15 @@ struct type_15 {
     type_14 inner[2];
 };
 constant bool Foo_1 = true;
+struct ArgumentBufferGroup0 {
+    device FooStruct& alignment [[id(0)]];
+    device type_6 const& dummy [[id(1)]];
+    constant type_8& float_vecs [[id(2)]];
+    constant metal::float3& global_vec [[id(22)]];
+    constant metal::float3x2& global_mat [[id(23)]];
+    constant type_12& global_nested_arrays_of_matrices_2x4_ [[id(24)]];
+    constant type_15& global_nested_arrays_of_matrices_4x2_ [[id(26)]];
+};
 
 void test_msl_packed_vec3_as_arg(
     metal::float3 arg
@@ -63,13 +72,7 @@ kernel void main_(
   metal::uint3 __local_invocation_id [[thread_position_in_threadgroup]]
 , threadgroup type_2& wg
 , threadgroup metal::atomic_uint& at_1
-, device FooStruct& alignment [[user(fake0)]]
-, device type_6 const& dummy [[user(fake0)]]
-, constant type_8& float_vecs [[user(fake0)]]
-, constant metal::float3& global_vec [[user(fake0)]]
-, constant metal::float3x2& global_mat [[user(fake0)]]
-, constant type_12& global_nested_arrays_of_matrices_2x4_ [[user(fake0)]]
-, constant type_15& global_nested_arrays_of_matrices_4x2_ [[user(fake0)]]
+, device ArgumentBufferGroup0& argumentBufferGroup0 [[buffer(0)]]
 , constant _mslBufferSizes& _buffer_sizes [[user(fake0)]]
 ) {
     if (metal::all(__local_invocation_id == metal::uint3(0u))) {
@@ -79,22 +82,22 @@ kernel void main_(
     metal::threadgroup_barrier(metal::mem_flags::mem_threadgroup);
     float Foo = {};
     bool at = {};
-    test_msl_packed_vec3_(alignment);
-    metal::float4x2 _e8 = global_nested_arrays_of_matrices_4x2_.inner[0].inner[0];
-    metal::float4 _e16 = global_nested_arrays_of_matrices_2x4_.inner[0].inner[0][0];
+    test_msl_packed_vec3_(argumentBufferGroup0.alignment);
+    metal::float4x2 _e8 = argumentBufferGroup0.global_nested_arrays_of_matrices_4x2_.inner[0].inner[0];
+    metal::float4 _e16 = argumentBufferGroup0.global_nested_arrays_of_matrices_2x4_.inner[0].inner[0][0];
     wg.inner[7] = (_e8 * _e16).x;
-    metal::float3x2 _e23 = global_mat;
-    metal::float3 _e25 = global_vec;
+    metal::float3x2 _e23 = argumentBufferGroup0.global_mat;
+    metal::float3 _e25 = argumentBufferGroup0.global_vec;
     wg.inner[6] = (_e23 * _e25).x;
-    float _e35 = dummy[1].y;
+    float _e35 = argumentBufferGroup0.dummy[1].y;
     wg.inner[5] = _e35;
-    float _e43 = float_vecs.inner[0].w;
+    float _e43 = argumentBufferGroup0.float_vecs.inner[0].w;
     wg.inner[4] = _e43;
-    float _e49 = alignment.v1_;
+    float _e49 = argumentBufferGroup0.alignment.v1_;
     wg.inner[3] = _e49;
-    float _e56 = alignment.v3_[0];
+    float _e56 = argumentBufferGroup0.alignment.v3_[0];
     wg.inner[2] = _e56;
-    alignment.v1_ = 4.0;
+    argumentBufferGroup0.alignment.v1_ = 4.0;
     wg.inner[1] = static_cast<float>(1 + (_buffer_sizes.size3 - 0 - 8) / 8);
     metal::atomic_store_explicit(&at_1, 2u, metal::memory_order_relaxed);
     Foo = 1.0;

@@ -22,17 +22,20 @@ struct Test3_ {
     metal::float4x3 a;
     float b;
 };
+struct ArgumentBufferGroup0 {
+    constant Test& input1_ [[id(0)]];
+    constant Test2_& input2_ [[id(1)]];
+    constant Test3_& input3_ [[id(2)]];
+};
 
 struct vertex_Output {
     metal::float4 member [[position]];
 };
 vertex vertex_Output vertex_(
-  constant Test& input1_ [[buffer(0)]]
-, constant Test2_& input2_ [[buffer(1)]]
-, constant Test3_& input3_ [[buffer(2)]]
+  device ArgumentBufferGroup0& argumentBufferGroup0 [[buffer(0)]]
 ) {
-    float _e4 = input1_.b;
-    float _e8 = input2_.b;
-    float _e12 = input3_.b;
+    float _e4 = argumentBufferGroup0.input1_.b;
+    float _e8 = argumentBufferGroup0.input2_.b;
+    float _e12 = argumentBufferGroup0.input3_.b;
     return vertex_Output { ((metal::float4(1.0) * _e4) * _e8) * _e12 };
 }

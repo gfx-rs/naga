@@ -4,7 +4,7 @@ use crate::{
     back::{self},
     proc::index,
     proc::{self, NameKey, TypeResolution},
-    valid, FastHashMap, FastHashSet, StorageAccess,
+    valid, ArraySize, FastHashMap, FastHashSet, ResourceBinding, StorageAccess,
 };
 use bit_set::BitSet;
 use std::{
@@ -4180,15 +4180,17 @@ impl<W: Write> Writer<W> {
     /// Write an argument buffer struct for each bind group.
     ///
     /// Iterates through the bind groups and their members in ascending order, generating
-    /// a struct whose members contain each binding for that group with an ID matching that
-    /// binding.
+    /// a struct whose members contain each binding for that group with a monotonically
+    /// increasing ID. In the case where two variables share a binding, they emitted in the
+    /// order they are defined in the module.
     ///
     /// For example, if we had some bind group:
     ///
     /// ```wgsl
     /// @group(0) @binding(0) var u_texture : texture_2d<f32>;
     /// @group(0) @binding(1) var u_sampler : sampler;
-    /// @group(1) @binding(0) var v_texture : sampler;
+    /// @group(1) @binding(0) var v_texture : texture_2d<f32>;
+    /// @group(1) @binding(0) var z_texture : texture_2d<f32>;
     /// ```
     ///
     /// This would generate:
@@ -4200,8 +4202,15 @@ impl<W: Write> Writer<W> {
     /// };
     /// struct ArgumentBufferGroup1 {
     ///     metal::texture2d<float, metal::access::sample> v_texture [[id(0)]];
+    ///     metal::texture2d<float, metal::access::sample> z_texture [[id(1)]];
     /// };
     /// ```
+    ///
+    /// In the case of binding arrays, IDs will increase by the size of the array, as
+    /// required by Metal.
+    ///
+    /// For more information on Argument Buffers, see section 2.13 of
+    /// [the Metal Spec](https://developer.apple.com/metal/Metal-Shading-Language-Specification.pdf)
     fn write_argument_buffers(
         &mut self,
         module: &crate::Module,
@@ -4229,6 +4238,7 @@ impl<W: Write> Writer<W> {
 
         log::trace!("Writing argument buffer for group 0");
 
+        let mut id = 0;
         for (handle, var) in bindings {
             let binding = var.binding.as_ref().unwrap();
             if binding.group != current_bind_group {
@@ -4237,6 +4247,7 @@ impl<W: Write> Writer<W> {
 
                 // begin another argument buffer
                 current_bind_group = binding.group;
+                id = 0;
                 writeln!(
                     self.out,
                     "struct ArgumentBufferGroup{current_bind_group} {{"
@@ -4246,20 +4257,46 @@ impl<W: Write> Writer<W> {
 
             // write this member
             let name = &self.names[&NameKey::GlobalVariable(handle)];
-            log::trace!("Writing argument member {name} - {var:?}");
-            let (space, access, storage_access, reference) = match var.space.to_msl_name() {
-                Some(space) => {
-                    let (storage_access, access) = if var.space.needs_access_qualifier() {
-                        (StorageAccess::LOAD, "const")
-                    } else {
-                        (StorageAccess::all(), "")
-                    };
-                    (space, access, storage_access, "&")
-                }
-                _ => ("", "", StorageAccess::LOAD, ""),
-            };
 
             let gctx = module.to_ctx();
+            let var_type = &gctx.types[var.ty];
+
+            log::trace!("Writing argument member {binding:?} {name} - {var_type:?}");
+
+            // Determine the storage access required for this variable
+            let storage_access = match var.space {
+                crate::AddressSpace::Storage { access } => access,
+                _ => match var_type.inner {
+                    crate::TypeInner::Image {
+                        class: crate::ImageClass::Storage { access, .. },
+                        ..
+                    } => access,
+                    crate::TypeInner::BindingArray { base, .. } => match gctx.types[base].inner {
+                        crate::TypeInner::Image {
+                            class: crate::ImageClass::Storage { access, .. },
+                            ..
+                        } => access,
+                        _ => crate::StorageAccess::LOAD,
+                    },
+                    _ => crate::StorageAccess::LOAD,
+                },
+            };
+
+            // Next, get the Metal name (eg. device, constant) for this variable's space
+            // and determine whether it needs to be qualified with "const".
+            let (space, access, reference) = match var.space.to_msl_name() {
+                Some(space) => {
+                    let access = if var.space.needs_access_qualifier()
+                        && !storage_access.contains(StorageAccess::STORE)
+                    {
+                        "const"
+                    } else {
+                        ""
+                    };
+                    (space, access, "&")
+                }
+                _ => ("", "", ""),
+            };
 
             // resolve the binding, if required
             let resolved_binding = resolve_argument_buffer_binding(
@@ -4275,28 +4312,53 @@ impl<W: Write> Writer<W> {
                 gctx,
                 names: &self.names,
                 access: storage_access,
-                binding: resolved_binding.as_ref(), // todo: a fake binding here would potentially resolve this?
+                binding: resolved_binding.as_ref(),
                 first_time: false,
             };
 
             match writeln!(
                 self.out,
-                "{}{}{}{}{}{}{} {} [[id({})]];",
+                "{}{space}{}{ty_name}{}{access}{reference} {name} [[id({id})]];",
                 back::INDENT,
-                space,
                 if space.is_empty() { "" } else { " " },
-                ty_name,
                 if access.is_empty() { "" } else { " " },
-                access,
-                reference,
-                name,
-                binding.binding,
             ) {
                 Err(e) => {
                     log::error!("Error writing argument buffer for binding {binding:?}");
                     return Err(e.into());
                 }
                 _ => {}
+            }
+
+            // If this binding was an array, we need to increment ID by the size of the array.
+
+            // Dynamically sized array bindings need to be treated as a special case:
+            if let Some(super::ResolvedBinding::Resource(super::BindTarget {
+                binding_array_size: Some(array_size),
+                ..
+            })) = resolved_binding
+            {
+                id += array_size;
+                continue;
+            };
+
+            // Otherwise, check the variable's type to see if it's an array.
+            match var_type.inner {
+                crate::TypeInner::Array {
+                    size: ArraySize::Constant(size),
+                    ..
+                }
+                | crate::TypeInner::BindingArray {
+                    size: ArraySize::Constant(size),
+                    ..
+                } => {
+                    id += size.get();
+                }
+
+                // Not an array - just increment by 1.
+                _ => {
+                    id += 1;
+                }
             }
         }
 
@@ -4318,7 +4380,7 @@ impl<W: Write> Writer<W> {
 fn resolve_argument_buffer_binding(
     entry_points: &[crate::EntryPoint],
     options: &Options,
-    binding: &crate::ResourceBinding,
+    binding: &ResourceBinding,
     ty: &crate::Type,
 ) -> Option<super::ResolvedBinding> {
     match ty.inner {

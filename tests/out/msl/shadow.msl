@@ -32,6 +32,16 @@ struct type_7 {
 };
 constant metal::float3 c_ambient = metal::float3(0.05, 0.05, 0.05);
 constant uint c_max_lights = 10u;
+struct ArgumentBufferGroup0 {
+    constant Globals& u_globals [[id(0)]];
+    device type_6 const& s_lights [[id(1)]];
+    constant type_7& u_lights [[id(2)]];
+    metal::depth2d_array<float, metal::access::sample> t_shadow [[id(12)]];
+    metal::sampler sampler_shadow [[id(13)]];
+};
+struct ArgumentBufferGroup1 {
+    constant Entity& u_entity [[id(0)]];
+};
 
 float fetch_shadow(
     uint light_id,
@@ -60,18 +70,18 @@ struct vs_mainOutput {
 };
 vertex vs_mainOutput vs_main(
   vs_mainInput varyings [[stage_in]]
-, constant Globals& u_globals [[user(fake0)]]
-, constant Entity& u_entity [[user(fake0)]]
+, device ArgumentBufferGroup0& argumentBufferGroup0 [[buffer(0)]]
+, device ArgumentBufferGroup1& argumentBufferGroup1 [[buffer(1)]]
 ) {
     const auto position = varyings.position;
     const auto normal = varyings.normal;
     VertexOutput out = {};
-    metal::float4x4 w = u_entity.world;
-    metal::float4x4 _e7 = u_entity.world;
+    metal::float4x4 w = argumentBufferGroup1.u_entity.world;
+    metal::float4x4 _e7 = argumentBufferGroup1.u_entity.world;
     metal::float4 world_pos = _e7 * static_cast<metal::float4>(position);
     out.world_normal = metal::float3x3(w[0].xyz, w[1].xyz, w[2].xyz) * static_cast<metal::float3>(normal.xyz);
     out.world_position = world_pos;
-    metal::float4x4 _e26 = u_globals.view_proj;
+    metal::float4x4 _e26 = argumentBufferGroup0.u_globals.view_proj;
     out.proj_position = _e26 * world_pos;
     VertexOutput _e28 = out;
     const auto _tmp = _e28;
@@ -89,11 +99,8 @@ struct fs_mainOutput {
 fragment fs_mainOutput fs_main(
   fs_mainInput varyings_1 [[stage_in]]
 , metal::float4 proj_position [[position]]
-, constant Globals& u_globals [[user(fake0)]]
-, constant Entity& u_entity [[user(fake0)]]
-, device type_6 const& s_lights [[user(fake0)]]
-, metal::depth2d_array<float, metal::access::sample> t_shadow [[user(fake0)]]
-, metal::sampler sampler_shadow [[user(fake0)]]
+, device ArgumentBufferGroup0& argumentBufferGroup0 [[buffer(0)]]
+, device ArgumentBufferGroup1& argumentBufferGroup1 [[buffer(1)]]
 , constant _mslBufferSizes& _buffer_sizes [[user(fake0)]]
 ) {
     const VertexOutput in = { proj_position, varyings_1.world_normal, varyings_1.world_position };
@@ -110,16 +117,16 @@ fragment fs_mainOutput fs_main(
         }
         loop_init = false;
         uint _e7 = i;
-        uint _e11 = u_globals.num_lights.x;
+        uint _e11 = argumentBufferGroup0.u_globals.num_lights.x;
         if (_e7 < metal::min(_e11, c_max_lights)) {
         } else {
             break;
         }
         {
             uint _e16 = i;
-            Light light = s_lights[_e16];
+            Light light = argumentBufferGroup0.s_lights[_e16];
             uint _e19 = i;
-            float _e23 = fetch_shadow(_e19, light.proj * in.world_position, t_shadow, sampler_shadow);
+            float _e23 = fetch_shadow(_e19, light.proj * in.world_position, argumentBufferGroup0.t_shadow, argumentBufferGroup0.sampler_shadow);
             metal::float3 light_dir = metal::normalize(light.pos.xyz - in.world_position.xyz);
             float diffuse = metal::max(0.0, metal::dot(normal_1, light_dir));
             metal::float3 _e37 = color;
@@ -127,7 +134,7 @@ fragment fs_mainOutput fs_main(
         }
     }
     metal::float3 _e42 = color;
-    metal::float4 _e47 = u_entity.color;
+    metal::float4 _e47 = argumentBufferGroup1.u_entity.color;
     return fs_mainOutput { metal::float4(_e42, 1.0) * _e47 };
 }
 
@@ -142,11 +149,8 @@ struct fs_main_without_storageOutput {
 fragment fs_main_without_storageOutput fs_main_without_storage(
   fs_main_without_storageInput varyings_2 [[stage_in]]
 , metal::float4 proj_position_1 [[position]]
-, constant Globals& u_globals [[user(fake0)]]
-, constant Entity& u_entity [[user(fake0)]]
-, constant type_7& u_lights [[user(fake0)]]
-, metal::depth2d_array<float, metal::access::sample> t_shadow [[user(fake0)]]
-, metal::sampler sampler_shadow [[user(fake0)]]
+, device ArgumentBufferGroup0& argumentBufferGroup0 [[buffer(0)]]
+, device ArgumentBufferGroup1& argumentBufferGroup1 [[buffer(1)]]
 ) {
     const VertexOutput in_1 = { proj_position_1, varyings_2.world_normal, varyings_2.world_position };
     metal::float3 color_1 = {};
@@ -162,16 +166,16 @@ fragment fs_main_without_storageOutput fs_main_without_storage(
         }
         loop_init_1 = false;
         uint _e7 = i_1;
-        uint _e11 = u_globals.num_lights.x;
+        uint _e11 = argumentBufferGroup0.u_globals.num_lights.x;
         if (_e7 < metal::min(_e11, c_max_lights)) {
         } else {
             break;
         }
         {
             uint _e16 = i_1;
-            Light light_1 = u_lights.inner[_e16];
+            Light light_1 = argumentBufferGroup0.u_lights.inner[_e16];
             uint _e19 = i_1;
-            float _e23 = fetch_shadow(_e19, light_1.proj * in_1.world_position, t_shadow, sampler_shadow);
+            float _e23 = fetch_shadow(_e19, light_1.proj * in_1.world_position, argumentBufferGroup0.t_shadow, argumentBufferGroup0.sampler_shadow);
             metal::float3 light_dir_1 = metal::normalize(light_1.pos.xyz - in_1.world_position.xyz);
             float diffuse_1 = metal::max(0.0, metal::dot(normal_2, light_dir_1));
             metal::float3 _e37 = color_1;
@@ -179,6 +183,6 @@ fragment fs_main_without_storageOutput fs_main_without_storage(
         }
     }
     metal::float3 _e42 = color_1;
-    metal::float4 _e47 = u_entity.color;
+    metal::float4 _e47 = argumentBufferGroup1.u_entity.color;
     return fs_main_without_storageOutput { metal::float4(_e42, 1.0) * _e47 };
 }
