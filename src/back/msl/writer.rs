@@ -4137,6 +4137,8 @@ impl<W: Write> Writer<W> {
         // begin the first argument buffer
         writeln!(self.out, "struct ArgumentBufferGroup0 {{")?;
 
+        log::trace!("Writing argument buffer for group 0");
+
         for (handle, var) in module.global_variables.iter() {
             let Some(ref binding) = var.binding else {continue };
             if binding.group != current_bind_group {
@@ -4149,10 +4151,12 @@ impl<W: Write> Writer<W> {
                     self.out,
                     "struct ArgumentBufferGroup{current_bind_group} {{"
                 )?;
+                log::trace!("Writing argument buffer for group {current_bind_group}");
             }
 
             // write this member
             let name = &self.names[&NameKey::GlobalVariable(handle)];
+            log::trace!("Writing argument member {name} - {var:?}");
             let (space, access, storage_access, reference) = match var.space.to_msl_name() {
                 Some(space) => {
                     let (storage_access, access) = if var.space.needs_access_qualifier() {
@@ -4165,13 +4169,22 @@ impl<W: Write> Writer<W> {
                 _ => ("", "", StorageAccess::LOAD, ""),
             };
 
+            let gctx = module.to_ctx();
+
+            let resolved_binding = resolve_argument_buffer_binding(
+                &module.entry_points,
+                options,
+                &binding,
+                &gctx.types[var.ty],
+            );
+
             // build the type name
             let ty_name = TypeContext {
                 handle: var.ty,
-                gctx: module.to_ctx(),
+                gctx,
                 names: &self.names,
                 access: storage_access,
-                binding: None,
+                binding: resolved_binding.as_ref(), // todo: a fake binding here would potentially resolve this?
                 first_time: false,
             };
 
@@ -4186,7 +4199,7 @@ impl<W: Write> Writer<W> {
                 access,
                 reference,
                 name,
-                binding.binding
+                binding.binding,
             ) {
                 Err(e) => {
                     log::error!("Error writing argument buffer for binding {binding:?}");
@@ -4201,6 +4214,40 @@ impl<W: Write> Writer<W> {
 
         Ok(())
     }
+}
+
+fn resolve_argument_buffer_binding(
+    entry_points: &[crate::EntryPoint],
+    options: &Options,
+    binding: &crate::ResourceBinding,
+    ty: &crate::Type,
+) -> Option<super::ResolvedBinding> {
+    // This requires a little trickiness.
+    // In the very specific case of unsized arrays, we must inspect each entry-point to determine
+    // the size of the array and find the highest one.
+    // In all other cases there is no need to resolve the binding, so we just return None.
+
+    match ty.inner {
+        crate::TypeInner::BindingArray { .. } => {}
+        _ => return None,
+    }
+
+    let mut largest_size_found = u32::MIN;
+    let mut resolved_binding = None;
+
+    for ep in entry_points {
+        let ep_binding = options.resolve_resource_binding(ep, binding).ok();
+        let Some(super::ResolvedBinding::Resource(super::BindTarget {
+                    binding_array_size: Some(override_size),
+                    ..
+                })) = ep_binding else { continue };
+        if override_size > largest_size_found {
+            largest_size_found = override_size;
+            resolved_binding = ep_binding;
+        }
+    }
+
+    resolved_binding
 }
 
 /// Check this entry point to determine if any global bindings are missing, or their types are

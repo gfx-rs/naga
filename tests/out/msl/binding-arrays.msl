@@ -16,6 +16,17 @@ struct UniformIndex {
 struct FragmentIn {
     uint index;
 };
+struct ArgumentBufferGroup0 {
+    metal::array<metal::texture2d<float, metal::access::sample>, 10> texture_array_unbounded [[id(0)]];
+    metal::array<metal::texture2d<float, metal::access::sample>, 5> texture_array_bounded [[id(1)]];
+    metal::array<metal::texture2d_array<float, metal::access::sample>, 5> texture_array_2darray [[id(2)]];
+    metal::array<metal::texture2d_ms<float, metal::access::read>, 5> texture_array_multisampled [[id(3)]];
+    metal::array<metal::depth2d<float, metal::access::sample>, 5> texture_array_depth [[id(4)]];
+    metal::array<metal::texture2d<float, metal::access::read>, 5> texture_array_storage [[id(5)]];
+    metal::array<metal::sampler, 5> samp [[id(6)]];
+    metal::array<metal::sampler, 5> samp_comp [[id(7)]];
+    constant UniformIndex& uni [[id(8)]];
+};
 
 struct main_Input {
     uint index [[user(loc0), flat]];
