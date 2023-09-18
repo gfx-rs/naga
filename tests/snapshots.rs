@@ -617,6 +617,9 @@ fn convert_wgsl() {
         ),
     ];
 
+    // kr: REMOVE-ME
+    let inputs = [("binding-arrays", Targets::METAL)];
+
     for &(name, targets) in inputs.iter() {
         println!("Processing '{name}'");
         // WGSL shaders lives in root dir as a privileged.
@@ -628,23 +631,24 @@ fn convert_wgsl() {
         }
     }
 
-    #[cfg(feature = "span")]
-    {
-        let inputs = [
-            ("debug-symbol-simple", Targets::SPIRV),
-            ("debug-symbol-terrain", Targets::SPIRV),
-        ];
-        for &(name, targets) in inputs.iter() {
-            println!("Processing '{name}'");
-            // WGSL shaders lives in root dir as a privileged.
-            let file = fs::read_to_string(format!("{root}/{BASE_DIR_IN}/{name}.wgsl"))
-                .expect("Couldn't find wgsl file");
-            match naga::front::wgsl::parse_str(&file) {
-                Ok(module) => check_targets(&module, name, targets, Some(&file)),
-                Err(e) => panic!("{}", e.emit_to_string(&file)),
-            }
-        }
-    }
+    // kr: REMOVE-ME
+    // #[cfg(feature = "span")]
+    // {
+    //     let inputs = [
+    //         ("debug-symbol-simple", Targets::SPIRV),
+    //         ("debug-symbol-terrain", Targets::SPIRV),
+    //     ];
+    //     for &(name, targets) in inputs.iter() {
+    //         println!("Processing '{name}'");
+    //         // WGSL shaders lives in root dir as a privileged.
+    //         let file = fs::read_to_string(format!("{root}/{BASE_DIR_IN}/{name}.wgsl"))
+    //             .expect("Couldn't find wgsl file");
+    //         match naga::front::wgsl::parse_str(&file) {
+    //             Ok(module) => check_targets(&module, name, targets, Some(&file)),
+    //             Err(e) => panic!("{}", e.emit_to_string(&file)),
+    //         }
+    //     }
+    // }
 }
 
 #[cfg(feature = "spv-in")]

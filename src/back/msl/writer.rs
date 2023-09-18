@@ -82,7 +82,7 @@ struct TypeContext<'a> {
     handle: Handle<crate::Type>,
     gctx: proc::GlobalCtx<'a>,
     names: &'a FastHashMap<NameKey, String>,
-    access: crate::StorageAccess,
+    access: StorageAccess,
     binding: Option<&'a super::ResolvedBinding>,
     first_time: bool,
 }
@@ -4162,9 +4162,10 @@ impl<W: Write> Writer<W> {
                     };
                     (space, access, storage_access, "&")
                 }
-                _ => ("", "", StorageAccess::empty(), ""),
+                _ => ("", "", StorageAccess::LOAD, ""),
             };
 
+            // build the type name
             let ty_name = TypeContext {
                 handle: var.ty,
                 gctx: module.to_ctx(),
@@ -4174,7 +4175,7 @@ impl<W: Write> Writer<W> {
                 first_time: false,
             };
 
-            writeln!(
+            match writeln!(
                 self.out,
                 "{}{}{}{}{}{}{} {} [[id({})]];",
                 back::INDENT,
@@ -4186,7 +4187,13 @@ impl<W: Write> Writer<W> {
                 reference,
                 name,
                 binding.binding
-            )?;
+            ) {
+                Err(e) => {
+                    log::error!("Error writing argument buffer for binding {binding:?}");
+                    return Err(e.into());
+                }
+                _ => {}
+            }
         }
 
         // finish the struct
