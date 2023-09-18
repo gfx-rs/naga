@@ -146,15 +146,17 @@ impl ConstantEvaluator<'_> {
             Expression::Literal(_) | Expression::ZeroValue(_) | Expression::Constant(_) => {
                 Ok(self.register_evaluated_expr(expr.clone(), span))
             }
-            Expression::Compose { ref components, .. } => {
-                for component in components {
-                    self.check_and_get(*component)?;
-                }
-                Ok(self.register_evaluated_expr(expr.clone(), span))
+            Expression::Compose { ty, ref components } => {
+                let components = components
+                    .iter()
+                    .map(|component| self.check_and_get(*component))
+                    .collect::<Result<Vec<_>, _>>()?;
+
+                Ok(self.register_evaluated_expr(Expression::Compose { ty, components }, span))
             }
-            Expression::Splat { value, .. } => {
-                self.check_and_get(value)?;
-                Ok(self.register_evaluated_expr(expr.clone(), span))
+            Expression::Splat { value, size } => {
+                let value = self.check_and_get(value)?;
+                Ok(self.register_evaluated_expr(Expression::Splat { value, size }, span))
             }
             Expression::AccessIndex { base, index } => {
                 let base = self.check_and_get(base)?;

@@ -10,7 +10,7 @@ var Texture: texture_2d<f32>;
 var Sampler: sampler;
 
 fn returns() -> S {
-    return S(Value);
+    return S(1);
 }
 
 fn statement() {
