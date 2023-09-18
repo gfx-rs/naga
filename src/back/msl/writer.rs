@@ -1417,8 +1417,16 @@ impl<W: Write> Writer<W> {
                 write!(self.out, "{name}")?;
             }
             crate::Expression::GlobalVariable(handle) => {
+                // If this variable belongs to binding, we must prefix it with the
+                // appropriate argument buffer name.
+                let variable = &context.module.global_variables[handle];
                 let name = &self.names[&NameKey::GlobalVariable(handle)];
-                write!(self.out, "{name}")?;
+                if let Some(ref binding) = variable.binding {
+                    let id = binding.group;
+                    write!(self.out, "argumentBufferGroup{id}.{name}")?;
+                } else {
+                    write!(self.out, "{name}")?;
+                }
             }
             crate::Expression::LocalVariable(handle) => {
                 let name_key = match context.origin {
@@ -3111,8 +3119,14 @@ impl<W: Write> Writer<W> {
 
         self.write_type_defs(module)?;
         self.write_global_constants(module)?;
-        self.write_argument_buffers(module, options)?;
-        self.write_functions(module, info, options, pipeline_options)
+        let argument_buffers_count = self.write_argument_buffers(module, options)?;
+        self.write_functions(
+            module,
+            info,
+            options,
+            pipeline_options,
+            argument_buffers_count,
+        )
     }
 
     fn write_ray_queries(&mut self) -> Result<(), Error> {
@@ -3450,6 +3464,7 @@ impl<W: Write> Writer<W> {
         mod_info: &valid::ModuleInfo,
         options: &Options,
         pipeline_options: &PipelineOptions,
+        argument_buffers_count: u32,
     ) -> Result<TranslationInfo, Error> {
         let mut pass_through_globals = Vec::new();
         for (fun_handle, fun) in module.functions.iter() {
@@ -3856,6 +3871,10 @@ impl<W: Write> Writer<W> {
                 )?;
             }
 
+            // Keep a record of which argument buffers will be used by this entry point.
+            let mut argument_buffers_used: Vec<u32> =
+                Vec::with_capacity(argument_buffers_count as _);
+
             // Those global variables used by this entry point and its callees
             // get passed as arguments. `Private` globals are an exception, they
             // don't outlive this invocation, so we declare them below as locals
@@ -3872,9 +3891,18 @@ impl<W: Write> Writer<W> {
                     crate::AddressSpace::Storage { .. } if options.lang_version < (2, 0) => {
                         return Err(Error::UnsupportedAddressSpace(var.space))
                     }
-                    _ => options
-                        .resolve_resource_binding(ep, var.binding.as_ref().unwrap())
-                        .ok(),
+                    _ => {
+                        // This global variable refers to a binding, which will require access through
+                        // an argument buffer. If we haven't yet seen this bind group, add it to our list.
+                        if let Some(ref binding) = var.binding {
+                            let group = binding.group;
+                            if !argument_buffers_used.contains(&group) {
+                                argument_buffers_used.push(group);
+                            }
+                        }
+
+                        continue;
+                    }
                 };
                 if let Some(ref resolved) = resolved {
                     // Inline samplers are be defined in the EP body
@@ -3909,8 +3937,21 @@ impl<W: Write> Writer<W> {
                 writeln!(self.out)?;
             }
 
-            {
-                log::trace!("Write argument buffer parameters here");
+            // Sort the argument buffer list
+            argument_buffers_used.sort();
+
+            for id in argument_buffers_used.drain(..) {
+                let separator = if is_first_argument {
+                    is_first_argument = false;
+                    ' '
+                } else {
+                    ','
+                };
+                write!(self.out, "{separator} ")?;
+                writeln!(
+                    self.out,
+                    "device ArgumentBufferGroup{id}& argumentBufferGroup{id} [[buffer({id})]]"
+                )?;
             }
 
             // If this entry uses any variable-length arrays, their sizes are
@@ -4125,11 +4166,36 @@ impl<W: Write> Writer<W> {
         Ok(())
     }
 
+    /// Write an argument buffer struct for each bind group.
+    ///
+    /// Iterates through the bind groups and their members in ascending order, generating
+    /// a struct whose members contain each binding for that group with an ID matching that
+    /// binding.
+    ///
+    /// For example, if we had some bind group:
+    ///
+    /// ```wgsl
+    /// @group(0) @binding(0) var u_texture : texture_2d<f32>;
+    /// @group(0) @binding(1) var u_sampler : sampler;
+    /// @group(1) @binding(0) var v_texture : sampler;
+    /// ```
+    ///
+    /// This would generate:
+    ///
+    /// ```metal
+    /// struct ArgumentBufferGroup0 {
+    ///     metal::texture2d<float, metal::access::sample> u_texture [[id(0)]];
+    ///     metal::sampler u_sampler [[id(1)]];
+    /// };
+    /// struct ArgumentBufferGroup1 {
+    ///     metal::texture2d<float, metal::access::sample> v_texture [[id(0)]];
+    /// };
+    /// ```
     fn write_argument_buffers(
         &mut self,
         module: &crate::Module,
         options: &Options,
-    ) -> BackendResult {
+    ) -> Result<u32, Error> {
         let mut current_bind_group = 0;
 
         // First we have to collect each of the bindings
@@ -4141,7 +4207,7 @@ impl<W: Write> Writer<W> {
 
         // If there are no global bindings, do nothing
         if bindings.is_empty() {
-            return Ok(());
+            return Ok(0);
         };
 
         // Then sort them by group, then binding
@@ -4226,7 +4292,9 @@ impl<W: Write> Writer<W> {
         // finish the struct
         writeln!(self.out, "}};")?;
 
-        Ok(())
+        // We return the count of argument buffers created, which will be the
+        // current bind group number, plus one.
+        Ok(current_bind_group + 1)
     }
 }
 
