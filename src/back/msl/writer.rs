@@ -4132,15 +4132,28 @@ impl<W: Write> Writer<W> {
     ) -> BackendResult {
         let mut current_bind_group = 0;
 
-        // TODO: check for case where there are no global bindings
+        // First we have to collect each of the bindings
+        let mut bindings = module
+            .global_variables
+            .iter()
+            .filter(|(_, var)| var.binding.is_some())
+            .collect::<Vec<_>>();
+
+        // If there are no global bindings, do nothing
+        if bindings.is_empty() {
+            return Ok(());
+        };
+
+        // Then sort them by group, then binding
+        bindings.sort_by(|(_, var_a), (_, var_b)| var_a.binding.cmp(&var_b.binding));
 
         // begin the first argument buffer
         writeln!(self.out, "struct ArgumentBufferGroup0 {{")?;
 
         log::trace!("Writing argument buffer for group 0");
 
-        for (handle, var) in module.global_variables.iter() {
-            let Some(ref binding) = var.binding else {continue };
+        for (handle, var) in bindings {
+            let binding = var.binding.as_ref().unwrap();
             if binding.group != current_bind_group {
                 // finish the struct
                 writeln!(self.out, "}};")?;
@@ -4171,6 +4184,7 @@ impl<W: Write> Writer<W> {
 
             let gctx = module.to_ctx();
 
+            // resolve the binding, if required
             let resolved_binding = resolve_argument_buffer_binding(
                 &module.entry_points,
                 options,
@@ -4216,17 +4230,18 @@ impl<W: Write> Writer<W> {
     }
 }
 
+/// Resolves a binding used inside of an argument buffer.
+///
+/// When using binding arrays, we must inspect each [crate::EntryPoint] to determine
+/// the size of the largest array used, as this is specified per entry point.
+///
+/// In all other cases there is no need to resolve the binding, so we just return [None].
 fn resolve_argument_buffer_binding(
     entry_points: &[crate::EntryPoint],
     options: &Options,
     binding: &crate::ResourceBinding,
     ty: &crate::Type,
 ) -> Option<super::ResolvedBinding> {
-    // This requires a little trickiness.
-    // In the very specific case of unsized arrays, we must inspect each entry-point to determine
-    // the size of the array and find the highest one.
-    // In all other cases there is no need to resolve the binding, so we just return None.
-
     match ty.inner {
         crate::TypeInner::BindingArray { .. } => {}
         _ => return None,
