@@ -124,9 +124,13 @@ impl ConstantEvaluator<'_> {
             | Expression::Compose { .. }
             | Expression::Splat { .. } => Ok(expr),
             Expression::Constant(c) => {
+                // Are we working in a function's expression arena, or the
+                // module's constant expression arena?
                 if let Some(const_expressions) = self.const_expressions {
+                    // Deep-copy the constant's value into our arena.
                     self.copy_from(self.constants[c].init, const_expressions)
                 } else {
+                    // "See through" the constant and use its initializer.
                     Ok(self.constants[c].init)
                 }
             }
@@ -790,6 +794,13 @@ impl ConstantEvaluator<'_> {
         Ok(self.register_constant(expr, span))
     }
 
+    /// Deep copy `expr` from `expressions` into `self.expressions`.
+    ///
+    /// Return the root of the new copy.
+    ///
+    /// This is used when we're evaluating expressions in a function's
+    /// expression arena that refer to a constant: we need to copy the
+    /// constant's value into the function's arena so we can operate on it.
     fn copy_from(
         &mut self,
         handle: Handle<Expression>,
