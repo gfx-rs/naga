@@ -867,22 +867,29 @@ impl ConstantEvaluator<'_> {
             (components.len(), false)
         };
 
+        fn flattener<'c>(
+            component: &'c Handle<Expression>,
+            is_vector: bool,
+            expressions: &'c Arena<Expression>,
+        ) -> &'c [Handle<Expression>] {
+            if is_vector {
+                if let Expression::Compose {
+                    ty: _,
+                    components: ref subcomponents,
+                } = expressions[*component]
+                {
+                    return subcomponents;
+                }
+            }
+            std::slice::from_ref(component)
+        }
+
+        // Expressions like `vec4(vec3(vec2(6, 7), 8), 9)` require us to flatten
+        // two levels.
         components
             .iter()
-            .flat_map(move |component| {
-                if let (
-                    true,
-                    &Expression::Compose {
-                        ty: _,
-                        components: ref subcomponents,
-                    },
-                ) = (is_vector, &self.expressions[*component])
-                {
-                    subcomponents
-                } else {
-                    std::slice::from_ref(component)
-                }
-            })
+            .flat_map(move |component| flattener(component, is_vector, self.expressions))
+            .flat_map(move |component| flattener(component, is_vector, self.expressions))
             .take(size)
             .cloned()
     }
