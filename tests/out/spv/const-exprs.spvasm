@@ -51,7 +51,7 @@ OpMemberDecorate %17 0 Offset 0
 %35 = OpConstant  %4  7
 %36 = OpConstantComposite  %5  %34 %35
 %37 = OpConstant  %4  8
-%38 = OpConstantComposite  %6  %36 %37
+%38 = OpConstantComposite  %6  %34 %35 %37
 %39 = OpConstant  %4  9
 %20 = OpFunction  %2  None %21
 %19 = OpLabel
