@@ -345,11 +345,7 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
                     }),
                 };
 
-                let res = eval
-                    .try_eval_and_append(&expr, span)
-                    .map_err(|e| Error::ConstantEvaluatorError(e, span));
-
-                match res {
+                match eval.try_eval_and_append(&expr, span) {
                     Ok(expr) => Ok(expr),
                     Err(_) => Ok(rctx.naga_expressions.append(expr, span)),
                 }

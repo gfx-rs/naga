@@ -1,7 +1,7 @@
 use crate::{
     arena::{Arena, Handle, UniqueArena},
-    ArraySize, BinaryOperator, Constant, Expression, FastHashMap, Literal, ScalarKind, Span, Type,
-    TypeInner, UnaryOperator,
+    ArraySize, BinaryOperator, Constant, Expression, Literal, ScalarKind, Span, Type, TypeInner,
+    UnaryOperator,
 };
 
 #[derive(Debug)]
@@ -21,13 +21,6 @@ pub struct ConstantEvaluator<'a> {
 pub struct ConstantEvaluatorEmitter<'a> {
     pub emitter: &'a mut super::Emitter,
     pub block: &'a mut crate::Block,
-}
-
-#[derive(Debug)]
-pub struct EvalData {
-    pub types: UniqueArena<Type>,
-    pub evald_expressions: Arena<Expression>,
-    pub mapping: FastHashMap<Handle<Expression>, Handle<Expression>>,
 }
 
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]
@@ -149,17 +142,17 @@ impl ConstantEvaluator<'_> {
         log::trace!("try_eval_and_append: {:?}", expr);
         match *expr {
             Expression::Literal(_) | Expression::ZeroValue(_) | Expression::Constant(_) => {
-                Ok(self.register_constant(expr.clone(), span))
+                Ok(self.register_evaluated_expr(expr.clone(), span))
             }
             Expression::Compose { ref components, .. } => {
                 for component in components {
                     self.check_and_get(*component)?;
                 }
-                Ok(self.register_constant(expr.clone(), span))
+                Ok(self.register_evaluated_expr(expr.clone(), span))
             }
             Expression::Splat { value, .. } => {
                 self.check_and_get(value)?;
-                Ok(self.register_constant(expr.clone(), span))
+                Ok(self.register_evaluated_expr(expr.clone(), span))
             }
             Expression::AccessIndex { base, index } => {
                 let base = self.check_and_get(base)?;
@@ -266,7 +259,7 @@ impl ConstantEvaluator<'_> {
                     ty,
                     components: vec![value; size as usize],
                 };
-                Ok(self.register_constant(expr, span))
+                Ok(self.register_evaluated_expr(expr, span))
             }
             Expression::ZeroValue(ty) => {
                 let inner = match self.types[ty].inner {
@@ -275,7 +268,7 @@ impl ConstantEvaluator<'_> {
                 };
                 let res_ty = self.types.insert(Type { name: None, inner }, span);
                 let expr = Expression::ZeroValue(res_ty);
-                Ok(self.register_constant(expr, span))
+                Ok(self.register_evaluated_expr(expr, span))
             }
             _ => Err(ConstantEvaluatorError::SplatScalarOnly),
         }
@@ -307,11 +300,11 @@ impl ConstantEvaluator<'_> {
             Expression::ZeroValue(ty) => {
                 let dst_ty = get_dst_ty(ty)?;
                 let expr = Expression::ZeroValue(dst_ty);
-                Ok(self.register_constant(expr, span))
+                Ok(self.register_evaluated_expr(expr, span))
             }
             Expression::Splat { value, .. } => {
                 let expr = Expression::Splat { size, value };
-                Ok(self.register_constant(expr, span))
+                Ok(self.register_evaluated_expr(expr, span))
             }
             Expression::Compose {
                 ty,
@@ -328,7 +321,7 @@ impl ConstantEvaluator<'_> {
                     ty: dst_ty,
                     components,
                 };
-                Ok(self.register_constant(expr, span))
+                Ok(self.register_evaluated_expr(expr, span))
             }
             _ => Err(ConstantEvaluatorError::SwizzleVectorOnly),
         }
@@ -363,7 +356,7 @@ impl ConstantEvaluator<'_> {
                 };
 
                 let expr = Expression::Literal(literal);
-                Ok(self.register_constant(expr, span))
+                Ok(self.register_evaluated_expr(expr, span))
             }
             crate::MathFunction::Clamp => {
                 let literal = match (const0, const1.unwrap(), const2.unwrap()) {
@@ -391,7 +384,7 @@ impl ConstantEvaluator<'_> {
                 };
 
                 let expr = Expression::Literal(literal);
-                Ok(self.register_constant(expr, span))
+                Ok(self.register_evaluated_expr(expr, span))
             }
             _ => Err(ConstantEvaluatorError::NotImplemented(format!("{fun:?}"))),
         }
@@ -408,7 +401,7 @@ impl ConstantEvaluator<'_> {
                     TypeInner::Array { size, .. } => match size {
                         crate::ArraySize::Constant(len) => {
                             let expr = Expression::Literal(Literal::U32(len.get()));
-                            Ok(self.register_constant(expr, span))
+                            Ok(self.register_evaluated_expr(expr, span))
                         }
                         crate::ArraySize::Dynamic => {
                             Err(ConstantEvaluatorError::ArrayLengthDynamic)
@@ -446,7 +439,7 @@ impl ConstantEvaluator<'_> {
                             self.types.insert(Type { name: None, inner }, span)
                         }
                     };
-                    Ok(self.register_constant(Expression::ZeroValue(ty), span))
+                    Ok(self.register_evaluated_expr(Expression::ZeroValue(ty), span))
                 }
             }
             Expression::Splat { size, value } => {
@@ -502,7 +495,7 @@ impl ConstantEvaluator<'_> {
                     Literal::zero(kind, width)
                         .ok_or(ConstantEvaluatorError::TypeNotConstructible)?,
                 );
-                Ok(self.register_constant(expr, span))
+                Ok(self.register_evaluated_expr(expr, span))
             }
             TypeInner::Vector { size, kind, width } => {
                 let scalar_ty = self.types.insert(
@@ -517,7 +510,7 @@ impl ConstantEvaluator<'_> {
                     ty,
                     components: vec![el; size as usize],
                 };
-                Ok(self.register_constant(expr, span))
+                Ok(self.register_evaluated_expr(expr, span))
             }
             TypeInner::Matrix {
                 columns,
@@ -540,7 +533,7 @@ impl ConstantEvaluator<'_> {
                     ty,
                     components: vec![el; columns as usize],
                 };
-                Ok(self.register_constant(expr, span))
+                Ok(self.register_evaluated_expr(expr, span))
             }
             TypeInner::Array {
                 base,
@@ -552,7 +545,7 @@ impl ConstantEvaluator<'_> {
                     ty,
                     components: vec![el; size.get() as usize],
                 };
-                Ok(self.register_constant(expr, span))
+                Ok(self.register_evaluated_expr(expr, span))
             }
             TypeInner::Struct { ref members, .. } => {
                 let types: Vec<_> = members.iter().map(|m| m.ty).collect();
@@ -561,7 +554,7 @@ impl ConstantEvaluator<'_> {
                     components.push(self.eval_zero_value_impl(ty, span)?);
                 }
                 let expr = Expression::Compose { ty, components };
-                Ok(self.register_constant(expr, span))
+                Ok(self.register_evaluated_expr(expr, span))
             }
             _ => Err(ConstantEvaluatorError::TypeNotConstructible),
         }
@@ -647,7 +640,7 @@ impl ConstantEvaluator<'_> {
             _ => return Err(ConstantEvaluatorError::InvalidCastArg),
         };
 
-        Ok(self.register_constant(expr, span))
+        Ok(self.register_evaluated_expr(expr, span))
     }
 
     fn unary_op(
@@ -691,7 +684,7 @@ impl ConstantEvaluator<'_> {
             _ => return Err(ConstantEvaluatorError::InvalidUnaryOpArg),
         };
 
-        Ok(self.register_constant(expr, span))
+        Ok(self.register_evaluated_expr(expr, span))
     }
 
     fn binary_op(
@@ -791,7 +784,7 @@ impl ConstantEvaluator<'_> {
             _ => return Err(ConstantEvaluatorError::InvalidBinaryOpArgs),
         };
 
-        Ok(self.register_constant(expr, span))
+        Ok(self.register_evaluated_expr(expr, span))
     }
 
     /// Deep copy `expr` from `expressions` into `self.expressions`.
@@ -810,17 +803,17 @@ impl ConstantEvaluator<'_> {
         match expressions[expr] {
             ref expr @ (Expression::Literal(_)
             | Expression::Constant(_)
-            | Expression::ZeroValue(_)) => Ok(self.register_constant(expr.clone(), span)),
+            | Expression::ZeroValue(_)) => Ok(self.register_evaluated_expr(expr.clone(), span)),
             Expression::Compose { ty, ref components } => {
                 let mut components = components.clone();
                 for component in &mut components {
                     *component = self.copy_from(*component, expressions)?;
                 }
-                Ok(self.register_constant(Expression::Compose { ty, components }, span))
+                Ok(self.register_evaluated_expr(Expression::Compose { ty, components }, span))
             }
             Expression::Splat { size, value } => {
                 let value = self.copy_from(value, expressions)?;
-                Ok(self.register_constant(Expression::Splat { size, value }, span))
+                Ok(self.register_evaluated_expr(Expression::Splat { size, value }, span))
             }
             _ => {
                 log::debug!("copy_from: SubexpressionsAreNotConstant");
@@ -829,7 +822,7 @@ impl ConstantEvaluator<'_> {
         }
     }
 
-    fn register_constant(&mut self, expr: Expression, span: Span) -> Handle<Expression> {
+    fn register_evaluated_expr(&mut self, expr: Expression, span: Span) -> Handle<Expression> {
         if let Some(ref mut emitter) = self.emitter {
             let is_running = emitter.emitter.is_running();
             let needs_pre_emit = expr.needs_pre_emit();

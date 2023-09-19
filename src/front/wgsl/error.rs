@@ -673,7 +673,7 @@ impl<'a> Error<'a> {
                 notes: vec![],
             },
             Error::ExpectedConstExprConcreteIntegerScalar(span) => ParseError {
-                message: "must be a const-expression that resolves to a concrete integer scalar (u32, i32)".to_string(),
+                message: "must be a const-expression that resolves to a concrete integer scalar (u32 or i32)".to_string(),
                 labels: vec![(span, "must resolve to u32 or i32".into())],
                 notes: vec![],
             },

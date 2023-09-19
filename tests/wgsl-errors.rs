@@ -923,7 +923,7 @@ fn invalid_arrays() {
 
     check(
         "alias Bad = array<f32, true>;",
-        r###"error: must be a const-expression that resolves to a concrete integer scalar (u32, i32)
+        r###"error: must be a const-expression that resolves to a concrete integer scalar (u32 or i32)
   ┌─ wgsl:1:24
   │
 1 │ alias Bad = array<f32, true>;
@@ -937,7 +937,7 @@ fn invalid_arrays() {
             const length: f32 = 2.718;
             alias Bad = array<f32, length>;
         "#,
-        r###"error: must be a const-expression that resolves to a concrete integer scalar (u32, i32)
+        r###"error: must be a const-expression that resolves to a concrete integer scalar (u32 or i32)
   ┌─ wgsl:3:36
   │
 3 │             alias Bad = array<f32, length>;
