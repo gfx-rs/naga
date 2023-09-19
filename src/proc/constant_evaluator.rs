@@ -311,11 +311,11 @@ impl ConstantEvaluator<'_> {
                 let dst_ty = get_dst_ty(ty)?;
 
                 let mut flattened = [src_constant; 4]; // dummy value
-                let len = self
-                    .flatten_compose(ty, components)
-                    .zip(flattened.iter_mut())
-                    .map(|(component, elt)| *elt = component)
-                    .count();
+                let len =
+                    crate::proc::flatten_compose(ty, components, self.expressions, self.types)
+                        .zip(flattened.iter_mut())
+                        .map(|(component, elt)| *elt = component)
+                        .count();
                 let flattened = &flattened[..len];
 
                 let swizzled_components = pattern[..size as usize]
@@ -467,7 +467,7 @@ impl ConstantEvaluator<'_> {
                     .components()
                     .ok_or(ConstantEvaluatorError::InvalidAccessBase)?;
 
-                self.flatten_compose(ty, components)
+                crate::proc::flatten_compose(ty, components, self.expressions, self.types)
                     .nth(index)
                     .ok_or(ConstantEvaluatorError::InvalidAccessIndex)
             }
@@ -838,60 +838,6 @@ impl ConstantEvaluator<'_> {
         }
 
         self.expressions.append(expr, span)
-    }
-
-    /// Return an iterator over the individual components assembled by a
-    /// `Compose` expression.
-    ///
-    /// Given `ty` and `components` from an `Expression::Compose`, return an
-    /// iterator over the components of the resulting value.
-    ///
-    /// Normally, this would just be an iterator over `components`. However,
-    /// `Compose` expressions can concatenate vectors, in which case the i'th
-    /// value being composed is not generally the i'th element of `components`.
-    /// This function consults `ty` to decide if this concatenation is occuring,
-    /// and returns an iterator that produces the components of the result of
-    /// the `Compose` expression in either case.
-    fn flatten_compose<'c>(
-        &'c self,
-        ty: Handle<Type>,
-        components: &'c [Handle<Expression>],
-    ) -> impl Iterator<Item = Handle<Expression>> + 'c {
-        // Returning `impl Iterator` is a bit tricky. We may or may not want to
-        // flatten the components, but we have to settle on a single concrete
-        // type to return. The below is a single iterator chain that handles
-        // both the flattening and non-flattening cases.
-        let (size, is_vector) = if let TypeInner::Vector { size, .. } = self.types[ty].inner {
-            (size as usize, true)
-        } else {
-            (components.len(), false)
-        };
-
-        fn flattener<'c>(
-            component: &'c Handle<Expression>,
-            is_vector: bool,
-            expressions: &'c Arena<Expression>,
-        ) -> &'c [Handle<Expression>] {
-            if is_vector {
-                if let Expression::Compose {
-                    ty: _,
-                    components: ref subcomponents,
-                } = expressions[*component]
-                {
-                    return subcomponents;
-                }
-            }
-            std::slice::from_ref(component)
-        }
-
-        // Expressions like `vec4(vec3(vec2(6, 7), 8), 9)` require us to flatten
-        // two levels.
-        components
-            .iter()
-            .flat_map(move |component| flattener(component, is_vector, self.expressions))
-            .flat_map(move |component| flattener(component, is_vector, self.expressions))
-            .take(size)
-            .cloned()
     }
 }
 
