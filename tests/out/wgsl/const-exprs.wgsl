@@ -11,6 +11,25 @@ fn index_of_compose() {
     return;
 }
 
+fn non_constant_initializers() {
+    var w: i32 = 30;
+    var x: i32;
+    var y: i32;
+    var z: i32 = 70;
+
+    let _e2 = w;
+    x = _e2;
+    let _e4 = x;
+    y = _e4;
+    let _e9 = w;
+    let _e10 = x;
+    let _e11 = y;
+    let _e12 = z;
+    let _e14 = out;
+    out = (_e14 + vec4<i32>(_e9, _e10, _e11, _e12));
+    return;
+}
+
 fn swizzle_of_compose() {
     let a_1 = vec2<i32>(1, 2);
     let b_1 = vec2<i32>(3, 4);
@@ -29,5 +48,6 @@ fn main() {
     swizzle_of_compose();
     index_of_compose();
     compose_three_deep();
+    non_constant_initializers();
     return;
 }
