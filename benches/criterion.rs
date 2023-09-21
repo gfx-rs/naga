@@ -148,8 +148,11 @@ fn backends(c: &mut Criterion) {
     #[cfg(feature = "validate")]
     let inputs = {
         let mut validator = naga::valid::Validator::new(
-            naga::valid::ValidationFlags::empty(),
-            naga::valid::Capabilities::default(),
+            naga::valid::ValidationFlags::BLOCKS,
+            // atomicCompareExchangeWeak isn't implemented yet
+            // (#1413), so filter out anything that uses that.
+            naga::valid::Capabilities::default()
+                - naga::valid::Capabilities::ATOMIC_COMPARE_EXCHANGE_WEAK,
         );
         let input_modules = gather_modules();
         input_modules
