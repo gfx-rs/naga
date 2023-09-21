@@ -27,6 +27,7 @@ fn gather_inputs(folder: &str, extension: &str) -> Vec<Box<[u8]>> {
     list
 }
 
+#[cfg(feature = "glsl-in")]
 fn parse_glsl(stage: naga::ShaderStage, inputs: &[Box<[u8]>]) {
     let mut parser = naga::front::glsl::Frontend::default();
     let options = naga::front::glsl::Options {
