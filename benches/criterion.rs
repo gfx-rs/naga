@@ -215,7 +215,10 @@ fn backends(c: &mut Criterion) {
     group.bench_function("msl", |b| {
         b.iter(|| {
             let mut string = String::new();
-            let options = naga::back::msl::Options::default();
+            let options = naga::back::msl::Options {
+                lang_version: (2, 1),
+                .. Default::default()
+            };
             for &(ref module, ref info) in inputs.iter() {
                 let pipeline_options = naga::back::msl::PipelineOptions::default();
                 let mut writer = naga::back::msl::Writer::new(&mut string);
