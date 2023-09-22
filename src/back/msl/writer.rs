@@ -1,10 +1,12 @@
-use super::{sampler as sm, Error, LocationMode, Options, PipelineOptions, TranslationInfo};
+use super::{
+    sampler as sm, EntryPointError, Error, LocationMode, Options, PipelineOptions, TranslationInfo,
+};
 use crate::{
     arena::Handle,
     back::{self},
     proc::index,
     proc::{self, NameKey, TypeResolution},
-    valid, ArraySize, FastHashMap, FastHashSet, ResourceBinding, StorageAccess,
+    valid, ArraySize, EntryPoint, FastHashMap, FastHashSet, Module, ResourceBinding, StorageAccess,
 };
 use bit_set::BitSet;
 use std::{
@@ -234,7 +236,7 @@ impl<'a> Display for TypeContext<'a> {
 }
 
 struct TypedGlobalVariable<'a> {
-    module: &'a crate::Module,
+    module: &'a Module,
     names: &'a FastHashMap<NameKey, String>,
     handle: Handle<crate::GlobalVariable>,
     usage: valid::GlobalUse,
@@ -342,7 +344,7 @@ fn should_pack_struct_member(
     members: &[crate::StructMember],
     span: u32,
     index: usize,
-    module: &crate::Module,
+    module: &Module,
 ) -> Option<crate::ScalarKind> {
     let member = &members[index];
     //Note: this is imperfect - the same structure can be used for host-shared
@@ -500,7 +502,7 @@ struct ExpressionContext<'a> {
     function: &'a crate::Function,
     origin: FunctionOrigin,
     info: &'a valid::FunctionInfo,
-    module: &'a crate::Module,
+    module: &'a Module,
     pipeline_options: &'a PipelineOptions,
     policies: index::BoundsCheckPolicies,
 
@@ -1212,7 +1214,7 @@ impl<W: Write> Writer<W> {
     fn put_const_expression(
         &mut self,
         expr_handle: Handle<crate::Expression>,
-        module: &crate::Module,
+        module: &Module,
     ) -> BackendResult {
         self.put_possibly_const_expression(
             expr_handle,
@@ -1226,7 +1228,7 @@ impl<W: Write> Writer<W> {
         &mut self,
         expr_handle: Handle<crate::Expression>,
         expressions: &crate::Arena<crate::Expression>,
-        module: &crate::Module,
+        module: &Module,
         put_expression: E,
     ) -> BackendResult
     where
@@ -3066,8 +3068,8 @@ impl<W: Write> Writer<W> {
 
     pub fn write(
         &mut self,
-        module: &crate::Module,
-        info: &valid::ModuleInfo,
+        module: &Module,
+        module_info: &valid::ModuleInfo,
         options: &Options,
         pipeline_options: &PipelineOptions,
     ) -> Result<TranslationInfo, Error> {
@@ -3130,14 +3132,7 @@ impl<W: Write> Writer<W> {
 
         self.write_type_defs(module)?;
         self.write_global_constants(module)?;
-        let argument_buffers_count = self.write_argument_buffers(module, options)?;
-        self.write_functions(
-            module,
-            info,
-            options,
-            pipeline_options,
-            argument_buffers_count,
-        )
+        self.write_functions(module, module_info, options, pipeline_options)
     }
 
     fn write_ray_queries(&mut self) -> Result<(), Error> {
@@ -3189,7 +3184,7 @@ impl<W: Write> Writer<W> {
         Ok(())
     }
 
-    fn write_type_defs(&mut self, module: &crate::Module) -> BackendResult {
+    fn write_type_defs(&mut self, module: &Module) -> BackendResult {
         for (handle, ty) in module.types.iter() {
             if !ty.needs_alias() {
                 continue;
@@ -3369,7 +3364,7 @@ impl<W: Write> Writer<W> {
     }
 
     /// Writes all named constants
-    fn write_global_constants(&mut self, module: &crate::Module) -> BackendResult {
+    fn write_global_constants(&mut self, module: &Module) -> BackendResult {
         let constants = module.constants.iter().filter(|&(_, c)| c.name.is_some());
 
         for (handle, constant) in constants {
@@ -3471,13 +3466,14 @@ impl<W: Write> Writer<W> {
     // Returns the array of mapped entry point names.
     fn write_functions(
         &mut self,
-        module: &crate::Module,
-        mod_info: &valid::ModuleInfo,
+        module: &Module,
+        module_info: &valid::ModuleInfo,
         options: &Options,
         pipeline_options: &PipelineOptions,
-        argument_buffers_count: u32,
     ) -> Result<TranslationInfo, Error> {
         let mut pass_through_globals = Vec::new();
+
+        // Emit each user-defined function
         for (fun_handle, fun) in module.functions.iter() {
             log::trace!(
                 "function {:?}, handle {:?}",
@@ -3485,7 +3481,7 @@ impl<W: Write> Writer<W> {
                 fun_handle
             );
 
-            let fun_info = &mod_info[fun_handle];
+            let fun_info = &module_info[fun_handle];
             pass_through_globals.clear();
             let mut supports_array_length = false;
             for (handle, var) in module.global_variables.iter() {
@@ -3603,7 +3599,7 @@ impl<W: Write> Writer<W> {
                     module,
                     pipeline_options,
                 },
-                mod_info,
+                mod_info: module_info,
                 result_struct: None,
             };
             self.named_expressions.clear();
@@ -3612,545 +3608,25 @@ impl<W: Write> Writer<W> {
             writeln!(self.out, "}}")?;
         }
 
-        let mut info = TranslationInfo {
+        let mut translation_info = TranslationInfo {
             entry_point_names: Vec::with_capacity(module.entry_points.len()),
         };
 
         for (ep_index, ep) in module.entry_points.iter().enumerate() {
-            let fun = &ep.function;
-            let fun_info = mod_info.get_entry_point(ep_index);
-
-            log::trace!(
-                "entry point {:?}, index {:?}",
-                fun.name.as_deref().unwrap_or("(anonymous)"),
-                ep_index
-            );
-
-            // Is any global variable used by this entry point dynamically sized?
-            let has_dynamically_sized_global_variables = module
-                .global_variables
-                .iter()
-                .filter(|&(handle, _)| !fun_info[handle].is_empty())
-                .any(|(_, var)| needs_array_length(var.ty, &module.types));
-
-            // skip this entry point if any global bindings are missing,
-            // or their types are incompatible.
-            let fun_name = &self.names[&NameKey::EntryPoint(ep_index as _)];
-            match validate_entry_point(
-                options,
-                module,
-                fun_info,
+            let entry_point_info = EntryPointInfo {
                 ep,
-                has_dynamically_sized_global_variables,
-            ) {
-                Err(e) => {
-                    info.entry_point_names.push(Err(e));
-                    continue;
-                }
-                _ => info.entry_point_names.push(Ok(fun_name.clone())),
-            }
-
-            writeln!(self.out)?;
-
-            let (em_str, in_mode, out_mode) = match ep.stage {
-                crate::ShaderStage::Vertex => (
-                    "vertex",
-                    LocationMode::VertexInput,
-                    LocationMode::VertexOutput,
-                ),
-                crate::ShaderStage::Fragment { .. } => (
-                    "fragment",
-                    LocationMode::FragmentInput,
-                    LocationMode::FragmentOutput,
-                ),
-                crate::ShaderStage::Compute { .. } => {
-                    ("kernel", LocationMode::Uniform, LocationMode::Uniform)
-                }
+                ep_index,
+                module,
+                mod_info: module_info,
+                options,
+                pipeline_options,
             };
-
-            // List all the Naga `EntryPoint`'s `Function`'s arguments,
-            // flattening structs into their members. In Metal, we will pass
-            // each of these values to the entry point as a separate argument—
-            // except for the varyings, handled next.
-            let mut flattened_arguments = Vec::new();
-            for (arg_index, arg) in fun.arguments.iter().enumerate() {
-                match module.types[arg.ty].inner {
-                    crate::TypeInner::Struct { ref members, .. } => {
-                        for (member_index, member) in members.iter().enumerate() {
-                            let member_index = member_index as u32;
-                            flattened_arguments.push((
-                                NameKey::StructMember(arg.ty, member_index),
-                                member.ty,
-                                member.binding.as_ref(),
-                            ));
-                        }
-                    }
-                    _ => flattened_arguments.push((
-                        NameKey::EntryPointArgument(ep_index as _, arg_index as u32),
-                        arg.ty,
-                        arg.binding.as_ref(),
-                    )),
-                }
-            }
-
-            // Identify the varyings among the argument values, and emit a
-            // struct type named `<fun>Input` to hold them.
-            let stage_in_name = format!("{fun_name}Input");
-            let varyings_member_name = self.namer.call("varyings");
-            let mut has_varyings = false;
-            if !flattened_arguments.is_empty() {
-                writeln!(self.out, "struct {stage_in_name} {{")?;
-                for &(ref name_key, ty, binding) in flattened_arguments.iter() {
-                    let binding = match binding {
-                        Some(ref binding @ &crate::Binding::Location { .. }) => binding,
-                        _ => continue,
-                    };
-                    has_varyings = true;
-                    let name = &self.names[name_key];
-                    let ty_name = TypeContext {
-                        handle: ty,
-                        gctx: module.to_ctx(),
-                        names: &self.names,
-                        access: crate::StorageAccess::empty(),
-                        binding: None,
-                        first_time: false,
-                    };
-                    let resolved = options.resolve_local_binding(binding, in_mode)?;
-                    write!(self.out, "{}{} {}", back::INDENT, ty_name, name)?;
-                    resolved.try_fmt(&mut self.out)?;
-                    writeln!(self.out, ";")?;
-                }
-                writeln!(self.out, "}};")?;
-            }
-
-            // Define a struct type named for the return value, if any, named
-            // `<fun>Output`.
-            let stage_out_name = format!("{fun_name}Output");
-            let result_member_name = self.namer.call("member");
-            let result_type_name = match fun.result {
-                Some(ref result) => {
-                    let mut result_members = Vec::new();
-                    if let crate::TypeInner::Struct { ref members, .. } =
-                        module.types[result.ty].inner
-                    {
-                        for (member_index, member) in members.iter().enumerate() {
-                            result_members.push((
-                                &self.names[&NameKey::StructMember(result.ty, member_index as u32)],
-                                member.ty,
-                                member.binding.as_ref(),
-                            ));
-                        }
-                    } else {
-                        result_members.push((
-                            &result_member_name,
-                            result.ty,
-                            result.binding.as_ref(),
-                        ));
-                    }
-
-                    writeln!(self.out, "struct {stage_out_name} {{")?;
-                    let mut has_point_size = false;
-                    for (name, ty, binding) in result_members {
-                        let ty_name = TypeContext {
-                            handle: ty,
-                            gctx: module.to_ctx(),
-                            names: &self.names,
-                            access: crate::StorageAccess::empty(),
-                            binding: None,
-                            first_time: true,
-                        };
-                        let binding = binding.ok_or(Error::Validation)?;
-
-                        if let crate::Binding::BuiltIn(crate::BuiltIn::PointSize) = *binding {
-                            has_point_size = true;
-                            if !pipeline_options.allow_and_force_point_size {
-                                continue;
-                            }
-                        }
-
-                        let array_len = match module.types[ty].inner {
-                            crate::TypeInner::Array {
-                                size: crate::ArraySize::Constant(size),
-                                ..
-                            } => Some(size),
-                            _ => None,
-                        };
-                        let resolved = options.resolve_local_binding(binding, out_mode)?;
-                        write!(self.out, "{}{} {}", back::INDENT, ty_name, name)?;
-                        if let Some(array_len) = array_len {
-                            write!(self.out, " [{array_len}]")?;
-                        }
-                        resolved.try_fmt(&mut self.out)?;
-                        writeln!(self.out, ";")?;
-                    }
-
-                    if pipeline_options.allow_and_force_point_size
-                        && ep.stage == crate::ShaderStage::Vertex
-                        && !has_point_size
-                    {
-                        // inject the point size output last
-                        writeln!(
-                            self.out,
-                            "{}float _point_size [[point_size]];",
-                            back::INDENT
-                        )?;
-                    }
-                    writeln!(self.out, "}};")?;
-                    &stage_out_name
-                }
-                None => "void",
-            };
-
-            // Write the entry point function's name, and begin its argument list.
-            writeln!(self.out, "{em_str} {result_type_name} {fun_name}(")?;
-            let mut is_first_argument = true;
-
-            // If we have produced a struct holding the `EntryPoint`'s
-            // `Function`'s arguments' varyings, pass that struct first.
-            if has_varyings {
-                writeln!(
-                    self.out,
-                    "  {stage_in_name} {varyings_member_name} [[stage_in]]"
-                )?;
-                is_first_argument = false;
-            }
-
-            let mut local_invocation_id = None;
-
-            // Then pass the remaining arguments not included in the varyings
-            // struct.
-            //
-            // Since `Namer.reset` wasn't expecting struct members to be
-            // suddenly injected into the normal namespace like this,
-            // `self.names` doesn't keep them distinct from other variables.
-            // Generate fresh names for these arguments, and remember the
-            // mapping.
-            let mut flattened_member_names = FastHashMap::default();
-            for &(ref name_key, ty, binding) in flattened_arguments.iter() {
-                let binding = match binding {
-                    Some(binding @ &crate::Binding::BuiltIn { .. }) => binding,
-                    _ => continue,
-                };
-                let name = if let NameKey::StructMember(ty, index) = *name_key {
-                    // We should always insert a fresh entry here, but use
-                    // `or_insert` to get a reference to the `String` we just
-                    // inserted.
-                    flattened_member_names
-                        .entry(NameKey::StructMember(ty, index))
-                        .or_insert_with(|| self.namer.call(&self.names[name_key]))
-                } else {
-                    &self.names[name_key]
-                };
-
-                if binding == &crate::Binding::BuiltIn(crate::BuiltIn::LocalInvocationId) {
-                    local_invocation_id = Some(name_key);
-                }
-
-                let ty_name = TypeContext {
-                    handle: ty,
-                    gctx: module.to_ctx(),
-                    names: &self.names,
-                    access: crate::StorageAccess::empty(),
-                    binding: None,
-                    first_time: false,
-                };
-                let resolved = options.resolve_local_binding(binding, in_mode)?;
-                let separator = if is_first_argument {
-                    is_first_argument = false;
-                    ' '
-                } else {
-                    ','
-                };
-                write!(self.out, "{separator} {ty_name} {name}")?;
-                resolved.try_fmt(&mut self.out)?;
-                writeln!(self.out)?;
-            }
-
-            let need_workgroup_variables_initialization =
-                self.need_workgroup_variables_initialization(options, ep, module, fun_info);
-
-            if need_workgroup_variables_initialization && local_invocation_id.is_none() {
-                let separator = if is_first_argument {
-                    is_first_argument = false;
-                    ' '
-                } else {
-                    ','
-                };
-                writeln!(
-                    self.out,
-                    "{separator} {NAMESPACE}::uint3 __local_invocation_id [[thread_position_in_threadgroup]]"
-                )?;
-            }
-
-            // Keep a record of which argument buffers will be used by this entry point.
-            let mut argument_buffers_used: Vec<u32> =
-                Vec::with_capacity(argument_buffers_count as _);
-
-            // Those global variables used by this entry point and its callees
-            // get passed as arguments. `Private` globals are an exception, they
-            // don't outlive this invocation, so we declare them below as locals
-            // within the entry point.
-            for (handle, var) in module.global_variables.iter() {
-                let usage = fun_info[handle];
-                if usage.is_empty() || var.space == crate::AddressSpace::Private {
-                    continue;
-                }
-                // the resolves have already been checked for `!fake_missing_bindings` case
-                let resolved = match var.space {
-                    crate::AddressSpace::PushConstant => options.resolve_push_constants(ep).ok(),
-                    crate::AddressSpace::WorkGroup => None,
-                    crate::AddressSpace::Storage { .. } if options.lang_version < (2, 0) => {
-                        return Err(Error::UnsupportedAddressSpace(var.space))
-                    }
-                    _ => {
-                        // This global variable refers to a binding, which will require access through
-                        // an argument buffer. If we haven't yet seen this bind group, add it to our list.
-                        if let Some(ref binding) = var.binding {
-                            let group = binding.group;
-                            if !argument_buffers_used.contains(&group) {
-                                argument_buffers_used.push(group);
-                            }
-                        }
-
-                        continue;
-                    }
-                };
-                if let Some(ref resolved) = resolved {
-                    // Inline samplers are be defined in the EP body
-                    if resolved.as_inline_sampler(options).is_some() {
-                        continue;
-                    }
-                }
-
-                let tyvar = TypedGlobalVariable {
-                    module,
-                    names: &self.names,
-                    handle,
-                    usage,
-                    binding: resolved.as_ref(),
-                    reference: true,
-                };
-                let separator = if is_first_argument {
-                    is_first_argument = false;
-                    ' '
-                } else {
-                    ','
-                };
-                write!(self.out, "{separator} ")?;
-                tyvar.try_fmt(&mut self.out)?;
-                if let Some(resolved) = resolved {
-                    resolved.try_fmt(&mut self.out)?;
-                }
-                if let Some(value) = var.init {
-                    write!(self.out, " = ")?;
-                    self.put_const_expression(value, module)?;
-                }
-                writeln!(self.out)?;
-            }
-
-            // Sort the argument buffer list
-            argument_buffers_used.sort();
-
-            for id in argument_buffers_used.drain(..) {
-                let separator = if is_first_argument {
-                    is_first_argument = false;
-                    ' '
-                } else {
-                    ','
-                };
-                write!(self.out, "{separator} ")?;
-                writeln!(
-                    self.out,
-                    "device ArgumentBufferGroup{id}& argumentBufferGroup{id} [[buffer({id})]]"
-                )?;
-            }
-
-            // If this entry uses any variable-length arrays, their sizes are
-            // passed as a final struct-typed argument.
-            if has_dynamically_sized_global_variables {
-                // this is checked earlier
-                let resolved = options.resolve_sizes_buffer(ep).unwrap();
-                let separator = if module.global_variables.is_empty() {
-                    ' '
-                } else {
-                    ','
-                };
-                write!(
-                    self.out,
-                    "{separator} constant _mslBufferSizes& _buffer_sizes",
-                )?;
-                resolved.try_fmt(&mut self.out)?;
-                writeln!(self.out)?;
-            }
-
-            // end of the entry point argument list
-            writeln!(self.out, ") {{")?;
-
-            if need_workgroup_variables_initialization {
-                self.write_workgroup_variables_initialization(
-                    module,
-                    mod_info,
-                    fun_info,
-                    local_invocation_id,
-                )?;
-            }
-
-            // Metal doesn't support private mutable variables outside of functions,
-            // so we put them here, just like the locals.
-            for (handle, var) in module.global_variables.iter() {
-                let usage = fun_info[handle];
-                if usage.is_empty() {
-                    continue;
-                }
-                if var.space == crate::AddressSpace::Private {
-                    let tyvar = TypedGlobalVariable {
-                        module,
-                        names: &self.names,
-                        handle,
-                        usage,
-                        binding: None,
-                        reference: false,
-                    };
-                    write!(self.out, "{}", back::INDENT)?;
-                    tyvar.try_fmt(&mut self.out)?;
-                    match var.init {
-                        Some(value) => {
-                            write!(self.out, " = ")?;
-                            self.put_const_expression(value, module)?;
-                            writeln!(self.out, ";")?;
-                        }
-                        None => {
-                            writeln!(self.out, " = {{}};")?;
-                        }
-                    };
-                } else if let Some(ref binding) = var.binding {
-                    // write an inline sampler
-                    let resolved = options.resolve_resource_binding(ep, binding).unwrap();
-                    if let Some(sampler) = resolved.as_inline_sampler(options) {
-                        let name = &self.names[&NameKey::GlobalVariable(handle)];
-                        writeln!(
-                            self.out,
-                            "{}constexpr {}::sampler {}(",
-                            back::INDENT,
-                            NAMESPACE,
-                            name
-                        )?;
-                        self.put_inline_sampler_properties(back::Level(2), sampler)?;
-                        writeln!(self.out, "{});", back::INDENT)?;
-                    }
-                }
-            }
-
-            // Now take the arguments that we gathered into structs, and the
-            // structs that we flattened into arguments, and emit local
-            // variables with initializers that put everything back the way the
-            // body code expects.
-            //
-            // If we had to generate fresh names for struct members passed as
-            // arguments, be sure to use those names when rebuilding the struct.
-            //
-            // "Each day, I change some zeros to ones, and some ones to zeros.
-            // The rest, I leave alone."
-            for (arg_index, arg) in fun.arguments.iter().enumerate() {
-                let arg_name =
-                    &self.names[&NameKey::EntryPointArgument(ep_index as _, arg_index as u32)];
-                match module.types[arg.ty].inner {
-                    crate::TypeInner::Struct { ref members, .. } => {
-                        let struct_name = &self.names[&NameKey::Type(arg.ty)];
-                        write!(
-                            self.out,
-                            "{}const {} {} = {{ ",
-                            back::INDENT,
-                            struct_name,
-                            arg_name
-                        )?;
-                        for (member_index, member) in members.iter().enumerate() {
-                            let key = NameKey::StructMember(arg.ty, member_index as u32);
-                            // If it's not in the varying struct, then we should
-                            // have passed it as its own argument and assigned
-                            // it a new name.
-                            let name = match member.binding {
-                                Some(crate::Binding::BuiltIn { .. }) => {
-                                    &flattened_member_names[&key]
-                                }
-                                _ => &self.names[&key],
-                            };
-                            if member_index != 0 {
-                                write!(self.out, ", ")?;
-                            }
-                            if let Some(crate::Binding::Location { .. }) = member.binding {
-                                write!(self.out, "{varyings_member_name}.")?;
-                            }
-                            write!(self.out, "{name}")?;
-                        }
-                        writeln!(self.out, " }};")?;
-                    }
-                    _ => {
-                        if let Some(crate::Binding::Location { .. }) = arg.binding {
-                            writeln!(
-                                self.out,
-                                "{}const auto {} = {}.{};",
-                                back::INDENT,
-                                arg_name,
-                                varyings_member_name,
-                                arg_name
-                            )?;
-                        }
-                    }
-                }
-            }
-
-            // Finally, declare all the local variables that we need
-            //TODO: we can postpone this till the relevant expressions are emitted
-            for (local_handle, local) in fun.local_variables.iter() {
-                let name = &self.names[&NameKey::EntryPointLocal(ep_index as _, local_handle)];
-                let ty_name = TypeContext {
-                    handle: local.ty,
-                    gctx: module.to_ctx(),
-                    names: &self.names,
-                    access: crate::StorageAccess::empty(),
-                    binding: None,
-                    first_time: false,
-                };
-                write!(self.out, "{}{} {}", back::INDENT, ty_name, name)?;
-                match local.init {
-                    Some(value) => {
-                        write!(self.out, " = ")?;
-                        self.put_const_expression(value, module)?;
-                    }
-                    None => {
-                        write!(self.out, " = {{}}")?;
-                    }
-                };
-                writeln!(self.out, ";")?;
-            }
-
-            let guarded_indices =
-                index::find_checked_indexes(module, fun, fun_info, options.bounds_check_policies);
-
-            let context = StatementContext {
-                expression: ExpressionContext {
-                    function: fun,
-                    origin: FunctionOrigin::EntryPoint(ep_index as _),
-                    info: fun_info,
-                    policies: options.bounds_check_policies,
-                    guarded_indices,
-                    module,
-                    pipeline_options,
-                },
-                mod_info,
-                result_struct: Some(&stage_out_name),
-            };
-            self.named_expressions.clear();
-            self.update_expressions_to_bake(fun, fun_info, &context.expression);
-            self.put_block(back::Level(1), &fun.body, &context)?;
-            writeln!(self.out, "}}")?;
-            if ep_index + 1 != module.entry_points.len() {
-                writeln!(self.out)?;
-            }
+            translation_info
+                .entry_point_names
+                .push(self.write_entry_point(entry_point_info)?);
         }
 
-        Ok(info)
+        Ok(translation_info)
     }
 
     fn write_barrier(&mut self, flags: crate::Barrier, level: back::Level) -> BackendResult {
@@ -4211,11 +3687,7 @@ impl<W: Write> Writer<W> {
     ///
     /// For more information on Argument Buffers, see section 2.13 of
     /// [the Metal Spec](https://developer.apple.com/metal/Metal-Shading-Language-Specification.pdf)
-    fn write_argument_buffers(
-        &mut self,
-        module: &crate::Module,
-        options: &Options,
-    ) -> Result<u32, Error> {
+    fn write_argument_buffers(&mut self, module: &Module, options: &Options) -> Result<u32, Error> {
         let mut current_bind_group = 0;
 
         // First we have to collect each of the bindings
@@ -4369,6 +3841,553 @@ impl<W: Write> Writer<W> {
         // current bind group number, plus one.
         Ok(current_bind_group + 1)
     }
+
+    fn write_entry_point(
+        &mut self,
+        entry_point_info: EntryPointInfo,
+    ) -> Result<Result<String, EntryPointError>, Error> {
+        let EntryPointInfo {
+            ep,
+            ep_index,
+            module,
+            mod_info,
+            options,
+            pipeline_options,
+        } = entry_point_info;
+        let fun = &ep.function;
+        let fun_info = mod_info.get_entry_point(ep_index);
+
+        log::trace!(
+            "entry point {:?}, index {:?}",
+            fun.name.as_deref().unwrap_or("(anonymous)"),
+            ep_index
+        );
+
+        // Is any global variable used by this entry point dynamically sized?
+        let has_dynamically_sized_global_variables = module
+            .global_variables
+            .iter()
+            .filter(|&(handle, _)| !fun_info[handle].is_empty())
+            .any(|(_, var)| needs_array_length(var.ty, &module.types));
+
+        // skip this entry point if any global bindings are missing,
+        // or their types are incompatible.
+        let fun_name = self.names[&NameKey::EntryPoint(ep_index as _)].clone();
+        match validate_entry_point(
+            options,
+            module,
+            fun_info,
+            ep,
+            has_dynamically_sized_global_variables,
+        ) {
+            Err(e) => {
+                return Ok(Err(e));
+            }
+            _ => {}
+        }
+
+        writeln!(self.out)?;
+
+        let (em_str, in_mode, out_mode) = match ep.stage {
+            crate::ShaderStage::Vertex => (
+                "vertex",
+                LocationMode::VertexInput,
+                LocationMode::VertexOutput,
+            ),
+            crate::ShaderStage::Fragment { .. } => (
+                "fragment",
+                LocationMode::FragmentInput,
+                LocationMode::FragmentOutput,
+            ),
+            crate::ShaderStage::Compute { .. } => {
+                ("kernel", LocationMode::Uniform, LocationMode::Uniform)
+            }
+        };
+
+        // List all the Naga `EntryPoint`'s `Function`'s arguments,
+        // flattening structs into their members. In Metal, we will pass
+        // each of these values to the entry point as a separate argument—
+        // except for the varyings, handled next.
+        let mut flattened_arguments = Vec::new();
+        for (arg_index, arg) in fun.arguments.iter().enumerate() {
+            match module.types[arg.ty].inner {
+                crate::TypeInner::Struct { ref members, .. } => {
+                    for (member_index, member) in members.iter().enumerate() {
+                        let member_index = member_index as u32;
+                        flattened_arguments.push((
+                            NameKey::StructMember(arg.ty, member_index),
+                            member.ty,
+                            member.binding.as_ref(),
+                        ));
+                    }
+                }
+                _ => flattened_arguments.push((
+                    NameKey::EntryPointArgument(ep_index as _, arg_index as u32),
+                    arg.ty,
+                    arg.binding.as_ref(),
+                )),
+            }
+        }
+
+        // Identify the varyings among the argument values, and emit a
+        // struct type named `<fun>Input` to hold them.
+        let stage_in_name = format!("{fun_name}Input");
+        let varyings_member_name = self.namer.call("varyings");
+        let mut has_varyings = false;
+        if !flattened_arguments.is_empty() {
+            writeln!(self.out, "struct {stage_in_name} {{")?;
+            for &(ref name_key, ty, binding) in flattened_arguments.iter() {
+                let binding = match binding {
+                    Some(ref binding @ &crate::Binding::Location { .. }) => binding,
+                    _ => continue,
+                };
+                has_varyings = true;
+                let name = &self.names[name_key];
+                let ty_name = TypeContext {
+                    handle: ty,
+                    gctx: module.to_ctx(),
+                    names: &self.names,
+                    access: crate::StorageAccess::empty(),
+                    binding: None,
+                    first_time: false,
+                };
+                let resolved = options.resolve_local_binding(binding, in_mode)?;
+                write!(self.out, "{}{} {}", back::INDENT, ty_name, name)?;
+                resolved.try_fmt(&mut self.out)?;
+                writeln!(self.out, ";")?;
+            }
+            writeln!(self.out, "}};")?;
+        }
+
+        // Define a struct type named for the return value, if any, named
+        // `<fun>Output`.
+        let stage_out_name = format!("{fun_name}Output");
+        let result_member_name = self.namer.call("member");
+        let result_type_name = match fun.result {
+            Some(ref result) => {
+                let mut result_members = Vec::new();
+                if let crate::TypeInner::Struct { ref members, .. } = module.types[result.ty].inner
+                {
+                    for (member_index, member) in members.iter().enumerate() {
+                        result_members.push((
+                            &self.names[&NameKey::StructMember(result.ty, member_index as u32)],
+                            member.ty,
+                            member.binding.as_ref(),
+                        ));
+                    }
+                } else {
+                    result_members.push((&result_member_name, result.ty, result.binding.as_ref()));
+                }
+
+                writeln!(self.out, "struct {stage_out_name} {{")?;
+                let mut has_point_size = false;
+                for (name, ty, binding) in result_members {
+                    let ty_name = TypeContext {
+                        handle: ty,
+                        gctx: module.to_ctx(),
+                        names: &self.names,
+                        access: crate::StorageAccess::empty(),
+                        binding: None,
+                        first_time: true,
+                    };
+                    let binding = binding.ok_or(Error::Validation)?;
+
+                    if let crate::Binding::BuiltIn(crate::BuiltIn::PointSize) = *binding {
+                        has_point_size = true;
+                        if !pipeline_options.allow_and_force_point_size {
+                            continue;
+                        }
+                    }
+
+                    let array_len = match module.types[ty].inner {
+                        crate::TypeInner::Array {
+                            size: crate::ArraySize::Constant(size),
+                            ..
+                        } => Some(size),
+                        _ => None,
+                    };
+                    let resolved = options.resolve_local_binding(binding, out_mode)?;
+                    write!(self.out, "{}{} {}", back::INDENT, ty_name, name)?;
+                    if let Some(array_len) = array_len {
+                        write!(self.out, " [{array_len}]")?;
+                    }
+                    resolved.try_fmt(&mut self.out)?;
+                    writeln!(self.out, ";")?;
+                }
+
+                if pipeline_options.allow_and_force_point_size
+                    && ep.stage == crate::ShaderStage::Vertex
+                    && !has_point_size
+                {
+                    // inject the point size output last
+                    writeln!(
+                        self.out,
+                        "{}float _point_size [[point_size]];",
+                        back::INDENT
+                    )?;
+                }
+                writeln!(self.out, "}};")?;
+                &stage_out_name
+            }
+            None => "void",
+        };
+
+        // Write the entry point function's name, and begin its argument list.
+        writeln!(self.out, "{em_str} {result_type_name} {fun_name}(")?;
+        let mut is_first_argument = true;
+
+        // If we have produced a struct holding the `EntryPoint`'s
+        // `Function`'s arguments' varyings, pass that struct first.
+        if has_varyings {
+            writeln!(
+                self.out,
+                "  {stage_in_name} {varyings_member_name} [[stage_in]]"
+            )?;
+            is_first_argument = false;
+        }
+
+        let mut local_invocation_id = None;
+
+        // Then pass the remaining arguments not included in the varyings
+        // struct.
+        //
+        // Since `Namer.reset` wasn't expecting struct members to be
+        // suddenly injected into the normal namespace like this,
+        // `self.names` doesn't keep them distinct from other variables.
+        // Generate fresh names for these arguments, and remember the
+        // mapping.
+        let mut flattened_member_names = FastHashMap::default();
+        for &(ref name_key, ty, binding) in flattened_arguments.iter() {
+            let binding = match binding {
+                Some(binding @ &crate::Binding::BuiltIn { .. }) => binding,
+                _ => continue,
+            };
+            let name = if let NameKey::StructMember(ty, index) = *name_key {
+                // We should always insert a fresh entry here, but use
+                // `or_insert` to get a reference to the `String` we just
+                // inserted.
+                flattened_member_names
+                    .entry(NameKey::StructMember(ty, index))
+                    .or_insert_with(|| self.namer.call(&self.names[name_key]))
+            } else {
+                &self.names[name_key]
+            };
+
+            if binding == &crate::Binding::BuiltIn(crate::BuiltIn::LocalInvocationId) {
+                local_invocation_id = Some(name_key);
+            }
+
+            let ty_name = TypeContext {
+                handle: ty,
+                gctx: module.to_ctx(),
+                names: &self.names,
+                access: crate::StorageAccess::empty(),
+                binding: None,
+                first_time: false,
+            };
+            let resolved = options.resolve_local_binding(binding, in_mode)?;
+            let separator = if is_first_argument {
+                is_first_argument = false;
+                ' '
+            } else {
+                ','
+            };
+            write!(self.out, "{separator} {ty_name} {name}")?;
+            resolved.try_fmt(&mut self.out)?;
+            writeln!(self.out)?;
+        }
+
+        let need_workgroup_variables_initialization =
+            self.need_workgroup_variables_initialization(options, ep, module, fun_info);
+
+        if need_workgroup_variables_initialization && local_invocation_id.is_none() {
+            let separator = if is_first_argument {
+                is_first_argument = false;
+                ' '
+            } else {
+                ','
+            };
+            writeln!(
+                    self.out,
+                    "{separator} {NAMESPACE}::uint3 __local_invocation_id [[thread_position_in_threadgroup]]"
+                )?;
+        }
+
+        // Keep a record of which argument buffers will be used by this entry point.
+        let mut argument_buffers_used: Vec<u32> = Vec::with_capacity(1 as _);
+
+        // Those global variables used by this entry point and its callees
+        // get passed as arguments. `Private` globals are an exception, they
+        // don't outlive this invocation, so we declare them below as locals
+        // within the entry point.
+        for (handle, var) in module.global_variables.iter() {
+            let usage = fun_info[handle];
+            if usage.is_empty() || var.space == crate::AddressSpace::Private {
+                continue;
+            }
+            // the resolves have already been checked for `!fake_missing_bindings` case
+            let resolved = match var.space {
+                crate::AddressSpace::PushConstant => options.resolve_push_constants(ep).ok(),
+                crate::AddressSpace::WorkGroup => None,
+                crate::AddressSpace::Storage { .. } if options.lang_version < (2, 0) => {
+                    return Err(Error::UnsupportedAddressSpace(var.space))
+                }
+                _ => {
+                    // This global variable refers to a binding, which will require access through
+                    // an argument buffer. If we haven't yet seen this bind group, add it to our list.
+                    if let Some(ref binding) = var.binding {
+                        let group = binding.group;
+                        if !argument_buffers_used.contains(&group) {
+                            argument_buffers_used.push(group);
+                        }
+                    }
+
+                    continue;
+                }
+            };
+            if let Some(ref resolved) = resolved {
+                // Inline samplers are be defined in the EP body
+                if resolved.as_inline_sampler(options).is_some() {
+                    continue;
+                }
+            }
+
+            let tyvar = TypedGlobalVariable {
+                module,
+                names: &self.names,
+                handle,
+                usage,
+                binding: resolved.as_ref(),
+                reference: true,
+            };
+            let separator = if is_first_argument {
+                is_first_argument = false;
+                ' '
+            } else {
+                ','
+            };
+            write!(self.out, "{separator} ")?;
+            tyvar.try_fmt(&mut self.out)?;
+            if let Some(resolved) = resolved {
+                resolved.try_fmt(&mut self.out)?;
+            }
+            if let Some(value) = var.init {
+                write!(self.out, " = ")?;
+                self.put_const_expression(value, module)?;
+            }
+            writeln!(self.out)?;
+        }
+
+        // Sort the argument buffer list
+        argument_buffers_used.sort();
+
+        for id in argument_buffers_used.drain(..) {
+            let separator = if is_first_argument {
+                is_first_argument = false;
+                ' '
+            } else {
+                ','
+            };
+            write!(self.out, "{separator} ")?;
+            writeln!(
+                self.out,
+                "device ArgumentBufferGroup{id}& argumentBufferGroup{id} [[buffer({id})]]"
+            )?;
+        }
+
+        // If this entry uses any variable-length arrays, their sizes are
+        // passed as a final struct-typed argument.
+        if has_dynamically_sized_global_variables {
+            // this is checked earlier
+            let resolved = options.resolve_sizes_buffer(ep).unwrap();
+            let separator = if module.global_variables.is_empty() {
+                ' '
+            } else {
+                ','
+            };
+            write!(
+                self.out,
+                "{separator} constant _mslBufferSizes& _buffer_sizes",
+            )?;
+            resolved.try_fmt(&mut self.out)?;
+            writeln!(self.out)?;
+        }
+
+        // end of the entry point argument list
+        writeln!(self.out, ") {{")?;
+
+        if need_workgroup_variables_initialization {
+            self.write_workgroup_variables_initialization(
+                module,
+                mod_info,
+                fun_info,
+                local_invocation_id,
+            )?;
+        }
+
+        // Metal doesn't support private mutable variables outside of functions,
+        // so we put them here, just like the locals.
+        for (handle, var) in module.global_variables.iter() {
+            let usage = fun_info[handle];
+            if usage.is_empty() {
+                continue;
+            }
+            if var.space == crate::AddressSpace::Private {
+                let tyvar = TypedGlobalVariable {
+                    module,
+                    names: &self.names,
+                    handle,
+                    usage,
+                    binding: None,
+                    reference: false,
+                };
+                write!(self.out, "{}", back::INDENT)?;
+                tyvar.try_fmt(&mut self.out)?;
+                match var.init {
+                    Some(value) => {
+                        write!(self.out, " = ")?;
+                        self.put_const_expression(value, module)?;
+                        writeln!(self.out, ";")?;
+                    }
+                    None => {
+                        writeln!(self.out, " = {{}};")?;
+                    }
+                };
+            } else if let Some(ref binding) = var.binding {
+                // write an inline sampler
+                let resolved = options.resolve_resource_binding(ep, binding).unwrap();
+                if let Some(sampler) = resolved.as_inline_sampler(options) {
+                    let name = &self.names[&NameKey::GlobalVariable(handle)];
+                    writeln!(
+                        self.out,
+                        "{}constexpr {}::sampler {}(",
+                        back::INDENT,
+                        NAMESPACE,
+                        name
+                    )?;
+                    self.put_inline_sampler_properties(back::Level(2), sampler)?;
+                    writeln!(self.out, "{});", back::INDENT)?;
+                }
+            }
+        }
+
+        // Now take the arguments that we gathered into structs, and the
+        // structs that we flattened into arguments, and emit local
+        // variables with initializers that put everything back the way the
+        // body code expects.
+        //
+        // If we had to generate fresh names for struct members passed as
+        // arguments, be sure to use those names when rebuilding the struct.
+        //
+        // "Each day, I change some zeros to ones, and some ones to zeros.
+        // The rest, I leave alone."
+        for (arg_index, arg) in fun.arguments.iter().enumerate() {
+            let arg_name =
+                &self.names[&NameKey::EntryPointArgument(ep_index as _, arg_index as u32)];
+            match module.types[arg.ty].inner {
+                crate::TypeInner::Struct { ref members, .. } => {
+                    let struct_name = &self.names[&NameKey::Type(arg.ty)];
+                    write!(
+                        self.out,
+                        "{}const {} {} = {{ ",
+                        back::INDENT,
+                        struct_name,
+                        arg_name
+                    )?;
+                    for (member_index, member) in members.iter().enumerate() {
+                        let key = NameKey::StructMember(arg.ty, member_index as u32);
+                        // If it's not in the varying struct, then we should
+                        // have passed it as its own argument and assigned
+                        // it a new name.
+                        let name = match member.binding {
+                            Some(crate::Binding::BuiltIn { .. }) => &flattened_member_names[&key],
+                            _ => &self.names[&key],
+                        };
+                        if member_index != 0 {
+                            write!(self.out, ", ")?;
+                        }
+                        if let Some(crate::Binding::Location { .. }) = member.binding {
+                            write!(self.out, "{varyings_member_name}.")?;
+                        }
+                        write!(self.out, "{name}")?;
+                    }
+                    writeln!(self.out, " }};")?;
+                }
+                _ => {
+                    if let Some(crate::Binding::Location { .. }) = arg.binding {
+                        writeln!(
+                            self.out,
+                            "{}const auto {} = {}.{};",
+                            back::INDENT,
+                            arg_name,
+                            varyings_member_name,
+                            arg_name
+                        )?;
+                    }
+                }
+            }
+        }
+
+        // Finally, declare all the local variables that we need
+        //TODO: we can postpone this till the relevant expressions are emitted
+        for (local_handle, local) in fun.local_variables.iter() {
+            let name = &self.names[&NameKey::EntryPointLocal(ep_index as _, local_handle)];
+            let ty_name = TypeContext {
+                handle: local.ty,
+                gctx: module.to_ctx(),
+                names: &self.names,
+                access: crate::StorageAccess::empty(),
+                binding: None,
+                first_time: false,
+            };
+            write!(self.out, "{}{} {}", back::INDENT, ty_name, name)?;
+            match local.init {
+                Some(value) => {
+                    write!(self.out, " = ")?;
+                    self.put_const_expression(value, module)?;
+                }
+                None => {
+                    write!(self.out, " = {{}}")?;
+                }
+            };
+            writeln!(self.out, ";")?;
+        }
+
+        let guarded_indices =
+            index::find_checked_indexes(module, fun, fun_info, options.bounds_check_policies);
+
+        let context = StatementContext {
+            expression: ExpressionContext {
+                function: fun,
+                origin: FunctionOrigin::EntryPoint(ep_index as _),
+                info: fun_info,
+                policies: options.bounds_check_policies,
+                guarded_indices,
+                module,
+                pipeline_options,
+            },
+            mod_info,
+            result_struct: Some(&stage_out_name),
+        };
+        self.named_expressions.clear();
+        self.update_expressions_to_bake(fun, fun_info, &context.expression);
+        self.put_block(back::Level(1), &fun.body, &context)?;
+        writeln!(self.out, "}}")?;
+        if ep_index + 1 != module.entry_points.len() {
+            writeln!(self.out)?;
+        }
+
+        Ok(Ok(fun_name))
+    }
+}
+
+struct EntryPointInfo<'a> {
+    ep: &'a EntryPoint,
+    ep_index: usize,
+    module: &'a Module,
+    mod_info: &'a valid::ModuleInfo,
+    options: &'a Options,
+    pipeline_options: &'a PipelineOptions,
 }
 
 /// Resolves a binding used inside of an argument buffer.
@@ -4378,7 +4397,7 @@ impl<W: Write> Writer<W> {
 ///
 /// In all other cases there is no need to resolve the binding, so we just return [None].
 fn resolve_argument_buffer_binding(
-    entry_points: &[crate::EntryPoint],
+    entry_points: &[EntryPoint],
     options: &Options,
     binding: &ResourceBinding,
     ty: &crate::Type,
@@ -4410,11 +4429,11 @@ fn resolve_argument_buffer_binding(
 /// incompatible
 fn validate_entry_point(
     options: &Options,
-    module: &crate::Module,
+    module: &Module,
     fun_info: &valid::FunctionInfo,
-    ep: &crate::EntryPoint,
+    ep: &EntryPoint,
     supports_array_length: bool,
-) -> Result<(), super::EntryPointError> {
+) -> Result<(), EntryPointError> {
     if !options.fake_missing_bindings {
         for (var_handle, var) in module.global_variables.iter() {
             if fun_info[var_handle].is_empty() {
@@ -4428,7 +4447,7 @@ fn validate_entry_point(
                         Some(ref br) => br,
                         None => {
                             let var_name = var.name.clone().unwrap_or_default();
-                            return Err(super::EntryPointError::MissingBinding(var_name));
+                            return Err(EntryPointError::MissingBinding(var_name));
                         }
                     };
                     let target = options.get_resource_binding_target(ep, br);
@@ -4449,7 +4468,7 @@ fn validate_entry_point(
                         None => false,
                     };
                     if !good {
-                        return Err(super::EntryPointError::MissingBindTarget(br.clone()));
+                        return Err(EntryPointError::MissingBindTarget(br.clone()));
                     }
                 }
                 crate::AddressSpace::PushConstant => {
@@ -4471,7 +4490,7 @@ fn validate_entry_point(
 /// Initializing workgroup variables is more tricky for Metal because we have to deal
 /// with atomics at the type-level (which don't have a copy constructor).
 mod workgroup_mem_init {
-    use crate::EntryPoint;
+    use crate::{EntryPoint, Module};
 
     use super::*;
 
@@ -4546,7 +4565,7 @@ mod workgroup_mem_init {
             &mut self,
             options: &Options,
             ep: &EntryPoint,
-            module: &crate::Module,
+            module: &Module,
             fun_info: &valid::FunctionInfo,
         ) -> bool {
             options.zero_initialize_workgroup_memory
@@ -4558,7 +4577,7 @@ mod workgroup_mem_init {
 
         pub(super) fn write_workgroup_variables_initialization(
             &mut self,
-            module: &crate::Module,
+            module: &Module,
             module_info: &valid::ModuleInfo,
             fun_info: &valid::FunctionInfo,
             local_invocation_id: Option<&NameKey>,
@@ -4600,7 +4619,7 @@ mod workgroup_mem_init {
 
         fn write_workgroup_variable_initialization(
             &mut self,
-            module: &crate::Module,
+            module: &Module,
             module_info: &valid::ModuleInfo,
             ty: Handle<crate::Type>,
             access_stack: &mut AccessStack,
@@ -4672,7 +4691,7 @@ mod workgroup_mem_init {
 fn test_stack_size() {
     use crate::valid::{Capabilities, ValidationFlags};
     // create a module with at least one expression nested
-    let mut module = crate::Module::default();
+    let mut module = Module::default();
     let mut fun = crate::Function::default();
     let const_expr = fun.expressions.append(
         crate::Expression::Literal(crate::Literal::F32(1.0)),
