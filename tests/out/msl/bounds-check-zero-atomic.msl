@@ -23,9 +23,6 @@ struct Globals {
     type_1 b;
     type_2 c;
 };
-struct ArgumentBufferGroup0 {
-    device Globals& globals [[id(0)]];
-};
 
 uint fetch_add_atomic(
     device Globals& globals,

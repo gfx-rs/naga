@@ -4,10 +4,6 @@
 
 using metal::uint;
 
-struct ArgumentBufferGroup0 {
-    metal::texture2d<float, metal::access::sample> Texture [[id(0)]];
-    metal::sampler Sampler [[id(1)]];
-};
 
 metal::float4 test(
     metal::texture2d<float, metal::access::sample> Passed_Texture,
@@ -20,9 +16,13 @@ metal::float4 test(
 struct main_Output {
     metal::float4 member [[color(0)]];
 };
+struct main_ArgumentBuffer {
+    metal::texture2d<float, metal::access::sample> Texture [[id(0)]];
+    metal::sampler Sampler [[id(1)]];
+};
 fragment main_Output main_(
-  device ArgumentBufferGroup0& argumentBufferGroup0 [[buffer(0)]]
+  device main_ArgumentBuffer& argumentBuffer [[buffer(0)]]
 ) {
-    metal::float4 _e2 = test(argumentBufferGroup0.Texture, argumentBufferGroup0.Sampler);
+    metal::float4 _e2 = test(argumentBuffer.Texture, argumentBuffer.Sampler);
     return main_Output { _e2 };
 }

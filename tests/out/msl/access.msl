@@ -57,12 +57,6 @@ struct type_22 {
 struct type_26 {
     metal::float4 inner[2];
 };
-struct ArgumentBufferGroup0 {
-    device Bar& bar [[id(0)]];
-    constant Baz& baz [[id(1)]];
-    device metal::int2& qux [[id(2)]];
-    constant MatCx2InArray& nested_mat_cx2_ [[id(3)]];
-};
 
 void test_matrix_within_struct_accesses(
     constant Baz& baz
@@ -174,9 +168,15 @@ struct foo_vertInput {
 struct foo_vertOutput {
     metal::float4 member [[position]];
 };
+struct foo_vertArgumentBuffer {
+    device Bar& bar [[id(0)]];
+    constant Baz& baz [[id(1)]];
+    device metal::int2& qux [[id(2)]];
+    constant MatCx2InArray& nested_mat_cx2_ [[id(3)]];
+};
 vertex foo_vertOutput foo_vert(
   uint vi [[vertex_id]]
-, device ArgumentBufferGroup0& argumentBufferGroup0 [[buffer(0)]]
+, device foo_vertArgumentBuffer& argumentBuffer [[buffer(0)]]
 , constant _mslBufferSizes& _buffer_sizes [[buffer(24)]]
 ) {
     float foo = {};
@@ -184,13 +184,13 @@ vertex foo_vertOutput foo_vert(
     foo = 0.0;
     float baz_1 = foo;
     foo = 1.0;
-    test_matrix_within_struct_accesses(argumentBufferGroup0.baz);
-    test_matrix_within_array_within_struct_accesses(argumentBufferGroup0.nested_mat_cx2_);
-    metal::float4x3 _matrix = argumentBufferGroup0.bar._matrix;
-    type_9 arr_1 = argumentBufferGroup0.bar.arr;
-    float b = argumentBufferGroup0.bar._matrix[3].x;
-    int a_1 = argumentBufferGroup0.bar.data[(1 + (_buffer_sizes.size1 - 160 - 8) / 8) - 2u].value;
-    metal::int2 c = argumentBufferGroup0.qux;
+    test_matrix_within_struct_accesses(argumentBuffer.baz);
+    test_matrix_within_array_within_struct_accesses(argumentBuffer.nested_mat_cx2_);
+    metal::float4x3 _matrix = argumentBuffer.bar._matrix;
+    type_9 arr_1 = argumentBuffer.bar.arr;
+    float b = argumentBuffer.bar._matrix[3].x;
+    int a_1 = argumentBuffer.bar.data[(1 + (_buffer_sizes.size1 - 160 - 8) / 8) - 2u].value;
+    metal::int2 c = argumentBuffer.qux;
     float _e34 = read_from_private(foo);
     c2_ = type_22 {a_1, static_cast<int>(b), 3, 4, 5};
     c2_.inner[vi + 1u] = 42;
@@ -203,15 +203,19 @@ vertex foo_vertOutput foo_vert(
 struct foo_fragOutput {
     metal::float4 member_1 [[color(0)]];
 };
+struct foo_fragArgumentBuffer {
+    device Bar& bar [[id(0)]];
+    device metal::int2& qux [[id(1)]];
+};
 fragment foo_fragOutput foo_frag(
-  device ArgumentBufferGroup0& argumentBufferGroup0 [[buffer(0)]]
+  device foo_fragArgumentBuffer& argumentBuffer [[buffer(0)]]
 , constant _mslBufferSizes& _buffer_sizes [[buffer(24)]]
 ) {
-    argumentBufferGroup0.bar._matrix[1].z = 1.0;
-    argumentBufferGroup0.bar._matrix = metal::float4x3(metal::float3(0.0), metal::float3(1.0), metal::float3(2.0), metal::float3(3.0));
-    argumentBufferGroup0.bar.arr = type_9 {metal::uint2(0u), metal::uint2(1u)};
-    argumentBufferGroup0.bar.data[1].value = 1;
-    argumentBufferGroup0.qux = metal::int2 {};
+    argumentBuffer.bar._matrix[1].z = 1.0;
+    argumentBuffer.bar._matrix = metal::float4x3(metal::float3(0.0), metal::float3(1.0), metal::float3(2.0), metal::float3(3.0));
+    argumentBuffer.bar.arr = type_9 {metal::uint2(0u), metal::uint2(1u)};
+    argumentBuffer.bar.data[1].value = 1;
+    argumentBuffer.qux = metal::int2 {};
     return foo_fragOutput { metal::float4(0.0) };
 }
 

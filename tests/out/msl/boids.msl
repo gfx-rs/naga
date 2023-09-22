@@ -27,17 +27,17 @@ struct Particles {
     type_3 particles;
 };
 constant uint NUM_PARTICLES = 1500u;
-struct ArgumentBufferGroup0 {
+
+struct main_Input {
+};
+struct main_ArgumentBuffer {
     constant SimParams& params [[id(0)]];
     device Particles const& particlesSrc [[id(1)]];
     device Particles& particlesDst [[id(2)]];
 };
-
-struct main_Input {
-};
 kernel void main_(
   metal::uint3 global_invocation_id [[thread_position_in_grid]]
-, device ArgumentBufferGroup0& argumentBufferGroup0 [[buffer(0)]]
+, device main_ArgumentBuffer& argumentBuffer [[buffer(0)]]
 , constant _mslBufferSizes& _buffer_sizes [[buffer(3)]]
 ) {
     metal::float2 vPos = {};
@@ -54,9 +54,9 @@ kernel void main_(
     if (index >= NUM_PARTICLES) {
         return;
     }
-    metal::float2 _e8 = argumentBufferGroup0.particlesSrc.particles[index].pos;
+    metal::float2 _e8 = argumentBuffer.particlesSrc.particles[index].pos;
     vPos = _e8;
-    metal::float2 _e14 = argumentBufferGroup0.particlesSrc.particles[index].vel;
+    metal::float2 _e14 = argumentBuffer.particlesSrc.particles[index].vel;
     vVel = _e14;
     cMass = metal::float2(0.0, 0.0);
     cVel = metal::float2(0.0, 0.0);
@@ -80,14 +80,14 @@ kernel void main_(
             continue;
         }
         uint _e43 = i;
-        metal::float2 _e46 = argumentBufferGroup0.particlesSrc.particles[_e43].pos;
+        metal::float2 _e46 = argumentBuffer.particlesSrc.particles[_e43].pos;
         pos = _e46;
         uint _e49 = i;
-        metal::float2 _e52 = argumentBufferGroup0.particlesSrc.particles[_e49].vel;
+        metal::float2 _e52 = argumentBuffer.particlesSrc.particles[_e49].vel;
         vel = _e52;
         metal::float2 _e53 = pos;
         metal::float2 _e54 = vPos;
-        float _e58 = argumentBufferGroup0.params.rule1Distance;
+        float _e58 = argumentBuffer.params.rule1Distance;
         if (metal::distance(_e53, _e54) < _e58) {
             metal::float2 _e60 = cMass;
             metal::float2 _e61 = pos;
@@ -97,7 +97,7 @@ kernel void main_(
         }
         metal::float2 _e66 = pos;
         metal::float2 _e67 = vPos;
-        float _e71 = argumentBufferGroup0.params.rule2Distance;
+        float _e71 = argumentBuffer.params.rule2Distance;
         if (metal::distance(_e66, _e67) < _e71) {
             metal::float2 _e73 = colVel;
             metal::float2 _e74 = pos;
@@ -106,7 +106,7 @@ kernel void main_(
         }
         metal::float2 _e78 = pos;
         metal::float2 _e79 = vPos;
-        float _e83 = argumentBufferGroup0.params.rule3Distance;
+        float _e83 = argumentBuffer.params.rule3Distance;
         if (metal::distance(_e78, _e79) < _e83) {
             metal::float2 _e85 = cVel;
             metal::float2 _e86 = vel;
@@ -130,18 +130,18 @@ kernel void main_(
     }
     metal::float2 _e112 = vVel;
     metal::float2 _e113 = cMass;
-    float _e116 = argumentBufferGroup0.params.rule1Scale;
+    float _e116 = argumentBuffer.params.rule1Scale;
     metal::float2 _e119 = colVel;
-    float _e122 = argumentBufferGroup0.params.rule2Scale;
+    float _e122 = argumentBuffer.params.rule2Scale;
     metal::float2 _e125 = cVel;
-    float _e128 = argumentBufferGroup0.params.rule3Scale;
+    float _e128 = argumentBuffer.params.rule3Scale;
     vVel = ((_e112 + (_e113 * _e116)) + (_e119 * _e122)) + (_e125 * _e128);
     metal::float2 _e131 = vVel;
     metal::float2 _e133 = vVel;
     vVel = metal::normalize(_e131) * metal::clamp(metal::length(_e133), 0.0, 0.1);
     metal::float2 _e139 = vPos;
     metal::float2 _e140 = vVel;
-    float _e143 = argumentBufferGroup0.params.deltaT;
+    float _e143 = argumentBuffer.params.deltaT;
     vPos = _e139 + (_e140 * _e143);
     float _e147 = vPos.x;
     if (_e147 < -1.0) {
@@ -160,8 +160,8 @@ kernel void main_(
         vPos.y = -1.0;
     }
     metal::float2 _e174 = vPos;
-    argumentBufferGroup0.particlesDst.particles[index].pos = _e174;
+    argumentBuffer.particlesDst.particles[index].pos = _e174;
     metal::float2 _e179 = vVel;
-    argumentBufferGroup0.particlesDst.particles[index].vel = _e179;
+    argumentBuffer.particlesDst.particles[index].vel = _e179;
     return;
 }

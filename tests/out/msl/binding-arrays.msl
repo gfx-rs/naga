@@ -16,7 +16,14 @@ struct UniformIndex {
 struct FragmentIn {
     uint index;
 };
-struct ArgumentBufferGroup0 {
+
+struct main_Input {
+    uint index [[user(loc0), flat]];
+};
+struct main_Output {
+    metal::float4 member [[color(0)]];
+};
+struct main_ArgumentBuffer {
     metal::array<metal::texture2d<float, metal::access::sample>, 10> texture_array_unbounded [[id(0)]];
     metal::array<metal::texture2d<float, metal::access::sample>, 5> texture_array_bounded [[id(10)]];
     metal::array<metal::texture2d_array<float, metal::access::sample>, 5> texture_array_2darray [[id(15)]];
@@ -27,23 +34,16 @@ struct ArgumentBufferGroup0 {
     metal::array<metal::sampler, 5> samp_comp [[id(40)]];
     constant UniformIndex& uni [[id(45)]];
 };
-
-struct main_Input {
-    uint index [[user(loc0), flat]];
-};
-struct main_Output {
-    metal::float4 member [[color(0)]];
-};
 fragment main_Output main_(
   main_Input varyings [[stage_in]]
-, device ArgumentBufferGroup0& argumentBufferGroup0 [[buffer(0)]]
+, device main_ArgumentBuffer& argumentBuffer [[buffer(0)]]
 ) {
     const FragmentIn fragment_in = { varyings.index };
     uint u1_ = {};
     metal::uint2 u2_ = {};
     float v1_ = {};
     metal::float4 v4_ = {};
-    uint uniform_index = argumentBufferGroup0.uni.index;
+    uint uniform_index = argumentBuffer.uni.index;
     uint non_uniform_index = fragment_in.index;
     u1_ = 0u;
     u2_ = metal::uint2(0u);
@@ -52,121 +52,121 @@ fragment main_Output main_(
     metal::float2 uv = metal::float2(0.0);
     metal::int2 pix = metal::int2(0);
     metal::uint2 _e23 = u2_;
-    u2_ = _e23 + metal::uint2(argumentBufferGroup0.texture_array_unbounded[0].get_width(), argumentBufferGroup0.texture_array_unbounded[0].get_height());
+    u2_ = _e23 + metal::uint2(argumentBuffer.texture_array_unbounded[0].get_width(), argumentBuffer.texture_array_unbounded[0].get_height());
     metal::uint2 _e28 = u2_;
-    u2_ = _e28 + metal::uint2(argumentBufferGroup0.texture_array_unbounded[uniform_index].get_width(), argumentBufferGroup0.texture_array_unbounded[uniform_index].get_height());
+    u2_ = _e28 + metal::uint2(argumentBuffer.texture_array_unbounded[uniform_index].get_width(), argumentBuffer.texture_array_unbounded[uniform_index].get_height());
     metal::uint2 _e33 = u2_;
-    u2_ = _e33 + metal::uint2(argumentBufferGroup0.texture_array_unbounded[non_uniform_index].get_width(), argumentBufferGroup0.texture_array_unbounded[non_uniform_index].get_height());
-    metal::float4 _e42 = argumentBufferGroup0.texture_array_bounded[0].gather(argumentBufferGroup0.samp[0], uv);
+    u2_ = _e33 + metal::uint2(argumentBuffer.texture_array_unbounded[non_uniform_index].get_width(), argumentBuffer.texture_array_unbounded[non_uniform_index].get_height());
+    metal::float4 _e42 = argumentBuffer.texture_array_bounded[0].gather(argumentBuffer.samp[0], uv);
     metal::float4 _e43 = v4_;
     v4_ = _e43 + _e42;
-    metal::float4 _e50 = argumentBufferGroup0.texture_array_bounded[uniform_index].gather(argumentBufferGroup0.samp[uniform_index], uv);
+    metal::float4 _e50 = argumentBuffer.texture_array_bounded[uniform_index].gather(argumentBuffer.samp[uniform_index], uv);
     metal::float4 _e51 = v4_;
     v4_ = _e51 + _e50;
-    metal::float4 _e58 = argumentBufferGroup0.texture_array_bounded[non_uniform_index].gather(argumentBufferGroup0.samp[non_uniform_index], uv);
+    metal::float4 _e58 = argumentBuffer.texture_array_bounded[non_uniform_index].gather(argumentBuffer.samp[non_uniform_index], uv);
     metal::float4 _e59 = v4_;
     v4_ = _e59 + _e58;
-    metal::float4 _e68 = argumentBufferGroup0.texture_array_depth[0].gather_compare(argumentBufferGroup0.samp_comp[0], uv, 0.0);
+    metal::float4 _e68 = argumentBuffer.texture_array_depth[0].gather_compare(argumentBuffer.samp_comp[0], uv, 0.0);
     metal::float4 _e69 = v4_;
     v4_ = _e69 + _e68;
-    metal::float4 _e76 = argumentBufferGroup0.texture_array_depth[uniform_index].gather_compare(argumentBufferGroup0.samp_comp[uniform_index], uv, 0.0);
+    metal::float4 _e76 = argumentBuffer.texture_array_depth[uniform_index].gather_compare(argumentBuffer.samp_comp[uniform_index], uv, 0.0);
     metal::float4 _e77 = v4_;
     v4_ = _e77 + _e76;
-    metal::float4 _e84 = argumentBufferGroup0.texture_array_depth[non_uniform_index].gather_compare(argumentBufferGroup0.samp_comp[non_uniform_index], uv, 0.0);
+    metal::float4 _e84 = argumentBuffer.texture_array_depth[non_uniform_index].gather_compare(argumentBuffer.samp_comp[non_uniform_index], uv, 0.0);
     metal::float4 _e85 = v4_;
     v4_ = _e85 + _e84;
-    metal::float4 _e91 = (uint(0) < argumentBufferGroup0.texture_array_unbounded[0].get_num_mip_levels() && metal::all(metal::uint2(pix) < metal::uint2(argumentBufferGroup0.texture_array_unbounded[0].get_width(0), argumentBufferGroup0.texture_array_unbounded[0].get_height(0))) ? argumentBufferGroup0.texture_array_unbounded[0].read(metal::uint2(pix), 0): DefaultConstructible());
+    metal::float4 _e91 = (uint(0) < argumentBuffer.texture_array_unbounded[0].get_num_mip_levels() && metal::all(metal::uint2(pix) < metal::uint2(argumentBuffer.texture_array_unbounded[0].get_width(0), argumentBuffer.texture_array_unbounded[0].get_height(0))) ? argumentBuffer.texture_array_unbounded[0].read(metal::uint2(pix), 0): DefaultConstructible());
     metal::float4 _e92 = v4_;
     v4_ = _e92 + _e91;
-    metal::float4 _e97 = (uint(0) < argumentBufferGroup0.texture_array_unbounded[uniform_index].get_num_mip_levels() && metal::all(metal::uint2(pix) < metal::uint2(argumentBufferGroup0.texture_array_unbounded[uniform_index].get_width(0), argumentBufferGroup0.texture_array_unbounded[uniform_index].get_height(0))) ? argumentBufferGroup0.texture_array_unbounded[uniform_index].read(metal::uint2(pix), 0): DefaultConstructible());
+    metal::float4 _e97 = (uint(0) < argumentBuffer.texture_array_unbounded[uniform_index].get_num_mip_levels() && metal::all(metal::uint2(pix) < metal::uint2(argumentBuffer.texture_array_unbounded[uniform_index].get_width(0), argumentBuffer.texture_array_unbounded[uniform_index].get_height(0))) ? argumentBuffer.texture_array_unbounded[uniform_index].read(metal::uint2(pix), 0): DefaultConstructible());
     metal::float4 _e98 = v4_;
     v4_ = _e98 + _e97;
-    metal::float4 _e103 = (uint(0) < argumentBufferGroup0.texture_array_unbounded[non_uniform_index].get_num_mip_levels() && metal::all(metal::uint2(pix) < metal::uint2(argumentBufferGroup0.texture_array_unbounded[non_uniform_index].get_width(0), argumentBufferGroup0.texture_array_unbounded[non_uniform_index].get_height(0))) ? argumentBufferGroup0.texture_array_unbounded[non_uniform_index].read(metal::uint2(pix), 0): DefaultConstructible());
+    metal::float4 _e103 = (uint(0) < argumentBuffer.texture_array_unbounded[non_uniform_index].get_num_mip_levels() && metal::all(metal::uint2(pix) < metal::uint2(argumentBuffer.texture_array_unbounded[non_uniform_index].get_width(0), argumentBuffer.texture_array_unbounded[non_uniform_index].get_height(0))) ? argumentBuffer.texture_array_unbounded[non_uniform_index].read(metal::uint2(pix), 0): DefaultConstructible());
     metal::float4 _e104 = v4_;
     v4_ = _e104 + _e103;
     uint _e110 = u1_;
-    u1_ = _e110 + argumentBufferGroup0.texture_array_2darray[0].get_array_size();
+    u1_ = _e110 + argumentBuffer.texture_array_2darray[0].get_array_size();
     uint _e115 = u1_;
-    u1_ = _e115 + argumentBufferGroup0.texture_array_2darray[uniform_index].get_array_size();
+    u1_ = _e115 + argumentBuffer.texture_array_2darray[uniform_index].get_array_size();
     uint _e120 = u1_;
-    u1_ = _e120 + argumentBufferGroup0.texture_array_2darray[non_uniform_index].get_array_size();
+    u1_ = _e120 + argumentBuffer.texture_array_2darray[non_uniform_index].get_array_size();
     uint _e126 = u1_;
-    u1_ = _e126 + argumentBufferGroup0.texture_array_bounded[0].get_num_mip_levels();
+    u1_ = _e126 + argumentBuffer.texture_array_bounded[0].get_num_mip_levels();
     uint _e131 = u1_;
-    u1_ = _e131 + argumentBufferGroup0.texture_array_bounded[uniform_index].get_num_mip_levels();
+    u1_ = _e131 + argumentBuffer.texture_array_bounded[uniform_index].get_num_mip_levels();
     uint _e136 = u1_;
-    u1_ = _e136 + argumentBufferGroup0.texture_array_bounded[non_uniform_index].get_num_mip_levels();
+    u1_ = _e136 + argumentBuffer.texture_array_bounded[non_uniform_index].get_num_mip_levels();
     uint _e142 = u1_;
-    u1_ = _e142 + argumentBufferGroup0.texture_array_multisampled[0].get_num_samples();
+    u1_ = _e142 + argumentBuffer.texture_array_multisampled[0].get_num_samples();
     uint _e147 = u1_;
-    u1_ = _e147 + argumentBufferGroup0.texture_array_multisampled[uniform_index].get_num_samples();
+    u1_ = _e147 + argumentBuffer.texture_array_multisampled[uniform_index].get_num_samples();
     uint _e152 = u1_;
-    u1_ = _e152 + argumentBufferGroup0.texture_array_multisampled[non_uniform_index].get_num_samples();
-    metal::float4 _e160 = argumentBufferGroup0.texture_array_bounded[0].sample(argumentBufferGroup0.samp[0], uv);
+    u1_ = _e152 + argumentBuffer.texture_array_multisampled[non_uniform_index].get_num_samples();
+    metal::float4 _e160 = argumentBuffer.texture_array_bounded[0].sample(argumentBuffer.samp[0], uv);
     metal::float4 _e161 = v4_;
     v4_ = _e161 + _e160;
-    metal::float4 _e167 = argumentBufferGroup0.texture_array_bounded[uniform_index].sample(argumentBufferGroup0.samp[uniform_index], uv);
+    metal::float4 _e167 = argumentBuffer.texture_array_bounded[uniform_index].sample(argumentBuffer.samp[uniform_index], uv);
     metal::float4 _e168 = v4_;
     v4_ = _e168 + _e167;
-    metal::float4 _e174 = argumentBufferGroup0.texture_array_bounded[non_uniform_index].sample(argumentBufferGroup0.samp[non_uniform_index], uv);
+    metal::float4 _e174 = argumentBuffer.texture_array_bounded[non_uniform_index].sample(argumentBuffer.samp[non_uniform_index], uv);
     metal::float4 _e175 = v4_;
     v4_ = _e175 + _e174;
-    metal::float4 _e184 = argumentBufferGroup0.texture_array_bounded[0].sample(argumentBufferGroup0.samp[0], uv, metal::bias(0.0));
+    metal::float4 _e184 = argumentBuffer.texture_array_bounded[0].sample(argumentBuffer.samp[0], uv, metal::bias(0.0));
     metal::float4 _e185 = v4_;
     v4_ = _e185 + _e184;
-    metal::float4 _e192 = argumentBufferGroup0.texture_array_bounded[uniform_index].sample(argumentBufferGroup0.samp[uniform_index], uv, metal::bias(0.0));
+    metal::float4 _e192 = argumentBuffer.texture_array_bounded[uniform_index].sample(argumentBuffer.samp[uniform_index], uv, metal::bias(0.0));
     metal::float4 _e193 = v4_;
     v4_ = _e193 + _e192;
-    metal::float4 _e200 = argumentBufferGroup0.texture_array_bounded[non_uniform_index].sample(argumentBufferGroup0.samp[non_uniform_index], uv, metal::bias(0.0));
+    metal::float4 _e200 = argumentBuffer.texture_array_bounded[non_uniform_index].sample(argumentBuffer.samp[non_uniform_index], uv, metal::bias(0.0));
     metal::float4 _e201 = v4_;
     v4_ = _e201 + _e200;
-    float _e210 = argumentBufferGroup0.texture_array_depth[0].sample_compare(argumentBufferGroup0.samp_comp[0], uv, 0.0);
+    float _e210 = argumentBuffer.texture_array_depth[0].sample_compare(argumentBuffer.samp_comp[0], uv, 0.0);
     float _e211 = v1_;
     v1_ = _e211 + _e210;
-    float _e218 = argumentBufferGroup0.texture_array_depth[uniform_index].sample_compare(argumentBufferGroup0.samp_comp[uniform_index], uv, 0.0);
+    float _e218 = argumentBuffer.texture_array_depth[uniform_index].sample_compare(argumentBuffer.samp_comp[uniform_index], uv, 0.0);
     float _e219 = v1_;
     v1_ = _e219 + _e218;
-    float _e226 = argumentBufferGroup0.texture_array_depth[non_uniform_index].sample_compare(argumentBufferGroup0.samp_comp[non_uniform_index], uv, 0.0);
+    float _e226 = argumentBuffer.texture_array_depth[non_uniform_index].sample_compare(argumentBuffer.samp_comp[non_uniform_index], uv, 0.0);
     float _e227 = v1_;
     v1_ = _e227 + _e226;
-    float _e236 = argumentBufferGroup0.texture_array_depth[0].sample_compare(argumentBufferGroup0.samp_comp[0], uv, 0.0);
+    float _e236 = argumentBuffer.texture_array_depth[0].sample_compare(argumentBuffer.samp_comp[0], uv, 0.0);
     float _e237 = v1_;
     v1_ = _e237 + _e236;
-    float _e244 = argumentBufferGroup0.texture_array_depth[uniform_index].sample_compare(argumentBufferGroup0.samp_comp[uniform_index], uv, 0.0);
+    float _e244 = argumentBuffer.texture_array_depth[uniform_index].sample_compare(argumentBuffer.samp_comp[uniform_index], uv, 0.0);
     float _e245 = v1_;
     v1_ = _e245 + _e244;
-    float _e252 = argumentBufferGroup0.texture_array_depth[non_uniform_index].sample_compare(argumentBufferGroup0.samp_comp[non_uniform_index], uv, 0.0);
+    float _e252 = argumentBuffer.texture_array_depth[non_uniform_index].sample_compare(argumentBuffer.samp_comp[non_uniform_index], uv, 0.0);
     float _e253 = v1_;
     v1_ = _e253 + _e252;
-    metal::float4 _e261 = argumentBufferGroup0.texture_array_bounded[0].sample(argumentBufferGroup0.samp[0], uv, metal::gradient2d(uv, uv));
+    metal::float4 _e261 = argumentBuffer.texture_array_bounded[0].sample(argumentBuffer.samp[0], uv, metal::gradient2d(uv, uv));
     metal::float4 _e262 = v4_;
     v4_ = _e262 + _e261;
-    metal::float4 _e268 = argumentBufferGroup0.texture_array_bounded[uniform_index].sample(argumentBufferGroup0.samp[uniform_index], uv, metal::gradient2d(uv, uv));
+    metal::float4 _e268 = argumentBuffer.texture_array_bounded[uniform_index].sample(argumentBuffer.samp[uniform_index], uv, metal::gradient2d(uv, uv));
     metal::float4 _e269 = v4_;
     v4_ = _e269 + _e268;
-    metal::float4 _e275 = argumentBufferGroup0.texture_array_bounded[non_uniform_index].sample(argumentBufferGroup0.samp[non_uniform_index], uv, metal::gradient2d(uv, uv));
+    metal::float4 _e275 = argumentBuffer.texture_array_bounded[non_uniform_index].sample(argumentBuffer.samp[non_uniform_index], uv, metal::gradient2d(uv, uv));
     metal::float4 _e276 = v4_;
     v4_ = _e276 + _e275;
-    metal::float4 _e285 = argumentBufferGroup0.texture_array_bounded[0].sample(argumentBufferGroup0.samp[0], uv, metal::level(0.0));
+    metal::float4 _e285 = argumentBuffer.texture_array_bounded[0].sample(argumentBuffer.samp[0], uv, metal::level(0.0));
     metal::float4 _e286 = v4_;
     v4_ = _e286 + _e285;
-    metal::float4 _e293 = argumentBufferGroup0.texture_array_bounded[uniform_index].sample(argumentBufferGroup0.samp[uniform_index], uv, metal::level(0.0));
+    metal::float4 _e293 = argumentBuffer.texture_array_bounded[uniform_index].sample(argumentBuffer.samp[uniform_index], uv, metal::level(0.0));
     metal::float4 _e294 = v4_;
     v4_ = _e294 + _e293;
-    metal::float4 _e301 = argumentBufferGroup0.texture_array_bounded[non_uniform_index].sample(argumentBufferGroup0.samp[non_uniform_index], uv, metal::level(0.0));
+    metal::float4 _e301 = argumentBuffer.texture_array_bounded[non_uniform_index].sample(argumentBuffer.samp[non_uniform_index], uv, metal::level(0.0));
     metal::float4 _e302 = v4_;
     v4_ = _e302 + _e301;
     metal::float4 _e307 = v4_;
-    if (metal::all(metal::uint2(pix) < metal::uint2(argumentBufferGroup0.texture_array_storage[0].get_width(), argumentBufferGroup0.texture_array_storage[0].get_height()))) {
-        argumentBufferGroup0.texture_array_storage[0].write(_e307, metal::uint2(pix));
+    if (metal::all(metal::uint2(pix) < metal::uint2(argumentBuffer.texture_array_storage[0].get_width(), argumentBuffer.texture_array_storage[0].get_height()))) {
+        argumentBuffer.texture_array_storage[0].write(_e307, metal::uint2(pix));
     }
     metal::float4 _e310 = v4_;
-    if (metal::all(metal::uint2(pix) < metal::uint2(argumentBufferGroup0.texture_array_storage[uniform_index].get_width(), argumentBufferGroup0.texture_array_storage[uniform_index].get_height()))) {
-        argumentBufferGroup0.texture_array_storage[uniform_index].write(_e310, metal::uint2(pix));
+    if (metal::all(metal::uint2(pix) < metal::uint2(argumentBuffer.texture_array_storage[uniform_index].get_width(), argumentBuffer.texture_array_storage[uniform_index].get_height()))) {
+        argumentBuffer.texture_array_storage[uniform_index].write(_e310, metal::uint2(pix));
     }
     metal::float4 _e313 = v4_;
-    if (metal::all(metal::uint2(pix) < metal::uint2(argumentBufferGroup0.texture_array_storage[non_uniform_index].get_width(), argumentBufferGroup0.texture_array_storage[non_uniform_index].get_height()))) {
-        argumentBufferGroup0.texture_array_storage[non_uniform_index].write(_e313, metal::uint2(pix));
+    if (metal::all(metal::uint2(pix) < metal::uint2(argumentBuffer.texture_array_storage[non_uniform_index].get_width(), argumentBuffer.texture_array_storage[non_uniform_index].get_height()))) {
+        argumentBuffer.texture_array_storage[non_uniform_index].write(_e313, metal::uint2(pix));
     }
     metal::uint2 _e314 = u2_;
     uint _e315 = u1_;

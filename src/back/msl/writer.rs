@@ -1,14 +1,12 @@
 use super::{
-    sampler as sm, EntryPointError, Error, LocationMode, Options, PipelineOptions, ResolvedBinding,
-    TranslationInfo,
+    sampler as sm, BindTarget, EntryPointError, Error, LocationMode, Options, PipelineOptions,
+    ResolvedBinding, TranslationInfo,
 };
 use crate::{
     arena::Handle,
-    back::{self},
-    proc::index,
-    proc::{self, NameKey, TypeResolution},
-    valid, ArraySize, EntryPoint, FastHashMap, FastHashSet, GlobalVariable, Module,
-    ResourceBinding, StorageAccess,
+    back::{self, msl::BindSamplerTarget},
+    proc::{self, index, NameKey, TypeResolution},
+    valid, ArraySize, EntryPoint, FastHashMap, FastHashSet, GlobalVariable, Module, StorageAccess,
 };
 use bit_set::BitSet;
 use std::{
@@ -87,7 +85,7 @@ struct TypeContext<'a> {
     gctx: proc::GlobalCtx<'a>,
     names: &'a FastHashMap<NameKey, String>,
     access: StorageAccess,
-    binding: Option<&'a super::ResolvedBinding>,
+    binding: Option<&'a ResolvedBinding>,
     first_time: bool,
 }
 
@@ -221,7 +219,7 @@ impl<'a> Display for TypeContext<'a> {
                     ..*self
                 };
 
-                if let Some(&super::ResolvedBinding::Resource(super::BindTarget {
+                if let Some(&ResolvedBinding::Resource(BindTarget {
                     binding_array_size: Some(override_size),
                     ..
                 })) = self.binding
@@ -240,9 +238,9 @@ impl<'a> Display for TypeContext<'a> {
 struct TypedGlobalVariable<'a> {
     module: &'a Module,
     names: &'a FastHashMap<NameKey, String>,
-    handle: Handle<crate::GlobalVariable>,
+    handle: Handle<GlobalVariable>,
     usage: valid::GlobalUse,
-    binding: Option<&'a super::ResolvedBinding>,
+    binding: Option<&'a ResolvedBinding>,
     reference: bool,
 }
 
@@ -1055,7 +1053,7 @@ impl<W: Write> Writer<W> {
     /// dynamically sized array.
     fn put_dynamic_array_max_index(
         &mut self,
-        handle: Handle<crate::GlobalVariable>,
+        handle: Handle<GlobalVariable>,
         context: &ExpressionContext,
     ) -> BackendResult {
         let global = &context.module.global_variables[handle];
@@ -3691,7 +3689,6 @@ impl<W: Write> Writer<W> {
     fn write_argument_buffer(
         &mut self,
         module: &Module,
-        options: &Options,
         mut members: Vec<ArgumentBufferMember>,
         fun_name: &str,
     ) -> Result<(), Error> {
@@ -3700,6 +3697,7 @@ impl<W: Write> Writer<W> {
 
         log::trace!("Writing argument buffer for {fun_name}");
 
+        let mut id = 0;
         for member in members.drain(..) {
             let ArgumentBufferMember {
                 var,
@@ -3712,14 +3710,12 @@ impl<W: Write> Writer<W> {
 
             let gctx = module.to_ctx();
             let var_type = &gctx.types[var.ty];
-            let id = match resolved_binding {
-                ResolvedBinding::Resource(super::BindTarget {
-                    buffer: Some(slot), ..
-                }) => slot,
-                _ => continue,
-            };
+            log::trace!(
+                "Writing argument buffer member {resolved_binding:?}: {name} - {var_type:?}"
+            );
 
-            log::trace!("Writing argument member {resolved_binding:?}: {name} - {var_type:?}");
+            // let id =
+            //     get_argument_buffer_member_id(&resolved_binding, options.fake_missing_bindings)?;
 
             // Determine the storage access required for this variable
             let storage_access = match var.space {
@@ -3774,7 +3770,7 @@ impl<W: Write> Writer<W> {
                 if access.is_empty() { "" } else { " " },
             ) {
                 Err(e) => {
-                    log::error!("Error writing argument buffer for member {var:?}");
+                    log::error!("Error writing argument buffer at member {var:?}");
                     return Err(e.into());
                 }
                 _ => {}
@@ -3783,14 +3779,16 @@ impl<W: Write> Writer<W> {
             // If this binding was an array, we need to increment ID by the size of the array.
 
             // Dynamically sized array bindings need to be treated as a special case:
-            // if let Some(super::ResolvedBinding::Resource(super::BindTarget {
-            //     binding_array_size: Some(array_size),
-            //     ..
-            // })) = resolved_binding
-            // {
-            //     id += array_size;
-            //     continue;
-            // };
+            match resolved_binding {
+                ResolvedBinding::Resource(BindTarget {
+                    binding_array_size: Some(array_size),
+                    ..
+                }) => {
+                    id += array_size;
+                    continue;
+                }
+                _ => {}
+            };
 
             // Otherwise, check the variable's type to see if it's an array.
             match var_type.inner {
@@ -3802,12 +3800,12 @@ impl<W: Write> Writer<W> {
                     size: ArraySize::Constant(size),
                     ..
                 } => {
-                    // id += size.get();
+                    id += size.get();
                 }
 
                 // Not an array - just increment by 1.
                 _ => {
-                    // id += 1;
+                    id += 1;
                 }
             }
         }
@@ -4069,7 +4067,7 @@ impl<W: Write> Writer<W> {
         // If we have bindings that can be represented in an argument buffer, emit a struct
         // that contains those bindings.
         if argument_buffer_required {
-            self.write_argument_buffer(module, options, argument_buffer_members, &fun_name)?;
+            self.write_argument_buffer(module, argument_buffer_members, &fun_name)?;
         }
 
         // Write the entry point function's name, and begin its argument list.
@@ -4163,6 +4161,7 @@ impl<W: Write> Writer<W> {
                 ','
             };
             write!(self.out, "{separator} ")?;
+            // TODO: Determine if this is a vertex entry point; if so, this should be passed in as const
             writeln!(
                 self.out,
                 "device {fun_name}ArgumentBuffer& argumentBuffer [[buffer(0)]]"
@@ -4393,6 +4392,37 @@ impl<W: Write> Writer<W> {
     }
 }
 
+fn get_argument_buffer_member_id(
+    resolved_binding: &ResolvedBinding,
+    fake_missing_bindings: bool,
+) -> Result<u8, Error> {
+    let bind_target = match resolved_binding {
+        ResolvedBinding::Resource(b) => b,
+        // If we are faking missing bindings, then simply use the fake index we were given.
+        ResolvedBinding::User { index, .. } if fake_missing_bindings => return Ok(*index as _),
+        // It should not be possible for us to have been passed a variable that isn't resolved,
+        // so throw a validation error here.
+        _ => return Err(Error::Validation),
+    };
+
+    match bind_target {
+        BindTarget {
+            buffer: Some(slot), ..
+        } => Ok(*slot),
+        BindTarget {
+            texture: Some(slot),
+            ..
+        } => Ok(*slot),
+        BindTarget {
+            sampler: Some(BindSamplerTarget::Resource(slot)),
+            ..
+        } => Ok(*slot),
+        // It should not be possible for us to have been passed a variable without a valid bind
+        // target so throw a validation error here.
+        _ => Err(Error::Validation),
+    }
+}
+
 struct EntryPointInfo<'a> {
     ep: &'a EntryPoint,
     ep_index: usize,
@@ -4424,54 +4454,57 @@ fn validate_entry_point(
     ep: &EntryPoint,
     supports_array_length: bool,
 ) -> Result<(), EntryPointError> {
-    if !options.fake_missing_bindings {
-        for (var_handle, var) in module.global_variables.iter() {
-            if fun_info[var_handle].is_empty() {
-                continue;
-            }
-            match var.space {
-                crate::AddressSpace::Uniform
-                | crate::AddressSpace::Storage { .. }
-                | crate::AddressSpace::Handle => {
-                    let br = match var.binding {
-                        Some(ref br) => br,
-                        None => {
-                            let var_name = var.name.clone().unwrap_or_default();
-                            return Err(EntryPointError::MissingBinding(var_name));
-                        }
-                    };
-                    let target = options.get_resource_binding_target(ep, br);
-                    let good = match target {
-                        Some(target) => {
-                            let binding_ty = match module.types[var.ty].inner {
-                                crate::TypeInner::BindingArray { base, .. } => {
-                                    &module.types[base].inner
-                                }
-                                ref ty => ty,
-                            };
-                            match *binding_ty {
-                                crate::TypeInner::Image { .. } => target.texture.is_some(),
-                                crate::TypeInner::Sampler { .. } => target.sampler.is_some(),
-                                _ => target.buffer.is_some(),
-                            }
-                        }
-                        None => false,
-                    };
-                    if !good {
-                        return Err(EntryPointError::MissingBindTarget(br.clone()));
+    // If we're faking missing bindings, then there's no need to validate them.
+    if options.fake_missing_bindings {
+        return Ok(());
+    }
+
+    for (var_handle, var) in module.global_variables.iter() {
+        if fun_info[var_handle].is_empty() {
+            continue;
+        }
+        match var.space {
+            crate::AddressSpace::Uniform
+            | crate::AddressSpace::Storage { .. }
+            | crate::AddressSpace::Handle => {
+                let br = match var.binding {
+                    Some(ref br) => br,
+                    None => {
+                        let var_name = var.name.clone().unwrap_or_default();
+                        return Err(EntryPointError::MissingBinding(var_name));
                     }
+                };
+                let target = options.get_resource_binding_target(ep, br);
+                let good = match target {
+                    Some(target) => {
+                        let binding_ty = match module.types[var.ty].inner {
+                            crate::TypeInner::BindingArray { base, .. } => {
+                                &module.types[base].inner
+                            }
+                            ref ty => ty,
+                        };
+                        match *binding_ty {
+                            crate::TypeInner::Image { .. } => target.texture.is_some(),
+                            crate::TypeInner::Sampler { .. } => target.sampler.is_some(),
+                            _ => target.buffer.is_some(),
+                        }
+                    }
+                    None => false,
+                };
+                if !good {
+                    return Err(EntryPointError::MissingBindTarget(br.clone()));
                 }
-                crate::AddressSpace::PushConstant => {
-                    options.resolve_push_constants(ep)?;
-                }
-                crate::AddressSpace::Function
-                | crate::AddressSpace::Private
-                | crate::AddressSpace::WorkGroup => {}
             }
+            crate::AddressSpace::PushConstant => {
+                options.resolve_push_constants(ep)?;
+            }
+            crate::AddressSpace::Function
+            | crate::AddressSpace::Private
+            | crate::AddressSpace::WorkGroup => {}
         }
-        if supports_array_length {
-            options.resolve_sizes_buffer(ep)?;
-        }
+    }
+    if supports_array_length {
+        options.resolve_sizes_buffer(ep)?;
     }
 
     Ok(())
@@ -4480,12 +4513,12 @@ fn validate_entry_point(
 /// Initializing workgroup variables is more tricky for Metal because we have to deal
 /// with atomics at the type-level (which don't have a copy constructor).
 mod workgroup_mem_init {
-    use crate::{EntryPoint, Module};
+    use crate::{EntryPoint, GlobalVariable, Module};
 
     use super::*;
 
     enum Access {
-        GlobalVariable(Handle<crate::GlobalVariable>),
+        GlobalVariable(Handle<GlobalVariable>),
         StructMember(Handle<crate::Type>, u32),
         Array(usize),
     }

@@ -10,12 +10,12 @@ struct type_1 {
 struct Ah {
     type_1 inner;
 };
-struct ArgumentBufferGroup0 {
+
+struct cs_mainArgumentBuffer {
     device Ah const& ah [[id(0)]];
 };
-
 kernel void cs_main(
-  device ArgumentBufferGroup0& argumentBufferGroup0 [[buffer(0)]]
+  device cs_mainArgumentBuffer& argumentBuffer [[buffer(0)]]
 ) {
-    Ah ah_1 = argumentBufferGroup0.ah;
+    Ah ah_1 = argumentBuffer.ah;
 }

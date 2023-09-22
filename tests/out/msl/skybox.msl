@@ -12,11 +12,6 @@ struct Data {
     metal::float4x4 proj_inv;
     metal::float4x4 view;
 };
-struct ArgumentBufferGroup0 {
-    constant Data& r_data [[id(0)]];
-    metal::texturecube<float, metal::access::sample> r_texture [[id(1)]];
-    metal::sampler r_sampler [[id(2)]];
-};
 
 struct vs_mainInput {
 };
@@ -24,9 +19,12 @@ struct vs_mainOutput {
     metal::float4 position [[position]];
     metal::float3 uv [[user(loc0), center_perspective]];
 };
+struct vs_mainArgumentBuffer {
+    constant Data& r_data [[id(0)]];
+};
 vertex vs_mainOutput vs_main(
   uint vertex_index [[vertex_id]]
-, device ArgumentBufferGroup0& argumentBufferGroup0 [[buffer(0)]]
+, device vs_mainArgumentBuffer& argumentBuffer [[buffer(0)]]
 ) {
     int tmp1_ = {};
     int tmp2_ = {};
@@ -35,11 +33,11 @@ vertex vs_mainOutput vs_main(
     int _e9 = tmp1_;
     int _e15 = tmp2_;
     metal::float4 pos = metal::float4((static_cast<float>(_e9) * 4.0) - 1.0, (static_cast<float>(_e15) * 4.0) - 1.0, 0.0, 1.0);
-    metal::float4 _e27 = argumentBufferGroup0.r_data.view[0];
-    metal::float4 _e32 = argumentBufferGroup0.r_data.view[1];
-    metal::float4 _e37 = argumentBufferGroup0.r_data.view[2];
+    metal::float4 _e27 = argumentBuffer.r_data.view[0];
+    metal::float4 _e32 = argumentBuffer.r_data.view[1];
+    metal::float4 _e37 = argumentBuffer.r_data.view[2];
     metal::float3x3 inv_model_view = metal::transpose(metal::float3x3(_e27.xyz, _e32.xyz, _e37.xyz));
-    metal::float4x4 _e43 = argumentBufferGroup0.r_data.proj_inv;
+    metal::float4x4 _e43 = argumentBuffer.r_data.proj_inv;
     metal::float4 unprojected = _e43 * pos;
     const auto _tmp = VertexOutput {pos, inv_model_view * unprojected.xyz};
     return vs_mainOutput { _tmp.position, _tmp.uv };
@@ -52,10 +50,14 @@ struct fs_mainInput {
 struct fs_mainOutput {
     metal::float4 member_1 [[color(0)]];
 };
+struct fs_mainArgumentBuffer {
+    metal::texturecube<float, metal::access::sample> r_texture [[id(0)]];
+    metal::sampler r_sampler [[id(1)]];
+};
 fragment fs_mainOutput fs_main(
   fs_mainInput varyings_1 [[stage_in]]
 , metal::float4 position [[position]]
-, device ArgumentBufferGroup0& argumentBufferGroup0 [[buffer(0)]]
+, device fs_mainArgumentBuffer& argumentBuffer [[buffer(0)]]
 ) {
     constexpr metal::sampler r_sampler(
         metal::s_address::clamp_to_edge,
@@ -66,6 +68,6 @@ fragment fs_mainOutput fs_main(
         metal::coord::normalized
     );
     const VertexOutput in = { position, varyings_1.uv };
-    metal::float4 _e4 = argumentBufferGroup0.r_texture.sample(argumentBufferGroup0.r_sampler, in.uv);
+    metal::float4 _e4 = argumentBuffer.r_texture.sample(argumentBuffer.r_sampler, in.uv);
     return fs_mainOutput { _e4 };
 }
