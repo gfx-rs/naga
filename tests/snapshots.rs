@@ -317,7 +317,7 @@ fn write_output_msl(
     let (string, tr_info) = msl::write_string(module, info, &options, pipeline_options)
         .unwrap_or_else(|err| panic!("Metal write failed: {err}"));
 
-    for (ep, result) in module.entry_points.iter().zip(tr_info.entry_point_names) {
+    for (ep, result) in module.entry_points.iter().zip(tr_info.entry_point_info) {
         if let Err(error) = result {
             panic!("Failed to translate '{}': {}", ep.name, error);
         }

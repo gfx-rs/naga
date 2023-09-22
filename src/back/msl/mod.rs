@@ -35,6 +35,8 @@ mod writer;
 
 pub use writer::Writer;
 
+use self::writer::EntryPointInfo;
+
 pub type Slot = u8;
 pub type InlineSamplerIndex = u8;
 
@@ -495,7 +497,7 @@ pub struct TranslationInfo {
     /// corresponds to an entry point index.
     ///
     ///Note: Some entry points may fail translation because of missing bindings.
-    pub entry_point_names: Vec<Result<String, EntryPointError>>,
+    pub entry_point_info: Vec<Result<EntryPointInfo, EntryPointError>>,
 }
 
 pub fn write_string(

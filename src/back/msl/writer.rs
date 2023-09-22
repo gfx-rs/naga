@@ -3608,21 +3608,20 @@ impl<W: Write> Writer<W> {
         }
 
         let mut translation_info = TranslationInfo {
-            entry_point_names: Vec::with_capacity(module.entry_points.len()),
+            entry_point_info: Vec::with_capacity(module.entry_points.len()),
         };
 
         for (ep_index, ep) in module.entry_points.iter().enumerate() {
-            let entry_point_info = EntryPointInfo {
-                ep,
-                ep_index,
-                module,
-                mod_info: module_info,
-                options,
-                pipeline_options,
-            };
             translation_info
-                .entry_point_names
-                .push(self.write_entry_point(entry_point_info)?);
+                .entry_point_info
+                .push(self.write_entry_point(CreateEntryPointInfo {
+                    ep,
+                    ep_index,
+                    module,
+                    mod_info: module_info,
+                    options,
+                    pipeline_options,
+                })?);
         }
 
         Ok(translation_info)
@@ -3652,12 +3651,11 @@ impl<W: Write> Writer<W> {
         Ok(())
     }
 
-    /// Write an argument buffer struct for each bind group.
+    /// Write an argument buffer for an entry point.
     ///
-    /// Iterates through the bind groups and their members in ascending order, generating
+    /// Iterates through the bindings used by entry point, generating
     /// a struct whose members contain each binding for that group with a monotonically
-    /// increasing ID. In the case where two variables share a binding, they emitted in the
-    /// order they are defined in the module.
+    /// increasing ID.
     ///
     /// For example, if we had some bind group:
     ///
@@ -3674,10 +3672,8 @@ impl<W: Write> Writer<W> {
     /// struct ArgumentBufferGroup0 {
     ///     metal::texture2d<float, metal::access::sample> u_texture [[id(0)]];
     ///     metal::sampler u_sampler [[id(1)]];
-    /// };
-    /// struct ArgumentBufferGroup1 {
-    ///     metal::texture2d<float, metal::access::sample> v_texture [[id(0)]];
-    ///     metal::texture2d<float, metal::access::sample> z_texture [[id(1)]];
+    ///     metal::texture2d<float, metal::access::sample> v_texture [[id(2)]];
+    ///     metal::texture2d<float, metal::access::sample> z_texture [[id(3)]];
     /// };
     /// ```
     ///
@@ -3691,11 +3687,13 @@ impl<W: Write> Writer<W> {
         module: &Module,
         mut members: Vec<ArgumentBufferMember>,
         fun_name: &str,
-    ) -> Result<(), Error> {
+    ) -> Result<ArgumentBufferEntries, Error> {
         // begin the argument buffer
         writeln!(self.out, "struct {fun_name}ArgumentBuffer {{")?;
 
         log::trace!("Writing argument buffer for {fun_name}");
+
+        let mut argument_buffer_entries = ArgumentBufferEntries::default();
 
         let mut id = 0;
         for member in members.drain(..) {
@@ -3704,6 +3702,10 @@ impl<W: Write> Writer<W> {
                 handle,
                 resolved_binding,
             } = member;
+
+            // This must be valid.
+            let binding = var.binding.clone().unwrap();
+            argument_buffer_entries.insert(binding, id);
 
             // write this member
             let name = &self.names[&NameKey::GlobalVariable(handle)];
@@ -3813,16 +3815,16 @@ impl<W: Write> Writer<W> {
         // finish the struct
         writeln!(self.out, "}};")?;
 
-        Ok(())
+        Ok(argument_buffer_entries)
     }
 
     /// Emits a given entry point by gathering up the statically accessed variables an functions
     /// in that entry point
     fn write_entry_point(
         &mut self,
-        entry_point_info: EntryPointInfo,
-    ) -> Result<Result<String, EntryPointError>, Error> {
-        let EntryPointInfo {
+        entry_point_info: CreateEntryPointInfo,
+    ) -> Result<Result<EntryPointInfo, EntryPointError>, Error> {
+        let CreateEntryPointInfo {
             ep,
             ep_index,
             module,
@@ -4062,13 +4064,10 @@ impl<W: Write> Writer<W> {
             });
         }
 
-        let argument_buffer_required = !argument_buffer_members.is_empty();
-
         // If we have bindings that can be represented in an argument buffer, emit a struct
         // that contains those bindings.
-        if argument_buffer_required {
+        let argument_buffer_entries =
             self.write_argument_buffer(module, argument_buffer_members, &fun_name)?;
-        }
 
         // Write the entry point function's name, and begin its argument list.
         writeln!(self.out, "{em_str} {result_type_name} {fun_name}(")?;
@@ -4153,7 +4152,7 @@ impl<W: Write> Writer<W> {
 
         // If we have collected bindings into an argument buffer, pass that buffer as an argument to
         // the entry-point.
-        if argument_buffer_required {
+        if !argument_buffer_entries.is_empty() {
             let separator = if is_first_argument {
                 is_first_argument = false;
                 ' '
@@ -4388,7 +4387,10 @@ impl<W: Write> Writer<W> {
             writeln!(self.out)?;
         }
 
-        Ok(Ok(fun_name))
+        Ok(Ok(EntryPointInfo {
+            name: fun_name,
+            argument_buffer_entries,
+        }))
     }
 }
 
@@ -4423,13 +4425,20 @@ fn get_argument_buffer_member_id(
     }
 }
 
-struct EntryPointInfo<'a> {
+struct CreateEntryPointInfo<'a> {
     ep: &'a EntryPoint,
     ep_index: usize,
     module: &'a Module,
     mod_info: &'a valid::ModuleInfo,
     options: &'a Options,
     pipeline_options: &'a PipelineOptions,
+}
+
+
+#[derive(Debug, Clone)]
+pub struct EntryPointInfo {
+    pub name: String,
+    pub argument_buffer_entries: ArgumentBufferEntries,
 }
 
 struct ArgumentBufferMember<'a> {
@@ -4444,6 +4453,8 @@ struct GlobalVariablePassedByArgument<'a> {
     resolved_binding: Option<ResolvedBinding>,
     usage: valid::GlobalUse,
 }
+
+type ArgumentBufferEntries = FastHashMap<crate::ResourceBinding, u32>;
 
 /// Check this entry point to determine if any global bindings are missing, or their types are
 /// incompatible
