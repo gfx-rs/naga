@@ -1,5 +1,5 @@
 (
-	god_mode: false,
+	god_mode: true,
 	spv: (
 		version: (1, 1),
 		binding_map: {
