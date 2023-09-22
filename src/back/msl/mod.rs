@@ -79,6 +79,7 @@ pub struct EntryPointResources {
 
 pub type EntryPointResourceMap = std::collections::BTreeMap<String, EntryPointResources>;
 
+#[derive(Debug, Clone)]
 enum ResolvedBinding {
     BuiltIn(crate::BuiltIn),
     Attribute(u32),
@@ -94,7 +95,7 @@ enum ResolvedBinding {
     Resource(BindTarget),
 }
 
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 enum ResolvedInterpolation {
     CenterPerspective,
     CenterNoPerspective,

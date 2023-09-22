@@ -1,12 +1,14 @@
 use super::{
-    sampler as sm, EntryPointError, Error, LocationMode, Options, PipelineOptions, TranslationInfo,
+    sampler as sm, EntryPointError, Error, LocationMode, Options, PipelineOptions, ResolvedBinding,
+    TranslationInfo,
 };
 use crate::{
     arena::Handle,
     back::{self},
     proc::index,
     proc::{self, NameKey, TypeResolution},
-    valid, ArraySize, EntryPoint, FastHashMap, FastHashSet, Module, ResourceBinding, StorageAccess,
+    valid, ArraySize, EntryPoint, FastHashMap, FastHashSet, GlobalVariable, Module,
+    ResourceBinding, StorageAccess,
 };
 use bit_set::BitSet;
 use std::{
@@ -1425,9 +1427,8 @@ impl<W: Write> Writer<W> {
                 let name = &self.names[&NameKey::GlobalVariable(handle)];
 
                 match (variable.binding.as_ref(), &context.origin) {
-                    (Some(binding), FunctionOrigin::EntryPoint(_)) => {
-                        let id = binding.group;
-                        write!(self.out, "argumentBufferGroup{id}.{name}")?;
+                    (Some(_), FunctionOrigin::EntryPoint(_)) => {
+                        write!(self.out, "argumentBuffer.{name}")?;
                     }
                     _ => {
                         write!(self.out, "{name}")?;
@@ -2822,8 +2823,8 @@ impl<W: Write> Writer<W> {
 
                             // If this global variable is part of a binding, prefix its name
                             // with the name of the corresponding argument buffer.
-                            if let Some(ref binding) = var.binding {
-                                write!(self.out, "argumentBufferGroup{}.", binding.group)?;
+                            if let Some(_) = var.binding {
+                                write!(self.out, "argumentBuffer.")?;
                             }
 
                             write!(self.out, "{name}")?;
@@ -3687,53 +3688,38 @@ impl<W: Write> Writer<W> {
     ///
     /// For more information on Argument Buffers, see section 2.13 of
     /// [the Metal Spec](https://developer.apple.com/metal/Metal-Shading-Language-Specification.pdf)
-    fn write_argument_buffers(&mut self, module: &Module, options: &Options) -> Result<u32, Error> {
-        let mut current_bind_group = 0;
+    fn write_argument_buffer(
+        &mut self,
+        module: &Module,
+        options: &Options,
+        mut members: Vec<ArgumentBufferMember>,
+        fun_name: &str,
+    ) -> Result<(), Error> {
+        // begin the argument buffer
+        writeln!(self.out, "struct {fun_name}ArgumentBuffer {{")?;
 
-        // First we have to collect each of the bindings
-        let mut bindings = module
-            .global_variables
-            .iter()
-            .filter(|(_, var)| var.binding.is_some())
-            .collect::<Vec<_>>();
+        log::trace!("Writing argument buffer for {fun_name}");
 
-        // If there are no global bindings, do nothing
-        if bindings.is_empty() {
-            return Ok(0);
-        };
-
-        // Then sort them by group, then binding
-        bindings.sort_by(|(_, var_a), (_, var_b)| var_a.binding.cmp(&var_b.binding));
-
-        // begin the first argument buffer
-        writeln!(self.out, "struct ArgumentBufferGroup0 {{")?;
-
-        log::trace!("Writing argument buffer for group 0");
-
-        let mut id = 0;
-        for (handle, var) in bindings {
-            let binding = var.binding.as_ref().unwrap();
-            if binding.group != current_bind_group {
-                // finish the struct
-                writeln!(self.out, "}};")?;
-
-                // begin another argument buffer
-                current_bind_group = binding.group;
-                id = 0;
-                writeln!(
-                    self.out,
-                    "struct ArgumentBufferGroup{current_bind_group} {{"
-                )?;
-                log::trace!("Writing argument buffer for group {current_bind_group}");
-            }
+        for member in members.drain(..) {
+            let ArgumentBufferMember {
+                var,
+                handle,
+                resolved_binding,
+            } = member;
 
             // write this member
             let name = &self.names[&NameKey::GlobalVariable(handle)];
 
             let gctx = module.to_ctx();
             let var_type = &gctx.types[var.ty];
+            let id = match resolved_binding {
+                ResolvedBinding::Resource(super::BindTarget {
+                    buffer: Some(slot), ..
+                }) => slot,
+                _ => continue,
+            };
 
-            log::trace!("Writing argument member {binding:?} {name} - {var_type:?}");
+            log::trace!("Writing argument member {resolved_binding:?}: {name} - {var_type:?}");
 
             // Determine the storage access required for this variable
             let storage_access = match var.space {
@@ -3770,21 +3756,13 @@ impl<W: Write> Writer<W> {
                 _ => ("", "", ""),
             };
 
-            // resolve the binding, if required
-            let resolved_binding = resolve_argument_buffer_binding(
-                &module.entry_points,
-                options,
-                &binding,
-                &gctx.types[var.ty],
-            );
-
             // build the type name
             let ty_name = TypeContext {
                 handle: var.ty,
                 gctx,
                 names: &self.names,
                 access: storage_access,
-                binding: resolved_binding.as_ref(),
+                binding: Some(&resolved_binding),
                 first_time: false,
             };
 
@@ -3796,7 +3774,7 @@ impl<W: Write> Writer<W> {
                 if access.is_empty() { "" } else { " " },
             ) {
                 Err(e) => {
-                    log::error!("Error writing argument buffer for binding {binding:?}");
+                    log::error!("Error writing argument buffer for member {var:?}");
                     return Err(e.into());
                 }
                 _ => {}
@@ -3805,14 +3783,14 @@ impl<W: Write> Writer<W> {
             // If this binding was an array, we need to increment ID by the size of the array.
 
             // Dynamically sized array bindings need to be treated as a special case:
-            if let Some(super::ResolvedBinding::Resource(super::BindTarget {
-                binding_array_size: Some(array_size),
-                ..
-            })) = resolved_binding
-            {
-                id += array_size;
-                continue;
-            };
+            // if let Some(super::ResolvedBinding::Resource(super::BindTarget {
+            //     binding_array_size: Some(array_size),
+            //     ..
+            // })) = resolved_binding
+            // {
+            //     id += array_size;
+            //     continue;
+            // };
 
             // Otherwise, check the variable's type to see if it's an array.
             match var_type.inner {
@@ -3824,12 +3802,12 @@ impl<W: Write> Writer<W> {
                     size: ArraySize::Constant(size),
                     ..
                 } => {
-                    id += size.get();
+                    // id += size.get();
                 }
 
                 // Not an array - just increment by 1.
                 _ => {
-                    id += 1;
+                    // id += 1;
                 }
             }
         }
@@ -3837,11 +3815,11 @@ impl<W: Write> Writer<W> {
         // finish the struct
         writeln!(self.out, "}};")?;
 
-        // We return the count of argument buffers created, which will be the
-        // current bind group number, plus one.
-        Ok(current_bind_group + 1)
+        Ok(())
     }
 
+    /// Emits a given entry point by gathering up the statically accessed variables an functions
+    /// in that entry point
     fn write_entry_point(
         &mut self,
         entry_point_info: EntryPointInfo,
@@ -3870,20 +3848,17 @@ impl<W: Write> Writer<W> {
             .filter(|&(handle, _)| !fun_info[handle].is_empty())
             .any(|(_, var)| needs_array_length(var.ty, &module.types));
 
-        // skip this entry point if any global bindings are missing,
-        // or their types are incompatible.
+        // If any global bindings are missing, or their types are incompatible, report this entry point
+        // as invalid.
         let fun_name = self.names[&NameKey::EntryPoint(ep_index as _)].clone();
-        match validate_entry_point(
+        if let Err(e) = validate_entry_point(
             options,
             module,
             fun_info,
             ep,
             has_dynamically_sized_global_variables,
         ) {
-            Err(e) => {
-                return Ok(Err(e));
-            }
-            _ => {}
+            return Ok(Err(e));
         }
 
         writeln!(self.out)?;
@@ -3908,6 +3883,7 @@ impl<W: Write> Writer<W> {
         // flattening structs into their members. In Metal, we will pass
         // each of these values to the entry point as a separate argument—
         // except for the varyings, handled next.
+        // TODO: These could potentially be incorporated into the argument buffer.
         let mut flattened_arguments = Vec::new();
         for (arg_index, arg) in fun.arguments.iter().enumerate() {
             match module.types[arg.ty].inner {
@@ -4032,6 +4008,70 @@ impl<W: Write> Writer<W> {
             None => "void",
         };
 
+        let mut global_variables_passed_by_argument = Vec::new();
+        let mut argument_buffer_members = Vec::new();
+
+        // Walk through each of the global variables used within this entry point and
+        // determine how they should be handled.
+        //
+        // - Resource bindings are collected into an argument buffer
+        // - Private global variables and inline samplers are declared as locals within the entry point
+        // - All other global variables are passed as arguments to the entry point
+        for (handle, var) in module.global_variables.iter() {
+            let usage = fun_info[handle];
+            if usage.is_empty() || var.space == crate::AddressSpace::Private {
+                continue;
+            }
+            // the resolves have already been checked for `!fake_missing_bindings` case
+            let resolved = match var.space {
+                crate::AddressSpace::PushConstant => options.resolve_push_constants(ep).ok(),
+                crate::AddressSpace::WorkGroup => None,
+                crate::AddressSpace::Storage { .. } if options.lang_version < (2, 0) => {
+                    return Err(Error::UnsupportedAddressSpace(var.space))
+                }
+                _ => {
+                    // This global variable refers to a resource binding, which will require access through
+                    // an argument buffer.
+
+                    // TODO: Check for case of writable texture on tier 1 target.
+
+                    // These unwraps are safe as all bindings been validated when beginning to write this entry point.
+                    let resolved_binding = options
+                        .resolve_resource_binding(ep, var.binding.as_ref().unwrap())
+                        .unwrap();
+                    argument_buffer_members.push(ArgumentBufferMember {
+                        var,
+                        handle,
+                        resolved_binding,
+                    });
+
+                    continue;
+                }
+            };
+
+            if let Some(ref resolved) = resolved {
+                // Inline samplers are defined in the body of the entry point
+                if resolved.as_inline_sampler(options).is_some() {
+                    continue;
+                }
+            }
+
+            global_variables_passed_by_argument.push(GlobalVariablePassedByArgument {
+                var,
+                handle,
+                resolved_binding: resolved,
+                usage,
+            });
+        }
+
+        let argument_buffer_required = !argument_buffer_members.is_empty();
+
+        // If we have bindings that can be represented in an argument buffer, emit a struct
+        // that contains those bindings.
+        if argument_buffer_required {
+            self.write_argument_buffer(module, options, argument_buffer_members, &fun_name)?;
+        }
+
         // Write the entry point function's name, and begin its argument list.
         writeln!(self.out, "{em_str} {result_type_name} {fun_name}(")?;
         let mut is_first_argument = true;
@@ -4113,75 +4153,9 @@ impl<W: Write> Writer<W> {
                 )?;
         }
 
-        // Keep a record of which argument buffers will be used by this entry point.
-        let mut argument_buffers_used: Vec<u32> = Vec::with_capacity(1 as _);
-
-        // Those global variables used by this entry point and its callees
-        // get passed as arguments. `Private` globals are an exception, they
-        // don't outlive this invocation, so we declare them below as locals
-        // within the entry point.
-        for (handle, var) in module.global_variables.iter() {
-            let usage = fun_info[handle];
-            if usage.is_empty() || var.space == crate::AddressSpace::Private {
-                continue;
-            }
-            // the resolves have already been checked for `!fake_missing_bindings` case
-            let resolved = match var.space {
-                crate::AddressSpace::PushConstant => options.resolve_push_constants(ep).ok(),
-                crate::AddressSpace::WorkGroup => None,
-                crate::AddressSpace::Storage { .. } if options.lang_version < (2, 0) => {
-                    return Err(Error::UnsupportedAddressSpace(var.space))
-                }
-                _ => {
-                    // This global variable refers to a binding, which will require access through
-                    // an argument buffer. If we haven't yet seen this bind group, add it to our list.
-                    if let Some(ref binding) = var.binding {
-                        let group = binding.group;
-                        if !argument_buffers_used.contains(&group) {
-                            argument_buffers_used.push(group);
-                        }
-                    }
-
-                    continue;
-                }
-            };
-            if let Some(ref resolved) = resolved {
-                // Inline samplers are be defined in the EP body
-                if resolved.as_inline_sampler(options).is_some() {
-                    continue;
-                }
-            }
-
-            let tyvar = TypedGlobalVariable {
-                module,
-                names: &self.names,
-                handle,
-                usage,
-                binding: resolved.as_ref(),
-                reference: true,
-            };
-            let separator = if is_first_argument {
-                is_first_argument = false;
-                ' '
-            } else {
-                ','
-            };
-            write!(self.out, "{separator} ")?;
-            tyvar.try_fmt(&mut self.out)?;
-            if let Some(resolved) = resolved {
-                resolved.try_fmt(&mut self.out)?;
-            }
-            if let Some(value) = var.init {
-                write!(self.out, " = ")?;
-                self.put_const_expression(value, module)?;
-            }
-            writeln!(self.out)?;
-        }
-
-        // Sort the argument buffer list
-        argument_buffers_used.sort();
-
-        for id in argument_buffers_used.drain(..) {
+        // If we have collected bindings into an argument buffer, pass that buffer as an argument to
+        // the entry-point.
+        if argument_buffer_required {
             let separator = if is_first_argument {
                 is_first_argument = false;
                 ' '
@@ -4191,8 +4165,44 @@ impl<W: Write> Writer<W> {
             write!(self.out, "{separator} ")?;
             writeln!(
                 self.out,
-                "device ArgumentBufferGroup{id}& argumentBufferGroup{id} [[buffer({id})]]"
+                "device {fun_name}ArgumentBuffer& argumentBuffer [[buffer(0)]]"
             )?;
+        }
+
+        // All other global variables must be passed by argument
+        for global_variable in global_variables_passed_by_argument.drain(..) {
+            let GlobalVariablePassedByArgument {
+                var,
+                handle,
+                resolved_binding,
+                usage,
+            } = global_variable;
+
+            let tyvar = TypedGlobalVariable {
+                module,
+                names: &self.names,
+                handle,
+                usage,
+                binding: resolved_binding.as_ref(),
+                reference: true,
+            };
+
+            let separator = if is_first_argument {
+                is_first_argument = false;
+                ' '
+            } else {
+                ','
+            };
+            write!(self.out, "{separator} ")?;
+            tyvar.try_fmt(&mut self.out)?;
+            if let Some(resolved) = resolved_binding {
+                resolved.try_fmt(&mut self.out)?;
+            }
+            if let Some(value) = var.init {
+                write!(self.out, " = ")?;
+                self.put_const_expression(value, module)?;
+            }
+            writeln!(self.out)?;
         }
 
         // If this entry uses any variable-length arrays, their sizes are
@@ -4281,6 +4291,8 @@ impl<W: Write> Writer<W> {
         //
         // "Each day, I change some zeros to ones, and some ones to zeros.
         // The rest, I leave alone."
+        //
+        // TODO: This could potentially be simplified through argument buffers.
         for (arg_index, arg) in fun.arguments.iter().enumerate() {
             let arg_name =
                 &self.names[&NameKey::EntryPointArgument(ep_index as _, arg_index as u32)];
@@ -4390,39 +4402,17 @@ struct EntryPointInfo<'a> {
     pipeline_options: &'a PipelineOptions,
 }
 
-/// Resolves a binding used inside of an argument buffer.
-///
-/// When using binding arrays, we must inspect each [crate::EntryPoint] to determine
-/// the size of the largest array used, as this is specified per entry point.
-///
-/// In all other cases there is no need to resolve the binding, so we just return [None].
-fn resolve_argument_buffer_binding(
-    entry_points: &[EntryPoint],
-    options: &Options,
-    binding: &ResourceBinding,
-    ty: &crate::Type,
-) -> Option<super::ResolvedBinding> {
-    match ty.inner {
-        crate::TypeInner::BindingArray { .. } => {}
-        _ => return None,
-    }
+struct ArgumentBufferMember<'a> {
+    var: &'a GlobalVariable,
+    handle: Handle<GlobalVariable>,
+    resolved_binding: ResolvedBinding,
+}
 
-    let mut largest_size_found = u32::MIN;
-    let mut resolved_binding = None;
-
-    for ep in entry_points {
-        let ep_binding = options.resolve_resource_binding(ep, binding).ok();
-        let Some(super::ResolvedBinding::Resource(super::BindTarget {
-                    binding_array_size: Some(override_size),
-                    ..
-                })) = ep_binding else { continue };
-        if override_size > largest_size_found {
-            largest_size_found = override_size;
-            resolved_binding = ep_binding;
-        }
-    }
-
-    resolved_binding
+struct GlobalVariablePassedByArgument<'a> {
+    var: &'a GlobalVariable,
+    handle: Handle<GlobalVariable>,
+    resolved_binding: Option<ResolvedBinding>,
+    usage: valid::GlobalUse,
 }
 
 /// Check this entry point to determine if any global bindings are missing, or their types are
