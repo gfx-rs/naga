@@ -6,7 +6,7 @@ use crate::front::wgsl::parse::number::Number;
 use crate::front::wgsl::parse::{ast, conv};
 use crate::front::Typifier;
 use crate::proc::{
-    ensure_block_returns, Alignment, ConstantEvaluator, ConstantEvaluatorEmitter, Emitter,
+    ensure_block_returns, Alignment, ConstantEvaluator, ConstantEvaluatorExtraData, Emitter,
     Layouter, ResolveContext, TypeResolution,
 };
 use crate::{Arena, FastHashMap, FastIndexMap, Handle, Span};
@@ -106,6 +106,8 @@ pub struct StatementContext<'source, 'temp, 'out> {
     named_expressions: &'out mut FastIndexMap<Handle<crate::Expression>, (String, Span)>,
     arguments: &'out [crate::FunctionArgument],
     module: &'out mut crate::Module,
+    /// Tracks the constness of `Expression`s residing in `self.naga_expressions`
+    expression_constness: &'temp mut crate::proc::ExpressionConstnessTracker,
 }
 
 impl<'a, 'temp> StatementContext<'a, 'temp, '_> {
@@ -122,6 +124,7 @@ impl<'a, 'temp> StatementContext<'a, 'temp, '_> {
             named_expressions: self.named_expressions,
             arguments: self.arguments,
             module: self.module,
+            expression_constness: self.expression_constness,
         }
     }
 
@@ -147,6 +150,7 @@ impl<'a, 'temp> StatementContext<'a, 'temp, '_> {
                 typifier: self.typifier,
                 block,
                 emitter,
+                expression_constness: self.expression_constness,
             }),
         }
     }
@@ -188,6 +192,8 @@ pub struct RuntimeExpressionContext<'temp, 'out> {
     block: &'temp mut crate::Block,
     emitter: &'temp mut Emitter,
     typifier: &'temp mut Typifier,
+    /// Tracks the constness of `Expression`s residing in `self.naga_expressions`
+    expression_constness: &'temp mut crate::proc::ExpressionConstnessTracker,
 }
 
 impl RuntimeExpressionContext<'_, '_> {
@@ -200,6 +206,7 @@ impl RuntimeExpressionContext<'_, '_> {
             block: self.block,
             emitter: self.emitter,
             typifier: self.typifier,
+            expression_constness: self.expression_constness,
         }
     }
 }
@@ -337,8 +344,9 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
                     types: &mut self.module.types,
                     constants: &self.module.constants,
                     expressions: rctx.naga_expressions,
-                    const_expressions: Some(&self.module.const_expressions),
-                    emitter: Some(ConstantEvaluatorEmitter {
+                    extra_data: Some(ConstantEvaluatorExtraData {
+                        const_expressions: &self.module.const_expressions,
+                        expression_constness: rctx.expression_constness,
                         emitter: rctx.emitter,
                         block: rctx.block,
                     }),
@@ -354,8 +362,7 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
                     types: &mut self.module.types,
                     constants: &self.module.constants,
                     expressions: &mut self.module.const_expressions,
-                    const_expressions: None,
-                    emitter: None,
+                    extra_data: None,
                 };
 
                 eval.try_eval_and_append(&expr, span)
@@ -1026,6 +1033,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 types: ctx.types,
                 module: ctx.module,
                 arguments: &arguments,
+                expression_constness: &mut crate::proc::ExpressionConstnessTracker::new(),
             },
         )?;
         ensure_block_returns(&mut body);
@@ -1176,7 +1184,9 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
                     let (const_initializer, initializer) = {
                         match initializer {
-                            Some(init) if ctx.naga_expressions.is_const(init) => (Some(init), None),
+                            Some(init) if ctx.expression_constness.contains(init) => {
+                                (Some(init), None)
+                            }
                             Some(init) => (None, Some(init)),
                             None => (None, None),
                         }

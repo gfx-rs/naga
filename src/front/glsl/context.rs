@@ -77,6 +77,8 @@ pub struct Context<'a> {
     pub body: Block,
     pub module: &'a mut crate::Module,
     pub is_const: bool,
+    /// Tracks the constness of `Expression`s residing in `self.expressions`
+    pub expression_constness: crate::proc::ExpressionConstnessTracker,
 }
 
 impl<'a> Context<'a> {
@@ -99,6 +101,7 @@ impl<'a> Context<'a> {
             body: Block::new(),
             module,
             is_const: false,
+            expression_constness: crate::proc::ExpressionConstnessTracker::new(),
         };
 
         this.emit_start();
@@ -245,21 +248,25 @@ impl<'a> Context<'a> {
     }
 
     pub fn add_expression(&mut self, expr: Expression, meta: Span) -> Result<Handle<Expression>> {
-        let (expressions, const_expressions) = if self.is_const {
+        let (expressions, extra_data) = if self.is_const {
             (&mut self.module.const_expressions, None)
         } else {
-            (&mut self.expressions, Some(&self.module.const_expressions))
+            (
+                &mut self.expressions,
+                Some(crate::proc::ConstantEvaluatorExtraData {
+                    const_expressions: &self.module.const_expressions,
+                    expression_constness: &mut self.expression_constness,
+                    emitter: &mut self.emitter,
+                    block: &mut self.body,
+                }),
+            )
         };
 
         let mut eval = crate::proc::ConstantEvaluator {
             types: &mut self.module.types,
             constants: &self.module.constants,
             expressions,
-            const_expressions,
-            emitter: (!self.is_const).then_some(crate::proc::ConstantEvaluatorEmitter {
-                emitter: &mut self.emitter,
-                block: &mut self.body,
-            }),
+            extra_data,
         };
 
         let res = eval.try_eval_and_append(&expr, meta).map_err(|e| Error {
