@@ -603,180 +603,68 @@ fn write_output_wgsl(
 fn convert_wgsl() {
     let _ = env_logger::try_init();
 
+    use Targets::*;
     let inputs = [
-        // TODO: merge array-in-ctor and array-in-function-return-type tests after fix HLSL issue https://github.com/gfx-rs/naga/issues/1930
-        (
-            "array-in-ctor",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-        ),
-        (
-            "array-in-function-return-type",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::WGSL,
-        ),
-        (
-            "empty",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-        ),
-        (
-            "quad",
-            Targets::SPIRV
-                | Targets::METAL
-                | Targets::GLSL
-                | Targets::DOT
-                | Targets::HLSL
-                | Targets::WGSL,
-        ),
-        (
-            "bits",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-        ),
-        (
-            "bitcast",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-        ),
-        (
-            "boids",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-        ),
-        (
-            "skybox",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-        ),
-        (
-            "collatz",
-            Targets::SPIRV
-                | Targets::METAL
-                | Targets::IR
-                | Targets::ANALYSIS
-                | Targets::HLSL
-                | Targets::WGSL,
-        ),
-        (
-            "shadow",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-        ),
-        (
-            "image",
-            Targets::SPIRV | Targets::METAL | Targets::HLSL | Targets::WGSL | Targets::GLSL,
-        ),
-        ("extra", Targets::SPIRV | Targets::METAL | Targets::WGSL),
-        ("push-constants", Targets::GLSL | Targets::HLSL),
-        (
-            "operators",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-        ),
-        (
-            "functions",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-        ),
-        (
-            "fragment-output",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-        ),
-        (
-            "dualsource",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-        ),
-        ("functions-webgl", Targets::GLSL),
-        (
-            "interpolate",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-        ),
-        (
-            "access",
-            Targets::SPIRV
-                | Targets::METAL
-                | Targets::GLSL
-                | Targets::HLSL
-                | Targets::WGSL
-                | Targets::IR
-                | Targets::ANALYSIS,
-        ),
-        (
-            "atomicOps",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-        ),
-        ("atomicCompareExchange", Targets::SPIRV | Targets::WGSL),
-        (
-            "padding",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-        ),
-        ("pointers", Targets::SPIRV | Targets::WGSL),
-        (
-            "control-flow",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-        ),
-        (
-            "standard",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-        ),
+        // TODO: merge array-in-ctor and array-in-function-return-type tests after fix HLSL issue
+        // https://github.com/gfx-rs/naga/issues/1930
+        ("array-in-ctor", SPIRV | METAL | GLSL | HLSL | WGSL),
+        ("array-in-function-return-type", SPIRV | METAL | GLSL | WGSL),
+        ("empty", SPIRV | METAL | GLSL | HLSL | WGSL),
+        ("quad", SPIRV | METAL | GLSL | DOT | HLSL | WGSL),
+        ("bits", SPIRV | METAL | GLSL | HLSL | WGSL),
+        ("bitcast", SPIRV | METAL | GLSL | HLSL | WGSL),
+        ("boids", SPIRV | METAL | GLSL | HLSL | WGSL),
+        ("skybox", SPIRV | METAL | GLSL | HLSL | WGSL),
+        ("collatz", SPIRV | METAL | IR | ANALYSIS | HLSL | WGSL),
+        ("shadow", SPIRV | METAL | GLSL | HLSL | WGSL),
+        ("image", SPIRV | METAL | HLSL | WGSL | GLSL),
+        ("extra", SPIRV | METAL | WGSL),
+        ("push-constants", GLSL | HLSL),
+        ("operators", SPIRV | METAL | GLSL | HLSL | WGSL),
+        ("functions", SPIRV | METAL | GLSL | HLSL | WGSL),
+        ("fragment-output", SPIRV | METAL | GLSL | HLSL | WGSL),
+        ("dualsource", SPIRV | METAL | GLSL | HLSL | WGSL),
+        ("functions-webgl", GLSL),
+        ("interpolate", SPIRV | METAL | GLSL | HLSL | WGSL),
+        ("access", SPIRV | METAL | GLSL | HLSL | WGSL | IR | ANALYSIS),
+        ("atomicOps", SPIRV | METAL | GLSL | HLSL | WGSL),
+        ("atomicCompareExchange", SPIRV | WGSL),
+        ("padding", SPIRV | METAL | GLSL | HLSL | WGSL),
+        ("pointers", SPIRV | WGSL),
+        ("control-flow", SPIRV | METAL | GLSL | HLSL | WGSL),
+        ("standard", SPIRV | METAL | GLSL | HLSL | WGSL),
         //TODO: GLSL https://github.com/gfx-rs/naga/issues/874
-        (
-            "interface",
-            Targets::SPIRV | Targets::METAL | Targets::HLSL | Targets::WGSL,
-        ),
-        (
-            "globals",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-        ),
-        ("bounds-check-zero", Targets::SPIRV | Targets::METAL),
-        ("bounds-check-zero-atomic", Targets::METAL),
-        ("bounds-check-restrict", Targets::SPIRV | Targets::METAL),
-        (
-            "bounds-check-image-restrict",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL,
-        ),
-        (
-            "bounds-check-image-rzsw",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL,
-        ),
-        ("policy-mix", Targets::SPIRV | Targets::METAL),
-        (
-            "texture-arg",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-        ),
-        ("cubeArrayShadow", Targets::GLSL),
-        (
-            "math-functions",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-        ),
-        ("cubeArrayShadow", Targets::GLSL),
-        (
-            "binding-arrays",
-            Targets::WGSL | Targets::HLSL | Targets::METAL | Targets::SPIRV,
-        ),
-        (
-            "binding-buffer-arrays",
-            Targets::WGSL | Targets::SPIRV, //TODO: more backends, eventually merge into "binding-arrays"
-        ),
-        ("resource-binding-map", Targets::METAL),
-        ("multiview", Targets::SPIRV | Targets::GLSL | Targets::WGSL),
-        ("multiview_webgl", Targets::GLSL),
-        (
-            "break-if",
-            Targets::WGSL | Targets::GLSL | Targets::SPIRV | Targets::HLSL | Targets::METAL,
-        ),
-        ("lexical-scopes", Targets::WGSL),
-        ("type-alias", Targets::WGSL),
-        ("module-scope", Targets::WGSL),
-        (
-            "workgroup-var-init",
-            Targets::WGSL | Targets::GLSL | Targets::SPIRV | Targets::HLSL | Targets::METAL,
-        ),
-        (
-            "workgroup-uniform-load",
-            Targets::WGSL | Targets::GLSL | Targets::SPIRV | Targets::HLSL | Targets::METAL,
-        ),
-        ("runtime-array-in-unused-struct", Targets::SPIRV),
-        ("sprite", Targets::SPIRV),
-        ("force_point_size_vertex_shader_webgl", Targets::GLSL),
-        ("invariant", Targets::GLSL),
-        ("ray-query", Targets::SPIRV | Targets::METAL),
-        ("hlsl-keyword", Targets::HLSL),
-        (
-            "constructors",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-        ),
+        ("interface", SPIRV | METAL | HLSL | WGSL),
+        ("globals", SPIRV | METAL | GLSL | HLSL | WGSL),
+        ("bounds-check-zero", SPIRV | METAL),
+        ("bounds-check-zero-atomic", METAL),
+        ("bounds-check-restrict", SPIRV | METAL),
+        ("bounds-check-image-restrict", SPIRV | METAL | GLSL),
+        ("bounds-check-image-rzsw", SPIRV | METAL | GLSL),
+        ("policy-mix", SPIRV | METAL),
+        ("texture-arg", SPIRV | METAL | GLSL | HLSL | WGSL),
+        ("cubeArrayShadow", GLSL),
+        ("math-functions", SPIRV | METAL | GLSL | HLSL | WGSL),
+        ("cubeArrayShadow", GLSL),
+        ("binding-arrays", WGSL | HLSL | METAL | SPIRV),
+        //TODO: more backends, eventually merge into "binding-arrays"
+        ("binding-buffer-arrays", WGSL | SPIRV),
+        ("resource-binding-map", METAL),
+        ("multiview", SPIRV | GLSL | WGSL),
+        ("multiview_webgl", GLSL),
+        ("break-if", WGSL | GLSL | SPIRV | HLSL | METAL),
+        ("lexical-scopes", WGSL),
+        ("type-alias", WGSL),
+        ("module-scope", WGSL),
+        ("workgroup-var-init", WGSL | GLSL | SPIRV | HLSL | METAL),
+        ("workgroup-uniform-load", WGSL | GLSL | SPIRV | HLSL | METAL),
+        ("runtime-array-in-unused-struct", SPIRV),
+        ("sprite", SPIRV),
+        ("force_point_size_vertex_shader_webgl", GLSL),
+        ("invariant", GLSL),
+        ("ray-query", SPIRV | METAL),
+        ("hlsl-keyword", HLSL),
+        ("constructors", SPIRV | METAL | GLSL | HLSL | WGSL),
     ];
 
     for &(name, targets) in inputs.iter() {
@@ -792,8 +680,8 @@ fn convert_wgsl() {
     #[cfg(feature = "span")]
     {
         let inputs = [
-            ("debug-symbol-simple", Targets::SPIRV),
-            ("debug-symbol-terrain", Targets::SPIRV),
+            ("debug-symbol-simple", SPIRV),
+            ("debug-symbol-terrain", SPIRV),
         ];
         for &(name, targets) in inputs.iter() {
             // WGSL shaders lives in root dir as a privileged.
@@ -827,30 +715,15 @@ fn convert_spv(name: &str, adjust_coordinate_space: bool, targets: Targets) {
 #[cfg(feature = "spv-in")]
 #[test]
 fn convert_spv_all() {
-    convert_spv(
-        "quad-vert",
-        false,
-        Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-    );
-    convert_spv("shadow", true, Targets::IR | Targets::ANALYSIS);
-    convert_spv(
-        "inv-hyperbolic-trig-functions",
-        true,
-        Targets::HLSL | Targets::WGSL,
-    );
-    convert_spv(
-        "empty-global-name",
-        true,
-        Targets::HLSL | Targets::WGSL | Targets::METAL,
-    );
-    convert_spv("degrees", false, Targets::empty());
-    convert_spv("binding-arrays.dynamic", true, Targets::WGSL);
-    convert_spv("binding-arrays.static", true, Targets::WGSL);
-    convert_spv(
-        "do-while",
-        true,
-        Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-    );
+    use Target::*;
+    convert_spv("quad-vert", false, METAL | GLSL | HLSL | WGSL);
+    convert_spv("shadow", true, IR | ANALYSIS);
+    convert_spv("inv-hyperbolic-trig-functions", true, HLSL | WGSL);
+    convert_spv("empty-global-name", true, HLSL | WGSL | METAL);
+    convert_spv("degrees", false, empty());
+    convert_spv("binding-arrays.dynamic", true, WGSL);
+    convert_spv("binding-arrays.static", true, WGSL);
+    convert_spv("do-while", true, METAL | GLSL | HLSL | WGSL);
 }
 
 #[cfg(feature = "glsl-in")]
