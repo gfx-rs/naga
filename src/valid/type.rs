@@ -569,6 +569,7 @@ impl super::Validator {
                 TypeInfo::new(TypeFlags::DATA | TypeFlags::SIZED, Alignment::ONE)
             }
             Ti::BindingArray { base, size } => {
+                self.require_type_capability(Capabilities::BINDING_ARRAY)?;
                 if base >= handle {
                     return Err(TypeError::InvalidArrayBaseType(base));
                 }

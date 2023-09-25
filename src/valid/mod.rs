@@ -120,6 +120,8 @@ bitflags::bitflags! {
         /// some backends (#1413). Our benchmark harness would like to be able
         /// to filter out modules we can't process successfully.
         const ATOMIC_COMPARE_EXCHANGE_WEAK = 0x4000;
+        /// Support for binding arrays.
+        const BINDING_ARRAY = 0x8000;
     }
 }
 

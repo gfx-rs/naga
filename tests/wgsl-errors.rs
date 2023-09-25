@@ -853,10 +853,10 @@ fn matrix_with_bad_type() {
 /// Unless you are generating code programmatically, the
 /// `check_validation_error` macro will probably be more convenient to
 /// use.
-macro_rules! check_one_validation {
-    ( $source:expr, $pattern:pat $( if $guard:expr )? ) => {
+macro_rules! check_one_validation_with_capabilities {
+    ( $capabilities:expr, $source:expr, $pattern:pat $( if $guard:expr )? ) => {
         let source = $source;
-        let error = validation_error($source);
+        let error = validation_error($source, $capabilities);
         if ! matches!(&error, $pattern $( if $guard )? ) {
             eprintln!("validation error does not match pattern:\n\
                        source code: {}\n\
@@ -872,6 +872,15 @@ macro_rules! check_one_validation {
             $( eprintln!("if {}", stringify!($guard)); )?
             panic!("validation error does not match pattern");
         }
+    }
+}
+
+macro_rules! check_one_validation {
+    ( $source:expr, $pattern:pat $( if $guard:expr )? ) => {
+        check_one_validation_with_capabilities!(
+            naga::valid::Capabilities::default(),
+            $source, $pattern $( if $guard )?
+        );
     }
 }
 
@@ -893,7 +902,10 @@ macro_rules! check_validation {
     }
 }
 
-fn validation_error(source: &str) -> Result<naga::valid::ModuleInfo, naga::valid::ValidationError> {
+fn validation_error(
+    source: &str,
+    capabilities: naga::valid::Capabilities,
+) -> Result<naga::valid::ModuleInfo, naga::valid::ValidationError> {
     let module = match naga::front::wgsl::parse_str(source) {
         Ok(module) => module,
         Err(err) => {
@@ -901,12 +913,9 @@ fn validation_error(source: &str) -> Result<naga::valid::ModuleInfo, naga::valid
             panic!("{}", err.emit_to_string(source));
         }
     };
-    naga::valid::Validator::new(
-        naga::valid::ValidationFlags::all(),
-        naga::valid::Capabilities::default(),
-    )
-    .validate(&module)
-    .map_err(|e| e.into_inner()) // TODO: Add tests for spans, too?
+    naga::valid::Validator::new(naga::valid::ValidationFlags::all(), capabilities)
+        .validate(&module)
+        .map_err(|e| e.into_inner()) // TODO: Add tests for spans, too?
 }
 
 #[test]
@@ -1939,8 +1948,10 @@ fn binding_array_private() {
 
 #[test]
 fn binding_array_non_struct() {
-    check_validation! {
-        "var<storage> x: binding_array<i32, 4>;":
+    use naga::valid::Capabilities;
+    check_one_validation_with_capabilities! {
+        Capabilities::default() | Capabilities::BINDING_ARRAY,
+        "var<storage> x: binding_array<i32, 4>;",
         Err(naga::valid::ValidationError::Type {
             source: naga::valid::TypeError::BindingArrayBaseTypeNotStruct(_),
             ..
