@@ -36,6 +36,7 @@ impl Namer {
     /// - Drop leading digits.
     /// - Retain only alphanumeric and `_` characters.
     /// - Avoid prefixes in [`Namer::reserved_prefixes`].
+    /// - Replace consecutive `_` characters with a single `_` character.
     ///
     /// The return value is a valid identifier prefix in all of Naga's output languages,
     /// and it never ends with a `SEPARATOR` character.
