@@ -6,8 +6,8 @@ use crate::front::wgsl::parse::number::Number;
 use crate::front::wgsl::parse::{ast, conv};
 use crate::front::Typifier;
 use crate::proc::{
-    ensure_block_returns, Alignment, ConstantEvaluator, ConstantEvaluatorExtraData, Emitter,
-    Layouter, ResolveContext, TypeResolution,
+    ensure_block_returns, Alignment, ConstantEvaluator, Emitter, FunctionLocalData, Layouter,
+    ResolveContext, TypeResolution,
 };
 use crate::{Arena, FastHashMap, FastIndexMap, Handle, Span};
 
@@ -344,7 +344,7 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
                     types: &mut self.module.types,
                     constants: &self.module.constants,
                     expressions: rctx.naga_expressions,
-                    extra_data: Some(ConstantEvaluatorExtraData {
+                    function_local_data: Some(FunctionLocalData {
                         const_expressions: &self.module.const_expressions,
                         expression_constness: rctx.expression_constness,
                         emitter: rctx.emitter,
@@ -362,7 +362,7 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
                     types: &mut self.module.types,
                     constants: &self.module.constants,
                     expressions: &mut self.module.const_expressions,
-                    extra_data: None,
+                    function_local_data: None,
                 };
 
                 eval.try_eval_and_append(&expr, span)
@@ -1184,7 +1184,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
                     let (const_initializer, initializer) = {
                         match initializer {
-                            Some(init) if ctx.expression_constness.contains(init) => {
+                            Some(init) if ctx.expression_constness.is_const(init) => {
                                 (Some(init), None)
                             }
                             Some(init) => (None, Some(init)),

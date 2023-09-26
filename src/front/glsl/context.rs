@@ -248,12 +248,12 @@ impl<'a> Context<'a> {
     }
 
     pub fn add_expression(&mut self, expr: Expression, meta: Span) -> Result<Handle<Expression>> {
-        let (expressions, extra_data) = if self.is_const {
+        let (expressions, function_info) = if self.is_const {
             (&mut self.module.const_expressions, None)
         } else {
             (
                 &mut self.expressions,
-                Some(crate::proc::ConstantEvaluatorExtraData {
+                Some(crate::proc::FunctionLocalData {
                     const_expressions: &self.module.const_expressions,
                     expression_constness: &mut self.expression_constness,
                     emitter: &mut self.emitter,
@@ -266,7 +266,7 @@ impl<'a> Context<'a> {
             types: &mut self.module.types,
             constants: &self.module.constants,
             expressions,
-            extra_data,
+            function_local_data: function_info,
         };
 
         let res = eval.try_eval_and_append(&expr, meta).map_err(|e| Error {
