@@ -46,6 +46,7 @@ impl Namer {
             .trim_end_matches(SEPARATOR);
 
         let base = if !string.is_empty()
+            && !string.contains("__")
             && string
                 .chars()
                 .all(|c: char| c.is_ascii_alphanumeric() || c == '_')
@@ -55,7 +56,13 @@ impl Namer {
             let mut filtered = string
                 .chars()
                 .filter(|&c| c.is_ascii_alphanumeric() || c == '_')
-                .collect::<String>();
+                .fold(String::new(), |mut s, c| {
+                    if s.ends_with('_') && c == '_' {
+                        return s;
+                    }
+                    s.push(c);
+                    s
+                });
             let stripped_len = filtered.trim_end_matches(SEPARATOR).len();
             filtered.truncate(stripped_len);
             if filtered.is_empty() {
@@ -268,4 +275,6 @@ fn test() {
     assert_eq!(namer.call("x"), "x");
     assert_eq!(namer.call("x"), "x_1");
     assert_eq!(namer.call("x1"), "x1_");
+    assert_eq!(namer.call("__x"), "_x");
+    assert_eq!(namer.call("1___x"), "_x_1");
 }

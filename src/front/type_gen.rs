@@ -297,9 +297,7 @@ impl crate::Module {
                 );
 
                 crate::Type {
-                    name: Some(format!(
-                        "__atomic_compare_exchange_result<{kind:?},{width}>"
-                    )),
+                    name: Some(format!("_atomic_compare_exchange_result<{kind:?},{width}>")),
                     inner: crate::TypeInner::Struct {
                         members: vec![
                             crate::StructMember {
@@ -348,7 +346,7 @@ impl crate::Module {
                     (float_ty, width as u32)
                 };
 
-                let mut type_name = "__modf_result_".to_string();
+                let mut type_name = "_modf_result_".to_string();
                 if let Some(size) = size {
                     let _ = write!(type_name, "vec{}_", size as u8);
                 }
@@ -426,7 +424,7 @@ impl crate::Module {
                     (float_ty, int_ty, width as u32)
                 };
 
-                let mut type_name = "__frexp_result_".to_string();
+                let mut type_name = "_frexp_result_".to_string();
                 if let Some(size) = size {
                     let _ = write!(type_name, "vec{}_", size as u8);
                 }
