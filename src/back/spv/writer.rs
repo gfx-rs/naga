@@ -629,7 +629,7 @@ impl Writer {
         context.cached.reset(ir_function.expressions.len());
         for (handle, expr) in ir_function.expressions.iter() {
             if (expr.needs_pre_emit() && !matches!(*expr, crate::Expression::LocalVariable(_)))
-                || context.expression_constness.contains(handle)
+                || context.expression_constness.is_const(handle)
             {
                 context.cache_expression_value(handle, &mut prelude)?;
             }
