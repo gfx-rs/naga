@@ -248,25 +248,16 @@ impl<'a> Context<'a> {
     }
 
     pub fn add_expression(&mut self, expr: Expression, meta: Span) -> Result<Handle<Expression>> {
-        let (expressions, function_info) = if self.is_const {
-            (&mut self.module.const_expressions, None)
+        let mut eval = if self.is_const {
+            crate::proc::ConstantEvaluator::for_module(self.module)
         } else {
-            (
+            crate::proc::ConstantEvaluator::for_function(
+                self.module,
                 &mut self.expressions,
-                Some(crate::proc::FunctionLocalData {
-                    const_expressions: &self.module.const_expressions,
-                    expression_constness: &mut self.expression_constness,
-                    emitter: &mut self.emitter,
-                    block: &mut self.body,
-                }),
+                &mut self.expression_constness,
+                &mut self.emitter,
+                &mut self.body,
             )
-        };
-
-        let mut eval = crate::proc::ConstantEvaluator {
-            types: &mut self.module.types,
-            constants: &self.module.constants,
-            expressions,
-            function_local_data: function_info,
         };
 
         let res = eval.try_eval_and_append(&expr, meta).map_err(|e| Error {
@@ -276,17 +267,20 @@ impl<'a> Context<'a> {
 
         match res {
             Ok(expr) => Ok(expr),
-            Err(e) if self.is_const => Err(e),
-            Err(_) => {
-                let needs_pre_emit = expr.needs_pre_emit();
-                if needs_pre_emit {
-                    self.body.extend(self.emitter.finish(expressions));
+            Err(e) => {
+                if self.is_const {
+                    Err(e)
+                } else {
+                    let needs_pre_emit = expr.needs_pre_emit();
+                    if needs_pre_emit {
+                        self.body.extend(self.emitter.finish(&self.expressions));
+                    }
+                    let h = self.expressions.append(expr, meta);
+                    if needs_pre_emit {
+                        self.emitter.start(&self.expressions);
+                    }
+                    Ok(h)
                 }
-                let h = expressions.append(expr, meta);
-                if needs_pre_emit {
-                    self.emitter.start(expressions);
-                }
-                Ok(h)
             }
         }
     }

@@ -6,8 +6,8 @@ use crate::front::wgsl::parse::number::Number;
 use crate::front::wgsl::parse::{ast, conv};
 use crate::front::Typifier;
 use crate::proc::{
-    ensure_block_returns, Alignment, ConstantEvaluator, Emitter, FunctionLocalData, Layouter,
-    ResolveContext, TypeResolution,
+    ensure_block_returns, Alignment, ConstantEvaluator, Emitter, Layouter, ResolveContext,
+    TypeResolution,
 };
 use crate::{Arena, FastHashMap, FastIndexMap, Handle, Span};
 
@@ -340,17 +340,13 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
     ) -> Result<Handle<crate::Expression>, Error<'source>> {
         match self.expr_type {
             ExpressionContextType::Runtime(ref mut rctx) => {
-                let mut eval = ConstantEvaluator {
-                    types: &mut self.module.types,
-                    constants: &self.module.constants,
-                    expressions: rctx.naga_expressions,
-                    function_local_data: Some(FunctionLocalData {
-                        const_expressions: &self.module.const_expressions,
-                        expression_constness: rctx.expression_constness,
-                        emitter: rctx.emitter,
-                        block: rctx.block,
-                    }),
-                };
+                let mut eval = ConstantEvaluator::for_function(
+                    self.module,
+                    rctx.naga_expressions,
+                    rctx.expression_constness,
+                    rctx.emitter,
+                    rctx.block,
+                );
 
                 match eval.try_eval_and_append(&expr, span) {
                     Ok(expr) => Ok(expr),
@@ -358,13 +354,7 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
                 }
             }
             ExpressionContextType::Constant => {
-                let mut eval = ConstantEvaluator {
-                    types: &mut self.module.types,
-                    constants: &self.module.constants,
-                    expressions: &mut self.module.const_expressions,
-                    function_local_data: None,
-                };
-
+                let mut eval = ConstantEvaluator::for_module(self.module);
                 eval.try_eval_and_append(&expr, span)
                     .map_err(|e| Error::ConstantEvaluatorError(e, span))
             }
