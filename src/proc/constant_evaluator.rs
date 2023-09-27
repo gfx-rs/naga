@@ -6,23 +6,23 @@ use crate::{
 
 #[derive(Debug)]
 pub struct ConstantEvaluator<'a> {
-    pub types: &'a mut UniqueArena<Type>,
-    pub constants: &'a Arena<Constant>,
-    pub expressions: &'a mut Arena<Expression>,
+    types: &'a mut UniqueArena<Type>,
+    constants: &'a Arena<Constant>,
+    expressions: &'a mut Arena<Expression>,
 
     /// When `self.expressions` refers to a function's local expression
     /// arena, this needs to be populated
-    pub function_local_data: Option<FunctionLocalData<'a>>,
+    function_local_data: Option<FunctionLocalData<'a>>,
 }
 
 #[derive(Debug)]
-pub struct FunctionLocalData<'a> {
+struct FunctionLocalData<'a> {
     /// Global constant expressions
-    pub const_expressions: &'a Arena<Expression>,
+    const_expressions: &'a Arena<Expression>,
     /// Tracks the constness of expressions residing in `ConstantEvaluator.expressions`
-    pub expression_constness: &'a mut ExpressionConstnessTracker,
-    pub emitter: &'a mut super::Emitter,
-    pub block: &'a mut crate::Block,
+    expression_constness: &'a mut ExpressionConstnessTracker,
+    emitter: &'a mut super::Emitter,
+    block: &'a mut crate::Block,
 }
 
 #[derive(Debug)]
@@ -37,7 +37,7 @@ impl ExpressionConstnessTracker {
         }
     }
 
-    pub fn insert(&mut self, value: Handle<Expression>) {
+    fn insert(&mut self, value: Handle<Expression>) {
         self.inner.insert(value.index());
     }
 
@@ -137,7 +137,36 @@ pub enum ConstantEvaluatorError {
 // Math
 // As
 
-impl ConstantEvaluator<'_> {
+impl<'a> ConstantEvaluator<'a> {
+    pub fn for_module(module: &'a mut crate::Module) -> Self {
+        Self {
+            types: &mut module.types,
+            constants: &module.constants,
+            expressions: &mut module.const_expressions,
+            function_local_data: None,
+        }
+    }
+
+    pub fn for_function(
+        module: &'a mut crate::Module,
+        expressions: &'a mut Arena<Expression>,
+        expression_constness: &'a mut ExpressionConstnessTracker,
+        emitter: &'a mut super::Emitter,
+        block: &'a mut crate::Block,
+    ) -> Self {
+        Self {
+            types: &mut module.types,
+            constants: &module.constants,
+            expressions,
+            function_local_data: Some(FunctionLocalData {
+                const_expressions: &module.const_expressions,
+                expression_constness,
+                emitter,
+                block,
+            }),
+        }
+    }
+
     fn check(&self, expr: Handle<Expression>) -> Result<(), ConstantEvaluatorError> {
         if let Some(ref extra_data) = self.function_local_data {
             if !extra_data.expression_constness.is_const(expr) {
