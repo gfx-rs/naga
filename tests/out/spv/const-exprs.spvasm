@@ -51,7 +51,8 @@ OpMemberDecorate %12 0 Offset 0
 %55 = OpConstantNull  %4
 %57 = OpConstantNull  %4
 %72 = OpConstantComposite  %3  %7 %7 %7 %7
-%78 = OpConstantComposite  %3  %7 %7 %7 %7
+%78 = OpConstant  %4  -4
+%79 = OpConstantComposite  %3  %78 %78 %78 %78
 %15 = OpFunction  %2  None %16
 %14 = OpLabel
 %20 = OpAccessChain  %17  %8 %18
@@ -115,10 +116,9 @@ OpFunctionEnd
 %76 = OpFunction  %2  None %16
 %75 = OpLabel
 %77 = OpAccessChain  %17  %8 %18
-OpBranch %79
-%79 = OpLabel
-%80 = OpSNegate  %3  %78
-OpStore %77 %80
+OpBranch %80
+%80 = OpLabel
+OpStore %77 %79
 OpReturn
 OpFunctionEnd
 %82 = OpFunction  %2  None %16
