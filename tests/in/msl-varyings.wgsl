@@ -18,5 +18,6 @@ fn vs_main(vertex: Vertex, note: NoteInstance) -> VertexOutput {
 
 @fragment
 fn fs_main(in: VertexOutput, note: NoteInstance) -> @location(0) vec4f {
+    let position = vec3(1f);
     return in.position;
 }

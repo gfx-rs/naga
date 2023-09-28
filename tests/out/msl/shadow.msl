@@ -133,8 +133,8 @@ fragment fs_mainOutput fs_main(
 
 
 struct fs_main_without_storageInput {
-    metal::float3 world_normal_1 [[user(loc0), center_perspective]];
-    metal::float4 world_position_1 [[user(loc1), center_perspective]];
+    metal::float3 world_normal [[user(loc0), center_perspective]];
+    metal::float4 world_position [[user(loc1), center_perspective]];
 };
 struct fs_main_without_storageOutput {
     metal::float4 member_2 [[color(0)]];
@@ -148,7 +148,7 @@ fragment fs_main_without_storageOutput fs_main_without_storage(
 , metal::depth2d_array<float, metal::access::sample> t_shadow [[user(fake0)]]
 , metal::sampler sampler_shadow [[user(fake0)]]
 ) {
-    const VertexOutput in_1 = { proj_position_1, varyings_2.world_normal_1, varyings_2.world_position_1 };
+    const VertexOutput in_1 = { proj_position_1, varyings_2.world_normal, varyings_2.world_position };
     metal::float3 color_1 = {};
     uint i_1 = {};
     metal::float3 normal_2 = metal::normalize(in_1.world_normal);

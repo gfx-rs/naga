@@ -3695,6 +3695,8 @@ impl<W: Write> Writer<W> {
             // Generate fresh names for these arguments, and remember the
             // mapping.
             let mut flattened_member_names = FastHashMap::default();
+            // Varyings' members get their own namespace
+            let mut varyings_namer = crate::proc::Namer::default();
 
             // List all the Naga `EntryPoint`'s `Function`'s arguments,
             // flattening structs into their members. In Metal, we will pass
@@ -3711,11 +3713,15 @@ impl<W: Write> Writer<W> {
                                 member.ty,
                                 member.binding.as_ref(),
                             ));
+                            let name_key = &NameKey::StructMember(arg.ty, member_index);
                             flattened_member_names.insert(
                                 NameKey::StructMember(arg.ty, member_index),
-                                self.namer.call(
-                                    &self.names[&NameKey::StructMember(arg.ty, member_index)],
-                                ),
+                                match member.binding {
+                                    Some(crate::Binding::Location { .. }) => {
+                                        varyings_namer.call(&self.names[name_key])
+                                    }
+                                    _ => self.namer.call(&self.names[name_key]),
+                                },
                             );
                         }
                     }

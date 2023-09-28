@@ -34,16 +34,17 @@ vertex vs_mainOutput vs_main(
 
 
 struct fs_mainInput {
-    metal::float2 position_3 [[user(loc1), center_perspective]];
+    metal::float2 position [[user(loc1), center_perspective]];
 };
 struct fs_mainOutput {
     metal::float4 member_1 [[color(0)]];
 };
 fragment fs_mainOutput fs_main(
   fs_mainInput varyings_1 [[stage_in]]
-, metal::float4 position_2 [[position]]
+, metal::float4 position [[position]]
 ) {
-    const VertexOutput in = { position_2 };
-    const NoteInstance note_1 = { varyings_1.position_3 };
+    const VertexOutput in = { position };
+    const NoteInstance note_1 = { varyings_1.position };
+    metal::float3 position_1 = metal::float3(1.0);
     return fs_mainOutput { in.position };
 }
