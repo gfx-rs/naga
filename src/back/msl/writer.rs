@@ -3713,16 +3713,14 @@ impl<W: Write> Writer<W> {
                                 member.ty,
                                 member.binding.as_ref(),
                             ));
-                            let name_key = &NameKey::StructMember(arg.ty, member_index);
-                            flattened_member_names.insert(
-                                NameKey::StructMember(arg.ty, member_index),
-                                match member.binding {
-                                    Some(crate::Binding::Location { .. }) => {
-                                        varyings_namer.call(&self.names[name_key])
-                                    }
-                                    _ => self.namer.call(&self.names[name_key]),
-                                },
-                            );
+                            let name_key = NameKey::StructMember(arg.ty, member_index);
+                            let name = match member.binding {
+                                Some(crate::Binding::Location { .. }) => {
+                                    varyings_namer.call(&self.names[&name_key])
+                                }
+                                _ => self.namer.call(&self.names[&name_key]),
+                            };
+                            flattened_member_names.insert(name_key, name);
                         }
                     }
                     _ => flattened_arguments.push((
