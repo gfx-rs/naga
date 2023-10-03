@@ -3147,8 +3147,6 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     Rf::Any => "any",
                     Rf::IsNan => "isnan",
                     Rf::IsInf => "isinf",
-                    Rf::IsFinite => "isfinite",
-                    Rf::IsNormal => "isnormal",
                 };
                 write!(self.out, "{fun_str}(")?;
                 self.write_expr(module, argument, func_ctx)?;
