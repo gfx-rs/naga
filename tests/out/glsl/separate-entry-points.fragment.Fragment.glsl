@@ -11,14 +11,6 @@ void derivatives() {
     float width = fwidth(0.0);
 }
 
-void barriers() {
-    memoryBarrierBuffer();
-    barrier();
-    memoryBarrierShared();
-    barrier();
-    return;
-}
-
 void main() {
     derivatives();
     _fs2p_location0 = vec4(0.0);

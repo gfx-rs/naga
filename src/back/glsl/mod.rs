@@ -827,6 +827,11 @@ impl<'a, W: Write> Writer<'a, W> {
 
             let fun_info = &self.info[handle];
 
+            // Skip functions that that are not compatible with this entry point's stage
+            if !fun_info.available_stages.contains(ep_info.available_stages) {
+                continue;
+            }
+
             // Write the function
             self.write_function(back::FunctionType::Function(handle), function, fun_info)?;
 

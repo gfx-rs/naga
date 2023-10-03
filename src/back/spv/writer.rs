@@ -1952,6 +1952,11 @@ impl Writer {
                     log::info!("Skip function {:?}", ir_function.name);
                     continue;
                 }
+
+                // Skip functions that that are not compatible with this entry point's stage
+                if !info.available_stages.contains(ep_info.available_stages) {
+                    continue;
+                }
             }
             let id = self.write_function(ir_function, info, ir_module, None, &debug_info_inner)?;
             self.lookup_function.insert(handle, id);
