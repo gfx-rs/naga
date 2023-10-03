@@ -3991,6 +3991,9 @@ impl<'a, W: Write> Writer<'a, W> {
         if flags.contains(crate::Barrier::WORK_GROUP) {
             writeln!(self.out, "{level}memoryBarrierShared();")?;
         }
+        if flags.contains(crate::Barrier::SUB_GROUP) {
+            unimplemented!() // FIXME
+        }
         writeln!(self.out, "{level}barrier();")?;
         Ok(())
     }
