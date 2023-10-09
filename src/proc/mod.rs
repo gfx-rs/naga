@@ -623,33 +623,14 @@ impl GlobalCtx<'_> {
             handle: crate::Handle<crate::Expression>,
             arena: &crate::Arena<crate::Expression>,
         ) -> Option<crate::Literal> {
-            Some(match arena[handle] {
-                crate::Expression::Literal(literal) => literal,
+            match arena[handle] {
+                crate::Expression::Literal(literal) => Some(literal),
                 crate::Expression::ZeroValue(ty) => match gctx.types[ty].inner {
-                    crate::TypeInner::Scalar {
-                        kind: crate::ScalarKind::Sint,
-                        width: 4,
-                    } => crate::Literal::I32(0),
-                    crate::TypeInner::Scalar {
-                        kind: crate::ScalarKind::Uint,
-                        width: 4,
-                    } => crate::Literal::U32(0),
-                    crate::TypeInner::Scalar {
-                        kind: crate::ScalarKind::Float,
-                        width: 4,
-                    } => crate::Literal::F32(0.0),
-                    crate::TypeInner::Scalar {
-                        kind: crate::ScalarKind::Float,
-                        width: 8,
-                    } => crate::Literal::F64(0.0),
-                    crate::TypeInner::Scalar {
-                        kind: crate::ScalarKind::Bool,
-                        width: 1,
-                    } => crate::Literal::Bool(false),
-                    _ => return None,
+                    crate::TypeInner::Scalar { kind, width } => crate::Literal::zero(kind, width),
+                    _ => None,
                 },
-                _ => return None,
-            })
+                _ => None,
+            }
         }
         match arena[handle] {
             crate::Expression::Constant(c) => {
