@@ -21,6 +21,7 @@ fn test_atomic_compare_exchange_i32_() {
             let _e6 = i;
             let _e8 = atomicLoad((&arr_i32_[_e6]));
             old = _e8;
+            exchanged = false;
             loop {
                 let _e12 = exchanged;
                 if !(_e12) {
@@ -62,6 +63,7 @@ fn test_atomic_compare_exchange_u32_() {
             let _e6 = i_1;
             let _e8 = atomicLoad((&arr_u32_[_e6]));
             old_1 = _e8;
+            exchanged_1 = false;
             loop {
                 let _e12 = exchanged_1;
                 if !(_e12) {

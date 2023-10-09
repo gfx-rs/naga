@@ -82,6 +82,7 @@ OpBranch %43
 %47 = OpAccessChain  %46  %22 %45
 %48 = OpAtomicLoad  %4  %47 %49 %50
 OpStore %29 %48
+OpStore %32 %23
 OpBranch %51
 %51 = OpLabel
 OpLoopMerge %52 %54 None
@@ -153,6 +154,7 @@ OpBranch %92
 %96 = OpAccessChain  %95  %78 %94
 %97 = OpAtomicLoad  %3  %96 %49 %50
 OpStore %80 %97
+OpStore %82 %23
 OpBranch %98
 %98 = OpLabel
 OpLoopMerge %99 %101 None
