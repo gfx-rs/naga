@@ -2283,8 +2283,8 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                             )?;
                             let rctx = ctx.runtime_expression_ctx(span)?;
                             rctx.block.push(
-                                crate::Statement::SubgroupBroadcast {
-                                    mode: crate::BroadcastMode::Index(index),
+                                crate::Statement::SubgroupGather {
+                                    mode: crate::GatherMode::Broadcast(index),
                                     argument,
                                     result,
                                 },
@@ -2306,8 +2306,8 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                             )?;
                             let rctx = ctx.runtime_expression_ctx(span)?;
                             rctx.block.push(
-                                crate::Statement::SubgroupBroadcast {
-                                    mode: crate::BroadcastMode::First,
+                                crate::Statement::SubgroupGather {
+                                    mode: crate::GatherMode::BroadcastFirst,
                                     argument,
                                     result,
                                 },

@@ -2273,7 +2273,7 @@ impl<'a, W: Write> Writer<'a, W> {
             } => {
                 unimplemented!(); // FIXME:
             }
-            Statement::SubgroupBroadcast {
+            Statement::SubgroupGather {
                 ref mode,
                 argument,
                 result,
