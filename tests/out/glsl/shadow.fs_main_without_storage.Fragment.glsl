@@ -21,7 +21,7 @@ struct Light {
     vec4 pos;
     vec4 color;
 };
-const vec3 c_ambient = vec3(0.05, 0.05, 0.05);
+const vec3 c_ambient = vec3(0.05000000074505806, 0.05000000074505806, 0.05000000074505806);
 const uint c_max_lights = 10u;
 
 uniform Globals_block_0Fragment { Globals _group_0_binding_0_fs; };

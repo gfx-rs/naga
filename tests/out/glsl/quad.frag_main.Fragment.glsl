@@ -7,7 +7,7 @@ struct VertexOutput {
     vec2 uv;
     vec4 position;
 };
-const float c_scale = 1.2;
+const float c_scale = 1.2000000476837158;
 
 uniform highp sampler2D _group_0_binding_0_fs;
 
