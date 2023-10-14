@@ -2266,15 +2266,15 @@ impl<'a, W: Write> Writer<'a, W> {
                 write!(self.out, ");")?;
             }
             Statement::SubgroupCollectiveOperation {
-                ref op,
-                ref collective_op,
+                op,
+                collective_op,
                 argument,
                 result,
             } => {
                 unimplemented!(); // FIXME:
             }
             Statement::SubgroupGather {
-                ref mode,
+                mode,
                 argument,
                 result,
             } => {

@@ -2310,7 +2310,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                             args.finish()?;
 
                             let result = ctx
-                                .interrupt_emitter(crate::Expression::SubgroupBallotResult, span);
+                                .interrupt_emitter(crate::Expression::SubgroupBallotResult, span)?;
                             let rctx = ctx.runtime_expression_ctx(span)?;
                             rctx.block
                                 .push(crate::Statement::SubgroupBallot { result, predicate }, span);
@@ -2328,7 +2328,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                             let result = ctx.interrupt_emitter(
                                 crate::Expression::SubgroupOperationResult { ty },
                                 span,
-                            );
+                            )?;
                             let rctx = ctx.runtime_expression_ctx(span)?;
                             rctx.block.push(
                                 crate::Statement::SubgroupGather {
@@ -2351,7 +2351,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                             let result = ctx.interrupt_emitter(
                                 crate::Expression::SubgroupOperationResult { ty },
                                 span,
-                            );
+                            )?;
                             let rctx = ctx.runtime_expression_ctx(span)?;
                             rctx.block.push(
                                 crate::Statement::SubgroupGather {
@@ -2569,7 +2569,8 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
         let ty = ctx.register_type(argument)?;
 
-        let result = ctx.interrupt_emitter(crate::Expression::SubgroupOperationResult { ty }, span);
+        let result =
+            ctx.interrupt_emitter(crate::Expression::SubgroupOperationResult { ty }, span)?;
         let rctx = ctx.runtime_expression_ctx(span)?;
         rctx.block.push(
             crate::Statement::SubgroupCollectiveOperation {
