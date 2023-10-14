@@ -2260,6 +2260,21 @@ impl<'a, W: Write> Writer<'a, W> {
 
                 writeln!(self.out, "subgroupBallot(true);")?;
             }
+            Statement::SubgroupCollectiveOperation {
+                ref op,
+                ref collective_op,
+                argument,
+                result,
+            } => {
+                unimplemented!(); // FIXME:
+            }
+            Statement::SubgroupBroadcast {
+                ref mode,
+                argument,
+                result,
+            } => {
+                unimplemented!(); // FIXME
+            }
         }
 
         Ok(())
@@ -3434,6 +3449,7 @@ impl<'a, W: Write> Writer<'a, W> {
             | Expression::AtomicResult { .. }
             | Expression::RayQueryProceedResult
             | Expression::WorkGroupUniformLoadResult { .. }
+            | Expression::SubgroupOperationResult { .. }
             | Expression::SubgroupBallotResult => unreachable!(),
             // `ArrayLength` is written as `expr.length()` and we convert it to a uint
             Expression::ArrayLength(expr) => {
