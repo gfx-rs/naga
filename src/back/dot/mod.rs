@@ -452,6 +452,7 @@ fn write_function_expressions(
                 offset: _,
                 level,
                 depth_ref,
+                clamp_to_edge: _,
             } => {
                 edges.insert("image", image);
                 edges.insert("sampler", sampler);
@@ -460,9 +461,7 @@ fn write_function_expressions(
                     edges.insert("array_index", expr);
                 }
                 match level {
-                    crate::SampleLevel::Auto
-                    | crate::SampleLevel::Zero
-                    | crate::SampleLevel::Base => {}
+                    crate::SampleLevel::Auto | crate::SampleLevel::Zero => {}
                     crate::SampleLevel::Exact(expr) => {
                         edges.insert("level", expr);
                     }

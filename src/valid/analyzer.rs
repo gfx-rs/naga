@@ -600,6 +600,7 @@ impl FunctionInfo {
                 offset: _,
                 level,
                 depth_ref,
+                clamp_to_edge: _,
             } => {
                 let image_storage = GlobalOrArgument::from_expression(expression_arena, image)?;
                 let sampler_storage = GlobalOrArgument::from_expression(expression_arena, sampler)?;
@@ -619,7 +620,7 @@ impl FunctionInfo {
                 // "nur" == "Non-Uniform Result"
                 let array_nur = array_index.and_then(|h| self.add_ref(h));
                 let level_nur = match level {
-                    Sl::Auto | Sl::Zero | Sl::Base => None,
+                    Sl::Auto | Sl::Zero => None,
                     Sl::Exact(h) | Sl::Bias(h) => self.add_ref(h),
                     Sl::Gradient { x, y } => self.add_ref(x).or(self.add_ref(y)),
                 };

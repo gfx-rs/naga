@@ -793,6 +793,7 @@
                     offset: None,
                     level: Zero,
                     depth_ref: Some(65),
+                    clamp_to_edge: false,
                 ),
             ],
             named_expressions: {},

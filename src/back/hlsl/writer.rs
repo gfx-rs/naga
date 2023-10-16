@@ -1346,7 +1346,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     // If we are going to write a `textureSampleBaseClampToEdge` next,
                     // precompute the half-texel before clamping the coordinates.
                     if let crate::Expression::ImageSample {
-                        level: crate::SampleLevel::Base,
+                        level: crate::SampleLevel::Zero,
+                        clamp_to_edge: true,
                         image,
                         ..
                     } = func_ctx.expressions[handle]
@@ -2394,6 +2395,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 offset,
                 level,
                 depth_ref,
+                clamp_to_edge,
             } => {
                 use crate::SampleLevel as Sl;
                 const COMPONENTS: [&str; 4] = ["", "Green", "Blue", "Alpha"];
@@ -2407,9 +2409,10 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     None => "",
                 };
                 let level_str = match level {
+                    Sl::Zero if clamp_to_edge => "Level",
                     Sl::Zero if gather.is_none() => "LevelZero",
                     Sl::Auto | Sl::Zero => "",
-                    Sl::Exact(_) | Sl::Base => "Level",
+                    Sl::Exact(_) => "Level",
                     Sl::Bias(_) => "Bias",
                     Sl::Gradient { .. } => "Grad",
                 };
@@ -2418,7 +2421,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 write!(self.out, ".{base_str}{cmp_str}{component_str}{level_str}(")?;
                 self.write_expr(module, sampler, func_ctx)?;
                 write!(self.out, ", ")?;
-                if level == Sl::Base {
+                if clamp_to_edge {
                     // clamp the coordinates to [ half_texel, 1 - half_texel ]
                     write!(self.out, "clamp(")?;
                     self.write_expr(module, coordinate, func_ctx)?;
@@ -2445,6 +2448,9 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 }
 
                 match level {
+                    Sl::Zero if clamp_to_edge => {
+                        write!(self.out, ", 0.0")?;
+                    }
                     Sl::Auto | Sl::Zero => {}
                     Sl::Exact(expr) => {
                         write!(self.out, ", ")?;
@@ -2459,9 +2465,6 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         self.write_expr(module, x, func_ctx)?;
                         write!(self.out, ", ")?;
                         self.write_expr(module, y, func_ctx)?;
-                    }
-                    Sl::Base => {
-                        write!(self.out, ", 0.0")?;
                     }
                 }
 

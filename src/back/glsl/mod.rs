@@ -1862,7 +1862,8 @@ impl<'a, W: Write> Writer<'a, W> {
                     // If we are going to write a `textureSampleBaseClampToEdge` next,
                     // precompute the half-texel before clamping the coordinates.
                     if let crate::Expression::ImageSample {
-                        level: crate::SampleLevel::Base,
+                        level: crate::SampleLevel::Zero,
+                        clamp_to_edge: true,
                         image,
                         ..
                     } = ctx.expressions[handle]
@@ -2485,6 +2486,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 offset,
                 level,
                 depth_ref,
+                clamp_to_edge,
             } => {
                 let dim = match *ctx.info[image].ty.inner_with(&self.module.types) {
                     TypeInner::Image { dim, .. } => dim,
@@ -2506,11 +2508,6 @@ impl<'a, W: Write> Writer<'a, W> {
                             )))
                         }
                         crate::SampleLevel::Auto => {}
-                        crate::SampleLevel::Base => {
-                            unreachable!(
-                                "textureSampleBaseClampToEdge should not have passed validation"
-                            )
-                        }
                     }
                 }
 
@@ -2537,7 +2534,6 @@ impl<'a, W: Write> Writer<'a, W> {
                         }
                     }
                     crate::SampleLevel::Gradient { .. } => "textureGrad",
-                    crate::SampleLevel::Base => "textureLod",
                 };
                 let offset_name = match offset {
                     Some(_) => "Offset",
@@ -2570,7 +2566,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 let tex_1d_hack = dim == crate::ImageDimension::D1 && self.options.version.is_es();
                 let is_vec = tex_1d_hack || coord_dim != 1;
 
-                if level == crate::SampleLevel::Base {
+                if clamp_to_edge {
                     // clamp the coordinates to [ half_texel, 1 - half_texel ]
                     write!(self.out, "clamp(")?;
                     self.write_expr(coordinate, ctx)?;
@@ -2652,9 +2648,6 @@ impl<'a, W: Write> Writer<'a, W> {
                             write!(self.out, ", ")?;
                             self.write_expr(y, ctx)?;
                         }
-                    }
-                    crate::SampleLevel::Base => {
-                        write!(self.out, ", 0.0")?;
                     }
                 }
 

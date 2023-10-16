@@ -1221,7 +1221,6 @@ pub enum SampleLevel {
         x: Handle<Expression>,
         y: Handle<Expression>,
     },
-    Base,
 }
 
 /// Type of an image query.
@@ -1415,6 +1414,7 @@ pub enum Expression {
         offset: Option<Handle<Expression>>,
         level: SampleLevel,
         depth_ref: Option<Handle<Expression>>,
+        clamp_to_edge: bool,
     },
 
     /// Load a texel from an image.

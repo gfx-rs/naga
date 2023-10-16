@@ -743,11 +743,15 @@ impl<W: Write> Writer<W> {
         &mut self,
         image: Handle<crate::Expression>,
         level: crate::SampleLevel,
+        clamp_to_edge: bool,
         context: &ExpressionContext,
     ) -> BackendResult {
         let has_levels = context.image_needs_lod(image);
         match level {
             crate::SampleLevel::Auto => {}
+            crate::SampleLevel::Zero if clamp_to_edge => {
+                write!(self.out, ", {NAMESPACE}::level(0.0)")?;
+            }
             crate::SampleLevel::Zero => {
                 //TODO: do we support Zero on `Sampled` image classes?
             }
@@ -770,9 +774,6 @@ impl<W: Write> Writer<W> {
                 write!(self.out, ", ")?;
                 self.put_expression(y, context, true)?;
                 write!(self.out, ")")?;
-            }
-            crate::SampleLevel::Base => {
-                write!(self.out, ", {NAMESPACE}::level(0.0)")?;
             }
         }
         Ok(())
@@ -1467,6 +1468,7 @@ impl<W: Write> Writer<W> {
                 offset,
                 level,
                 depth_ref,
+                clamp_to_edge,
             } => {
                 let main_op = match gather {
                     Some(_) => "gather",
@@ -1481,7 +1483,7 @@ impl<W: Write> Writer<W> {
                 self.put_expression(sampler, context, true)?;
                 write!(self.out, ", ")?;
 
-                if level == crate::SampleLevel::Base {
+                if clamp_to_edge {
                     // clamp the coordinates to [ half_texel, 1 - half_texel ]
                     write!(self.out, "{NAMESPACE}::clamp(")?;
                     self.put_expression(coordinate, context, true)?;
@@ -1505,7 +1507,7 @@ impl<W: Write> Writer<W> {
                     self.put_expression(dref, context, true)?;
                 }
 
-                self.put_image_sample_level(image, level, context)?;
+                self.put_image_sample_level(image, level, clamp_to_edge, context)?;
 
                 if let Some(offset) = offset {
                     write!(self.out, ", ")?;
@@ -2671,7 +2673,8 @@ impl<W: Write> Writer<W> {
                         // If we are going to write a `textureSampleBaseClampToEdge` next,
                         // precompute the half-texel before clamping the coordinates.
                         if let crate::Expression::ImageSample {
-                            level: crate::SampleLevel::Base,
+                            level: crate::SampleLevel::Zero,
+                            clamp_to_edge: true,
                             image,
                             ..
                         } = context.expression.function.expressions[handle]

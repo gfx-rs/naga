@@ -1245,6 +1245,7 @@ impl<W: Write> Writer<W> {
                 offset,
                 level,
                 depth_ref,
+                clamp_to_edge,
             } => {
                 use crate::SampleLevel as Sl;
 
@@ -1254,10 +1255,10 @@ impl<W: Write> Writer<W> {
                 };
                 let suffix_level = match level {
                     Sl::Auto => "",
+                    Sl::Zero if clamp_to_edge => "BaseClampToEdge",
                     Sl::Zero | Sl::Exact(_) => "Level",
                     Sl::Bias(_) => "Bias",
                     Sl::Gradient { .. } => "Grad",
-                    Sl::Base => "BaseClampToEdge",
                 };
 
                 write!(self.out, "textureSample{suffix_cmp}{suffix_level}(")?;
@@ -1278,7 +1279,8 @@ impl<W: Write> Writer<W> {
                 }
 
                 match level {
-                    Sl::Auto | Sl::Base => {}
+                    Sl::Auto => {}
+                    Sl::Zero if clamp_to_edge => {}
                     Sl::Zero => {
                         // Level 0 is implied for depth comparison
                         if depth_ref.is_none() {
@@ -1318,6 +1320,7 @@ impl<W: Write> Writer<W> {
                 offset,
                 level: _,
                 depth_ref,
+                clamp_to_edge: _,
             } => {
                 let suffix_cmp = match depth_ref {
                     Some(_) => "Compare",

@@ -2399,6 +2399,8 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             .then(|| self.expression(args.next()?, ctx.reborrow()))
             .transpose()?;
 
+        let mut clamp_to_edge = false;
+
         let (level, depth_ref) = match fun {
             Texture::Gather => (crate::SampleLevel::Zero, None),
             Texture::GatherCompare => {
@@ -2428,7 +2430,10 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 let level = self.expression(args.next()?, ctx.reborrow())?;
                 (crate::SampleLevel::Exact(level), None)
             }
-            Texture::SampleBaseClampToEdge => (crate::SampleLevel::Base, None),
+            Texture::SampleBaseClampToEdge => {
+                clamp_to_edge = true;
+                (crate::SampleLevel::Zero, None)
+            }
         };
 
         let offset = args
@@ -2448,6 +2453,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             offset,
             level,
             depth_ref,
+            clamp_to_edge,
         })
     }
 

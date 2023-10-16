@@ -508,7 +508,7 @@ impl crate::SampleLevel {
     pub const fn implicit_derivatives(&self) -> bool {
         match *self {
             Self::Auto | Self::Bias(_) => true,
-            Self::Zero | Self::Exact(_) | Self::Gradient { .. } | Self::Base => false,
+            Self::Zero | Self::Exact(_) | Self::Gradient { .. } => false,
         }
     }
 }

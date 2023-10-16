@@ -86,6 +86,7 @@ impl<'tracer> ExpressionTracer<'tracer> {
                     offset,
                     ref level,
                     depth_ref,
+                    clamp_to_edge: _,
                 } => {
                     work_list.push(image);
                     work_list.push(sampler);
@@ -96,7 +97,7 @@ impl<'tracer> ExpressionTracer<'tracer> {
                     }
                     use crate::SampleLevel as Sl;
                     match *level {
-                        Sl::Auto | Sl::Zero | Sl::Base => {}
+                        Sl::Auto | Sl::Zero => {}
                         Sl::Exact(expr) | Sl::Bias(expr) => work_list.push(expr),
                         Sl::Gradient { x, y } => work_list.extend([x, y]),
                     }
@@ -266,6 +267,7 @@ impl ModuleMap {
                 ref mut offset,
                 ref mut level,
                 ref mut depth_ref,
+                clamp_to_edge: _,
             } => {
                 adjust(image);
                 adjust(sampler);
@@ -366,7 +368,7 @@ impl ModuleMap {
 
         use crate::SampleLevel as Sl;
         match *level {
-            Sl::Auto | Sl::Zero | Sl::Base => {}
+            Sl::Auto | Sl::Zero => {}
             Sl::Exact(ref mut expr) => adjust(expr),
             Sl::Bias(ref mut expr) => adjust(expr),
             Sl::Gradient {

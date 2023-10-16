@@ -290,6 +290,7 @@ impl super::Validator {
                 offset,
                 level,
                 depth_ref,
+                clamp_to_edge: _,
             } => {
                 if let Some(offset) = offset {
                     validate_const_expr(offset)?;
@@ -302,9 +303,7 @@ impl super::Validator {
                     .check_dep_opt(array_index)?;
 
                 match level {
-                    crate::SampleLevel::Auto
-                    | crate::SampleLevel::Zero
-                    | crate::SampleLevel::Base => (),
+                    crate::SampleLevel::Auto | crate::SampleLevel::Zero => (),
                     crate::SampleLevel::Exact(expr) => {
                         handle.check_dep(expr)?;
                     }

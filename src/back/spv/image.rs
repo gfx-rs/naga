@@ -915,6 +915,7 @@ impl<'w> BlockContext<'w> {
         offset: Option<Handle<crate::Expression>>,
         level: crate::SampleLevel,
         depth_ref: Option<Handle<crate::Expression>>,
+        clamp_to_edge: bool,
         block: &mut Block,
     ) -> Result<Word, Error> {
         use super::instructions::SampleLod;
@@ -947,7 +948,7 @@ impl<'w> BlockContext<'w> {
             self.get_type_id(LookupType::Local(LocalType::SampledImage { image_type_id }));
 
         let sampler_id = self.get_handle_id(sampler);
-        let coordinates_id = if level == crate::SampleLevel::Base {
+        let coordinates_id = if clamp_to_edge {
             self.write_clamped_image_coordinates(image_id, coordinate, block)?
         } else {
             self.write_image_coordinates(coordinate, array_index, block)?
@@ -983,7 +984,7 @@ impl<'w> BlockContext<'w> {
                 }
                 inst
             }
-            (crate::SampleLevel::Zero | crate::SampleLevel::Base, None) => {
+            (crate::SampleLevel::Zero, None) => {
                 let mut inst = Instruction::image_sample(
                     sample_result_type_id,
                     id,
