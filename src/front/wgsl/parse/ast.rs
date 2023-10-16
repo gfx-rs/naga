@@ -395,9 +395,10 @@ pub enum ConstructorType<'a> {
 }
 
 #[derive(Debug, Copy, Clone)]
-pub enum Literal {
+pub enum Literal<'a> {
     Bool(bool),
     Number(Number),
+    String(&'a str),
 }
 
 #[cfg(doc)]
@@ -405,7 +406,7 @@ use crate::front::wgsl::lower::Lowerer;
 
 #[derive(Debug)]
 pub enum Expression<'a> {
-    Literal(Literal),
+    Literal(Literal<'a>),
     Ident(IdentExpr<'a>),
 
     /// A type constructor expression.

@@ -95,6 +95,14 @@ impl FunctionTracer<'_> {
                         self.trace_expression(query);
                         self.trace_ray_query_function(fun);
                     }
+                    St::DebugPrintf {
+                        format: _,
+                        ref arguments,
+                    } => {
+                        for expr in arguments {
+                            self.trace_expression(*expr);
+                        }
+                    }
 
                     // Trivial statements.
                     St::Break
@@ -243,6 +251,14 @@ impl FunctionMap {
                     } => {
                         adjust(query);
                         self.adjust_ray_query_function(fun);
+                    }
+                    St::DebugPrintf {
+                        format: _,
+                        ref mut arguments,
+                    } => {
+                        for expr in arguments {
+                            adjust(expr);
+                        }
                     }
 
                     // Trivial statements.

@@ -610,6 +610,7 @@ pub struct Writer {
     /// The set of spirv extensions used.
     extensions_used: crate::FastIndexSet<&'static str>,
 
+    strings: Vec<Instruction>,
     debugs: Vec<Instruction>,
     annotations: Vec<Instruction>,
     flags: WriterFlags,

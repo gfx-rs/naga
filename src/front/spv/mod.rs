@@ -3688,7 +3688,8 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                 | S::Store { .. }
                 | S::ImageStore { .. }
                 | S::Atomic { .. }
-                | S::RayQuery { .. } => {}
+                | S::RayQuery { .. }
+                | S::DebugPrintf { .. } => {}
                 S::Call {
                     function: ref mut callee,
                     ref arguments,

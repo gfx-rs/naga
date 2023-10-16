@@ -3010,6 +3010,9 @@ impl<W: Write> Writer<W> {
                         }
                     }
                 }
+                crate::Statement::DebugPrintf { .. } => {
+                    return Err(Error::FeatureNotImplemented("debug printf".to_string()));
+                }
             }
         }
 

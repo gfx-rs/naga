@@ -239,6 +239,8 @@ pub enum Error<'a> {
     ExpectedPositiveArrayLength(Span),
     MissingWorkgroupSize(Span),
     ConstantEvaluatorError(ConstantEvaluatorError, Span),
+    /// String literals are only used with debugPrintf
+    UnexpectedStringLiteral(Span),
 }
 
 impl<'a> Error<'a> {
@@ -253,6 +255,7 @@ impl<'a> Error<'a> {
                             Token::Attribute => "@".to_string(),
                             Token::Number(_) => "number".to_string(),
                             Token::Word(s) => s.to_string(),
+                            Token::String(_) => "string".to_string(),
                             Token::Operation(c) => format!("operation ('{c}')"),
                             Token::LogicalOperation(c) => format!("logical operation ('{c}')"),
                             Token::ShiftOperation(c) => format!("bitshift ('{c}{c}')"),
@@ -697,6 +700,14 @@ impl<'a> Error<'a> {
                 labels: vec![(
                     span,
                     "must be paired with a @workgroup_size attribute".into(),
+                )],
+                notes: vec![],
+            },
+            Error::UnexpectedStringLiteral(span) => ParseError {
+                message: "unexpected string literal".to_string(),
+                labels: vec![(
+                    span,
+                    "string literals can only be used as the first argument to debugPrintf".into(),
                 )],
                 notes: vec![],
             },

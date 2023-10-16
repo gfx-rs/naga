@@ -1485,6 +1485,9 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         unreachable!("got abstract numeric type when not expected");
                     }
                     ast::Literal::Bool(b) => crate::Literal::Bool(b),
+                    ast::Literal::String(_) => {
+                        return Err(Error::UnexpectedStringLiteral(span));
+                    }
                 };
                 let handle = ctx.interrupt_emitter(crate::Expression::Literal(literal), span)?;
                 return Ok(TypedExpression::non_reference(handle));
@@ -2255,6 +2258,35 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                                 ctx.reborrow(),
                             )?;
                             return Ok(Some(handle));
+                        }
+                        "debugPrintf" => {
+                            let format = arguments.first().ok_or(Error::WrongArgumentCount {
+                                span,
+                                expected: 1..16,
+                                found: 0,
+                            })?;
+
+                            let format = match ctx.ast_expressions[*format] {
+                                ast::Expression::Literal(ast::Literal::String(format)) => {
+                                    format.to_string()
+                                }
+                                _ => return Err(Error::Other),
+                            };
+
+                            let arguments = arguments
+                                .iter()
+                                .skip(1)
+                                .map(|&arg| self.expression(arg, ctx.reborrow()))
+                                .collect::<Result<Vec<_>, _>>()?;
+                            let rctx = ctx.runtime_expression_ctx(span)?;
+                            rctx.block
+                                .extend(rctx.emitter.finish(rctx.naga_expressions));
+
+                            rctx.emitter.start(rctx.naga_expressions);
+                            rctx.block
+                                .push(crate::Statement::DebugPrintf { format, arguments }, span);
+
+                            return Ok(None);
                         }
                         _ => return Err(Error::UnknownIdent(function.span, function.name)),
                     }

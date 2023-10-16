@@ -919,6 +919,9 @@ impl super::Validator {
                         crate::RayQueryFunction::Terminate => {}
                     }
                 }
+                S::DebugPrintf { .. } => {
+                    // FIXME
+                }
             }
         }
         Ok(BlockInfo { stages, finished })
