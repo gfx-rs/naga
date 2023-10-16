@@ -302,7 +302,9 @@ impl super::Validator {
                     .check_dep_opt(array_index)?;
 
                 match level {
-                    crate::SampleLevel::Auto | crate::SampleLevel::Zero => (),
+                    crate::SampleLevel::Auto
+                    | crate::SampleLevel::Zero
+                    | crate::SampleLevel::Base => (),
                     crate::SampleLevel::Exact(expr) => {
                         handle.check_dep(expr)?;
                     }

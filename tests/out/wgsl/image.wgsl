@@ -178,8 +178,11 @@ fn texture_sample() -> @location(0) vec4<f32> {
     let _e135 = textureSampleBias(image_cube_array, sampler_reg, tc3_, 0, 2.0);
     let _e136 = a;
     a = (_e136 + _e135);
-    let _e138 = a;
-    return _e138;
+    let _e140 = textureSampleBaseClampToEdge(image_2d, sampler_reg, tc);
+    let _e141 = a;
+    a = (_e141 + _e140);
+    let _e143 = a;
+    return _e143;
 }
 
 @fragment 

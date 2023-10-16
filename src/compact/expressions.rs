@@ -96,7 +96,7 @@ impl<'tracer> ExpressionTracer<'tracer> {
                     }
                     use crate::SampleLevel as Sl;
                     match *level {
-                        Sl::Auto | Sl::Zero => {}
+                        Sl::Auto | Sl::Zero | Sl::Base => {}
                         Sl::Exact(expr) | Sl::Bias(expr) => work_list.push(expr),
                         Sl::Gradient { x, y } => work_list.extend([x, y]),
                     }
@@ -366,7 +366,7 @@ impl ModuleMap {
 
         use crate::SampleLevel as Sl;
         match *level {
-            Sl::Auto | Sl::Zero => {}
+            Sl::Auto | Sl::Zero | Sl::Base => {}
             Sl::Exact(ref mut expr) => adjust(expr),
             Sl::Bias(ref mut expr) => adjust(expr),
             Sl::Gradient {

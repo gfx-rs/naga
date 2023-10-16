@@ -136,6 +136,7 @@ fn texture_sample() -> @location(0) vec4<f32> {
     a += textureSample(image_cube_array, sampler_reg, tc3, 0);
     a += textureSampleLevel(image_cube_array, sampler_reg, tc3, 0, level);
     a += textureSampleBias(image_cube_array, sampler_reg, tc3, 0, 2.0);
+    a += textureSampleBaseClampToEdge(image_2d, sampler_reg, tc);
     return a;
 }
 

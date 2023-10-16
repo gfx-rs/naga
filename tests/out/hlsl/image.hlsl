@@ -312,8 +312,15 @@ float4 texture_sample() : SV_Target0
     float4 _expr135 = image_cube_array.SampleBias(sampler_reg, float4(tc3_, 0), 2.0);
     float4 _expr136 = a;
     a = (_expr136 + _expr135);
-    float4 _expr138 = a;
-    return _expr138;
+    float2 _expr140_dim;
+    float _expr140_num;
+    image_2d.GetDimensions(0u, _expr140_dim.x, _expr140_dim.y, _expr140_num);
+    float2 _expr140_half_texel = (0.5).xx / _expr140_dim;
+    float4 _expr140 = image_2d.SampleLevel(sampler_reg, clamp(tc, _expr140_half_texel, (1.0).xx - _expr140_half_texel), 0.0);
+    float4 _expr141 = a;
+    a = (_expr141 + _expr140);
+    float4 _expr143 = a;
+    return _expr143;
 }
 
 float texture_sample_comparison() : SV_Target0

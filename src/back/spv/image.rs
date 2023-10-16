@@ -379,6 +379,95 @@ impl<'w> BlockContext<'w> {
         })
     }
 
+    /// Helper function to clamp the image coordinates to [ half_texel, 1 - half_texel ]
+    /// for use with `textureSampleBaseClampToEdge`
+    fn write_clamped_image_coordinates(
+        &mut self,
+        image_id: Word,
+        coordinates: Handle<crate::Expression>,
+        block: &mut Block,
+    ) -> Result<Word, Error> {
+        // query image size
+        let dim_type_id = self.get_type_id(
+            LocalType::Value {
+                vector_size: Some(crate::VectorSize::Bi),
+                kind: crate::ScalarKind::Sint,
+                width: 4,
+                pointer_space: None,
+            }
+            .into(),
+        );
+        let dim_id = self.gen_id();
+        let mut inst =
+            Instruction::image_query(spirv::Op::ImageQuerySizeLod, dim_type_id, dim_id, image_id);
+        inst.add_operand(self.writer.get_constant_scalar(crate::Literal::U32(0)));
+        block.body.push(inst);
+
+        let vec_type = LocalType::Value {
+            vector_size: Some(crate::VectorSize::Bi),
+            kind: crate::ScalarKind::Float,
+            width: 4,
+            pointer_space: None,
+        }
+        .into();
+        let vec_type_id = self.get_type_id(vec_type);
+
+        // conv vec2i to vec2f
+        let conv_id = self.gen_id();
+        block.body.push(Instruction::unary(
+            spirv::Op::ConvertSToF,
+            vec_type_id,
+            conv_id,
+            dim_id,
+        ));
+
+        // vec2(0.5) / dim
+        self.temp_list.clear();
+        self.temp_list
+            .resize(2, self.writer.get_constant_scalar(crate::Literal::F32(0.5)));
+        let vec_id = self
+            .writer
+            .get_constant_composite(vec_type, &self.temp_list);
+        let half_texel_id = self.gen_id();
+        block.body.push(Instruction::binary(
+            spirv::Op::FDiv,
+            vec_type_id,
+            half_texel_id,
+            vec_id,
+            conv_id,
+        ));
+
+        // vec2(1.0) - half_texel
+        self.temp_list
+            .fill(self.writer.get_constant_scalar(crate::Literal::F32(1.0)));
+        let vec_id = self
+            .writer
+            .get_constant_composite(vec_type, &self.temp_list);
+        let sub_id = self.gen_id();
+        block.body.push(Instruction::binary(
+            spirv::Op::FSub,
+            vec_type_id,
+            sub_id,
+            vec_id,
+            half_texel_id,
+        ));
+
+        // clamp coords
+        let coord_id = self
+            .write_image_coordinates(coordinates, None, block)?
+            .value_id;
+        let clamp_id = self.gen_id();
+        block.body.push(Instruction::ext_inst(
+            self.writer.gl450_ext_inst_id,
+            spirv::GLOp::FClamp,
+            vec_type_id,
+            clamp_id,
+            &[coord_id, half_texel_id, sub_id],
+        ));
+
+        Ok(clamp_id)
+    }
+
     pub(super) fn get_handle_id(&mut self, expr_handle: Handle<crate::Expression>) -> Word {
         let id = match self.ir_function.expressions[expr_handle] {
             crate::Expression::GlobalVariable(handle) => {
@@ -858,9 +947,12 @@ impl<'w> BlockContext<'w> {
             self.get_type_id(LookupType::Local(LocalType::SampledImage { image_type_id }));
 
         let sampler_id = self.get_handle_id(sampler);
-        let coordinates_id = self
-            .write_image_coordinates(coordinate, array_index, block)?
-            .value_id;
+        let coordinates_id = if level == crate::SampleLevel::Base {
+            self.write_clamped_image_coordinates(image_id, coordinate, block)?
+        } else {
+            self.write_image_coordinates(coordinate, array_index, block)?
+                .value_id
+        };
 
         let sampled_image_id = self.gen_id();
         block.body.push(Instruction::sampled_image(
@@ -891,7 +983,7 @@ impl<'w> BlockContext<'w> {
                 }
                 inst
             }
-            (crate::SampleLevel::Zero, None) => {
+            (crate::SampleLevel::Zero | crate::SampleLevel::Base, None) => {
                 let mut inst = Instruction::image_sample(
                     sample_result_type_id,
                     id,

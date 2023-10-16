@@ -84,8 +84,12 @@ void main() {
     vec4 _e135 = texture(_group_0_binding_6_fs, vec4(tc3_, 0), 2.0);
     vec4 _e136 = a;
     a = (_e136 + _e135);
-    vec4 _e138 = a;
-    _fs2p_location0 = _e138;
+    vec2 _e140_half_texel = vec2(0.5) / vec2(textureSize(_group_0_binding_1_fs, 0));
+    vec4 _e140 = textureLod(_group_0_binding_1_fs, clamp(tc, _e140_half_texel, vec2(1.0) - _e140_half_texel), 0.0);
+    vec4 _e141 = a;
+    a = (_e141 + _e140);
+    vec4 _e143 = a;
+    _fs2p_location0 = _e143;
     return;
 }
 

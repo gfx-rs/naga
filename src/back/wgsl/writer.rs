@@ -1257,6 +1257,7 @@ impl<W: Write> Writer<W> {
                     Sl::Zero | Sl::Exact(_) => "Level",
                     Sl::Bias(_) => "Bias",
                     Sl::Gradient { .. } => "Grad",
+                    Sl::Base => "BaseClampToEdge",
                 };
 
                 write!(self.out, "textureSample{suffix_cmp}{suffix_level}(")?;
@@ -1277,7 +1278,7 @@ impl<W: Write> Writer<W> {
                 }
 
                 match level {
-                    Sl::Auto => {}
+                    Sl::Auto | Sl::Base => {}
                     Sl::Zero => {
                         // Level 0 is implied for depth comparison
                         if depth_ref.is_none() {

@@ -460,8 +460,9 @@ fn write_function_expressions(
                     edges.insert("array_index", expr);
                 }
                 match level {
-                    crate::SampleLevel::Auto => {}
-                    crate::SampleLevel::Zero => {}
+                    crate::SampleLevel::Auto
+                    | crate::SampleLevel::Zero
+                    | crate::SampleLevel::Base => {}
                     crate::SampleLevel::Exact(expr) => {
                         edges.insert("level", expr);
                     }

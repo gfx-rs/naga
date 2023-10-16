@@ -17,6 +17,10 @@ const SPECIAL_BASE_VERTEX: &str = "base_vertex";
 const SPECIAL_BASE_INSTANCE: &str = "base_instance";
 const SPECIAL_OTHER: &str = "other";
 
+/// The suffix of the variable that will hold the calculated half-texel
+/// for use with `textureSampleBaseClampToEdge`
+const HALF_TEXEL_SUFFIX: &str = "_half_texel";
+
 pub(crate) const MODF_FUNCTION: &str = "naga_modf";
 pub(crate) const FREXP_FUNCTION: &str = "naga_frexp";
 
@@ -1339,6 +1343,17 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         None
                     };
 
+                    // If we are going to write a `textureSampleBaseClampToEdge` next,
+                    // precompute the half-texel before clamping the coordinates.
+                    if let crate::Expression::ImageSample {
+                        level: crate::SampleLevel::Base,
+                        image,
+                        ..
+                    } = func_ctx.expressions[handle]
+                    {
+                        self.write_half_texel(module, handle, image, level, func_ctx)?
+                    }
+
                     if let Some(name) = expr_name {
                         write!(self.out, "{level}")?;
                         self.write_named_expr(module, handle, name, handle, func_ctx)?;
@@ -2394,7 +2409,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 let level_str = match level {
                     Sl::Zero if gather.is_none() => "LevelZero",
                     Sl::Auto | Sl::Zero => "",
-                    Sl::Exact(_) => "Level",
+                    Sl::Exact(_) | Sl::Base => "Level",
                     Sl::Bias(_) => "Bias",
                     Sl::Gradient { .. } => "Grad",
                 };
@@ -2403,14 +2418,26 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 write!(self.out, ".{base_str}{cmp_str}{component_str}{level_str}(")?;
                 self.write_expr(module, sampler, func_ctx)?;
                 write!(self.out, ", ")?;
-                self.write_texture_coordinates(
-                    "float",
-                    coordinate,
-                    array_index,
-                    None,
-                    module,
-                    func_ctx,
-                )?;
+                if level == Sl::Base {
+                    // clamp the coordinates to [ half_texel, 1 - half_texel ]
+                    write!(self.out, "clamp(")?;
+                    self.write_expr(module, coordinate, func_ctx)?;
+                    write!(
+                        self.out,
+                        ", _expr{}{}, (1.0).xx - _expr{0}{1})",
+                        expr.index(),
+                        HALF_TEXEL_SUFFIX
+                    )?
+                } else {
+                    self.write_texture_coordinates(
+                        "float",
+                        coordinate,
+                        array_index,
+                        None,
+                        module,
+                        func_ctx,
+                    )?;
+                }
 
                 if let Some(depth_ref) = depth_ref {
                     write!(self.out, ", ")?;
@@ -2432,6 +2459,9 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         self.write_expr(module, x, func_ctx)?;
                         write!(self.out, ", ")?;
                         self.write_expr(module, y, func_ctx)?;
+                    }
+                    Sl::Base => {
+                        write!(self.out, ", 0.0")?;
                     }
                 }
 
@@ -3257,6 +3287,39 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         if barrier.contains(crate::Barrier::WORK_GROUP) {
             writeln!(self.out, "{level}GroupMemoryBarrierWithGroupSync();")?;
         }
+        Ok(())
+    }
+
+    /// Helper function to write the locals holding the half-texel
+    /// for use with `textureSampleBaseClampToEdge`
+    fn write_half_texel(
+        &mut self,
+        module: &Module,
+        expr: Handle<crate::Expression>,
+        image: Handle<crate::Expression>,
+        level: back::Level,
+        func_ctx: &back::FunctionCtx,
+    ) -> Result<(), Error> {
+        let prefix = format!("_expr{}", expr.index());
+
+        writeln!(self.out, "{level}float2 {prefix}_dim;")?;
+
+        // will not be used, but required for the method call
+        writeln!(self.out, "{level}float {prefix}_num;")?;
+
+        write!(self.out, "{level}")?;
+        self.write_expr(module, image, func_ctx)?;
+
+        writeln!(
+            self.out,
+            ".GetDimensions(0u, {prefix}_dim.x, {prefix}_dim.y, {prefix}_num);"
+        )?;
+
+        writeln!(
+            self.out,
+            "{level}float2 {prefix}{HALF_TEXEL_SUFFIX} = (0.5).xx / {prefix}_dim;"
+        )?;
+
         Ok(())
     }
 }

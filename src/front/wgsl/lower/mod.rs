@@ -800,7 +800,7 @@ enum Texture {
     SampleCompareLevel,
     SampleGrad,
     SampleLevel,
-    // SampleBaseClampToEdge,
+    SampleBaseClampToEdge,
 }
 
 impl Texture {
@@ -815,7 +815,7 @@ impl Texture {
             "textureSampleCompareLevel" => Self::SampleCompareLevel,
             "textureSampleGrad" => Self::SampleGrad,
             "textureSampleLevel" => Self::SampleLevel,
-            // "textureSampleBaseClampToEdge" => Some(Self::SampleBaseClampToEdge),
+            "textureSampleBaseClampToEdge" => Self::SampleBaseClampToEdge,
             _ => return None,
         })
     }
@@ -831,7 +831,7 @@ impl Texture {
             Self::SampleCompareLevel => 5,
             Self::SampleGrad => 6,
             Self::SampleLevel => 5,
-            // Self::SampleBaseClampToEdge => 3,
+            Self::SampleBaseClampToEdge => 3,
         }
     }
 }
@@ -2428,6 +2428,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 let level = self.expression(args.next()?, ctx.reborrow())?;
                 (crate::SampleLevel::Exact(level), None)
             }
+            Texture::SampleBaseClampToEdge => (crate::SampleLevel::Base, None),
         };
 
         let offset = args

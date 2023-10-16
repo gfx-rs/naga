@@ -185,8 +185,13 @@ fragment texture_sampleOutput texture_sample(
     metal::float4 _e135 = image_cube_array.sample(sampler_reg, tc3_, 0, metal::bias(2.0));
     metal::float4 _e136 = a;
     a = _e136 + _e135;
-    metal::float4 _e138 = a;
-    return texture_sampleOutput { _e138 };
+    metal::float2 _e140_dim = metal::float2(image_2d.get_width(), image_2d.get_height());
+    metal::float2 _e140_half_texel = metal::float2(0.5) / _e140_dim;
+    metal::float4 _e140 = image_2d.sample(sampler_reg, metal::clamp(tc, _e140_half_texel, metal::float2(1.0) - _e140_half_texel), metal::level(0.0));
+    metal::float4 _e141 = a;
+    a = _e141 + _e140;
+    metal::float4 _e143 = a;
+    return texture_sampleOutput { _e143 };
 }
 
 

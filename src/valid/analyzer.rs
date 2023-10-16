@@ -619,7 +619,7 @@ impl FunctionInfo {
                 // "nur" == "Non-Uniform Result"
                 let array_nur = array_index.and_then(|h| self.add_ref(h));
                 let level_nur = match level {
-                    Sl::Auto | Sl::Zero => None,
+                    Sl::Auto | Sl::Zero | Sl::Base => None,
                     Sl::Exact(h) | Sl::Bias(h) => self.add_ref(h),
                     Sl::Gradient { x, y } => self.add_ref(x).or(self.add_ref(y)),
                 };

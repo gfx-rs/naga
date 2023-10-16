@@ -1221,6 +1221,7 @@ pub enum SampleLevel {
         x: Handle<Expression>,
         y: Handle<Expression>,
     },
+    Base,
 }
 
 /// Type of an image query.
