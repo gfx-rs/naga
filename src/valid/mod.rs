@@ -115,6 +115,8 @@ bitflags::bitflags! {
         const RAY_QUERY = 0x1000;
         /// Support for generating two sources for blending from fragement shaders
         const DUAL_SOURCE_BLENDING = 0x2000;
+        /// Support for binding arrays.
+        const BINDING_ARRAY = 0x4000;
     }
 }
 
