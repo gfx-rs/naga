@@ -375,6 +375,19 @@ impl super::Validator {
         }
 
         if let crate::AtomicFunction::Exchange { compare: Some(cmp) } = *fun {
+            if !self
+                .capabilities
+                .contains(super::Capabilities::ATOMIC_COMPARE_EXCHANGE_WEAK)
+            {
+                return Err(FunctionError::Expression {
+                    handle: result,
+                    source: ExpressionError::MissingCapabilities(
+                        super::Capabilities::ATOMIC_COMPARE_EXCHANGE_WEAK,
+                    ),
+                }
+                .with_span_handle(result, context.expressions));
+            }
+
             if context.resolve_type(cmp, &self.valid_expression_set)? != value_inner {
                 log::error!("Atomic exchange comparison has a different type from the value");
                 return Err(AtomicError::InvalidOperand(cmp)

@@ -27,6 +27,7 @@ fn gather_inputs(folder: &str, extension: &str) -> Vec<Box<[u8]>> {
     list
 }
 
+#[cfg(feature = "glsl-in")]
 fn parse_glsl(stage: naga::ShaderStage, inputs: &[Box<[u8]>]) {
     let mut parser = naga::front::glsl::Frontend::default();
     let options = naga::front::glsl::Options {
@@ -148,8 +149,11 @@ fn backends(c: &mut Criterion) {
     #[cfg(feature = "validate")]
     let inputs = {
         let mut validator = naga::valid::Validator::new(
-            naga::valid::ValidationFlags::empty(),
-            naga::valid::Capabilities::default(),
+            naga::valid::ValidationFlags::BLOCKS,
+            // atomicCompareExchangeWeak isn't implemented yet
+            // (#1413), so filter out anything that uses that.
+            naga::valid::Capabilities::default()
+                - naga::valid::Capabilities::ATOMIC_COMPARE_EXCHANGE_WEAK,
         );
         let input_modules = gather_modules();
         input_modules
@@ -211,7 +215,10 @@ fn backends(c: &mut Criterion) {
     group.bench_function("msl", |b| {
         b.iter(|| {
             let mut string = String::new();
-            let options = naga::back::msl::Options::default();
+            let options = naga::back::msl::Options {
+                lang_version: (2, 1),
+                .. Default::default()
+            };
             for &(ref module, ref info) in inputs.iter() {
                 let pipeline_options = naga::back::msl::PipelineOptions::default();
                 let mut writer = naga::back::msl::Writer::new(&mut string);

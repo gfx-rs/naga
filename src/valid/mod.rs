@@ -115,12 +115,20 @@ bitflags::bitflags! {
         const RAY_QUERY = 0x1000;
         /// Support for generating two sources for blending from fragement shaders
         const DUAL_SOURCE_BLENDING = 0x2000;
+        /// Support for WGSL atomicCompareExchangeWeak
+        ///
+        /// This is part of the WGSL standard, but it's not implemented yet for
+        /// some backends (#1413). Our benchmark harness would like to be able
+        /// to filter out modules we can't process successfully.
+        const ATOMIC_COMPARE_EXCHANGE_WEAK = 0x4000;
+        /// Support for binding arrays.
+        const BINDING_ARRAY = 0x8000;
     }
 }
 
 impl Default for Capabilities {
     fn default() -> Self {
-        Self::MULTISAMPLED_SHADING
+        Self::MULTISAMPLED_SHADING | Self::ATOMIC_COMPARE_EXCHANGE_WEAK
     }
 }
 
