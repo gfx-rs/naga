@@ -879,6 +879,15 @@ impl Writer {
                     _ => {}
                 }
             }
+            crate::TypeInner::Pointer {
+                space: crate::AddressSpace::PhysicalStorage { .. },
+                ..
+            } => {
+                self.require_any(
+                    "Buffer Pointer",
+                    &[spirv::Capability::PhysicalStorageBufferAddresses],
+                )?;
+            }
             crate::TypeInner::AccelerationStructure => {
                 self.require_any("Acceleration Structure", &[spirv::Capability::RayQueryKHR])?;
             }
@@ -1905,6 +1914,17 @@ impl Writer {
             self.write_type_declaration_arena(&ir_module.types, handle)?;
         }
 
+        let has_physical_storage_pointer = self
+            .capabilities_used
+            .contains(&spirv::Capability::PhysicalStorageBufferAddresses);
+        if self.physical_layout.version < 0x10500 && has_physical_storage_pointer {
+            // enable the physical storage buffer class on < SPV-1.5
+            Instruction::extension("SPV_KHR_physical_storage_buffer")
+                .to_words(&mut self.logical_layout.extensions);
+            Instruction::extension("GL_EXT_buffer_reference")
+                .to_words(&mut self.logical_layout.extensions);
+        }
+
         // write all const-expressions as constants
         self.constant_ids
             .resize(ir_module.const_expressions.len(), 0);
@@ -1980,7 +2000,11 @@ impl Writer {
                 .to_words(&mut self.logical_layout.capabilities);
         }
 
-        let addressing_model = spirv::AddressingModel::Logical;
+        let addressing_model = if has_physical_storage_pointer {
+            spirv::AddressingModel::PhysicalStorageBuffer64
+        } else {
+            spirv::AddressingModel::Logical
+        };
         let memory_model = spirv::MemoryModel::GLSL450;
         //self.check(addressing_model.required_capabilities())?;
         //self.check(memory_model.required_capabilities())?;

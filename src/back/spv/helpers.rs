@@ -26,6 +26,7 @@ pub(super) const fn map_storage_class(space: crate::AddressSpace) -> spirv::Stor
         crate::AddressSpace::Function => spirv::StorageClass::Function,
         crate::AddressSpace::Private => spirv::StorageClass::Private,
         crate::AddressSpace::Storage { .. } => spirv::StorageClass::StorageBuffer,
+        crate::AddressSpace::PhysicalStorage { .. } => spirv::StorageClass::PhysicalStorageBuffer,
         crate::AddressSpace::Uniform => spirv::StorageClass::Uniform,
         crate::AddressSpace::WorkGroup => spirv::StorageClass::Workgroup,
         crate::AddressSpace::PushConstant => spirv::StorageClass::PushConstant,

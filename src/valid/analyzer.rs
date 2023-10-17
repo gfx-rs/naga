@@ -576,6 +576,7 @@ impl FunctionInfo {
                     As::Uniform | As::PushConstant => true,
                     // storage data is only uniform when read-only
                     As::Storage { access } => !access.contains(crate::StorageAccess::STORE),
+                    As::PhysicalStorage { .. } => false,
                     As::Handle => false,
                 };
                 Uniformity {

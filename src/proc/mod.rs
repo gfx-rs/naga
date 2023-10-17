@@ -162,6 +162,7 @@ impl crate::Literal {
 }
 
 pub const POINTER_SPAN: u32 = 4;
+pub const BUFFER_POINTER_SPAN: u32 = 8;
 
 impl super::TypeInner {
     pub const fn scalar_kind(&self) -> Option<super::ScalarKind> {
@@ -218,6 +219,14 @@ impl super::TypeInner {
                 rows,
                 width,
             } => Alignment::from(rows) * width as u32 * columns as u32,
+            Self::Pointer {
+                space: crate::AddressSpace::PhysicalStorage { .. },
+                ..
+            }
+            | Self::ValuePointer {
+                space: crate::AddressSpace::PhysicalStorage { .. },
+                ..
+            } => BUFFER_POINTER_SPAN,
             Self::Pointer { .. } | Self::ValuePointer { .. } => POINTER_SPAN,
             Self::Array {
                 base: _,
@@ -346,6 +355,7 @@ impl super::AddressSpace {
             | crate::AddressSpace::WorkGroup => Sa::LOAD | Sa::STORE,
             crate::AddressSpace::Uniform => Sa::LOAD,
             crate::AddressSpace::Storage { access } => access,
+            crate::AddressSpace::PhysicalStorage { .. } => Sa::LOAD,
             crate::AddressSpace::Handle => Sa::LOAD,
             crate::AddressSpace::PushConstant => Sa::LOAD,
         }

@@ -1230,12 +1230,32 @@ impl Parser {
                 let mut space = conv::map_address_space(ident, span)?;
                 lexer.expect(Token::Separator(','))?;
                 let base = self.type_decl(lexer, ctx)?;
-                if let crate::AddressSpace::Storage { ref mut access } = space {
-                    *access = if lexer.skip(Token::Separator(',')) {
-                        lexer.next_storage_access()?
-                    } else {
-                        crate::StorageAccess::LOAD
-                    };
+                match space {
+                    crate::AddressSpace::Storage { ref mut access } => {
+                        *access = if lexer.skip(Token::Separator(',')) {
+                            lexer.next_storage_access()?
+                        } else {
+                            crate::StorageAccess::LOAD
+                        };
+                    }
+                    crate::AddressSpace::PhysicalStorage { ref mut alignment } => {
+                        *alignment = if lexer.skip(Token::Separator(',')) {
+                            // TODO: we should probably use the constant expression evaluator here
+                            (match lexer.next() {
+                                (Token::Number(Ok(Number::I32(num))), _span) => {
+                                    u32::try_from(num).map_err(|_| Error::ExpectedNonNegative(span))
+                                }
+                                (Token::Number(Err(e)), span) => Err(Error::BadNumber(span, e)),
+                                other => Err(Error::Unexpected(
+                                    other.1,
+                                    ExpectedToken::PrimaryExpression,
+                                )),
+                            })?
+                        } else {
+                            *alignment
+                        };
+                    }
+                    _ => {}
                 }
                 lexer.expect_generic_paren('>')?;
                 ast::Type::Pointer { base, space }
