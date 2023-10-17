@@ -1346,7 +1346,6 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     // If we are going to write a `textureSampleBaseClampToEdge` next,
                     // precompute the half-texel before clamping the coordinates.
                     if let crate::Expression::ImageSample {
-                        level: crate::SampleLevel::Zero,
                         clamp_to_edge: true,
                         image,
                         ..
