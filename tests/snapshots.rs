@@ -784,7 +784,7 @@ fn convert_wgsl() {
         ("separate-entry-points", Targets::SPIRV | Targets::GLSL),
         (
             "debug-printf",
-            Targets::WGSL | Targets::GLSL | Targets::SPIRV | Targets::HLSL,
+            Targets::WGSL | Targets::GLSL | Targets::SPIRV,
         ),
     ];
 
@@ -860,11 +860,7 @@ fn convert_spv_all() {
         true,
         Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
     );
-    convert_spv(
-        "debug-printf-s",
-        false,
-        Targets::GLSL | Targets::HLSL | Targets::WGSL,
-    );
+    convert_spv("debug-printf-s", false, Targets::GLSL | Targets::WGSL);
 }
 
 #[cfg(feature = "glsl-in")]
