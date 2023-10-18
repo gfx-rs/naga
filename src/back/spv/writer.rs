@@ -1953,7 +1953,15 @@ impl Writer {
                     continue;
                 }
 
-                // Skip functions that that are not compatible with this entry point's stage
+                // Skip functions that that are not compatible with this entry point's stage.
+                //
+                // When validation is enabled, it rejects modules whose entry points try to call
+                // incompatible functions, so if we got this far, then any functions incompatible
+                // with our selected entry point must not be used.
+                //
+                // When validation is disabled, `fun_info.available_stages` is always just
+                // `ShaderStages::all()`, so this will write all functions in the module, and
+                // the downstream GLSL compiler will catch any problems.
                 if !info.available_stages.contains(ep_info.available_stages) {
                     continue;
                 }
