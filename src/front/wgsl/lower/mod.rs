@@ -13,6 +13,13 @@ use crate::{Arena, FastHashMap, FastIndexMap, Handle, Span};
 
 mod construction;
 
+/// Resolves the type of a given expression.
+///
+/// Expects a &mut [`ExpressionContext`] and a [`Handle<Expression>`].
+///
+/// Returns a &[`TypeResolution`].
+///
+/// See the documentation of [`resolve_inner!`] for why this macro is necessary.
 macro_rules! resolve {
     ($ctx:ident, $expr:expr) => {{
         $ctx.grow_types($expr)?;
@@ -21,6 +28,19 @@ macro_rules! resolve {
 }
 pub(super) use resolve;
 
+/// Resolves the inner type of a given expression.
+///
+/// Expects a &mut [`ExpressionContext`] and a [`Handle<Expression>`].
+///
+/// Returns a &[`crate::TypeInner`].
+///
+/// Ideally, we would simply have a function that takes a `&mut ExpressionContext`
+/// and returns a `&TypeResolution`. Unfortunately, this leads the borrow checker
+/// to conclude that the mutable borrow lasts for as long as we are using the
+/// `&TypeResolution`, so we can't use the `ExpressionContext` for anything else -
+/// like, say, resolving another operand's type. Using a macro that expands to
+/// two separate calls, only the first of which needs a `&mut`,
+/// lets the borrow checker see that the mutable borrow is over.
 macro_rules! resolve_inner {
     ($ctx:ident, $expr:expr) => {{
         $ctx.grow_types($expr)?;
@@ -28,7 +48,14 @@ macro_rules! resolve_inner {
     }};
 }
 
-macro_rules! resolve_inner_x2 {
+/// Resolves the inner types of two given expressions.
+///
+/// Expects a &mut [`ExpressionContext`] and two [`Handle<Expression>`]s.
+///
+/// Returns a tuple containing two &[`crate::TypeInner`].
+///
+/// See the documentation of [`resolve_inner!`] for why this macro is necessary.
+macro_rules! resolve_inner_binary {
     ($ctx:ident, $left:expr, $right:expr) => {{
         $ctx.grow_types($left)?;
         $ctx.grow_types($right)?;
@@ -523,7 +550,7 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
     /// the shared reference would extend the mutable borrow, and you
     /// wouldn't be able to use `self` for anything else. Instead, you
     /// should use [`register_type`] or one of [`resolve!`],
-    /// [`resolve_inner!`] or [`resolve_inner_x2!`].
+    /// [`resolve_inner!`] or [`resolve_inner_binary!`].
     ///
     /// [`self.typifier`]: ExpressionContext::typifier
     /// [`register_type`]: Self::register_type
@@ -602,7 +629,7 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
                 | crate::BinaryOperator::Divide
                 | crate::BinaryOperator::Modulo
         ) {
-            match resolve_inner_x2!(self, *left, *right) {
+            match resolve_inner_binary!(self, *left, *right) {
                 (&crate::TypeInner::Vector { size, .. }, &crate::TypeInner::Scalar { .. }) => {
                     *right = self.append_expression(
                         crate::Expression::Splat {
