@@ -13,21 +13,6 @@ use crate::{Arena, FastHashMap, FastIndexMap, Handle, Span};
 
 mod construction;
 
-/// Resolves the type of a given expression.
-///
-/// Expects a &mut [`ExpressionContext`] and a [`Handle<Expression>`].
-///
-/// Returns a &[`TypeResolution`].
-///
-/// See the documentation of [`resolve_inner!`] for why this macro is necessary.
-macro_rules! resolve {
-    ($ctx:ident, $expr:expr) => {{
-        $ctx.grow_types($expr)?;
-        &$ctx.typifier()[$expr]
-    }};
-}
-pub(super) use resolve;
-
 /// Resolves the inner type of a given expression.
 ///
 /// Expects a &mut [`ExpressionContext`] and a [`Handle<Expression>`].
@@ -65,6 +50,21 @@ macro_rules! resolve_inner_binary {
         )
     }};
 }
+
+/// Resolves the type of a given expression.
+///
+/// Expects a &mut [`ExpressionContext`] and a [`Handle<Expression>`].
+///
+/// Returns a &[`TypeResolution`].
+///
+/// See the documentation of [`resolve_inner!`] for why this macro is necessary.
+macro_rules! resolve {
+    ($ctx:ident, $expr:expr) => {{
+        $ctx.grow_types($expr)?;
+        &$ctx.typifier()[$expr]
+    }};
+}
+pub(super) use resolve;
 
 /// State for constructing a `crate::Module`.
 pub struct GlobalContext<'source, 'temp, 'out> {
