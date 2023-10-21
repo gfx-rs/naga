@@ -152,7 +152,7 @@ pub struct StatementContext<'source, 'temp, 'out> {
 
     const_typifier: &'temp mut Typifier,
     typifier: &'temp mut Typifier,
-    variables: &'out mut Arena<crate::LocalVariable>,
+    local_vars: &'out mut Arena<crate::LocalVariable>,
     naga_expressions: &'out mut Arena<crate::Expression>,
     /// Stores the names of expressions that are assigned in `let` statement
     /// Also stores the spans of the names, for use in errors.
@@ -181,7 +181,7 @@ impl<'a, 'temp> StatementContext<'a, 'temp, '_> {
             ast_expressions: self.ast_expressions,
             const_typifier: self.const_typifier,
             typifier: self.typifier,
-            variables: self.variables,
+            local_vars: self.local_vars,
             naga_expressions: self.naga_expressions,
             named_expressions: self.named_expressions,
             arguments: self.arguments,
@@ -207,7 +207,7 @@ impl<'a, 'temp> StatementContext<'a, 'temp, '_> {
             expr_type: ExpressionContextType::Runtime(RuntimeExpressionContext {
                 local_table: self.local_table,
                 naga_expressions: self.naga_expressions,
-                local_vars: self.variables,
+                local_vars: self.local_vars,
                 arguments: self.arguments,
                 typifier: self.typifier,
                 block,
@@ -1063,7 +1063,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 ast_expressions: ctx.ast_expressions,
                 const_typifier: ctx.const_typifier,
                 typifier: &mut typifier,
-                variables: &mut local_variables,
+                local_vars: &mut local_variables,
                 naga_expressions: &mut expressions,
                 named_expressions: &mut named_expressions,
                 types: ctx.types,
@@ -1243,7 +1243,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         }
                     };
 
-                    let var = ctx.variables.append(
+                    let var = ctx.local_vars.append(
                         crate::LocalVariable {
                             name: Some(v.name.name.to_string()),
                             ty,
