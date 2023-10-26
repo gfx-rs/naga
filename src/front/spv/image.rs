@@ -647,6 +647,7 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
             offset,
             level,
             depth_ref,
+            clamp_to_edge: false,
         };
         self.lookup_expression.insert(
             result_id,

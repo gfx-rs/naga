@@ -290,6 +290,7 @@ impl super::Validator {
                 offset,
                 level,
                 depth_ref,
+                clamp_to_edge: _,
             } => {
                 if let Some(offset) = offset {
                     validate_const_expr(offset)?;

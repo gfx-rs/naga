@@ -793,7 +793,7 @@ enum Texture {
     SampleCompareLevel,
     SampleGrad,
     SampleLevel,
-    // SampleBaseClampToEdge,
+    SampleBaseClampToEdge,
 }
 
 impl Texture {
@@ -808,7 +808,7 @@ impl Texture {
             "textureSampleCompareLevel" => Self::SampleCompareLevel,
             "textureSampleGrad" => Self::SampleGrad,
             "textureSampleLevel" => Self::SampleLevel,
-            // "textureSampleBaseClampToEdge" => Some(Self::SampleBaseClampToEdge),
+            "textureSampleBaseClampToEdge" => Self::SampleBaseClampToEdge,
             _ => return None,
         })
     }
@@ -824,7 +824,7 @@ impl Texture {
             Self::SampleCompareLevel => 5,
             Self::SampleGrad => 6,
             Self::SampleLevel => 5,
-            // Self::SampleBaseClampToEdge => 3,
+            Self::SampleBaseClampToEdge => 3,
         }
     }
 }
@@ -2381,6 +2381,8 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             .then(|| self.expression(args.next()?, ctx))
             .transpose()?;
 
+        let mut clamp_to_edge = false;
+
         let (level, depth_ref) = match fun {
             Texture::Gather => (crate::SampleLevel::Zero, None),
             Texture::GatherCompare => {
@@ -2410,6 +2412,10 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 let level = self.expression(args.next()?, ctx)?;
                 (crate::SampleLevel::Exact(level), None)
             }
+            Texture::SampleBaseClampToEdge => {
+                clamp_to_edge = true;
+                (crate::SampleLevel::Zero, None)
+            }
         };
 
         let offset = args
@@ -2429,6 +2435,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             offset,
             level,
             depth_ref,
+            clamp_to_edge,
         })
     }
 

@@ -73,6 +73,10 @@ pub const SUPPORTED_ES_VERSIONS: &[u16] = &[300, 310, 320];
 /// of detail for bounds checking in `ImageLoad`
 const CLAMPED_LOD_SUFFIX: &str = "_clamped_lod";
 
+/// The suffix of the variable that will hold the calculated half-texel
+/// for use with `textureSampleBaseClampToEdge`
+const HALF_TEXEL_SUFFIX: &str = "_half_texel";
+
 pub(crate) const MODF_FUNCTION: &str = "naga_modf";
 pub(crate) const FREXP_FUNCTION: &str = "naga_frexp";
 
@@ -1911,6 +1915,17 @@ impl<'a, W: Write> Writer<'a, W> {
                         }
                     }
 
+                    // If we are going to write a `textureSampleBaseClampToEdge` next,
+                    // precompute the half-texel before clamping the coordinates.
+                    if let crate::Expression::ImageSample {
+                        clamp_to_edge: true,
+                        image,
+                        ..
+                    } = ctx.expressions[handle]
+                    {
+                        self.write_half_texel(ctx, handle, image, level)?
+                    }
+
                     if let Some(name) = expr_name {
                         write!(self.out, "{level}")?;
                         self.write_named_expr(handle, name, handle, ctx)?;
@@ -2526,6 +2541,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 offset,
                 level,
                 depth_ref,
+                clamp_to_edge,
             } => {
                 let dim = match *ctx.resolve_type(image, &self.module.types) {
                     TypeInner::Image { dim, .. } => dim,
@@ -2604,24 +2620,38 @@ impl<'a, W: Write> Writer<'a, W> {
 
                 let tex_1d_hack = dim == crate::ImageDimension::D1 && self.options.version.is_es();
                 let is_vec = tex_1d_hack || coord_dim != 1;
-                // Compose a new texture coordinates vector
-                if is_vec {
-                    write!(self.out, "vec{}(", coord_dim + tex_1d_hack as u8)?;
-                }
-                self.write_expr(coordinate, ctx)?;
-                if tex_1d_hack {
-                    write!(self.out, ", 0.0")?;
-                }
-                if let Some(expr) = array_index {
-                    write!(self.out, ", ")?;
-                    self.write_expr(expr, ctx)?;
-                }
-                if merge_depth_ref {
-                    write!(self.out, ", ")?;
-                    self.write_expr(depth_ref.unwrap(), ctx)?;
-                }
-                if is_vec {
-                    write!(self.out, ")")?;
+
+                if clamp_to_edge {
+                    // clamp the coordinates to [ half_texel, 1 - half_texel ]
+                    write!(self.out, "clamp(")?;
+                    self.write_expr(coordinate, ctx)?;
+                    write!(
+                        self.out,
+                        ", {}{}{}, vec2(1.0) - {0}{1}{2})",
+                        back::BAKE_PREFIX,
+                        expr.index(),
+                        HALF_TEXEL_SUFFIX
+                    )?
+                } else {
+                    // Compose a new texture coordinates vector
+                    if is_vec {
+                        write!(self.out, "vec{}(", coord_dim + tex_1d_hack as u8)?;
+                    }
+                    self.write_expr(coordinate, ctx)?;
+                    if tex_1d_hack {
+                        write!(self.out, ", 0.0")?;
+                    }
+                    if let Some(expr) = array_index {
+                        write!(self.out, ", ")?;
+                        self.write_expr(expr, ctx)?;
+                    }
+                    if merge_depth_ref {
+                        write!(self.out, ", ")?;
+                        self.write_expr(depth_ref.unwrap(), ctx)?;
+                    }
+                    if is_vec {
+                        write!(self.out, ")")?;
+                    }
                 }
 
                 if let (Some(expr), false) = (depth_ref, merge_depth_ref) {
@@ -3508,6 +3538,30 @@ impl<'a, W: Write> Writer<'a, W> {
         // the lod argument is 0 based, close the `clamp` call and end the
         // local declaration statement.
         writeln!(self.out, ") - 1);")?;
+
+        Ok(())
+    }
+
+    /// Helper function to write the local holding the half-texel
+    /// for use with `textureSampleBaseClampToEdge`
+    fn write_half_texel(
+        &mut self,
+        ctx: &back::FunctionCtx,
+        expr: Handle<crate::Expression>,
+        image: Handle<crate::Expression>,
+        level: back::Level,
+    ) -> Result<(), Error> {
+        write!(
+            self.out,
+            "{level}vec2 {}{}{} = vec2(0.5) / vec2(textureSize(",
+            back::BAKE_PREFIX,
+            expr.index(),
+            HALF_TEXEL_SUFFIX,
+        )?;
+
+        self.write_expr(image, ctx)?;
+
+        writeln!(self.out, ", 0));")?;
 
         Ok(())
     }

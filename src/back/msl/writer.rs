@@ -35,6 +35,10 @@ const RAY_QUERY_FUN_MAP_INTERSECTION: &str = "_map_intersection_type";
 pub(crate) const MODF_FUNCTION: &str = "naga_modf";
 pub(crate) const FREXP_FUNCTION: &str = "naga_frexp";
 
+/// The suffix of the variable that will hold the calculated half-texel
+/// for use with `textureSampleBaseClampToEdge`
+const HALF_TEXEL_SUFFIX: &str = "_half_texel";
+
 /// Write the Metal name for a Naga numeric type: scalar, vector, or matrix.
 ///
 /// The `sizes` slice determines whether this function writes a
@@ -740,11 +744,15 @@ impl<W: Write> Writer<W> {
         &mut self,
         image: Handle<crate::Expression>,
         level: crate::SampleLevel,
+        clamp_to_edge: bool,
         context: &ExpressionContext,
     ) -> BackendResult {
         let has_levels = context.image_needs_lod(image);
         match level {
             crate::SampleLevel::Auto => {}
+            crate::SampleLevel::Zero if clamp_to_edge => {
+                write!(self.out, ", {NAMESPACE}::level(0.0)")?;
+            }
             crate::SampleLevel::Zero => {
                 //TODO: do we support Zero on `Sampled` image classes?
             }
@@ -1461,6 +1469,7 @@ impl<W: Write> Writer<W> {
                 offset,
                 level,
                 depth_ref,
+                clamp_to_edge,
             } => {
                 let main_op = match gather {
                     Some(_) => "gather",
@@ -1474,7 +1483,22 @@ impl<W: Write> Writer<W> {
                 write!(self.out, ".{main_op}{comparison_op}(")?;
                 self.put_expression(sampler, context, true)?;
                 write!(self.out, ", ")?;
-                self.put_expression(coordinate, context, true)?;
+
+                if clamp_to_edge {
+                    // clamp the coordinates to [ half_texel, 1 - half_texel ]
+                    write!(self.out, "{NAMESPACE}::clamp(")?;
+                    self.put_expression(coordinate, context, true)?;
+                    write!(
+                        self.out,
+                        ", {}{}{}, {NAMESPACE}::float2(1.0) - {0}{1}{2})",
+                        back::BAKE_PREFIX,
+                        expr_handle.index(),
+                        HALF_TEXEL_SUFFIX
+                    )?
+                } else {
+                    self.put_expression(coordinate, context, true)?;
+                }
+
                 if let Some(expr) = array_index {
                     write!(self.out, ", ")?;
                     self.put_expression(expr, context, true)?;
@@ -1484,7 +1508,7 @@ impl<W: Write> Writer<W> {
                     self.put_expression(dref, context, true)?;
                 }
 
-                self.put_image_sample_level(image, level, context)?;
+                self.put_image_sample_level(image, level, clamp_to_edge, context)?;
 
                 if let Some(offset) = offset {
                     write!(self.out, ", ")?;
@@ -2657,6 +2681,17 @@ impl<W: Write> Writer<W> {
                                 None
                             }
                         };
+
+                        // If we are going to write a `textureSampleBaseClampToEdge` next,
+                        // precompute the half-texel before clamping the coordinates.
+                        if let crate::Expression::ImageSample {
+                            clamp_to_edge: true,
+                            image,
+                            ..
+                        } = context.expression.function.expressions[handle]
+                        {
+                            self.write_half_texel(handle, image, level, &context.expression)?
+                        }
 
                         if let Some(name) = expr_name {
                             write!(self.out, "{level}")?;
@@ -4346,6 +4381,36 @@ impl<W: Write> Writer<W> {
                 "{level}{NAMESPACE}::threadgroup_barrier({NAMESPACE}::mem_flags::mem_threadgroup);",
             )?;
         }
+        Ok(())
+    }
+
+    /// Helper function to write the locals holding the half-texel
+    /// for use with `textureSampleBaseClampToEdge`
+    fn write_half_texel(
+        &mut self,
+        expr_handle: Handle<crate::Expression>,
+        image: Handle<crate::Expression>,
+        level: back::Level,
+        context: &ExpressionContext,
+    ) -> Result<(), Error> {
+        let prefix = format!("{}{}", back::BAKE_PREFIX, expr_handle.index());
+
+        write!(
+            self.out,
+            "{level}{NAMESPACE}::float2 {prefix}_dim = {NAMESPACE}::float2("
+        )?;
+
+        self.put_expression(image, context, true)?;
+        write!(self.out, ".get_width(), ")?;
+
+        self.put_expression(image, context, true)?;
+        writeln!(self.out, ".get_height());")?;
+
+        writeln!(
+            self.out,
+            "{level}{NAMESPACE}::float2 {prefix}{HALF_TEXEL_SUFFIX} = {NAMESPACE}::float2(0.5) / {prefix}_dim;"
+        )?;
+
         Ok(())
     }
 }

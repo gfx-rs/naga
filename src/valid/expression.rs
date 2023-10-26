@@ -74,6 +74,10 @@ pub enum ExpressionError {
     ExpectedSamplerType(Handle<crate::Type>),
     #[error("Unable to operate on image class {0:?}")]
     InvalidImageClass(crate::ImageClass),
+    #[error("Needs to be texture_2d<f32>")]
+    InvalidSampleBaseClampToEdgeImageType,
+    #[error("Needs to be vec2<f32>")]
+    InvalidSampleBaseClampToEdgeCoordinateType,
     #[error("Derivatives can only be taken from scalar and vector floats")]
     InvalidDerivative,
     #[error("Image array index parameter is misplaced")]
@@ -390,6 +394,7 @@ impl super::Validator {
                 offset,
                 level,
                 depth_ref,
+                clamp_to_edge,
             } => {
                 // check the validity of expressions
                 let image_ty = Self::global_var_ty(module, function, image)?;
@@ -515,6 +520,36 @@ impl super::Validator {
                 // check level properties
                 match level {
                     crate::SampleLevel::Auto => ShaderStages::FRAGMENT,
+                    crate::SampleLevel::Zero if clamp_to_edge => {
+                        // TODO: handle external textures
+                        match module.types[image_ty].inner {
+                            Ti::Image {
+                                dim: crate::ImageDimension::D2,
+                                arrayed: false,
+                                class:
+                                    crate::ImageClass::Sampled {
+                                        kind: Sk::Float,
+                                        multi: false,
+                                    },
+                            } => {}
+                            _ => {
+                                return Err(ExpressionError::InvalidSampleBaseClampToEdgeImageType)
+                            }
+                        }
+                        match resolver[coordinate] {
+                            Ti::Vector {
+                                size: crate::VectorSize::Bi,
+                                kind: Sk::Float,
+                                ..
+                            } => {}
+                            _ => {
+                                return Err(
+                                    ExpressionError::InvalidSampleBaseClampToEdgeCoordinateType,
+                                )
+                            }
+                        }
+                        ShaderStages::all()
+                    }
                     crate::SampleLevel::Zero => ShaderStages::all(),
                     crate::SampleLevel::Exact(expr) => {
                         match resolver[expr] {

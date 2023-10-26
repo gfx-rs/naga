@@ -1413,6 +1413,7 @@ pub enum Expression {
         offset: Option<Handle<Expression>>,
         level: SampleLevel,
         depth_ref: Option<Handle<Expression>>,
+        clamp_to_edge: bool,
     },
 
     /// Load a texel from an image.
