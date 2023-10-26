@@ -1,5 +1,5 @@
 name: CI
-on: [push, pull_request]
+on: [push]
 
 env:
   CARGO_INCREMENTAL: false
@@ -28,6 +28,8 @@ jobs:
       # -Z avoid-dev-deps doesn't work
       - run: cargo +nightly hack generate-lockfile --remove-dev-deps -Z minimal-versions
 
+      - uses: Swatinem/rust-cache@v2
+
       - name: Test all features
         run: cargo +$MSRV clippy --all-features --workspace -- -D warnings
 
@@ -41,6 +43,10 @@ jobs:
         uses: taiki-e/install-action@v2
         with:
           tool: cargo-nextest,cargo-llvm-cov
+
+      # TODO: These two separate tests might need their own cache.
+
+      - uses: Swatinem/rust-cache@v2
 
       - name: Default test
         # Our intention here is to test `naga` with no features enabled. But
@@ -67,6 +73,8 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
+      - uses: Swatinem/rust-cache@v2
+
       - name: Check benchmarks
         run: cargo check --benches
 
@@ -83,6 +91,8 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
+      - uses: Swatinem/rust-cache@v2
+
       - run: cargo doc -p naga --all-features --document-private-items
 
   fmt:
@@ -90,5 +100,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+
+      - uses: Swatinem/rust-cache@v2
 
       - run: cargo fmt -- --check

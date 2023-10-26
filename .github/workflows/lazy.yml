@@ -1,11 +1,6 @@
 # Lazy jobs running on master post merges.
 name: lazy
-on:
-  push:
-    branches: [master]
-  pull_request:
-    paths:
-      - '.github/workflows/lazy.yml'
+on: [push, pull_request]
 
 env:
   CARGO_INCREMENTAL: false
@@ -24,6 +19,9 @@ jobs:
       - name: Download shaders
         run: curl https://user.fm/files/v2-5573e18b9f03f42c6ae53c392083da35/dota2-shaders.zip -o data/all.zip
 
+      - uses: Swatinem/rust-cache@v2
+        shared-key: lazy-bin
+
       - name: Unpack shaders
         run: cd data && unzip all.zip
 
@@ -41,6 +39,9 @@ jobs:
 
       - name: Download shaders
         run: git clone https://github.com/SaschaWillems/Vulkan.git
+
+      - uses: Swatinem/rust-cache@v2
+        shared-key: lazy-bin
 
       - name: Build Naga
         run: cargo build --release --bin naga
@@ -72,7 +73,13 @@ jobs:
       - uses: actions/checkout@v3
 
       - name: Download shaders
-        run: git clone https://github.com/dneto0/spirv-samples.git
+        uses: actions/checkout@v3
+        with:
+          repository: dneto0/spirv-samples.git
+          path: spirv-samples
+
+      - uses: Swatinem/rust-cache@v2
+        shared-key: lazy-bin
 
       - name: Build Naga
         run: cargo build --release --bin naga
@@ -151,6 +158,8 @@ jobs:
         uses: taiki-e/install-action@v2
         with:
           tool: cargo-nextest
+
+      - uses: Swatinem/rust-cache@v2
 
       - name: Test minimal (without span)
         run: cargo nextest run --features validate -p naga
